@@ -26,13 +26,23 @@ for l in lines:
 AREA = re.compile(r"^(\d+(?:[ .]\d{3})*,\d) ?m2$")
 small = [l for l in uniq if l["h"] < 3.5]
 near = lambda a, b, dy0, dy1: abs(a["x"] - b["x"]) < 1.0 and dy0 <= b["y"] - a["y"] <= dy1
+# Ratio 2018 stamps a room as its code over its name, both one size ("VN 603" / "EKSPEDISJON"): the code goes with
+# the name just under it
+CODE = re.compile(r"^(VN|M|ØN|SB|ØF|VF|C|A|K) ?\d{3}[ ]?[A-Za-z]?$")
+coded = {}
+for c in uniq:
+    if not CODE.match(c["t"]): continue
+    n = min((l for l in uniq if l is not c and not CODE.match(l["t"]) and 6.0 <= c["y"] - l["y"] <= 11.0 and abs(l["x"] - c["x"]) < 25),
+            key=lambda l: abs(l["x"] - c["x"]), default=None)
+    if n: coded[id(n)] = c["t"]
 rooms = []
 for n in uniq:
+    if CODE.match(n["t"]): continue
     # a room name: the stamp's middle size, words not numbers, not a grid letter or a section mark
     # (larger sizes are names written into the plan, like TEKNISK ROM; streets are left out)
     if not 3.5 <= n["h"] <= 9.0 or len(n["t"]) < 2 or not re.search(r"[A-Za-zÆØÅæøå]{2}", n["t"]) or re.match(r"Snitt|VEDLEGG", n["t"]) or re.search(r"(gate|vei)$", n["t"], re.I) or AREA.match(n["t"]): continue
     area = next((AREA.match(s["t"]).group(1) for s in small if AREA.match(s["t"]) and near(n, s, -3.0, 0.2)), None)
-    code = next((s["t"] for s in small if not AREA.match(s["t"]) and near(n, s, 6.0, 11.0)), None)
+    code = coded.get(id(n)) or next((s["t"] for s in small if not AREA.match(s["t"]) and near(n, s, 6.0, 11.0)), None)
     rooms.append({"name": n["t"], "area_m2": float(area.replace(" ", "").replace(".", "").replace(",", ".")) if area else None, "code": code,
                   "at": [round(n["x"], 2), round(n["y"], 2)], "size": round(n["h"], 2)})
 json.dump(rooms, open(out, "w"), ensure_ascii=False)
