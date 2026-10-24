@@ -4,7 +4,7 @@
   {
    "id": "3-ost",
    "name": "3. etasje",
-   "wing": "Østfløyen",
+   "wing": "Østfløy og Østre nordfløy",
    "file": "14-05636-1__VEDLEGG_E.1_-_PLAN_3._ET_EKSISTERENDE.PDF",
    "page": 1,
    "scale": 200,
@@ -17,7 +17,7 @@
   {
    "id": "5-ost",
    "name": "5. etasje",
-   "wing": "Østfløyen",
+   "wing": "Østfløy og Østre nordfløy",
    "file": "14-05210-1__VEDLEGG_E.1_-_PLAN_5._ET_EKSISTERENDE.PDF",
    "page": 1,
    "scale": 200,
@@ -29,7 +29,7 @@
   {
    "id": "6-ost",
    "name": "6. etasje",
-   "wing": "Østfløyen",
+   "wing": "Østre nordfløy",
    "file": "14-05210-1__VEDLEGG_E.1_-_PLAN_6._ETASJE_EKSISTERENDE.PDF",
    "page": 1,
    "scale": 200,
@@ -41,7 +41,7 @@
   {
    "id": "7-ost",
    "name": "7. etasje",
-   "wing": "Østfløyen",
+   "wing": "Østre nordfløy",
    "file": "14-05210-1__VEDLEGG_E.1_-_PLAN_7._ETASJE_EKSISTERENDE.PDF",
    "page": 1,
    "scale": 200,
