@@ -57,13 +57,15 @@ document.body.innerHTML = `
 
 let viewer = null, data = null, loaded = null, view = {};
 const order = n => parseInt(n) || 0;
+const LOOK = { N: [0, 1], Ø: [1, 0], S: [0, -1], V: [-1, 0] };   // the way a drawn section looks
 async function load(draft) {
   const key = draft || "";
   if (loaded?.key === key) return loaded;
-  const [site, { floors }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] })]);
+  const [site, { floors }, { sections }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }),
+    fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).catch(() => ({ sections: [] }))]);
   let d = null; if (draft) { try { const r = await fetch(`api/utkast/${encodeURIComponent(draft)}`); if (r.ok) d = await r.json(); } catch { /* shown without */ } }
   const m = d?.edits ? applyEdits(site, floors, d.edits) : { site, floors };
-  return loaded = { key, ...m, draft: d };
+  return loaded = { key, ...m, sections, draft: d };
 }
 
 async function show(payload) {
@@ -78,15 +80,17 @@ async function show(payload) {
     ladder();
   }
   viewer.setStorey(view.storey || null);
-  if (view.mode === "section" && view.wing) { viewer.setMode("3d"); viewer.select(view.building); viewer.setSection(view.wing, view.section, 0); }
+  const drawn = view.drawn && data.sections.find(x => x.id === view.drawn);
+  if (view.mode === "section" && view.wing) { viewer.setMode("3d"); viewer.select(view.building); viewer.setSection(view.wing, view.section, 0, drawn?.through || null, LOOK[drawn?.looking] || null); }
   else {
     viewer.setMode(view.mode === "plan" ? "plan" : "3d");
     if (view.building) { viewer.select(view.building); viewer.focus(view.building); }
   }
   const p = {}; if (view.yaw != null) p.yaw = view.yaw; if (view.pitch != null) p.pitch = view.pitch; if (view.dist != null) p.dist = view.dist;
   if (Object.keys(p).length && view.mode !== "section") viewer.pose(p);
-  $("note").textContent = data.draft ? `Utkast, ikke lagret: ${data.draft.edits.length} endringer` : "";
-  $("note").hidden = !data.draft;
+  $("note").innerHTML = [data.draft ? `Utkast, ikke lagret: ${data.draft.edits.length} endringer` : "",
+    drawn ? `Tegnet snitt: <a href="${drawn.image}" target="_blank" rel="noopener">${drawn.title} (${drawn.year})</a>, plassert omtrentlig` : ""].filter(Boolean).join(" · ");
+  $("note").hidden = !data.draft && !drawn;
   sync(); caption(view.building); height();
   setTimeout(() => tellModel(), 1500);
 }
@@ -115,7 +119,7 @@ async function tellModel(manual) {
     const w = Math.min(768, im.naturalWidth), cv = document.createElement("canvas"); cv.width = w; cv.height = Math.round(im.naturalHeight * w / im.naturalWidth);
     cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
     const v = viewer.view(), pic = cv.toDataURL("image/jpeg", 0.8).split(",")[1];
-    const text = `Bildet viser Sykehustomta slik personen ser den nå: ${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "hele anlegget"}, ${v.mode === "plan" ? "plan, nord opp" : v.mode === "section" ? (v.section.kind === "lengde" ? "lengdesnitt" : "tverrsnitt") + " gjennom " + ((data.site.wings || []).find(w => w.id === v.section.wing)?.name || "bygget") + ", sett rett på, svart er det snittet går gjennom" : "3D"}${data.draft ? `, med utkastets ${data.draft.edits.length} endringer (ikke lagret)` : ""}.`;
+    const text = `Bildet viser Sykehustomta slik personen ser den nå: ${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "hele anlegget"}, ${v.mode === "plan" ? "plan, nord opp" : v.mode === "section" ? (v.section.kind === "lengde" ? "lengdesnitt" : "tverrsnitt") + " gjennom " + ((data.site.wings || []).find(w => w.id === v.section.wing)?.name || "bygget") + (view.drawn ? ` der tegningen ${data.sections.find(x => x.id === view.drawn)?.title} snitter` : "") + ", sett rett på, svart er det snittet går gjennom" : "3D"}${data.draft ? `, med utkastets ${data.draft.edits.length} endringer (ikke lagret)` : ""}.`;
     await ask("ui/update-model-context", { content: [{ type: "text", text }, { type: "image", data: pic, mimeType: "image/jpeg" }], structuredContent: { view: { storey: v.storey || null, mode: v.mode, section: v.section || null, draft: view.draft || null } } });
     if (manual) $("cap").textContent = "Bildet er sendt til chatten.";
   } catch { if (manual) $("cap").textContent = "Fikk ikke sendt bildet."; }

@@ -49,6 +49,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const gc = document.createElement("canvas"); gc.width = gc.height = 512; const gx = gc.getContext("2d"); gx.fillStyle = C.ground; gx.fillRect(0, 0, 512, 512);
     const grass = new THREE.CanvasTexture(gc); grass.wrapS = grass.wrapT = THREE.RepeatWrapping; grass.colorSpace = THREE.SRGBColorSpace; grass.anisotropy = 8;
     const gi = new Image(); gi.onload = () => { gx.drawImage(gi, 0, 0, 512, 512); gx.globalCompositeOperation = "screen"; gx.fillStyle = "rgba(196,205,168,.62)"; gx.fillRect(0, 0, 512, 512); grass.needsUpdate = true; dirty = true; };
+    gi.crossOrigin = "anonymous";   // in the chat app the page is on the host's origin: without it the canvas is tainted and the picture back fails
     gi.src = new URL("./tex-grass.jpg", import.meta.url).href;
     const m = new THREE.Mesh(g, mat("#ffffff", { map: grass })); m.receiveShadow = true; scene.add(m);
     const lot = site.lot.ring.map(p => P(p, ground(...p) + 0.25));
@@ -508,17 +509,20 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     return new THREE.Mesh(g, pocheMat);
   }
-  function setSection(wing, kind = "tverr", left = null) {   // left: px the page covers on the left (the wing card)
+  function setSection(wing, kind = "tverr", left = null, through = null, looking = null) {   // looking: [x, y], the way the drawing looks   // left: px the page covers on the left (the wing card); through: a site point the cut goes through, else the wing's middle
     const bs = own.filter(b => b.wing === wing); if (!bs.length) return null;
     const main = bs.reduce((a, b) => (b.area_m2 || 0) > (a.area_m2 || 0) ? b : a), r = main.ring;
     let d = [1, 0], L = 0;   // the wing's long direction: its outline's longest side
     for (let i = 0; i + 1 < r.length; i++) { const dx = r[i + 1][0] - r[i][0], dy = r[i + 1][1] - r[i][1], l = Math.hypot(dx, dy); if (l > L) { L = l; d = [dx / l, dy / l]; } }
-    const pts = bs.flatMap(b => b.ring), c = [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
-    const n = kind === "lengde" ? [-d[1], d[0]] : d, u = [-n[1], n[0]];   // n: the plane's normal (towards what stays), u: along the cut
+    const pts = bs.flatMap(b => b.ring), c = through || [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+    let n = kind === "lengde" ? [-d[1], d[0]] : d;
+    if (looking && n[0] * looking[0] + n[1] * looking[1] < 0) n = [-n[0], -n[1]];   // as the sheet: what is on its right is on the screen's right
+    const u = [-n[1], n[0]];   // n: the plane's normal (towards what stays), u: along the cut
     const along = pts.map(p => (p[0] - c[0]) * u[0] + (p[1] - c[1]) * u[1]), lo = Math.min(...along), hi = Math.max(...along);
-    const z0 = Math.min(...bs.map(b => b.base)), z1 = Math.max(...bs.map(b => b.top ?? b.base + 10));
+    const lv = ((site.wings || []).find(x => x.id === wing)?.levels || []).map(l => l.kote);
+    const z0 = Math.min(...bs.map(b => b.base), ...lv) - 2, z1 = Math.max(...bs.map(b => b.top ?? b.base + 10));
     setStorey(null); hand();
-    section = { wing, kind, n, u };
+    section = { wing, kind, n, u, through };
     /* world: x east, y up, z south; the kept side is where n points */
     /* what stays: from the cut to the far side of the wing, so the drawing is the wing, not the town behind it */
     const depth = Math.max(...pts.map(p => (p[0] - c[0]) * n[0] + (p[1] - c[1]) * n[1])) + 1;

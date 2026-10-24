@@ -38,7 +38,8 @@ function readJson(req, max) {
     req.on("error", no);
   });
 }
-const mcp = createMcp({ site, floors, docs, docUrl: f => RELEASE + f, SECURITY, readJson });
+const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson });
 
 createServer(async (req, res) => {
   try {

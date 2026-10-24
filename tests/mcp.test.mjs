@@ -66,6 +66,10 @@ test("show_building gives the app its view", async () => {
   const sec = await rpc("tools/call", { name: "show_building", arguments: { wing: "Sentralblokka", mode: "lengdesnitt" } });
   assert.equal(sec.structuredContent.view.mode, "section"); assert.equal(sec.structuredContent.view.section, "lengde");
   assert.equal((await rpc("tools/call", { name: "show_building", arguments: { mode: "tverrsnitt" } })).isError, true);   // a section needs a wing
+  const ds = (await call("about_wing", { wing: "Østfløy" })).data.drawn_sections;
+  assert.ok(ds.some(d => d.id === "snitt-ost"));
+  const dv = (await rpc("tools/call", { name: "show_building", arguments: { drawn_section: "snitt-ost" } })).structuredContent.view;
+  assert.equal(dv.drawn, "snitt-ost"); assert.equal(dv.wing, "ostfloy"); assert.equal(dv.mode, "section");
   const res = await rpc("resources/read", { uri: "ui://sykehus/bygget" });
   assert.match(res.contents[0].text, /mcp-app\.js/);
 });

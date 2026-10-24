@@ -9,6 +9,8 @@ const [site0, { floors: floors0 }] = await Promise.all([fetch("data/site.json").
 const draftId = new URLSearchParams(location.search).get("utkast");
 let draft = null;
 if (draftId) { try { const r = await fetch(`api/utkast/${encodeURIComponent(draftId)}`); draft = r.ok ? await r.json() : { missing: true }; } catch { draft = { missing: true }; } }
+/* the drawn sections, by hand from the sheets (data/sections.json) */
+const drawnSections = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
 const { site, floors } = draft?.edits ? applyEdits(site0, floors0, draft.edits) : { site: site0, floors: floors0 };
 const wings = site.wings || [];
 const $ = id => document.getElementById(id);
@@ -63,15 +65,18 @@ function setMode(m) {
 }
 function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); }
 /* a section through a wing, across or along it, looked at square on with the wing's floor heights beside it */
-function section(b, kind) {
+const LOOK = { N: [0, 1], Ø: [1, 0], S: [0, -1], V: [-1, 0] };   // the way a drawn section looks
+let sheet = null;   // the drawn section shown, if the cut is one
+function section(b, kind, drawn = null) {
+  sheet = drawn; showInfo(b);   // the card first: with a sheet it grows, and the drawing is framed beside it
   const r = $("info").getBoundingClientRect(), wide = innerWidth > 900;   // on a phone the card is below or over; the drawing takes the screen
-  viewer.setSection(b.wing, kind, wide ? r.right + 10 : 0); pressMode();
+  viewer.setSection(b.wing, kind, wide ? r.right + 10 : 0, drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
   for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
   showInfo(b); hint();
 }
 function hint() {
   pressMode(); const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} gjennom midten av bygget, sett rett på · svart: det snittet går gjennom (yttervegger 0,35 m antatt, innervegger der det finnes plantegning) · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  $("hint").textContent = (v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} ${sheet ? " som på tegningen" : " gjennom midten"} · svart: det snittet går gjennom · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
@@ -89,10 +94,12 @@ function showInfo(b) {
     ${h != null ? `<dt>Høyde</dt><dd>ca. ${h.toFixed(0)} m</dd><dt>Topp</dt><dd>kote ${kote(b.top)}</dd>` : ""}
     <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
     (w?.levels?.length ? storeyList(b, w) : "") +
+    (w ? sectionRow(w) : "") +
     (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
   el.style.display = "block";
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
+  for (const btn of el.querySelectorAll("[data-tegnet]")) btn.onclick = () => { const d = drawnSections.find(x => x.id === btn.dataset.tegnet); section(b, d.kind, d); };
 }
 /* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
    it at that floor; ▲ ▼ step one storey; "Hele bygget" puts it back */
@@ -104,11 +111,24 @@ function storeyList(b, w) {
       <button style="${s}" ${up == null ? "disabled" : `data-storey="${esc(up)}"`} aria-label="En etasje opp">▲</button>
       <button style="${s}" ${down == null ? "disabled" : `data-storey="${esc(down)}"`} aria-label="En etasje ned">▼</button>
       <button style="${s}" data-storey="" aria-pressed="${!on}">Hele bygget</button></div>
-    <div style="margin-top:6px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Snitt</b>
-      <button style="${s}" data-snitt="tverr" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "tverr"}">Tverrsnitt</button>
-      <button style="${s}" data-snitt="lengde" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "lengde"}">Lengdesnitt</button></div>
     <div style="margin-top:6px;max-height:34vh;overflow-y:auto;display:grid;gap:4px">${ls.map(l =>
       `<button style="${s};text-align:left;display:flex;justify-content:space-between;gap:12px" data-storey="${esc(l.name)}" aria-pressed="${l.name === on}"><span>${esc(l.name)}</span><span>${kote(l.kote)}${l.how && l.how !== "tegning" ? " · " + esc(l.how) : ""}</span></button>`).join("")}</div>`;
+}
+/* cut the wing across or along its middle, or where a drawn section does */
+function sectionRow(w) {
+  const v = viewer.view(), s = "min-height:34px;font-size:15px;padding:0 10px", on = k => v.mode === "section" && v.section.wing === w.id && v.section.kind === k && !sheet;
+  return `<div style="margin-top:8px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Snitt</b>
+      <button style="${s}" data-snitt="tverr" aria-pressed="${on("tverr")}">Tverrsnitt</button>
+      <button style="${s}" data-snitt="lengde" aria-pressed="${on("lengde")}">Lengdesnitt</button></div>${v.mode === "section" && v.section.wing === w.id ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}${drawnList(w, v, s)}`;
+}
+/* the wing's drawn sections: each cuts the model where the sheet does, with the sheet beside it */
+function drawnList(w, v, s) {
+  const ds = drawnSections.filter(d => d.wing === w.id); if (!ds.length) return "";
+  const on = v.mode === "section" && sheet && sheet.wing === w.id ? sheet : null;
+  return `<div style="margin-top:6px;display:grid;gap:4px"><b style="font-size:15px">Tegnede snitt</b>${ds.map(d =>
+    `<button style="${s};text-align:left" data-tegnet="${esc(d.id)}" aria-pressed="${d === on}">${esc(d.title)} (${d.year})</button>`).join("")}</div>` +
+    (on ? `<figure style="margin:8px 0 0;max-width:420px"><a href="${esc(on.image)}" target="_blank" rel="noopener" title="Åpne tegningen stor"><img src="${esc(on.image)}" alt="${esc(on.title)}" style="width:100%;border:1px solid #d8d2c6;background:#fff"></a>
+      <figcaption style="font-size:13px;color:var(--soft)">${esc(on.levels)}. ${esc(on.note)}. ${on.sure ? "" : "Hvor snittet står i modellen er lest ut fra tegningen og omtrentlig. "}<a href="${esc(on.url)}" target="_blank" rel="noopener">Tegningen (PDF)</a></figcaption></figure>` : "");
 }
 function peel(b, w, name) {
   viewer.cutBuilding(b.id, name);

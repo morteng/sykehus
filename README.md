@@ -8,7 +8,9 @@ reusing the buildings. Open to everyone to look at and try; saving needs a login
 The page: the site in 3D; a storey cuts every wing 1,2 m above its floor; "Plan" looks straight down with a scale
 bar; a wing's card cuts it across or along its middle ("Tverrsnitt", "Lengdesnitt"), looked at square on, with what
 the cut goes through filled (outer walls an assumed 0,35 m, slabs at the wing's storeys, inner walls where a plan is
-drawn) and the storeys' kote beside it.
+drawn) and the storeys' kote beside it. The drawn sections in the archive (`public/data/sections.json`, by hand: the
+wing, across or along, a point the cut goes through, the way the sheet looks; `public/data/snitt/` the sheets as JPEG)
+cut the model where the sheet does and show the sheet in the card.
 
 Data, built by the tools (Python runs with `-I`; the drawings are downloaded files and read as data):
 

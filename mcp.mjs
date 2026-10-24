@@ -28,7 +28,7 @@ const dirDeg = d => typeof d === "number" ? d : DIRS[String(d || "").toLowerCase
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson }) {
   const counts = new Map();
   const bump = (key, max, windowMs) => {
     const now = Date.now(), h = counts.get(key);
@@ -56,6 +56,7 @@ export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
     if (!full) return out;
     const drawn = floors.filter(f => f.walls.some(r => wingAt(r[0]) === w.id) || (f.rooms || []).some(r => wingAt(r.at) === w.id));
     return { ...out, drawn_storeys: [...new Set(drawn.map(f => f.name))], facades: (site.facades || []).filter(f => f.building === w.id).map(f => ({ id: f.id, name: f.name, openings: f.openings.length, source: f.src })),
+      drawn_sections: sections.filter(d => d.wing === w.id).map(d => ({ id: d.id, title: d.title, year: d.year, kind: d.kind, levels: d.levels, note: d.note, placement_sure: !!d.sure, sheet_image: d.image, download: d.url })),
       sources: (w.sources || []).map(d => ({ title: d.title, year: d.year ?? null, page: d.page ?? null, note: d.note ?? null, download: d.url ?? null })), draft_changes: w.draft || [] };
   };
   const roomOut = (f, r) => ({ name: r.name, code: r.code ?? null, use: r.use ?? null, wing: wingAt(r.at), area_m2: r.area_m2 ?? null, area_measured_m2: r.area_calc ?? null,
@@ -90,6 +91,10 @@ export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
     if (a.storey) { const n = storeyName(a.storey); if (!floors.some(f => f.name === n) && !wingsAll().some(w => (w.levels || []).some(l => l.name === n))) throw toolErr(`No storey "${a.storey}".`); v.storey = n; }
     if (a.wing) { const w = wingOrErr(a.wing); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; }
     if (a.mode === "plan" || a.mode === "3d") v.mode = a.mode;
+    if (a.drawn_section) {
+      const d = sections.find(x => x.id === a.drawn_section); if (!d) throw toolErr(`No drawn section "${a.drawn_section}". Drawn sections: ${sections.map(x => x.id).join(", ")} (about_wing lists them).`);
+      const w = wingOrErr(d.wing); Object.assign(v, { wing: w.id, building: piecesOf(w.id)[0]?.id, mode: "section", section: d.kind, drawn: d.id }); delete v.storey; return v;
+    }
     if (a.mode === "tverrsnitt" || a.mode === "lengdesnitt") {
       if (!v.wing) throw toolErr("A section needs wing: the wing to cut through.");
       v.mode = "section"; v.section = a.mode === "lengdesnitt" ? "lengde" : "tverr"; delete v.storey;
@@ -191,7 +196,8 @@ export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
         mode: { type: "string", enum: ["3d", "plan", "tverrsnitt", "lengdesnitt"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar. tverrsnitt / lengdesnitt: a section across or along the wing (needs wing) through its middle, looked at square on, with what the cut goes through filled black and the wing's storeys and kote on the right" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees (3d)" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d)" },
-        distance_m: { type: "number", minimum: 30, maximum: 1200 }, draft: DRAFT }),
+        distance_m: { type: "number", minimum: 30, maximum: 1200 },
+        drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, draft: DRAFT }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey; the app sends a small picture of the view back, so look at it before describing it. Needs a chat app that shows MCP Apps; otherwise give the link to the website.",
       run: async (a, req) => { const view = viewOf(a), w = view.wing && wingOf(site, view.wing);
         const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}`;

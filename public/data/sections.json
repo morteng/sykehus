@@ -1,0 +1,59 @@
+{
+  "about": "The drawn sections in the archive, by hand from the sheets: the wing each cuts, across (tverr) or along (lengde), and a point on the site the cut goes through. The drawings show no section line on a plan that is placed on the site, so where each cut stands is read from what the sheet shows and is approximate (sure: false). looking: the way the sheet looks (N, Ø, S, V), where the sheet says it.",
+  "sections": [
+    {
+      "id": "snitt-ost",
+      "title": "Snitt fasade øst, eksisterende og nytt",
+      "year": 2013,
+      "doc": "5c27a428f032",
+      "page": 1,
+      "image": "data/snitt/5c27a428f032-p1.jpg",
+      "url": "https://github.com/morteng/sykehus/releases/download/dokumenter-2026-10-24/5c27a428f032.pdf",
+      "wing": "ostfloy",
+      "kind": "tverr",
+      "through": [
+        52.0,
+        57.1
+      ],
+      "sure": false,
+      "levels": "2. +20,24 · 3. +23,54 · 4. +27,76 · 5. +32,02 · 6. +35,52 · tak +38,38",
+      "note": "Ottar Arkitekter, vedlegg E.1 til rammesøknad 17.12.2013, 1:200. Østfløys østre del snittet nord–sør, med operasjonsmodulen over parkeringen (nytt snitt) og Nordøstfløy bak",
+      "looking": "V"
+    },
+    {
+      "id": "snitt-bb",
+      "title": "Snitt B-B, sterilsentral, eksisterende og nytt",
+      "year": 2013,
+      "doc": "57dc6d477c88",
+      "page": 1,
+      "image": "data/snitt/57dc6d477c88-p1.jpg",
+      "url": "https://github.com/morteng/sykehus/releases/download/dokumenter-2026-10-24/57dc6d477c88.pdf",
+      "wing": "ostre-nordfloy",
+      "kind": "tverr",
+      "through": [
+        20.6,
+        79.8
+      ],
+      "sure": false,
+      "levels": "5. +32,02 · 6. +35,44 · 7. +39,11 · tak +42,78",
+      "note": "Ottar Arkitekter, vedlegg E.1, ikke i målestokk (koter påført). Sterilsentralen i 6. etasje der Midtfløy og Østre nordfløy møtes; 5. etasje operasjonsavdeling, 7. fysioterapi. Snittet er lagt gjennom sterilisasjonsrommet på 5. etasjes plan",
+      "looking": null
+    },
+    {
+      "id": "snitt-aa",
+      "title": "Snitt A-A og fasade vest, Vestfløy",
+      "year": 2013,
+      "doc": "c0d9952cb00c",
+      "page": 1,
+      "image": "data/snitt/c0d9952cb00c-p1.jpg",
+      "url": "https://github.com/morteng/sykehus/releases/download/dokumenter-2026-10-24/c0d9952cb00c.pdf",
+      "wing": "vestfloy",
+      "kind": "lengde",
+      "through": null,
+      "sure": false,
+      "levels": "ingen koter på arket",
+      "note": "Ottar Arkitekter, Plan 6 dagkirurgi, rammesøknad 28.05.2013, 1:200 (skannet). Snittet går langs fløyen, tegnet som fasaden mot vest under det (sett fra vest)",
+      "looking": "Ø"
+    }
+  ]
+}
