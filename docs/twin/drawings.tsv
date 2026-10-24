@@ -1,0 +1,201 @@
+id	year	title	kind	floors	state	lines	paths	pages	page_pt	scale	architect	kotes
+0950ada3c4f8		p06 1 Image33	annet			picture	0	1				
+03b11c8a380c		p07 1 Image36	annet			picture	0	1				
+6877bcbbcffd		p08 1 Image39	annet			picture	0	1				
+6c2ece2490ff		p08 2 Image40	annet			picture	0	1				
+713a7a590d0e		p10 1 Image46	annet			picture	0	1				
+185d76f2bf7c		p20 1 Image191	annet			picture	0	1				
+e81243d9b06e		p27 2 Image218	annet			picture	0	1				
+847be133b4d4		p27 3 Image220	annet			picture	0	1				
+fa362dbb8ffc		p28 1 Image224	annet			picture	0	1				
+020122ef10a8		p28 3 Image226	annet			picture	0	1				
+39c7ca4dcd2c		p29 1 Image228	annet			picture	0	1				
+b72090a61144		p29 4 Image231	annet			picture	0	1				
+8b8adc6aa67f		p29 5 Image232	annet			picture	0	1				
+7863753bdb68		p30 2 Image25	annet			picture	0	1				
+5f03a9b5a660		p34 1 Image251	annet			picture	0	1				
+59b7482b45f1		p34 2 Image252	annet			picture	0	1				
+2e9d11387c06		p35 1 Image257	annet			picture	0	1				
+90a04eb00225		p35 2 Image258	annet			picture	0	1				
+f1a36299b16f		p35 4 Image260	annet			picture	0	1				
+095ebafee04f		p35 5 Image261	annet			picture	0	1				
+f7f1662d71f0		p36 2 Image264	annet			picture	0	1				
+cc1147d68f4b		p40 1 Image283	annet			picture	0	1				
+a632745290e9		p40 2 Image284	annet			picture	0	1				
+08be5ce5d26b		p40 3 Image285	annet			picture	0	1				
+206842029c3d		p40 4 Image286	annet			picture	0	1				
+eaac9c2a1d15		p40 5 Image287	annet			picture	0	1				
+b5055eb8366b		p40 6 Image288	annet			picture	0	1				
+1f498cc08402		p45 2 Image311	annet			picture	0	1				
+d2f7e48ae48b	2008	BRANNTEGNING	brann			scan	0	1	1190x842			
+775c3491afaf	2008	Godkjente tegninger	annet			scan	0	1	2418x1679			
+a0396cc467d3	2008	Ny plan	plan		ny	scan	0	1	1977x1416			
+e3b4d4dd7334	2008	Plan2. etg	plan	2		scan	0	1	2382x1674			
+6cc77c2de232	2008	Tegninger plan 2 etg - og Branntegning	brann	2		scan	0	2	1191x842			
+5cd8a2a5ceb5	2008	forsyningssetral ny plan 2 etg	plan	2	ny	scan	0	1	2004x1187			
+a6179b9a364d	2008	situasjonskart	situasjon			scan	0	1	1191x842			
+76313d666736	2008	tegninger	annet			scan	0	2	1191x842			
+d073a6587c0c	2010	SITUASJONSPLAN	situasjon			scan	0	1	1191x842			
+ee45bfea99fa	2011	114 272 DRONNINGSGATA 28 - situasjonskart	situasjon			scan	0	1	841x595			
+868c234791e9	2011	114 272 DRONNINGSGATA 28 - tegninger	annet			scan	0	2	595x841			
+5dfd9c710731	2011	A-0601 REV A05	annet			vector	2287	1	842x1191			
+3c07a077ffcf	2011	A-0601 REVIDERTE FASADER 2012.02.02	fasade		ny	vector	1491	1	842x1191			
+12de9b405a96	2011	A-2110 ENKEL PLAN 11. ETASJE	plan	11	ny	vector	78951	1	1191x842		Ottar	
+d2b545c4d05c	2011	A-2110 PLAN 11. ETASJE	plan	11	eksisterende+ny	vector	108231	1	3685x2384		Ottar	
+d46524dcc90a	2011	AJOURFØRT SITUASJONSPLAN MED P... 2011.04.29	situasjon		eksisterende	scan	0	1	1192x842			
+b6a9abc731e6	2011	DRAMMEN SYKEHUS MODULBYGG - REVIDERT SITUASJONSPLAN 2012.02.02	situasjon		ny	scan	0	1	1192x842			
+89fbd1c9e2bf	2011	DRAMMEN SYKEHUS MODULBYGG - REVIDERT SITUASJONSPLAN 2012.02.13	situasjon		ny	scan	0	1	1192x842			
+f0e0a3120af2	2011	Kart	situasjon			scan	0	2	841x594			
+a63b36baa313	2011	Kart	situasjon			scan	0	1	1190x838			
+cee99fc133d4	2011	MODULBYGG FASADER - TEGN A-0601 REV A03	fasade			vector	1939	1	842x1191			
+1bb53743f294	2011	MODULBYGG PLAN 1 - 2012.02.02	plan	1		vector	1328	1	842x1191			
+07eb28fd8a80	2011	MODULBYGG PLAN 1 - TEGN A-0101 REV E02	plan	1		vector	2756	1	842x1191			
+97fc12ea798d	2011	MODULBYGG PLAN 2 - 2012.02.02	plan	2		vector	1870	1	842x1191			
+bb60b4b02e1f	2011	MODULBYGG PLAN 2 - TEGN A-0201 REV E02	plan	2		vector	3302	1	842x1191			
+92ef230d4e11	2011	MODULBYGG SNITT - TEGN A-0501 REV E02	snitt			vector	1024	1	842x1191			
+4ea3503c7914	2011	REV A-0101 REV E04	annet			vector	3263	1	842x1191			
+a4adc4569d66	2011	REV A-0201 REV E04	annet			vector	3758	1	842x1191			
+33f39971f612	2011	SITUASJONSKART1	situasjon			text	47	1	1191x842			
+b6aa61d78426	2011	SPØRSMÅL RUNDT PARKERINGSSITUASJONEN 140611.DOCX	situasjon			text	1	1	595x842			
+540961e5b575	2011	Situasjonskart	situasjon			scan	0	2	1190x841			
+aa38e85910de	2011	Tegning	annet			scan	0	1	841x595			
+dceb2f42c457	2011	Tegninger	annet			scan	0	12	842x595			
+937d39a427f8	2012	Byggemeldingstegninger plan 12 og 13	plan	12		scan	0	8	1190x841			
+f7d4477189f3	2012	Kartutsnitt	situasjon			scan	0	1	595x841			
+e84ae44de0de	2012	Plan snitt fasader og bilder	snitt			scan	0	6	1190x841			
+2e85a6397cd3	2012	Situasjonskart	situasjon			scan	0	1	841x595			
+1347009eb117	2013	19 SAK 09-13 AREALDISPONERING FOR OBSPOST FASE II	plan	2	eksisterende+ny	text	32	8	595x842			
+1627cbd9e0c3	2013	A-2020 PLAN 2. ETG. OBS. POST.	plan	2	eksisterende+ny	vector	43042	1	2384x1684	1:50	Ottar	
+321712811324	2013	A-2020.2 GULVPLAN 2 OBS.POST	plan	2	ny	vector	42380	1	2384x1684		Ottar	
+66616f7b4298	2013	A-2020.4 HIMLINGSPLAN 2 ETASJE OBS.POST	himling	2	ny	vector	38163	1	2384x1684	1:50	Ottar	
+38bc28f379ad	2013	A-2060 03 HIMLINGSPLAN	himling		eksisterende	vector	17180	1	3370x2384		Ottar	
+008c0f06097a	2013	A-403 OBS. POST. SKYLLEROM	fasade		ny	vector	8068	1	1191x842		Ottar	
+0ef8a849e316	2013	A-405 OBS.POST. VAKT PERSONAL	himling	U	ny	vector	4781	1	1191x842		Ottar	
+bf737c0b9055	2013	A-406 OBS. POST. MED.ROM 2.112C	annet		ny	vector	7020	1	1191x842		Ottar	
+0347882a6051	2013	A-407 OBS.POST. KJØKKEN SB 2.116B	himling	U	ny	vector	11014	1	1191x842		Ottar	
+a68ca77e44b4	2013	A-408 HØYSKAP	himling		ny	vector	1086	1	1191x842		Ottar	
+66c244c762f1	2013	A-409 UTSTYR FOR SERVANT	fasade		ny	vector	650	1	1191x842		Ottar	
+eb6646e27d26	2013	A-450 ROMBEHANDLINGSSKJEMA	himling	2		vector	1409	2	1191x842	1:50	Ottar	
+3f844514ea27	2013	A-500 LISTE DØRER	plan	2		vector	1645	2	1191x842	1:50	Ottar	
+da558c9f00e4	2013	BR-1 REVC - OBSII	annet			vector	12861	1	842x1191			
+8860d946d17b	2013	D. Situasjonsplan	situasjon			scan	0	1	1190x842			
+2a48d18cc94f	2013	E. Plan 6. etasje ny situasjon	situasjon	6	ny	scan	0	1	1190x841			
+1a1009a16c40	2013	E. Plan tak ny situasjon	situasjon		ny	scan	0	1	1190x841			
+c0d9952cb00c	2013	E. Snitt A-A og fasade vest	snitt			scan	0	1	1190x842			
+a4c9a90c45e4	2013	E. eksisterende planer tak og 6.etg.	plan	6	eksisterende	scan	0	2	1190x842			
+a2656a5b4c78	2013	Eksisterende tegninger	annet		eksisterende	scan	0	10	841x595			
+d8cfca8d3d48	2013	Himlingsplan	himling			scan	0	1	1190x842			
+93f5eb110d08	2013	OBS.POST II SKJEMATEGNINGER FAST INV.	fasade		ny	vector	7272	7	1191x842		Ottar	
+bf115a99791e	2013	Plantegning	plan			scan	0	1	1191x842			
+924692639681	2013	RA-001-01 BRANNTEKNISK PROSJEKTERINGSGRUNNLAG-REV C	brann	2	eksisterende+ny	text	72	27	595x842			
+352835b248d7	2013	SKISSETEGNINGER MODULBYGG OG ØSTFLØY	situasjon	3 5	eksisterende	vector	13190	11	1191x842			23.54 31.77 32.02
+9a3f4e9810a6	2013	Situasjonskart	situasjon			scan	0	1	841x595			
+fa0ed4778ded	2013	Snitt ventilasjonføringer på tak	snitt			scan	0	1	1190x842			
+1d51d97b7a67	2014	BRANNPLAN 5 ETASJE REVIDERT	brann	5	ny	vector	37657	1	842x1191			
+68fc8d5b2237	2014	BRANNPLAN 5 ETASJE REVIDERT	brann	5	ny	vector	37827	1	1191x842			
+280a9c571398	2014	BRANNPLAN 6 ETASJE	brann	6		vector	3845	1	842x1191			
+78add41bbc45	2014	BRANNPLAN STERILSENTRAL	brann			scan	0	1	596x842			
+b70b2fe39a38	2014	BRANNPLAN STERILSENTRAL REVIDERT	brann		ny	vector	8933	1	1191x842			
+8897d6509542	2014	D. Eksisterende situasjonsplan	situasjon		eksisterende	scan	0	1	1190x836			
+ace4e5c85fde	2014	D. Ny situasjonsplan - alle faser	situasjon		ny	scan	0	1	1190x835			
+f36d080d5af8	2014	DISPOTEGN. 15167388	annet			scan	0	1	1190x841			
+41a828662cab	2014	DISPOTEGN.DRAMMEN SH	annet			scan	0	3	595x841			
+31331053979d	2014	E. Brannplan - 6. etasje - sterilisasjonsavdeling	brann	6		scan	0	1	1189x835			
+0bd8ccfd2fa4	2014	E. Brannplan - Plan 5 - hovedoperasjon	brann	5		scan	0	1	1190x835			
+01872eb1af53	2014	E. Eksisterende plan - 3. 5. 6. og 7. etasje	plan	7	eksisterende	scan	0	4	1190x833			
+9fa1d61282bd	2014	E. Fasade nord - eksisterende og ny	fasade		eksisterende+ny	scan	0	1	1190x834			
+7707ccf6cc1c	2014	E. Fasade øst - eksisterende og ny	fasade		eksisterende+ny	scan	0	1	1190x835			
+fc0933e461a0	2014	E. Illustrasjoner modulbygg - eksisterende og ny situasjon sett fra Tybringsgate	situasjon		eksisterende+ny	scan	0	1	1190x835			
+d3fa4bd63fe7	2014	E. Plan 3. etasje med søyler og omriss nybygg	plan	3		scan	0	1	1190x835			
+44fe0377f0b7	2014	E. Plan 5. etasje NY modulbygg	plan	5	ny	scan	0	1	1189x836			
+f25da7a3b7e2	2014	E. Plan 5. etasje ombygging operasjon	plan	5	ny	scan	0	1	1190x834			
+f460a6e795bb	2014	E. Plan 6. etasje NY sterilsentral UTSNITT	snitt	6	ny	scan	0	1	1189x837			
+e9ee98259ee1	2014	E. Plan 6. etasje NY sterilsentral og modulbygg	plan	6	ny	scan	0	1	1189x835			
+65255183d766	2014	E. Plan 7. etasje tak Modulbygg og operasjon	plan	7		scan	0	1	1190x835			
+504455486add	2014	E. Snitt fasade øst - eksisterende og ny	snitt		eksisterende+ny	scan	0	1	1190x835			
+68a8142a849a	2014	E. Snitt fra Plan 6. etasje Sterilsentral - eksisterende og ny	snitt	6	eksisterende+ny	scan	0	1	1190x836			
+1bfc547ce73c	2014	FASADE NORD EKSISTERENDE OG NY	fasade	3 4 5 6	eksisterende+ny	vector	18262	1	1191x842	1:200		23.27 23.54 27.76 32.02 35.52 38.38
+bc0fee0e71c9	2014	FASADE ØST EKSISTERENDE OG NY	fasade		eksisterende+ny	vector	8934	1	1191x842	1:100 1:200		
+161c15804b9d	2014	FASADE ØST ETTER OMBYGGING	fasade		ny	vector	6643	1	842x595			
+d637491b8c47	2014	NABOVARSEL TEGNINGER	situasjon	1 5 6	eksisterende+ny	vector	12913	8	1191x842	1:200 1:1000		
+7d844f622438	2014	NABOVARSEL TEGNINGER	situasjon	1 5 6	eksisterende+ny	vector	12913	8	1191x842	1:200 1:1000		
+bcf3836fa294	2014	PLAN 3. ET EKSISTERENDE	plan	3	eksisterende+ny	vector	11174	1	1191x842	1:200		
+b95d54fc7802	2014	PLAN 3. ET MED SØYLER OG OMRISS BYGG	plan	3	eksisterende+ny	vector	14925	1	1191x842	1:200		
+a349b2b7a97f	2014	PLAN 5. ET EKSISTERENDE	plan	5	eksisterende+ny	vector	15731	1	1191x842	1:200		
+da72b0d93f6e	2014	PLAN 5. ET NY MODULBYGG	plan	5	eksisterende+ny	vector	17807	1	1191x842	1:200		
+8536716659bf	2014	PLAN 5. ET. OMBYGGING OPERASJON	plan	5	eksisterende+ny	vector	16290	1	1191x842	1:200		
+c97cc9d2200f	2014	PLAN 6 NY STERILSENTRAL UTSTNITT	plan	6	ny	vector	14371	1	1191x842		Ottar	
+e9d5e2080422	2014	PLAN 6. ETASJE EKSISTERENDE	plan	3 5 6	eksisterende+ny	vector	7889	1	1191x842	1:200		
+1aef93de7451	2014	PLAN 6. ETASJE NY STERILSENTRAL OG MODULBYGG	plan	3 5 6	eksisterende+ny	vector	12400	1	1191x842	1:200		
+f299348bf465	2014	PLAN 7. ET MODULBYGG OG OPERASJON	plan	3 5 6 7	eksisterende+ny	vector	3837	1	1191x842	1:200		
+f6c1acb26acd	2014	PLAN 7. ETASJE EKSISTERENDE	plan	3 5 6 7	eksisterende+ny	vector	3144	1	1191x842	1:200		
+382a06c8bcb5	2014	PLANSKISSE - 114 272 DRONNINGGATA 28	plan			scan	0	2	1190x841			
+073c4e6cb35e	2014	SITUASJONSPLAN OMBYGGING OMBYGGING	situasjon	1	eksisterende+ny	vector	13198	1	1191x842	1:1000		
+848553050deb	2014	SITUASJONSPLAN OPERASJONSMODUL	situasjon	1	eksisterende+ny	vector	13190	1	1191x842	1:1000		
+6d2972cc9e73	2014	SITUASJONSPLAN STERILSENTRAL	situasjon	1	eksisterende+ny	vector	13208	1	1191x842	1:1000		
+534362efe171	2014	SITUASJONSPLANER	situasjon	1	eksisterende+ny	vector	12947	2	1191x842	1:1000		
+fe302ba31dc7	2014	SITUASJONSPLANER	situasjon	1	eksisterende+ny	vector	12947	2	1191x842	1:1000		
+6303be0b820f	2014	SNITT 6. ET NY STERILSENTRAL UTSNITT	snitt	5 6 7	eksisterende+ny	vector	33032	1	1191x842		Ottar	32.02 35.44 39.11 42.78
+5c27a428f032	2014	SNITT FASADE ØST EKS OG NY	snitt	U 2 3 4 5 6	eksisterende+ny	vector	9594	1	1191x842	1:100 1:200		19.50 20.24 23.27 23.54 27.76 32.02 35.52 38.38
+57dc6d477c88	2014	SNITT STERILSENTRAL EKS OG NY	snitt	5 6 7	eksisterende+ny	vector	44148	1	1191x842		Ottar	32.02 35.44 39.11 42.78
+dd4c1f44fd50	2014	TEGNING PLAN 5 ET ETTER OMBYGGING	plan	5	ny	vector	88068	1	1191x842			31.77 32.02
+010711a2d754	2014	TEGNING PLAN 6 ET ETTER OMBYGGING	plan	3 5 6	ny	vector	62031	1	1191x842			
+f61225f45a83	2014	Tegning BR-05 revI	annet			vector	20176	1	842x1191			
+e0b98d457242	2014	Tegning BR-06 revI	annet			vector	18153	1	842x1191			
+3e636a3cdf77	2014	UTSNITT MØBLERINGSPLAN	snitt			scan	0	1	596x842			
+6d302a33ca71	2014	Uttalelse modulbygg på eksisterende tilfluktsrom	annet		eksisterende	scan	0	1	596x842			
+3becd986b7c4	2016	114775105 Tegning ny fasade	fasade	4	ny	text	220	1	1684x1191			
+3df68147404f	2016	114775105 Tegning ny fasade2	fasade	4	ny	text	221	1	1684x1191			
+52088b7f81c2	2016	114775105 Tegning ny fasade3	fasade	4	ny	text	221	1	1684x1191			
+c8b26632deda	2016	114775105 Tegning ny plan	plan		ny	scan	0	1	1191x842			
+b74abd2252c7	2016	A20 Takplan 1 200. Rev 1	plan	1 4 5		vector	1015	1	1684x1191	1:100	Sweco	
+b39f7b575bb1	2016	Situasjonsplan	situasjon			scan	108	1	595x842			
+c2e27e986047	2016	Tegning ny plan	plan		ny	vector	60397	2	1191x842			31.77
+0b3132c0b44a	2017	D1 D2 sitplan utomhusplan A0100001BM	situasjon	18	eksisterende+ny	vector	2015	1	1191x842	1:200 1:500	Link	
+52545dbc0699	2017	E1 plan og oppriss Buskerud kulde as	fasade			scan	0	1	1190x841			
+159030f5b1fc	2017	F2 kart	situasjon			scan	0	1	841x595			
+a0962aeaab84	2018	164472767 SITUASJONSPLAN	situasjon			vector	1809	1	1191x842	1:1000		
+0f91d8b99377	2018	164472767 TEGNING NY PLAN	plan	6	ny	vector	9747	1	1070x842	1:100		
+f4b9b902dffb	2018	2 Situasjonskart	situasjon			scan	112	1	595x842	1:1000		
+2e7b285980b7	2018	Fotoskisse fasade Forsyningsblokka	fasade			text	5	1	7078x4824			
+9c008a1c85cc	2018	Situasjonskart	situasjon			scan	110	1	588x416	1:1000		
+82c115b6dcb0	2019	A-01 Opplysninger om tiltakets ytre rammer og bygningsspesifikasjon	plan		eksisterende+ny	text	170	2	595x842			
+3d76e183492f	2019	BR-TEG Tiltak Midtfløy 3	annet			scan	0	1	1191x842			
+3cf56654ea72	2019	BR-TEG Tiltak Midtfløy 3	annet			scan	0	1	1191x842			
+9ae2e826b756	2019	D-01 Situasjonskart A815P000T-001	situasjon			vector	5898	1	1772x2551			
+bab0ca8c8834	2019	Dronninggata 28 - Ny plan	plan	6	ny	vector	9747	1	1070x842	1:100		
+ceef301823bf	2019	E-01 tegning	annet			vector	15065	1	2384x1684			
+ccb8ea9191ec	2019	F-NOT-003 0 Nye MRI maskiner Midtfløy plan 3	plan	3	eksisterende+ny	text	5	9	595x842		Rambøll	
+0253e4d51baf	2019	Grensesnitt bygg Biograph Horizon-Lamboo	snitt			text	49	2	595x842			
+396793d53e97	2019	Område kart	situasjon			vector	7787	1	1191x842			
+b57ea6664027	2019	Plantegning - Biograph Horizon - Lamboo	plan			scan	0	1	1191x842			
+883174705c66	2019	Reguleringskart	situasjon			text	3	1	595x842			
+5ff72ed34fc3	2019	Situasjonskart	situasjon			scan	5	1	595x842	1:1500		
+79dd61cbcbb0	2019	Situasjonskart	situasjon			scan	5	1	595x842	1:1500		
+e6ff09383ab0	2020	2 Fasadefoto	fasade			scan	0	2	596x842			
+81e6faa1e646	2020	Eksit. Plan 5	plan	5	eksisterende	vector	2103	1	1684x1191			
+de95cc148bd8	2020	F-RAP-001 Brannkonsept	brann	2 5	ny	text	1	16	595x842		Rambøll	
+a3cefea19678	2020	NyPlan 5	plan	5		vector	2761	1	1684x1191			
+b57546002395	2020	SF01 Brannkonsept	brann	5	eksisterende+ny	text	253	9	595x842		Rambøll	
+21cf141048a5	2023	Godkjente tegninger	annet			scan	0	4	1190x841			
+65cf664c9ac0	2023	Ny plan 5 et	plan	5	ny	vector	2761	1	1684x1191			
+c377e84304ed	2023	Ny plan 5.etg	plan	5	ny	vector	3019	1	1191x842			
+c1309c659e81	2025	D1 Situasjonskart	situasjon			vector	8576	1	1191x842			
+d7810484c67f	2025	E1 Tegning	annet			vector	1382	1	1191x842			
+de5dbc06c6af	2025	E2 Plan	plan			vector	11734	1	1191x842			
+b82333c592aa	2025	Plantegning	plan			vector	1382	1	1191x842			
+44f210f01200	2025	Plantegning og snittegning	snitt			vector	11734	1	1191x842			
+77c2ddb2e8bb	2026	260526 planinitiativ bragernes park detaljregulering nymal	plan			text	21	14	595x842			
+8c33c2da02e7	2026	Dronninggata 28 midlertidig bruk av eksisterende bygg Forsyningssentralen DG28 g	annet		eksisterende	text	8	1	612x792			
+1da876dff68b	2026	KS saksframlegg OR BSV	situasjon		eksisterende+ny	picture	0	6			Norconsult	
+04191cbda9e4	2026	OR BSV bestemmelser 07.01.26	plan	12	eksisterende+ny	text	108	20	595x842			
+aa952b3f0586	2026	OR BSV kvalitetsprogram 17.12.25	fasade	7	ny	scan	122	44	842x595			
+ad9c69ccdb70	2026	OR BSV merknadsbehandling	plan		eksisterende	text	22	68	842x595		Norconsult	
+bb072470fab8	2026	OR BSV planbeskrivelse 07.01.26	plan	U 4 8	ny	scan	3	107	595x842		Norconsult	
+754c52107f15	2026	OR BSV plankart 15.12.25	situasjon			vector	19790	1	2384x1684			
+3866bbd77dc0	2026	OR BSV skredfarevurdering 27.11.25	situasjon		ny	text	0	50	595x842		Norconsult	
+70013955f98f	2026	OR BSV supplerende 3D illustrasjoner 07.01.26	situasjon		eksisterende+ny	text	0	8	842x595			
+00c2f7b63ea3	2026	hoveddokument	plan		eksisterende+ny	text	4	3	595x842			
+872defe304cc	2026	hoveddokument	plan		eksisterende+ny	text	0	2	595x842			
+1312c1bab5e9	2026	oppstartsmotereferat   detaljregulering for amtmand bangs gate 20 m.fl	detalj	U 2	ny	text	13	32	595x842			
+ab69567d7ecf	2026	planinitiativ bragernes park illustrasjonsvedlegg	plan		eksisterende+ny	scan	20	25	1191x842			
