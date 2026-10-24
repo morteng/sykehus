@@ -22,6 +22,8 @@
   button small { display: block; font-size: 13px; opacity: .75; line-height: 1; margin-top: -2px; }
   #north { top: 14px; right: 14px; width: 64px; height: 64px; display: grid; place-items: center; }
   #north svg { width: 46px; height: 46px; transition: transform .1s; }
+  #zoom { top: 88px; right: 14px; width: 64px; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  #zoom button { width: 100%; min-height: 50px; padding: 0; font-size: 26px; line-height: 1; }
   #scale { right: 14px; bottom: 96px; padding: 8px 12px 6px; font-size: 14px; display: none; }
   #scale .ticks { display: flex; height: 8px; border: 1.5px solid var(--ink); border-top: 0; margin-bottom: 2px; }
   #scale .ticks i { flex: 1; } #scale .ticks i:nth-child(odd) { background: var(--ink); }
@@ -31,7 +33,7 @@
   #info dl { margin: 0; display: grid; grid-template-columns: auto auto; gap: 2px 14px; font-size: 15px; }
   #info dt { color: var(--soft); }
   #hint { top: 92px; left: 14px; padding: 8px 14px; font-size: 15px; color: var(--soft); }
-  @media (max-width: 640px) { #hint { display: none; } #info, #scale { bottom: 150px; } #bar { flex-wrap: wrap; justify-content: center; } }
+  @media (max-width: 640px) { #hint { display: none; } #info, #scale { bottom: 150px; } #bar { flex-direction: column; gap: 8px; width: calc(100vw - 24px); } #bar .sep { display: none; } #floors { max-width: 100%; overflow-x: auto; } }
 </style>
 </head>
 <body>
@@ -48,11 +50,10 @@
     <button id="m3d" aria-pressed="true">3D</button>
     <button id="mplan" aria-pressed="false">Plan</button>
   </div>
-  <div class="sep"></div>
-  <div class="group">
-    <button id="zin" title="Zoom inn" aria-label="Zoom inn" style="min-width:46px;font-size:22px">+</button>
-    <button id="zout" title="Zoom ut" aria-label="Zoom ut" style="min-width:46px;font-size:22px">−</button>
-  </div>
+</div>
+<div id="zoom" class="card">
+  <button id="zin" title="Zoom inn" aria-label="Zoom inn">+</button>
+  <button id="zout" title="Zoom ut" aria-label="Zoom ut">−</button>
 </div>
 <script type="module" src="app.js"></script>
 </body>
