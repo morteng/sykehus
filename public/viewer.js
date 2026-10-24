@@ -519,7 +519,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     setSun, select, setFloor, setStorey, cutBuilding, setMode, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
-    pose(p) { if (p) { hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
+    /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
+    pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
     snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
   };
