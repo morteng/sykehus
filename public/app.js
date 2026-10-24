@@ -74,8 +74,9 @@ async function printSheet() {
   const mmPerM = 1000 / scale, k = mmPerM * PX * v.mPerPx;   // printed mm a metre, and the picture's scale on paper
   const m = [5, 10, 20, 25, 50, 100].find(n => n * mmPerM >= 30) || 100;
   const wing = v.section && wings.find(w => w.id === v.section.wing);
-  const what = v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} gjennom ${wing?.name || "bygget"}${sheet ? ", der tegningen snitter" : ", midt i fløyen"}` : `${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "Situasjonsplan"} · rutenett 10 m (UTM 33)`;
-  const src = v.mode === "section" ? (sheet ? `Tegnet snitt: ${esc(sheet.title)} (${sheet.year}), ${esc(sheet.note)}. Plassert omtrentlig.` : "Snitt i modellen; yttervegger 0,35 m antatt, innervegger fra plantegningene der de finnes.")
+  const what = v.mode === "section" && v.section.kind === "fasade" ? `${wing?.name || "Bygget"}, fasade mot ${SIDE[side]}` : v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} gjennom ${wing?.name || "bygget"}${sheet ? ", der tegningen snitter" : ", midt i fløyen"}` : `${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "Situasjonsplan"} · rutenett 10 m (UTM 33)`;
+  const src = v.mode === "section" && v.section.kind === "fasade" ? ((site.facades || []).filter(f => f.building === v.section.wing && f.name.endsWith(SIDE[side])).flatMap(f => f.src).map(esc).join(" · ") || "Fasaden etter foto og laser, vinduene ikke fra tegning.")
+    : v.mode === "section" ? (sheet ? `Tegnet snitt: ${esc(sheet.title)} (${sheet.year}), ${esc(sheet.note)}. Plassert omtrentlig.` : "Snitt i modellen; yttervegger 0,35 m antatt, innervegger fra plantegningene der de finnes.")
     : floors.filter(f => f.name === v.storey).map(f => esc(f.source)).join(" · ") || "Bygningsomriss fra OpenStreetMap og Kartverkets laser.";
   const pic = new Image(); pic.src = viewer.snapshot(); await pic.decode();
   const names = viewer.labels.cloneNode(true);
@@ -90,9 +91,18 @@ async function printSheet() {
 $("print").onclick = () => printSheet();
 /* a section through a wing, across or along it, looked at square on with the wing's floor heights beside it */
 const LOOK = { N: [0, 1], Ø: [1, 0], S: [0, -1], V: [-1, 0] };   // the way a drawn section looks
-let sheet = null;   // the drawn section shown, if the cut is one
+let sheet = null, side = null;   // the drawn section shown, if the cut is one; the side a facade is seen from
+const SIDE = { N: "nord", Ø: "øst", S: "sør", V: "vest" };
+/* a wing's facade, looked at square on from that side: what stands in front of it is taken away */
+function facade(b, k) {
+  sheet = null; side = k; showInfo(b);
+  const r = $("info").getBoundingClientRect(), wide = innerWidth > 900, from = LOOK[k];
+  viewer.setSection(b.wing, "fasade", wide ? r.right + 10 : 0, null, [-from[0], -from[1]]); pressMode();
+  for (const [kk, btn] of floorBtns) btn.setAttribute("aria-pressed", String(kk === null));
+  showInfo(b); hint();
+}   // the drawn section shown, if the cut is one
 function section(b, kind, drawn = null) {
-  sheet = drawn; showInfo(b);   // the card first: with a sheet it grows, and the drawing is framed beside it
+  sheet = drawn; side = null; showInfo(b);   // the card first: with a sheet it grows, and the drawing is framed beside it
   const r = $("info").getBoundingClientRect(), wide = innerWidth > 900;   // on a phone the card is below or over; the drawing takes the screen
   viewer.setSection(b.wing, kind, wide ? r.right + 10 : 0, drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
   for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
@@ -100,7 +110,7 @@ function section(b, kind, drawn = null) {
 }
 function hint() {
   pressMode(); const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} ${sheet ? " som på tegningen" : " gjennom midten"} · svart: det snittet går gjennom · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  $("hint").textContent = (v.mode === "section" && v.section.kind === "fasade" ? `Fasade mot ${SIDE[side]}, sett rett på${(site.facades || []).some(f => f.building === v.section.wing && f.name.endsWith(SIDE[side])) ? " · vinduene fra tegningen" : " · vinduene etter foto, ikke tegning"} · dra for å flytte · 3D eller Plan for å gå ut` : v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} ${sheet ? " som på tegningen" : " gjennom midten"} · svart: det snittet går gjennom · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
@@ -123,6 +133,7 @@ function showInfo(b) {
   el.style.display = "block";
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
+  for (const btn of el.querySelectorAll("[data-fasade]")) btn.onclick = () => facade(b, btn.dataset.fasade);
   for (const btn of el.querySelectorAll("[data-tegnet]")) btn.onclick = () => { const d = drawnSections.find(x => x.id === btn.dataset.tegnet); section(b, d.kind, d); };
 }
 /* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
@@ -143,7 +154,10 @@ function sectionRow(w) {
   const v = viewer.view(), s = "min-height:34px;font-size:15px;padding:0 10px", on = k => v.mode === "section" && v.section.wing === w.id && v.section.kind === k && !sheet;
   return `<div style="margin-top:8px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Snitt</b>
       <button style="${s}" data-snitt="tverr" aria-pressed="${on("tverr")}">Tverrsnitt</button>
-      <button style="${s}" data-snitt="lengde" aria-pressed="${on("lengde")}">Lengdesnitt</button></div>${v.mode === "section" && v.section.wing === w.id ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}${drawnList(w, v, s)}`;
+      <button style="${s}" data-snitt="lengde" aria-pressed="${on("lengde")}">Lengdesnitt</button></div>
+    <div style="margin-top:6px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Fasade</b>${["N", "Ø", "S", "V"].map(k => {
+      const drawn = (site.facades || []).some(f => f.building === w.id && f.name.endsWith(SIDE[k]));
+      return `<button style="${s};min-width:44px" data-fasade="${k}" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade" && side === k}" title="Fasaden mot ${SIDE[k]}${drawn ? ", vinduer fra tegning" : ""}">${k}${drawn ? "*" : ""}</button>`; }).join("")}</div>${v.mode === "section" && v.section.wing === w.id && v.section.kind !== "fasade" ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}${drawnList(w, v, s)}`;
 }
 /* the wing's drawn sections: each cuts the model where the sheet does, with the sheet beside it */
 function drawnList(w, v, s) {

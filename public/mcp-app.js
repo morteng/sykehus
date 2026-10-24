@@ -81,7 +81,7 @@ async function show(payload) {
   }
   viewer.setStorey(view.storey || null);
   const drawn = view.drawn && data.sections.find(x => x.id === view.drawn);
-  if (view.mode === "section" && view.wing) { viewer.setMode("3d"); viewer.select(view.building); viewer.setSection(view.wing, view.section, 0, drawn?.through || null, LOOK[drawn?.looking] || null); }
+  if (view.mode === "section" && view.wing) { viewer.setMode("3d"); viewer.select(view.building); viewer.setSection(view.wing, view.section, 0, drawn?.through || null, view.side ? LOOK[view.side].map(x => -x) : LOOK[drawn?.looking] || null); }
   else {
     viewer.setMode(view.mode === "plan" ? "plan" : "3d");
     if (view.building) { viewer.select(view.building); viewer.focus(view.building); }
@@ -119,7 +119,7 @@ async function tellModel(manual) {
     const w = Math.min(768, im.naturalWidth), cv = document.createElement("canvas"); cv.width = w; cv.height = Math.round(im.naturalHeight * w / im.naturalWidth);
     cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
     const v = viewer.view(), pic = cv.toDataURL("image/jpeg", 0.8).split(",")[1];
-    const text = `Bildet viser Sykehustomta slik personen ser den nå: ${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "hele anlegget"}, ${v.mode === "plan" ? "plan, nord opp" : v.mode === "section" ? (v.section.kind === "lengde" ? "lengdesnitt" : "tverrsnitt") + " gjennom " + ((data.site.wings || []).find(w => w.id === v.section.wing)?.name || "bygget") + (view.drawn ? ` der tegningen ${data.sections.find(x => x.id === view.drawn)?.title} snitter` : "") + ", sett rett på, svart er det snittet går gjennom" : "3D"}${data.draft ? `, med utkastets ${data.draft.edits.length} endringer (ikke lagret)` : ""}.`;
+    const text = `Bildet viser Sykehustomta slik personen ser den nå: ${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "hele anlegget"}, ${v.mode === "plan" ? "plan, nord opp" : v.mode === "section" && v.section.kind === "fasade" ? `fasaden mot ${({ N: "nord", Ø: "øst", S: "sør", V: "vest" })[view.side]} av ${(data.site.wings || []).find(w => w.id === v.section.wing)?.name || "bygget"}, sett rett på` : v.mode === "section" ? (v.section.kind === "lengde" ? "lengdesnitt" : "tverrsnitt") + " gjennom " + ((data.site.wings || []).find(w => w.id === v.section.wing)?.name || "bygget") + (view.drawn ? ` der tegningen ${data.sections.find(x => x.id === view.drawn)?.title} snitter` : "") + ", sett rett på, svart er det snittet går gjennom" : "3D"}${data.draft ? `, med utkastets ${data.draft.edits.length} endringer (ikke lagret)` : ""}.`;
     await ask("ui/update-model-context", { content: [{ type: "text", text }, { type: "image", data: pic, mimeType: "image/jpeg" }], structuredContent: { view: { storey: v.storey || null, mode: v.mode, section: v.section || null, draft: view.draft || null } } });
     if (manual) $("cap").textContent = "Bildet er sendt til chatten.";
   } catch { if (manual) $("cap").textContent = "Fikk ikke sendt bildet."; }

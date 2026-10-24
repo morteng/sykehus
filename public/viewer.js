@@ -479,7 +479,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const pocheMat = new THREE.MeshBasicMaterial({ color: 0x2b2824, side: THREE.DoubleSide });
   /* what the cut goes through, filled as on a drawn section: outer walls (0,35 m, assumed), the floor slabs at the
      wing's storeys (0,3 m) and the roof, and the drawn inner walls of every floor sheet (0,15 m) */
-  function pocheOf(c, n, u, lo, hi) {
+  function pocheOf(c, n, u, lo, hi, groundOnly = false) {
     const pos = [], off = 0.03, at = (t, z) => { const v = P([c[0] + u[0] * t + n[0] * off, c[1] + u[1] * t + n[1] * off], z); pos.push(v.x, v.y, v.z); };
     const rect = (t0, t1, z0, z1) => { at(t0, z0); at(t1, z0); at(t1, z1); at(t0, z0); at(t1, z1); at(t0, z1); };
     const cross = ring => {   // where the cut line crosses a ring: positions along u, sorted
@@ -492,7 +492,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       }
       return ts.sort((a, b) => a - b);
     };
-    for (const b of own) {
+    for (const b of groundOnly ? [] : own) {
       const ts = cross(b.ring); if (ts.length < 2) continue;
       const top = b.top ?? b.base + 10, w = (site.wings || []).find(x => x.id === b.wing);
       const slabs = (w?.levels || []).map(l => l.kote).filter(k => k > b.base - 6 && k < top - 1);
@@ -503,7 +503,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         for (const k of slabs) rect(t0, t1, k - 0.3, k);
       }
     }
-    for (const f of floors) for (const line of f.walls || []) for (let i = 0; i + 1 < line.length; i++) {
+    for (const f of groundOnly ? [] : floors) for (const line of f.walls || []) for (let i = 0; i + 1 < line.length; i++) {
       const a = line[i], b = line[i + 1], sa = (a[0] - c[0]) * n[0] + (a[1] - c[1]) * n[1], sb = (b[0] - c[0]) * n[0] + (b[1] - c[1]) * n[1];
       if ((sa < 0) === (sb < 0)) continue;
       const k = sa / (sa - sb), x = a[0] + (b[0] - a[0]) * k, y = a[1] + (b[1] - a[1]) * k;
@@ -520,14 +520,18 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     return new THREE.Mesh(g, pocheMat);
   }
-  function setSection(wing, kind = "tverr", left = null, through = null, looking = null) {   // looking: [x, y], the way the drawing looks   // left: px the page covers on the left (the wing card); through: a site point the cut goes through, else the wing's middle
+  /* kind: tverr, lengde, or fasade (an elevation: looking the way `looking` says at the wing's outside, with what
+     stands in front of it taken away and nothing filled). left: px the page covers on the left (the wing card);
+     through: a site point the cut goes through, else the wing's middle; looking: [x, y], the way the drawing looks */
+  function setSection(wing, kind = "tverr", left = null, through = null, looking = null) {
     const bs = own.filter(b => b.wing === wing); if (!bs.length) return null;
     const main = bs.reduce((a, b) => (b.area_m2 || 0) > (a.area_m2 || 0) ? b : a), r = main.ring;
     let d = [1, 0], L = 0;   // the wing's long direction: its outline's longest side
     for (let i = 0; i + 1 < r.length; i++) { const dx = r[i + 1][0] - r[i][0], dy = r[i + 1][1] - r[i][1], l = Math.hypot(dx, dy); if (l > L) { L = l; d = [dx / l, dy / l]; } }
-    const pts = bs.flatMap(b => b.ring), c = through || [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
-    let n = kind === "lengde" ? [-d[1], d[0]] : d;
-    if (looking && n[0] * looking[0] + n[1] * looking[1] < 0) n = [-n[0], -n[1]];   // as the sheet: what is on its right is on the screen's right
+    const pts = bs.flatMap(b => b.ring); let c = through || [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+    let n = kind === "lengde" ? [-d[1], d[0]] : kind === "fasade" ? looking : d;
+    if (kind === "fasade") { const near = Math.min(...pts.map(p => (p[0] - c[0]) * n[0] + (p[1] - c[1]) * n[1])) - 0.6; c = [c[0] + n[0] * near, c[1] + n[1] * near]; }   // just outside the facade
+    else if (looking && n[0] * looking[0] + n[1] * looking[1] < 0) n = [-n[0], -n[1]];   // as the sheet: what is on its right is on the screen's right
     const u = [-n[1], n[0]];   // n: the plane's normal (towards what stays), u: along the cut
     const along = pts.map(p => (p[0] - c[0]) * u[0] + (p[1] - c[1]) * u[1]), lo = Math.min(...along), hi = Math.max(...along);
     const lv = ((site.wings || []).find(x => x.id === wing)?.levels || []).map(l => l.kote);
@@ -541,8 +545,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     backPlane.normal.set(-n[0], 0, n[1]); backPlane.constant = n[0] * c[0] + n[1] * c[1] + depth;
     renderer.clippingPlanes = [secPlane, backPlane];
     if (poche) { scene.remove(poche); poche.geometry.dispose(); }
-    poche = pocheOf(c, n, u, lo, hi); scene.add(poche);
-    cut.constant = 1e6; for (const g of floorGroups.values()) g.visible = true;
+    poche = pocheOf(c, n, u, lo, hi, kind === "fasade"); scene.add(poche);   // an elevation has the ground line only
+    cut.constant = 1e6; for (const g of floorGroups.values()) g.visible = kind !== "fasade";
 
     /* the frame holds the wing's width and height with room round it (the ortho frame is 0,72 × dist high) */
     const W = container.clientWidth || 600, H = container.clientHeight || 400, card = left ?? (W > 900 ? 440 : 0), labels = 190;   // the wing card on the left, the kote labels on the right

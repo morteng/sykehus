@@ -95,6 +95,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const d = sections.find(x => x.id === a.drawn_section); if (!d) throw toolErr(`No drawn section "${a.drawn_section}". Drawn sections: ${sections.map(x => x.id).join(", ")} (about_wing lists them).`);
       const w = wingOrErr(d.wing); Object.assign(v, { wing: w.id, building: piecesOf(w.id)[0]?.id, mode: "section", section: d.kind, drawn: d.id }); delete v.storey; return v;
     }
+    if (a.mode === "fasade") {
+      if (!v.wing) throw toolErr("A facade needs wing: the wing to look at.");
+      const deg = a.from_direction != null ? dirDeg(a.from_direction) : 0, side = ["N", "Ø", "S", "V"][Math.round(((deg % 360) + 360) % 360 / 90) % 4];
+      Object.assign(v, { mode: "section", section: "fasade", side }); delete v.storey; delete v.yaw; return v;
+    }
     if (a.mode === "tverrsnitt" || a.mode === "lengdesnitt") {
       if (!v.wing) throw toolErr("A section needs wing: the wing to cut through.");
       v.mode = "section"; v.section = a.mode === "lengdesnitt" ? "lengde" : "tverr"; delete v.storey;
@@ -193,7 +198,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "show_building", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },
         wing: { ...WING, description: "Look at this wing and ring it in yellow" },
-        mode: { type: "string", enum: ["3d", "plan", "tverrsnitt", "lengdesnitt"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar. tverrsnitt / lengdesnitt: a section across or along the wing (needs wing) through its middle, looked at square on, with what the cut goes through filled black and the wing's storeys and kote on the right" },
+        mode: { type: "string", enum: ["3d", "plan", "tverrsnitt", "lengdesnitt", "fasade"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar. fasade: the wing's facade seen square on from from_direction (N, Ø, S or V; needs wing), what stands in front taken away; windows from the drawings where a facade sheet exists (openings), else from photos. tverrsnitt / lengdesnitt: a section across or along the wing (needs wing) through its middle, looked at square on, with what the cut goes through filled black and the wing's storeys and kote on the right" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees (3d)" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d)" },
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
