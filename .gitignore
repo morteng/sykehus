@@ -1,0 +1,4 @@
+# built from the architects' drawings (tools/floors.mjs): their copyright, so not published here
+public/data/floors.json
+__pycache__/
+.DS_Store
