@@ -1,5 +1,7 @@
 /* Builds public/data/floors.json, the floors the viewer can show one at a time: each drawing in tools/plans.json read
    for its walls (pdfpaths.py), placed on the site from its control points (georef.py), and stacked at its level.
+   A sheet with "like": "<id>" shares that sheet's background; its control points are the other's moved by the page
+   offset between the two (sheetshift.py), so one careful placement serves the whole set.
 
   node tools/floors.mjs <folder with the drawings (PDF)> <work folder>
 
@@ -19,7 +21,12 @@ const floors = [];
 for (const p of plans) {
   const paths = `${work}/${p.id}.json`, geoF = `${work}/${p.id}-geo.json`;
   execFileSync("python3", ["-I", tools + "pdfpaths.py", `${pdfDir}/${p.file}`, String(p.page), paths], { stdio: "inherit" });
-  execFileSync("python3", ["-I", tools + "georef.py", paths, site, String(p.scale), geoF], { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, CP: p.cp, CPONLY: "1", SEEDONLY: "1" } });
+  let cp = p.cp;
+  if (p.like) {
+    const ref = plans.find(q => q.id === p.like), { offset: [dx, dy] } = JSON.parse(execFileSync("python3", ["-I", tools + "sheetshift.py", `${work}/${ref.id}.json`, paths], { encoding: "utf8" }));
+    cp = ref.cp.split(";").map(c => { const [x, y, sx, sy] = c.split(",").map(Number); return [(x + dx).toFixed(2), (y + dy).toFixed(2), sx, sy].join(","); }).join(";");
+  }
+  execFileSync("python3", ["-I", tools + "georef.py", paths, site, String(p.scale), geoF], { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, CP: cp, CPONLY: "1", SEEDONLY: "1" } });
   const geo = JSON.parse(readFileSync(geoF, "utf8")), c = Math.cos(geo.theta), s = Math.sin(geo.theta), m = geo.m_per_pt;
   /* site = (page * m) @ [[cos, sin], [-sin, cos]] + shift, as georef.py writes it */
   const toSite = ([x, y]) => [+(x * m * c - y * m * s + geo.shift[0]).toFixed(2), +(x * m * s + y * m * c + geo.shift[1]).toFixed(2)];
