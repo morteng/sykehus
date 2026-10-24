@@ -10,6 +10,7 @@ const draftId = new URLSearchParams(location.search).get("utkast");
 let draft = null;
 if (draftId) { try { const r = await fetch(`api/utkast/${encodeURIComponent(draftId)}`); draft = r.ok ? await r.json() : { missing: true }; } catch { draft = { missing: true }; } }
 /* the drawn sections, by hand from the sheets (data/sections.json) */
+const thumbs = await fetch("data/ark/index.json").then(r => r.ok ? r.json() : {}).catch(() => ({}));   // small pictures of the sheets (tools/thumbs.py)
 const drawnSections = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
 const { site, floors } = draft?.edits ? applyEdits(site0, floors0, draft.edits) : { site: site0, floors: floors0 };
 const wings = site.wings || [];
@@ -129,7 +130,7 @@ function showInfo(b) {
     <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
     (w?.levels?.length ? storeyList(b, w) : "") +
     (w ? sectionRow(w) : "") +
-    (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
+    (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>${sheetStrip(w)}` : "");
   el.style.display = "block";
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
@@ -175,6 +176,15 @@ function peel(b, w, name) {
 }
 /* a document as the cards name it: its title and year, the page, a link to it */
 function docLink(d) { return d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title); }
+/* the wing's drawings as small pictures; a click opens the drawing at its page */
+function sheetStrip(w) {
+  const ds = w.sources.map(d => ({ d, key: `${(d.url || "").split("/").pop().split(".")[0]}-p${d.page || 1}` })).filter(x => thumbs[x.key]);
+  if (!ds.length) return "";
+  return `<div style="margin-top:8px;display:flex;gap:6px;overflow-x:auto;max-width:420px;padding-bottom:4px">${ds.map(({ d, key }) =>
+    `<a href="${esc(d.url)}#page=${d.page || 1}" target="_blank" rel="noopener" title="${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}" style="flex:none;text-decoration:none;color:var(--soft);font-size:11px;width:120px">
+      <img src="${esc(thumbs[key])}" alt="${esc(d.title)}" loading="lazy" style="width:120px;height:85px;object-fit:contain;background:#fff;border:1px solid var(--line);display:block">
+      <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.title)}</span></a>`).join("")}</div>`;
+}
 /* "<docid>#p<n> note" references, as site.json levels carry them, resolved through the wings' sources where they are known */
 function sourceLinks(refs = []) {
   const known = new Map((site.wings || []).flatMap(w => w.sources).filter(d => d.id).map(d => [d.id, d]));

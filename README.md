@@ -42,6 +42,8 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   documents (the page draws the facades from them).
 - `node tools/floors.mjs <drawings folder> <work folder>`: `public/data/floors.json`, the walls of each drawing in
   `tools/plans.json`, placed on the site from its control points and stood at its kote.
+- `python3 -I tools/thumbs.py public/data/site.json twin-pack/sheets public/data/ark`: small pictures of the drawings
+  the wing cards name (a click opens the PDF at the page). Needs Pillow.
 - `python3 -I tools/ingest.py <sources> <data dir> [report.md]`: the document store (`docs.sqlite`, full text).
 
 `tools/osm-buildings.mjs`, `tools/osm-rings.mjs`, `public/tex-grass.jpg` and `public/vendor/` are copied from hagekart
