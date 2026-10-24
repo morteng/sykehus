@@ -9,6 +9,11 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
 
 - `node tools/site.mjs <lot.json> <dom.tif> <dtm.tif> <x0,y0,x1,y1> [osm.json]`: `public/data/site.json`, the lot,
   the buildings (OpenStreetMap outlines, Kartverket laser heights) and the terrain.
+- `python -I tools/wingparts.py <sit.json> <georef.json> <parts.json> [parts.png]`: the parts of the hospital block as
+  the 1:1000 site plan draws them (from `pdfpaths.py` and `georef.py`). Needs shapely.
+- `python -I tools/wings.py public/data/site.json <parts.json> tools/wings.json <dom.tif> <dtm.tif> <x0,y0,x1,y1>`: the
+  block as its wings (`tools/wings.json`, by hand from the documents) in place of the OSM outlines, with names, years
+  and sources. Run massing.py after it. Needs shapely.
 - `python3 -I tools/massing.py public/data/site.json <dom.tif> <x0,y0,x1,y1>`: clean massing for the buildings on the
   lot (flat-roofed blocks on each building's grid, at the roof levels the laser finds), written into site.json.
 - `python3 -I tools/trees.py public/data/site.json <dom.tif> <dtm.tif> <x0,y0,x1,y1>`: the trees, from where the laser

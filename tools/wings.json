@@ -1,0 +1,222 @@
+{
+ "about": "The wings of the hospital block and the buildings around it, by hand from the documents (docs/twin/PLAN.md §1). parts: the numbers tools/wingparts.py gives the parts of the 1:1000 site plan 534362efe171 p1 (largest first). osm: the OSM buildings these parts replace. sure: false where the documents do not settle which part is which. built: years and what was done, from the DIVE analysis 3957fafe78ec unless noted. Part 14 (a strip west of the high-rise) is the 2002 parking deck with legevakt (OSM 1163588204), which stays as it is.",
+ "source": "534362efe171#p1 (Ottar, Situasjonsplan eksisterende 1:1000, 17.12.2013)",
+ "replaces": [
+  "r13306175",
+  "126454331",
+  "134869340",
+  "495955085",
+  "991418580"
+ ],
+ "wings": [
+  {
+   "id": "sentralblokka",
+   "name": "Sentralblokka",
+   "aliases": [
+    "høyblokka",
+    "SB"
+   ],
+   "parts": [
+    1
+   ],
+   "sure": true,
+   "built": "1972–80",
+   "storeys": "14 etasjer og kjeller",
+   "construction": "bærende fasadevegger, ribbedekker",
+   "facade": "naturbetong",
+   "src": [
+    "3957fafe78ec DIVE",
+    "a00300169fdb samlerapport",
+    "bb072470fab8 §1.4"
+   ]
+  },
+  {
+   "id": "sentralblokka-sidebygg",
+   "name": "Sentralblokka, sidebygg",
+   "aliases": [],
+   "parts": [
+    2
+   ],
+   "sure": false,
+   "built": "1972–80?",
+   "note": "lav del øst for høyblokka; «TAK OVER 2. ETASJE, SIDEBYGG» på planene; laser tak ca. +23,7 og +27,4",
+   "src": [
+    "534362efe171#p1",
+    "PLAN §1.1 G"
+   ]
+  },
+  {
+   "id": "kirurgisk-poliklinikk",
+   "name": "Kirurgisk poliklinikk",
+   "aliases": [],
+   "parts": [
+    3
+   ],
+   "sure": false,
+   "built": "1967–70",
+   "storeys": "2–3 etasjer",
+   "note": "lav fløy foran (sør for) Midtfløy, laser tak ca. +23,8; ingen tegninger i arkivet",
+   "src": [
+    "3957fafe78ec DIVE"
+   ]
+  },
+  {
+   "id": "midtfloy",
+   "name": "Midtfløy",
+   "aliases": [
+    "hovedfløyen",
+    "M"
+   ],
+   "parts": [
+    10,
+    17
+   ],
+   "sure": true,
+   "built": "1887; 3. etasje 1911–14; 4. etasje 1937–40",
+   "storeys": "2.–7. etasje, tak +42,78",
+   "construction": "murverk (1887, 1911), betongdekker 1937–40",
+   "facade": "puss",
+   "src": [
+    "3957fafe78ec DIVE",
+    "57dc6d477c88#p1 snitt B-B"
+   ],
+   "note": "den lange, smale fløyen mellom Vestfløy og Østre nordfløy; laser tak ca. +43,7 (snitt B-B: tak +42,78)"
+  },
+  {
+   "id": "vestfloy",
+   "name": "Vestfløy",
+   "aliases": [
+    "V"
+   ],
+   "parts": [
+    4,
+    7
+   ],
+   "sure": true,
+   "built": "1911–14; 4. etasje 1937–40; vestfløy 1967–70",
+   "storeys": "4 etasjer over Dronninggata",
+   "facade": "puss, hvitmalt",
+   "src": [
+    "3957fafe78ec DIVE",
+    "c0d9952cb00c#p1 snitt A-A"
+   ]
+  },
+  {
+   "id": "venstre-nordfloy",
+   "name": "Venstre nordfløy",
+   "aliases": [
+    "VN",
+    "midtre nordfløy"
+   ],
+   "parts": [
+    5
+   ],
+   "sure": true,
+   "built": "1911–14, påbygget senere",
+   "src": [
+    "3957fafe78ec DIVE",
+    "937d39a427f8#p1 lokaliseringsfigur"
+   ]
+  },
+  {
+   "id": "mr-bygg",
+   "name": "MR-bygget",
+   "aliases": [],
+   "parts": [
+    16
+   ],
+   "sure": false,
+   "built": "2001",
+   "note": "mellom Venstre nordfløy og Østre nordfløy",
+   "src": [
+    "3957fafe78ec DIVE",
+    "ccb8ea9191ec"
+   ]
+  },
+  {
+   "id": "ostre-nordfloy",
+   "name": "Østre nordfløy",
+   "aliases": [
+    "ØN",
+    "nordre østfløy"
+   ],
+   "parts": [
+    8,
+    13,
+    15
+   ],
+   "sure": true,
+   "built": "1911–14; påbygget til 4 etasjer 1935",
+   "storeys": "2.–6. etasje",
+   "note": "romnummer ØN på planene",
+   "src": [
+    "3957fafe78ec DIVE",
+    "a349b2b7a97f#p1"
+   ]
+  },
+  {
+   "id": "ostfloy",
+   "name": "Østfløy",
+   "aliases": [
+    "fløyen langs Tybrings gate",
+    "akse 1–8"
+   ],
+   "parts": [
+    6,
+    11,
+    19,
+    20
+   ],
+   "sure": true,
+   "built": "1958–63",
+   "storeys": "2. etasje +20,24 til tak +38,38",
+   "construction": "betong søyler og dekker",
+   "facade": "puss, parvise vinduer",
+   "note": "Ottar kaller den «eksisterende østfløy»; 1935 eller 1963 er ikke helt avgjort (PLAN §3.2)",
+   "src": [
+    "352835b248d7#p2",
+    "1bfc547ce73c#p1 fasade nord",
+    "5c27a428f032#p1 snitt"
+   ]
+  },
+  {
+   "id": "bygg-sv",
+   "name": "Bygg ved Dronninggata (fyrhus/tøysentral?)",
+   "aliases": [],
+   "parts": [
+    9
+   ],
+   "sure": false,
+   "built": "1965?",
+   "note": "trolig fyrhus og tøysentral fra 1965",
+   "src": [
+    "3957fafe78ec DIVE"
+   ]
+  },
+  {
+   "id": "trappehus-no",
+   "name": "Trappehus nordøst",
+   "aliases": [],
+   "parts": [
+    12
+   ],
+   "sure": false,
+   "built": "1963?",
+   "src": [
+    "a349b2b7a97f#p1 TRAPPEHUS"
+   ]
+  },
+  {
+   "id": "bod-no",
+   "name": "Bod ved Tybrings gate",
+   "aliases": [],
+   "parts": [
+    18
+   ],
+   "sure": false,
+   "src": [
+    "534362efe171#p1"
+   ]
+  }
+ ]
+}

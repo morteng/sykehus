@@ -274,9 +274,26 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²` : "");
     tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), area: r.area_m2 || 0 };
   }).sort((a, b) => b.area - a.area)]));
+  /* the wings' names over their roofs (site.json wings, tools/wings.py), while the whole site is shown */
+  const wingTags = site.buildings.filter(b => b.own && b.name).map(b => {
+    const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;font-size:14px;font-weight:600;padding:2px 7px;border-radius:6px;background:#fbf9f4e6;border:1px solid #d8d2c6";
+    el.textContent = b.name.replace(/ \(.*\)$/, ""); tags.appendChild(el);
+    const c = b.ring.slice(0, -1).reduce((a, p, _, r) => [a[0] + p[0] / r.length, a[1] + p[1] / r.length], [0, 0]);
+    return { el, at: P(c, (b.top ?? b.base + 10) + 2), area: b.area_m2 || 0 };
+  }).sort((a, b) => b.area - a.area);
   const v3 = new THREE.Vector3();
   function placeTags() {
     const w = container.clientWidth, h = container.clientHeight, close = mode === "plan" ? view().mPerPx < 0.09 : O.dist < 150, placed = [];
+    for (const t of wingTags) {
+      if (floor) { t.el.style.display = "none"; continue; }
+      v3.copy(t.at).project(camera);
+      const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
+      if (v3.z > 1 || x < -100 || y < -30 || x > w + 100 || y > h + 30) { t.el.style.display = "none"; continue; }
+      t.el.style.display = "block"; t.size ??= [t.el.offsetWidth, t.el.offsetHeight];
+      const box = [x - t.size[0] / 2 - 3, y - t.size[1] - 3, x + t.size[0] / 2 + 3, y + 3];
+      if (placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { t.el.style.display = "none"; continue; }
+      placed.push(box); t.el.style.transform = `translate(${(x - t.size[0] / 2).toFixed(0)}px, ${(y - t.size[1]).toFixed(0)}px)`;
+    }
     for (const [id, list] of roomTags) for (const t of list) {
       if (id !== floor || !close) { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);

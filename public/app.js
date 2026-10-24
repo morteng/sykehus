@@ -55,13 +55,18 @@ function hint() {
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
 
+/* a building: for a wing of the hospital, what the documents say about it (site.json wings), then its size and
+   heights from the laser */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 function showInfo(b) {
   const el = $("info");
   if (!b) { el.style.display = "none"; return; }
-  const h = b.top != null ? b.top - b.base : null;
-  el.innerHTML = `<h2>${b.own ? "Bygning på tomta" : "Nabobygning"}</h2><dl>
+  const h = b.top != null ? b.top - b.base : null, w = (site.wings || []).find(x => x.id === b.wing);
+  const about = w ? [["Bygget", w.built], ["Etasjer", w.storeys], ["Konstruksjon", w.construction], ["Fasade", w.facade]].filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") : "";
+  el.innerHTML = `<h2>${w ? esc(w.name) : b.own ? "Bygning på tomta" : "Nabobygning"}</h2><dl>${about}
     <dt>Fotavtrykk</dt><dd>${num(b.area_m2)} m²</dd>
     ${h != null ? `<dt>Høyde</dt><dd>ca. ${h.toFixed(0)} m</dd><dt>Topp</dt><dd>kote ${kote(b.top)}</dd>` : ""}
-    <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>`;
+    <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
+    (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(d => d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title)).join(" · ")}</p>` : "");
   el.style.display = "block";
 }
