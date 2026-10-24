@@ -17,6 +17,10 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
 - `python -I tools/elevations.py public/data/site.json tools/elevations.json <documents folder> <dom.tif> <x0,y0,x1,y1>`:
   windows and doors from the vector facade drawings, placed along their walls in kote, and the operating module (on
   its frame, only the facades show it). Run after massing.py. Needs PyMuPDF.
+- `python -I tools/ifc.py public/data/site.json public/data/floors.json public/data/sykehus.ifc [wing id ...]`: the
+  buildings as IFC4 (BIM) for "Last ned som BIM-modell": a building per wing, its storeys, outer walls with the
+  facades' windows and doors as real openings, slabs, roofs, the drawn plans' walls and rooms, sources on each element.
+  Run last. Needs IfcOpenShell (0.8 or newer); FreeCAD 1.1 opens the file.
 - `python3 -I tools/massing.py public/data/site.json <dom.tif> <x0,y0,x1,y1>`: clean massing for the buildings on the
   lot (flat-roofed blocks on each building's grid, at the roof levels the laser finds), written into site.json.
 - `python3 -I tools/trees.py public/data/site.json <dom.tif> <dtm.tif> <x0,y0,x1,y1>`: the trees, from where the laser
