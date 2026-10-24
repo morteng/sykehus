@@ -310,7 +310,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const plate = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(b.ring.map(([x, y]) => new THREE.Vector2(x, y)))), pm);
       plate.rotation.x = -Math.PI / 2; plate.position.y = f.kote - base - 0.02; plate.receiveShadow = true; grp.add(plate);
     }
-    const xs = f.walls.flat().map(p => p[0]), ys = f.walls.flat().map(p => p[1]);
+    /* the view goes to the drawing; a storey with no drawing (only its kote is known) to the buildings it cuts */
+    const pts = f.walls.length ? f.walls.flat() : site.buildings.filter(b => b.own && b.base < f.kote && (b.top ?? 0) > f.kote && b.top - b.base < 40).flatMap(b => b.ring);
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
     grp.userData = { centre: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) };
     grp.visible = false; scene.add(grp); floorGroups.set(f.id, grp);
   }

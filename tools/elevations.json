@@ -46,6 +46,15 @@
    "on": "ostfloy-nord", "u": [14.10, 14.10], "out": [0, 12.19]
   }
  ],
+ "levels": {
+  "about": "storeys of the ladder that have no plan drawing, from the section; the page lets one choose them and cuts the buildings there",
+  "wing": "Østfløy",
+  "src": "5c27a428f032#p1 nytt snitt, kote ved hver etasje",
+  "list": [
+   { "id": "2", "name": "2. etasje", "kote": 20.24, "height": 3.30, "note": "kjeller; ok bunnplate +19,50" },
+   { "id": "4", "name": "4. etasje", "kote": 27.76, "height": 4.26 }
+  ]
+ },
  "volumes": [
   {
    "id": "operasjonsmodul",

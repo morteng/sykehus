@@ -1,8 +1,11 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try. */
 import { createViewer } from "./viewer.js";
 
-/* floors.json is built locally from the drawings; without it the page shows the site alone */
-const [site, { floors }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
+/* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys with no
+   plan drawing (site.json levels, kote from a section) join the ladder: chosen, they cut the buildings there. */
+const [site, { floors: drawn }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
+const floors = [...drawn, ...(site.levels || []).filter(l => !drawn.some(f => Math.abs(f.kote - l.kote) < 0.3))
+  .map(l => ({ id: "niva-" + l.id, name: l.name, kote: l.kote, height: l.height, wing: l.wing, walls: [], rooms: [], noplan: true, note: l.note, src: l.src }))];
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
@@ -42,7 +45,9 @@ function showFloor(f) {
     <dt>Gulv</dt><dd>kote ${kote(f.kote)}</dd>
     <dt>Etasjehøyde</dt><dd>${f.height.toFixed(2).replace(".", ",")} m</dd>
     ${withArea ? `<dt>Rom</dt><dd>${withArea}, til sammen ${num(sum)} m²</dd>` : rooms.length ? `<dt>Rom</dt><dd>${rooms.length} navngitt, uten areal på tegningen</dd>` : ""}
-    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:320px">${f.source}</p>`;
+    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:320px">${f.noplan
+      ? `${f.note ? esc(f.note[0].toUpperCase() + f.note.slice(1)) + ". " : ""}Ingen plantegning av denne etasjen i arkivet: bygningene er skåret 1,2 m over gulvet. Kote fra ${sourceLinks(f.src)}.`
+      : f.source}</p>`;
   el.style.display = "block";
 }
 function setMode(m) {
@@ -67,6 +72,13 @@ function showInfo(b) {
     <dt>Fotavtrykk</dt><dd>${num(b.area_m2)} m²</dd>
     ${h != null ? `<dt>Høyde</dt><dd>ca. ${h.toFixed(0)} m</dd><dt>Topp</dt><dd>kote ${kote(b.top)}</dd>` : ""}
     <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
-    (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(d => d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title)).join(" · ")}</p>` : "");
+    (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
   el.style.display = "block";
+}
+/* a document as the cards name it: its title and year, the page, a link to it */
+function docLink(d) { return d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title); }
+/* "<docid>#p<n> note" references, as site.json levels carry them, resolved through the wings' sources where they are known */
+function sourceLinks(refs = []) {
+  const known = new Map((site.wings || []).flatMap(w => w.sources).filter(d => d.id).map(d => [d.id, d]));
+  return refs.map(s => { const [ref] = s.split(" "), [id, p] = ref.split("#p"), d = known.get(id); return d ? docLink({ ...d, page: p ? +p : null }) : esc(s); }).join(" · ");
 }

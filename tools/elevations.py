@@ -8,7 +8,8 @@ sashes, panes); its outline is the cluster's box, its panes the rectangles insid
 bracing's diagonals are left out by their size and shape. Each opening is written as metres along the wall from its
 left end (as one stands outside) and kote: site.json facades[{id, building, name, from, to, openings[{kind, u, z,
 panes}], src}]. A volume (the operating module on its frame) becomes a building of its own: a box from 'bottom' to
-its laser roof, posts and braces under it. Run after tools/wings.py and tools/massing.py; running it again replaces
+its laser roof, posts and braces under it. 'levels' (storeys with no plan, kote from a section) go to site.json
+levels. Run after tools/wings.py and tools/massing.py; running it again replaces
 what it wrote. Needs PyMuPDF."""
 import sys, os, json, math
 import numpy as np
@@ -115,4 +116,6 @@ for v in E["volumes"]:
                               "lift": v["bottom"], "area_m2": round((u1 - u0) * (o1 - o0)), "wing": v["wing"], "name": v["name"],
                               "walls": walls, "blocks": [{"p": ring, "top": round(top, 2)}], "posts": posts, "braces": braces, "source": "; ".join(v["src"])})
     print(f'{v["id"]}: {u1 - u0:.2f} x {o1 - o0:.2f} m, underside +{v["bottom"]:.2f}, roof +{top:.2f} (laser), {len(posts)} posts')
+lv = E.get("levels")
+site["levels"] = [{**l, "wing": lv["wing"], "src": [lv["src"]]} for l in lv["list"]] if lv else []
 json.dump(site, open(site_f, "w"), separators=(",", ":"), ensure_ascii=False)
