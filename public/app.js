@@ -1,9 +1,15 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try. */
 import { createViewer } from "./viewer.js";
+import { applyEdits } from "./edits.js";
 
 /* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
    wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
-const [site, { floors }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
+const [site0, { floors: floors0 }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
+/* ?utkast=<id>: changes tried through the connector (mcp.mjs try_change), laid over the data and shown as not saved */
+const draftId = new URLSearchParams(location.search).get("utkast");
+let draft = null;
+if (draftId) { try { const r = await fetch(`api/utkast/${encodeURIComponent(draftId)}`); draft = r.ok ? await r.json() : { missing: true }; } catch { draft = { missing: true }; } }
+const { site, floors } = draft?.edits ? applyEdits(site0, floors0, draft.edits) : { site: site0, floors: floors0 };
 const wings = site.wings || [];
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
@@ -103,4 +109,21 @@ function docLink(d) { return d.url ? `<a href="${esc(d.url)}" target="_blank" re
 function sourceLinks(refs = []) {
   const known = new Map((site.wings || []).flatMap(w => w.sources).filter(d => d.id).map(d => [d.id, d]));
   return refs.map(s => { const [ref] = s.split(" "), [id, p] = ref.split("#p"), d = known.get(id); return d ? docLink({ ...d, page: p ? +p : null }) : esc(s); }).join(" · ");
+}
+
+/* the draft's banner: what is tried, that it is not saved, and its notes */
+if (draft) {
+  const el = document.createElement("div"); el.id = "draft"; el.className = "card";
+  el.innerHTML = draft.missing ? "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er."
+    : `<b>Utkast, ikke lagret</b> · ${draft.edits.length} ${draft.edits.length === 1 ? "endring" : "endringer"} prøvd via Claude. <a href="./">Se modellen uten</a>`
+      + (draft.edits.length ? `<ul>${draft.edits.map(e => `<li>${esc(describe(e))}</li>`).join("")}</ul>` : "");
+  document.body.appendChild(el);
+}
+function describe(e) {
+  const w = (site.wings || []).find(x => x.id === e.wing)?.name || e.wing;
+  const why = e.why ? ` (${e.why})` : "";
+  if (e.kind === "level") return `${w}, ${e.storey}: kote ${kote(e.kote)}${why}`;
+  if (e.kind === "wing") return `${w}, ${{ name: "navn", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
+  if (e.kind === "room") return `${e.storey}, ${e.room}: ${Object.entries(e.set).map(([k, v]) => `${{ name: "navn", use: "bruk", area_m2: "areal" }[k] || k} ${k === "area_m2" ? v + " m²" : v}`).join(", ")}${why}`;
+  return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }

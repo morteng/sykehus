@@ -57,3 +57,9 @@ from Kartverket's matrikkel. The derived site.json is shared under the ODbL.
 The floor walls in `public/data/floors.json` are traced from the existing-situation drawings in Drammen kommune's
 public building-case archive (each floor names its source drawing and architect). The documents themselves are not
 in this repository; build the document store locally with the tools.
+
+## The connector
+
+`node server.mjs` serves the site, the MCP connector at `/mcp` (MCP 2026-07-28, MCP Apps 2026-01-26: wings, storeys,
+rooms, openings, documents, the building in 3D in the chat) and drafts of tried changes (`?utkast=<id>`, not saved).
+Runbook: `docs/mcp-service.md`; decisions: `docs/rulings.md`. Tests: `node --test tests/*.mjs`.
