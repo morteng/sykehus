@@ -37,6 +37,23 @@
   #draft ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; color: var(--soft); }
   #hint { top: 118px; left: 14px; padding: 8px 14px; font-size: 15px; color: var(--soft); }
   @media (max-width: 640px) { #hint { display: none; } #draft { top: auto; bottom: 230px; max-width: calc(100vw - 24px); } #info, #scale { bottom: 150px; } #bar { flex-direction: column; gap: 8px; width: calc(100vw - 24px); } #bar .sep { display: none; } #floors { max-width: 100%; overflow-x: auto; } }
+  #sheet { display: none; }
+  @page { size: A4 landscape; margin: 10mm; }
+  @media print {
+    html, body { background: #fff; height: auto; }
+    body > *:not(#sheet) { display: none !important; }
+    #sheet { display: block; width: 277mm; font-size: 10pt; color: #000; }
+    #sheet .pic { position: relative; overflow: hidden; border: 0.3mm solid #000; }
+    #sheet .pic img { display: block; width: 100%; height: 100%; }
+    #sheet .pic > div { position: absolute; inset: 0; }
+    #sheet .block { display: flex; gap: 8mm; align-items: flex-end; margin-top: 3mm; }
+    #sheet .block h1 { font-size: 13pt; margin: 0; }
+    #sheet .block p { margin: 0.5mm 0 0; }
+    #sheet .bar { display: flex; height: 2mm; border: 0.3mm solid #000; border-top: 0; }
+    #sheet .bar i { flex: 1; } #sheet .bar i:nth-child(odd) { background: #000; }
+    #sheet .nums { display: flex; justify-content: space-between; font-size: 8pt; }
+    #sheet .src { font-size: 8pt; color: #333; margin-top: 2mm; }
+  }
 </style>
 </head>
 <body>
@@ -52,8 +69,10 @@
   <div class="group">
     <button id="m3d" aria-pressed="true">3D</button>
     <button id="mplan" aria-pressed="false">Plan</button>
+    <button id="print" hidden title="Skriv ut det du ser som et ark, med målestokk og kilder">Skriv ut</button>
   </div>
 </div>
+<div id="sheet"></div>
 <div id="zoom" class="card">
   <button id="zin" title="Zoom inn" aria-label="Zoom inn">+</button>
   <button id="zout" title="Zoom ut" aria-label="Zoom ut">−</button>

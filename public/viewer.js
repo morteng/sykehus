@@ -55,6 +55,16 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const lot = site.lot.ring.map(p => P(p, ground(...p) + 0.25));
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lot), new THREE.LineDashedMaterial({ color: C.lot, dashSize: 2, gapSize: 1.2 })).computeLineDistances());
   }
+  /* the plan's 10 m grid on whole UTM tens (EPSG:25833), as on a drawing; drawn over everything, only in the plan */
+  const grid = (() => {
+    const [ox, oy] = site.origin || [0, 0], xs = site.lot.ring.map(p => p[0]), ys = site.lot.ring.map(p => p[1]), pos = [];
+    const x0 = Math.floor((Math.min(...xs) - 150 + ox) / 10) * 10 - ox, x1 = Math.max(...xs) + 150, y0 = Math.floor((Math.min(...ys) - 150 + oy) / 10) * 10 - oy, y1 = Math.max(...ys) + 150;
+    for (let x = x0; x <= x1; x += 10) pos.push(x, 300, -y0, x, 300, -y1);
+    for (let y = y0; y <= y1; y += 10) pos.push(x0, 300, -y, x1, 300, -y);
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x5b6f86, transparent: true, opacity: 0.28, depthTest: false }));
+    l.renderOrder = 10; l.visible = false; l.frustumCulled = false; scene.add(l); return l;
+  })();
 
   /* ---------- buildings ---------- */
   const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
@@ -459,6 +469,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function setMode(m) {
     if (section && m !== "section") endSection();
     mode = m === "plan" ? "plan" : m === "section" && section ? "section" : "3d"; camera = mode === "3d" ? persp : ortho;
+    grid.visible = mode === "plan";
     sunL.castShadow = mode === "3d"; sky.intensity = mode === "3d" ? 2.2 : 2.8; place();
   }
   /* ---------- a section through one wing: across it (tverr) or along it (lengde), through its middle. Everything
@@ -632,6 +643,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
+    get labels() { return tags; },   // the names and kote over the picture, for a printed sheet
     snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
   };
 }

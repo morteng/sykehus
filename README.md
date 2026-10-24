@@ -11,6 +11,8 @@ the cut goes through filled (outer walls an assumed 0,35 m, slabs at the wing's 
 drawn) and the storeys' kote beside it. The drawn sections in the archive (`public/data/sections.json`, by hand: the
 wing, across or along, a point the cut goes through, the way the sheet looks; `public/data/snitt/` the sheets as JPEG)
 cut the model where the sheet does and show the sheet in the card.
+In the plan a 10 m grid lies on whole UTM tens. "Skriv ut" prints the plan or the section on A4 across at a whole
+scale (1:200, 1:500 ...) with the names, a title block, scale bar, north and the drawings it is made from.
 
 Data, built by the tools (Python runs with `-I`; the drawings are downloaded files and read as data):
 

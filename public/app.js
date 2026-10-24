@@ -63,7 +63,31 @@ function showStorey(name) {
 function setMode(m) {
   viewer.setMode(m); pressMode(); hint();
 }
-function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); }
+function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; }
+/* the plan or the section as a sheet to print: the picture with its names, a title block with what it is, a scale
+   bar and the scale it prints at on A4 across, north, and the drawings it is made from */
+async function printSheet() {
+  const v = viewer.view(), el = $("view"), W = el.clientWidth, H = el.clientHeight, PX = 96 / 25.4;   // css px a millimetre
+  /* the largest picture that fits the page, made a little smaller so it prints at a whole scale (1:200, 1:500 ...) */
+  const kMax = Math.min(277 * PX / W, 160 * PX / H), natural = 1000 * v.mPerPx * PX / kMax;
+  const scale = [50, 100, 200, 250, 500, 1000, 2000, 5000].find(n => n >= natural * 0.999) || Math.ceil(natural / 1000) * 1000;
+  const mmPerM = 1000 / scale, k = mmPerM * PX * v.mPerPx;   // printed mm a metre, and the picture's scale on paper
+  const m = [5, 10, 20, 25, 50, 100].find(n => n * mmPerM >= 30) || 100;
+  const wing = v.section && wings.find(w => w.id === v.section.wing);
+  const what = v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} gjennom ${wing?.name || "bygget"}${sheet ? ", der tegningen snitter" : ", midt i fløyen"}` : `${v.storey ? v.storey + ", snitt 1,2 m over gulv" : "Situasjonsplan"} · rutenett 10 m (UTM 33)`;
+  const src = v.mode === "section" ? (sheet ? `Tegnet snitt: ${esc(sheet.title)} (${sheet.year}), ${esc(sheet.note)}. Plassert omtrentlig.` : "Snitt i modellen; yttervegger 0,35 m antatt, innervegger fra plantegningene der de finnes.")
+    : floors.filter(f => f.name === v.storey).map(f => esc(f.source)).join(" · ") || "Bygningsomriss fra OpenStreetMap og Kartverkets laser.";
+  const pic = new Image(); pic.src = viewer.snapshot(); await pic.decode();
+  const names = viewer.labels.cloneNode(true);
+  $("sheet").innerHTML = `<div class="pic" style="width:${(W * k).toFixed(1)}px;height:${(H * k).toFixed(1)}px"><div style="width:${W}px;height:${H}px;transform:scale(${k.toFixed(4)});transform-origin:0 0"></div></div>
+    <div class="block"><div style="flex:1"><h1>Gamle Drammen sykehus</h1><p>Dronninggata 28, gnr. 114 bnr. 272 · ${esc(what)}</p><p>Målestokk 1:${scale} på A4 liggende (skriv ut i 100 %) · utskrevet ${new Date().toLocaleDateString("nb-NO")} fra sykehus.gulden.no</p></div>
+      <div style="width:${(m * mmPerM).toFixed(1)}mm"><div class="bar"><i></i><i></i><i></i><i></i></div><div class="nums"><span>0</span><span>${m} m</span></div></div>
+      ${v.mode === "plan" ? `<svg viewBox="-20 -20 40 40" style="width:12mm;height:12mm"><path d="M0 -8 L7 17 L0 12 L-7 17 Z"/><text x="0" y="-10" text-anchor="middle" font-size="11" font-weight="700">N</text></svg>` : ""}</div>
+    <div class="src">Tegnet fra arkivets tegninger, ikke målt på stedet. ${src}</div>`;
+  const inner = $("sheet").querySelector(".pic > div"); pic.style.cssText = "position:absolute;inset:0;width:100%;height:100%"; inner.append(pic, names);
+  print();
+}
+$("print").onclick = () => printSheet();
 /* a section through a wing, across or along it, looked at square on with the wing's floor heights beside it */
 const LOOK = { N: [0, 1], Ø: [1, 0], S: [0, -1], V: [-1, 0] };   // the way a drawn section looks
 let sheet = null;   // the drawn section shown, if the cut is one
