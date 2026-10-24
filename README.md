@@ -24,5 +24,6 @@ The code is MIT (`LICENSE`); three.js in `public/vendor/` is MIT too (`LICENSE-t
 openstreetmap.org/copyright), laser heights and terrain © Kartverket (hoydedata.no, CC BY 4.0), the lot outline
 from Kartverket's matrikkel. The derived site.json is shared under the ODbL.
 
-The floor plans (`public/data/floors.json`) and the documents are not in this repository: the drawings are the
-architects' work, read from Drammen kommune's public building-case archive. Build them locally with the tools.
+The floor walls in `public/data/floors.json` are traced from the existing-situation drawings in Drammen kommune's
+public building-case archive (each floor names its source drawing and architect). The documents themselves are not
+in this repository; build the document store locally with the tools.
