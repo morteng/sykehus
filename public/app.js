@@ -54,7 +54,7 @@ function showStorey(name) {
   el.innerHTML = `<h2>${esc(name)}</h2><dl>${rows.map(([w, l]) => `<dt>${esc(w.name)}</dt><dd>kote ${kote(l.kote)}${how(l)}</dd>`).join("")}
     ${withArea ? `<dt>Rom</dt><dd>${withArea}, til sammen ${num(sum)} m²</dd>` : rooms.length ? `<dt>Rom</dt><dd>${rooms.length} navngitt, uten areal på tegningen</dd>` : ""}
     ${calc.length ? `<dt>Målt</dt><dd>${calc.length} rom uten areal på tegningen, ca. ${num(Math.round(calc.reduce((a, r) => a + r.area_calc, 0)))} m² mellom veggene</dd>` : ""}
-    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">Bygningene er skåret 1,2 m over gulvet. ${drawn.length
+    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">Bygningene er skåret 1,2 m over gulvet; skravert gulv: ingen plantegning av etasjen der. ${drawn.length
       ? "Plantegning: " + drawn.map(f => esc(f.source)).join(" · ") : "Ingen plantegning av denne etasjen i arkivet."}</p>`;
   el.style.display = "block";
 }

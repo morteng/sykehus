@@ -300,12 +300,19 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   /* ---------- storeys: each wing has its own (site.json wings[].levels, tools/wings.json), at its own kote. A
      building is cut 1.2 m above the floor of the storey chosen for it, as a plan is cut, with a floor plate there;
-     the walls of a drawing of that storey (floors.json) stand in the buildings the drawing covers. ---------- */
+     the walls of a drawing of that storey (floors.json) stand in the buildings the drawing covers, and a building
+     no drawing covers gets a hatched plate. ---------- */
   const wingOf = new Map((site.wings || []).map(w => [w.id, w]));
   const levelsOf = b => wingOf.get(b.wing)?.levels || [];
   /* a storey's kote where a wing has no kote for it: the middle of the wings that have one */
   const refKote = name => { const ks = (site.wings || []).flatMap(w => (w.levels || []).filter(l => l.name === name).map(l => l.kote)).sort((a, b) => a - b); return ks.length ? ks[ks.length >> 1] : floors.find(f => f.name === name)?.kote ?? null; };
   const own = site.buildings.filter(b => b.own), cuts = new Map(), plates = new Map(), pm = mat(C.plate);
+  /* a building cut where no drawing of that storey stands: its plate hatched, as an unknown area on a drawing */
+  const hatchTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+    g.fillStyle = "#dcd8cf"; g.fillRect(0, 0, 64, 64); g.strokeStyle = "#9d978b"; g.lineWidth = 5;
+    for (const o of [-64, 0, 64]) { g.beginPath(); g.moveTo(o, 64); g.lineTo(o + 64, 0); g.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(0.5, 0.5); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const pmNone = mat("#ffffff", { map: hatchTex });
   for (const b of own) {
     cuts.set(b.id, new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6));
     const plate = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(b.ring.map(([x, y]) => new THREE.Vector2(x, y)))), pm);
@@ -364,7 +371,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       placed.push(box); t.el.style.transform = `translate(${(x - t.size[0] / 2).toFixed(0)}px, ${(y - t.size[1]).toFixed(0)}px)`;
     }
     for (const [id, list] of roomTags) for (const t of list) {
-      if (id !== floor || !close) { t.el.style.display = "none"; continue; }
+      if (!shownFloors.has(id) || !close) { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
       if (v3.z > 1 || x < -100 || y < -30 || x > w + 10 || y > h + 30) { t.el.style.display = "none"; continue; }
@@ -375,15 +382,16 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }
   }
   /* the storey shown: in every building (setStorey) or in one (cutBuilding); floor: the drawing whose rooms are named */
-  let floor = null, storey = null, only = null;
+  let floor = null, storey = null, only = null; const shownFloors = new Set();   // every sheet of the storey shown names its rooms
   function show(name, ids) {
     storey = name; floor = null;
     for (const b of own) cutAt(b, name && ids.has(b.id) ? koteIn(b, name) : null);
-    let drawn = null;
+    let drawn = null; const covered = new Set(); shownFloors.clear();
     for (const f of floors) {
       const g = floorGroups.get(f.id), on = !!name && f.name === name && [...g.userData.covers].some(id => ids.has(id));
-      g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; }
+      g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; shownFloors.add(f.id); for (const id of g.userData.covers) covered.add(id); }
     }
+    for (const b of own) plates.get(b.id).material = covered.has(b.id) ? pm : pmNone;
     floor = drawn?.id ?? null; dirty = true;
     return drawn;
   }
