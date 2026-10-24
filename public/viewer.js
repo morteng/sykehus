@@ -14,7 +14,7 @@ import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./sun.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
-const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890" };
+const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
 
 export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality() }) {
   const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
@@ -83,21 +83,46 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     tower: { concrete: "#e4e2e5", reveal: "#a3a19e", frame: "#3a3d42", glass: "#4576a8" },
     low: { concrete: "#ece3d6", frame: "#3b352d", blind: "#827356", glass: "#4f5d66" },
   };
-  function facade(kind) {
-    const W = 256, H = 358, mx = W / 2.5, my = H / 3.5, c = FACADE[kind];          // pixels per metre
+  /* a picture of a facade, Wm by Hm metres at ppm pixels a metre: box() paints a surface (metres from the left and
+     the top), with its gloss and how deep it lies; pane() a pane of glass, glass() a pane in its frame; done() adds
+     the grain and makes the relief from the depths */
+  function painter(Wm, Hm, ppm, c, repeat = true) {
+    const W = Math.round(Wm * ppm), H = Math.round(Hm * ppm), mx = W / Wm, my = H / Hm;
     const pic = document.createElement("canvas"), gl = document.createElement("canvas"); pic.width = gl.width = W; pic.height = gl.height = H;
     const g = pic.getContext("2d"), r = gl.getContext("2d"), depth = new Float32Array(W * H);     // depth: 0 at the face, 1 in a recess
-    const box = (x0, y0, x1, y1, col, rough, d) => {   // metres from the bay's left and the storey's top
-      const X0 = Math.round(x0 * mx), Y0 = Math.round(y0 * my), X1 = Math.round(x1 * mx), Y1 = Math.round(y1 * my);
+    const box = (x0, y0, x1, y1, col, rough, d) => {
+      const X0 = Math.max(0, Math.round(x0 * mx)), Y0 = Math.max(0, Math.round(y0 * my)), X1 = Math.min(W, Math.round(x1 * mx)), Y1 = Math.min(H, Math.round(y1 * my));
+      if (X1 <= X0 || Y1 <= Y0) return;
       g.fillStyle = col; g.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
       if (rough != null) { r.fillStyle = `rgb(0,${rough},0)`; r.fillRect(X0, Y0, X1 - X0, Y1 - Y0); }
       if (d != null) for (let y = Y0; y < Y1; y++) depth.fill(d, y * W + X0, y * W + X1);
     };
-    const glass = (x0, y0, x1, y1) => {   // a pane: the sky's light in its top, darker down, and the frame round it
-      box(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, c.frame, 150, 0.6);
+    const pane = (x0, y0, x1, y1) => {   // the sky's light in its top, darker down
       const gr = g.createLinearGradient(0, y0 * my, 0, y1 * my); gr.addColorStop(0, new THREE.Color(c.glass).lerp(new THREE.Color("#dfe9f3"), 0.35).getStyle()); gr.addColorStop(1, c.glass);
       box(x0, y0, x1, y1, gr, 25, 0.75);
     };
+    const glass = (x0, y0, x1, y1) => { box(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, c.frame, 150, 0.6); pane(x0, y0, x1, y1); };
+    const done = amt => {
+      /* the concrete's grain: small light and dark specks, more of them on the exposed aggregate */
+      const img = g.getImageData(0, 0, W, H), px = img.data;
+      let s = 1234567; const rnd = () => (s = (s * 1103515245 + 12345) >>> 0) / 4294967296;
+      for (let i = 0; i < W * H; i++) { if (depth[i] > 0.55) continue; const n = (rnd() - 0.5) * amt * (rnd() < 0.08 ? 2.2 : 1); px[i * 4] += n; px[i * 4 + 1] += n; px[i * 4 + 2] += n * 0.95; }
+      g.putImageData(img, 0, 0);
+      const tex = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+      if (!Q.relief) return { map: tex(pic, true), roughness: 0.9 };
+      /* relief: the slope of the depth, as a tangent-space normal */
+      const nc = document.createElement("canvas"); nc.width = W; nc.height = H; const nx = nc.getContext("2d"), ni = nx.createImageData(W, H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const at = (i, j) => depth[((j + H) % H) * W + ((i + W) % W)], dx = (at(x + 1, y) - at(x - 1, y)) * 2, dy = (at(x, y - 1) - at(x, y + 1)) * 2, k = (y * W + x) * 4;
+        const l = Math.hypot(dx, dy, 1); ni.data[k] = (dx / l * 0.5 + 0.5) * 255; ni.data[k + 1] = (dy / l * 0.5 + 0.5) * 255; ni.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; ni.data[k + 3] = 255;
+      }
+      nx.putImageData(ni, 0, 0);
+      return { map: tex(pic, true), roughnessMap: tex(gl), roughness: 1, normalMap: tex(nc), normalScale: new THREE.Vector2(1.2, 1.2), envMap, envMapIntensity: 0.7 };
+    };
+    return { box, pane, glass, done, g, mx, my };
+  }
+  function facade(kind) {
+    const c = FACADE[kind], { box, glass, done, g, mx, my } = painter(2.5, 3.5, 102.4, c);
     box(0, 0, 2.5, 3.5, c.concrete, 235, 0);
     if (kind === "tower") {
       box(1.1, 0, 2.5, 3.5, c.reveal, 235, 1);                                       // the slot
@@ -113,21 +138,21 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       }
       box(0, 3.44, 2.5, 3.5, "rgba(0,0,0,.07)", null, null);                         // the sill's shadow line
     }
-    /* the concrete's grain: small light and dark specks, more of them on the exposed aggregate */
-    const img = g.getImageData(0, 0, W, H), px = img.data, amt = kind === "low" ? 26 : 16;
-    let s = 1234567; const rnd = () => (s = (s * 1103515245 + 12345) >>> 0) / 4294967296;
-    for (let i = 0; i < W * H; i++) { if (depth[i] > 0.55) continue; const n = (rnd() - 0.5) * amt * (rnd() < 0.08 ? 2.2 : 1); px[i * 4] += n; px[i * 4 + 1] += n; px[i * 4 + 2] += n * 0.95; }
-    g.putImageData(img, 0, 0);
-    const tex = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
-    if (!Q.relief) return { map: tex(pic, true), roughness: 0.9 };
-    /* relief: the slope of the depth, as a tangent-space normal */
-    const nc = document.createElement("canvas"); nc.width = W; nc.height = H; const nx = nc.getContext("2d"), ni = nx.createImageData(W, H);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const at = (i, j) => depth[((j + H) % H) * W + ((i + W) % W)], dx = (at(x + 1, y) - at(x - 1, y)) * 2, dy = (at(x, y - 1) - at(x, y + 1)) * 2, k = (y * W + x) * 4;
-      const l = Math.hypot(dx, dy, 1); ni.data[k] = (dx / l * 0.5 + 0.5) * 255; ni.data[k + 1] = (dy / l * 0.5 + 0.5) * 255; ni.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; ni.data[k + 3] = 255;
+    return done(kind === "low" ? 26 : 16);
+  }
+  /* a facade the drawings show (tools/elevations.py): its own windows and doors, where the sheet has them, in a
+     plastered wall from z0 to z1 (kote); the sheet gives no colours, so plaster and frames are kept quiet */
+  FACADE.drawn = { concrete: "#e8e3d8", frame: "#4a463f", glass: "#4f5d66", door: "#6d675d" };
+  function drawnFacade(f, z0, z1) {
+    const L = Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1]), c = FACADE.drawn, y = z => z1 - z;
+    const { box, pane, done } = painter(L, z1 - z0, Q.relief ? 28 : 14, c, false);
+    box(0, 0, L, z1 - z0, c.concrete, 235, 0);
+    for (const o of f.openings) {
+      box(o.u[0], y(o.z[1]), o.u[1], y(o.z[0]), c.frame, 150, 0.6);                 // the frame, as drawn round the panes
+      for (const [a, b, lo, hi] of o.panes) o.kind === "door" ? box(a, y(hi), b, y(lo), c.door, 160, 0.7) : pane(a, y(hi), b, y(lo));
+      box(o.u[0] - 0.05, y(o.z[0]), o.u[1] + 0.05, y(o.z[0]) + 0.06, "rgba(0,0,0,.12)", null, null);   // the sill's shadow
     }
-    nx.putImageData(ni, 0, 0);
-    return { map: tex(pic, true), roughnessMap: tex(gl), roughness: 1, normalMap: tex(nc), normalScale: new THREE.Vector2(1.2, 1.2), envMap, envMapIntensity: 0.7 };
+    return done(18);
   }
   /* a sky for the glass to mirror: light blue overhead, pale at the horizon, the ground's green-grey below */
   const envMap = Q.relief && (() => {
@@ -141,13 +166,22 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const wallTex = { low: facade("low"), tower: facade("tower") };
   /* a building on the lot as blocks (tools/massing.py): flat roofs, and walls only where the roof steps down or the
      building ends, with the facade counted in bays and storeys from the base so the windows line up */
+  /* a wall on the line of a drawn facade (within 1.6 m of it, so a stair tower standing out of it counts) wears
+     that facade, stretched once along the line; the other walls the bays */
   function blocksMesh(b, tex) {
-    const pos = [], uv = [], roof = [], b0 = b.base - 0.5;
+    const pos = [], uv = [], roof = [], b0 = b.base - 0.5, z1 = Math.max(b.top, ...(b.walls || []).map(w => w[5])) + 0.1;
+    const faces = (site.facades || []).filter(f => f.building === (b.wing ?? b.id)).map(f => {
+      const L = Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1]); return { f, L, d: [(f.to[0] - f.from[0]) / L, (f.to[1] - f.from[1]) / L], pos: [], uv: [] };
+    });
+    const onLine = (F, p) => { const dx = p[0] - F.f.from[0], dy = p[1] - F.f.from[1]; return [dx * F.d[0] + dy * F.d[1], Math.abs(dy * F.d[0] - dx * F.d[1])]; };
     for (const [ax, ay, bx, by, lo, top] of b.walls || []) {
       const bot = lo ?? b0, len = Math.hypot(bx - ax, by - ay), along = (ax * (bx - ax) + ay * (by - ay)) / len / BAY;   // bays counted along the wall's line, so the walls on one line share them
-      const A = P([ax, ay], bot), B = P([bx, by], bot), Cc = P([bx, by], top), D = P([ax, ay], top), u0 = along, u1 = along + len / BAY, v0 = (bot - b.base) / STOREY, v1 = (top - b.base) / STOREY;
-      pos.push(A.x, A.y, A.z, B.x, B.y, B.z, Cc.x, Cc.y, Cc.z, A.x, A.y, A.z, Cc.x, Cc.y, Cc.z, D.x, D.y, D.z);
-      uv.push(u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1);
+      const A = P([ax, ay], bot), B = P([bx, by], bot), Cc = P([bx, by], top), D = P([ax, ay], top);
+      const F = faces.find(F => { const [ua, na] = onLine(F, [ax, ay]), [ub, nb] = onLine(F, [bx, by]); return Math.abs((bx - ax) * F.d[1] - (by - ay) * F.d[0]) / len < 0.05 && na < 1.6 && nb < 1.6 && Math.min(ua, ub) > -0.3 && Math.max(ua, ub) < F.L + 0.3; });
+      const [P0, T0] = F ? [F.pos, F.uv] : [pos, uv];
+      const [u0, u1, v0, v1] = F ? [onLine(F, [ax, ay])[0] / F.L, onLine(F, [bx, by])[0] / F.L, (bot - b0) / (z1 - b0), (top - b0) / (z1 - b0)] : [along, along + len / BAY, (bot - b.base) / STOREY, (top - b.base) / STOREY];
+      P0.push(A.x, A.y, A.z, B.x, B.y, B.z, Cc.x, Cc.y, Cc.z, A.x, A.y, A.z, Cc.x, Cc.y, Cc.z, D.x, D.y, D.z);
+      T0.push(u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1);
     }
     for (const k of b.blocks) {
       const top = k.top, p = k.p;
@@ -160,6 +194,22 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.Float32BufferAttribute(roof, 3));
     rg.setAttribute("normal", new THREE.Float32BufferAttribute(roof.map((_, i) => i % 3 === 1 ? 1 : 0), 3));   // flat roofs face up
     const r = new THREE.Mesh(rg, mat(C.flatRoof)); r.castShadow = r.receiveShadow = true; grp.add(r);
+    for (const F of faces) if (F.pos.length) {
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(F.pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(F.uv, 2)); g.computeVertexNormals();
+      const m = new THREE.Mesh(g, mat("#ffffff", drawnFacade(F.f, b0, z1))); m.castShadow = m.receiveShadow = true; grp.add(m);
+    }
+    /* a volume held up on a frame (the operating module): its underside, the posts down to the ground, the braces */
+    if (b.lift != null) {
+      const s = b.blocks.flatMap(k => { const q = k.p.map(pt => P(pt, b.lift)); return [q[0], q[2], q[1], q[0], q[3], q[2]].flatMap(v => [v.x, v.y, v.z]); });
+      const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(s, 3)); sg.setAttribute("normal", new THREE.Float32BufferAttribute(s.map((_, i) => i % 3 === 1 ? -1 : 0), 3));
+      const steel = mat(C.steel), under = new THREE.Mesh(sg, mat(C.flatRoof)); under.castShadow = under.receiveShadow = true; grp.add(under);
+      const bar = (p, q, w) => {   // a member of the frame from p to q, w thick
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, p.distanceTo(q), w), steel); m.position.copy(p).add(q).multiplyScalar(0.5);
+        m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), q.clone().sub(p).normalize()); m.castShadow = m.receiveShadow = true; grp.add(m);
+      };
+      for (const [x, y, w] of b.posts || []) bar(P([x, y], ground(x, y) - 0.2), P([x, y], b.lift), w);
+      for (const [ax, ay, bx, by] of b.braces || []) { bar(P([ax, ay], ground(ax, ay)), P([bx, by], b.lift), 0.15); bar(P([bx, by], ground(bx, by)), P([ax, ay], b.lift), 0.15); }
+    }
     return grp;
   }
   for (const b of site.buildings) {
@@ -256,7 +306,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const w = new THREE.Mesh(g, wm); w.rotation.x = -Math.PI / 2; w.position.y = f.kote - base; w.castShadow = w.receiveShadow = true; grp.add(w);
     }
     for (const b of site.buildings) {
-      if (!b.own || b.base >= f.kote || (b.top ?? 0) <= f.kote) continue;
+      if (!b.own || b.base >= f.kote || (b.top ?? 0) <= f.kote || (b.lift ?? -1e9) > f.kote) continue;
       const plate = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(b.ring.map(([x, y]) => new THREE.Vector2(x, y)))), pm);
       plate.rotation.x = -Math.PI / 2; plate.position.y = f.kote - base - 0.02; plate.receiveShadow = true; grp.add(plate);
     }

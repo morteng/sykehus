@@ -207,6 +207,23 @@
    ]
   },
   {
+   "id": "operasjonsmodul",
+   "name": "Operasjonsmodulen",
+   "aliases": ["modulbygg hovedoperasjon"],
+   "parts": [],
+   "sure": true,
+   "built": "etter 2013 (søkt 17.12.2013)",
+   "storeys": "5. etasje (operasjon) og teknisk rom over, på åpen stålramme",
+   "construction": "modulbygg på søyler og stag",
+   "note": "utvidelse av hovedoperasjon foran Østfløys nordfasade, ikke på situasjonsplanen fra 2013; mål fra fasadene, tak fra laser (geometri: tools/elevations.json)",
+   "src": [
+    "3957fafe78ec#p37 DIVE",
+    "1bfc547ce73c#p1 ny fasade mot nord",
+    "bc0fee0e71c9#p1 ny fasade mot øst",
+    "848553050deb#p1 situasjonsplan"
+   ]
+  },
+  {
    "id": "bod-no",
    "name": "Bod ved Tybrings gate",
    "aliases": [],

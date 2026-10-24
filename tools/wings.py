@@ -22,10 +22,11 @@ def at(g, x, y):
     c = np.floor((np.asarray(x) + OX - X0) / RES).astype(int); r = np.floor((Y1 - (np.asarray(y) + OY)) / RES).astype(int)
     ok = (c >= 0) & (r >= 0) & (c < g.shape[1]) & (r < g.shape[0]); v = np.full(c.shape, np.nan); v[ok] = g[r[ok], c[ok]]; v[v < -1000] = np.nan; return v
 
-keep = [b for b in site["buildings"] if b["id"] not in W["replaces"]]
+keep = [b for b in site["buildings"] if b["id"] not in W["replaces"] and "wing" not in b]   # and what an earlier run wrote
 new = []
 for w in W["wings"]:
-    shape = unary_union([Polygon(parts[n]["ring"]).buffer(0.4, join_style="mitre") for n in w["parts"]]).buffer(-0.4, join_style="mitre")   # parts drawn a hair apart join
+    if not w["parts"]: continue   # not on the site plan: its volume comes from tools/elevations.py
+    shape =unary_union([Polygon(parts[n]["ring"]).buffer(0.4, join_style="mitre") for n in w["parts"]]).buffer(-0.4, join_style="mitre")   # parts drawn a hair apart join
     polys = list(shape.geoms) if isinstance(shape, MultiPolygon) else [shape]
     for i, g in enumerate(sorted(polys, key=lambda g: -g.area)):
         g = g.simplify(0.05); ring = [[round(x, 2), round(y, 2)] for x, y in g.exterior.coords]
