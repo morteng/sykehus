@@ -339,8 +339,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   container.appendChild(tags);
   const roomTags = new Map(floors.map(f => [f.id, (f.rooms || []).map(r => {
     const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 3px #fffbf0,0 0 3px #fffbf0";
-    el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²` : "");
-    tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), area: r.area_m2 || 0 };
+    el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²`
+      : r.area_calc ? `<br><span title="Målt mellom veggene på tegningen, ikke skrevet på den">ca. ${Math.round(r.area_calc)} m²</span>` : "");
+    tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), area: r.area_m2 || r.area_calc || 0 };
   }).sort((a, b) => b.area - a.area)]));
   /* the wings' names over their roofs (site.json wings, tools/wings.py), while the whole site is shown */
   const wingTags = site.buildings.filter(b => b.own && b.name).map(b => {

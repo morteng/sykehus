@@ -44,9 +44,10 @@ function showStorey(name) {
   const el = $("info");
   if (!name) { el.style.display = "none"; return; }
   const rows = wings.map(w => [w, (w.levels || []).find(l => l.name === name)]).filter(r => r[1]).sort((a, b) => a[1].kote - b[1].kote);
-  const drawn = floors.filter(f => f.name === name), rooms = drawn.flatMap(f => f.rooms || []), sum = rooms.reduce((a, r) => a + (r.area_m2 || 0), 0), withArea = rooms.filter(r => r.area_m2).length;
+  const drawn = floors.filter(f => f.name === name), rooms = drawn.flatMap(f => f.rooms || []), sum = rooms.reduce((a, r) => a + (r.area_m2 || 0), 0), withArea = rooms.filter(r => r.area_m2).length, calc = rooms.filter(r => !r.area_m2 && r.area_calc);
   el.innerHTML = `<h2>${esc(name)}</h2><dl>${rows.map(([w, l]) => `<dt>${esc(w.name)}</dt><dd>kote ${kote(l.kote)}${how(l)}</dd>`).join("")}
     ${withArea ? `<dt>Rom</dt><dd>${withArea}, til sammen ${num(sum)} m²</dd>` : rooms.length ? `<dt>Rom</dt><dd>${rooms.length} navngitt, uten areal på tegningen</dd>` : ""}
+    ${calc.length ? `<dt>Målt</dt><dd>${calc.length} rom uten areal på tegningen, ca. ${num(Math.round(calc.reduce((a, r) => a + r.area_calc, 0)))} m² mellom veggene</dd>` : ""}
     </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">Bygningene er skåret 1,2 m over gulvet. ${drawn.length
       ? "Plantegning: " + drawn.map(f => esc(f.source)).join(" · ") : "Ingen plantegning av denne etasjen i arkivet."}</p>`;
   el.style.display = "block";

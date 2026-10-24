@@ -56,21 +56,26 @@
    "checked": "Østfløys nordøstre hjørne og operasjonsmodulens ytre vestre hjørne (tools/elevations.json); arket er skrevet ut ca. 1,4 % under 1:200, tilpasningen tar det"
   },
   {
-   "id": "6-ost",
+   "id": "6-br06",
    "name": "6. etasje",
-   "wing": "Østre nordfløy",
-   "file": "14-05210-1__VEDLEGG_E.1_-_PLAN_6._ETASJE_EKSISTERENDE.PDF",
+   "wing": "Østre nordfløy, Sentralblokka, Østfløy og operasjonsmodulen",
+   "file": "e0b98d457242.pdf",
    "page": 1,
-   "scale": 200,
+   "scale": 150,
+   "walls": "lines",
+   "rooms": false,
+   "keep": [
+    "ostre-nordfloy",
+    "sentralblokka",
+    "sentralblokka-sidebygg",
+    "ostfloy",
+    "operasjonsmodul"
+   ],
    "kote": 35.52,
    "height": 2.86,
-   "source": "Ottar Arkitekter, Plan 6. etasje eksisterende, 17.12.2013 (byggesak 14/05210); nivåer fra Snitt fasade øst (14/00026)",
-   "like": "3-ost",
-   "leave": [
-    "midtfloy",
-    "venstre-nordfloy",
-    "mr-bygg"
-   ]
+   "source": "Reinertsen, Brannplan 6. etasje sterilavdeling BR-06 rev. I as-built 2015 (1:150 på A3); nivåer fra Snitt fasade øst (14/00026)",
+   "cp": "341.9,978.7,43.52,49.85;171.8,301.6,18.03,76.60",
+   "checked": "samme dreining som BR-05; flyttet til best treff mot Ratio-planen (6-ratio) og Ottar 2013-planen: heissjaktene og østre nordfløys rom faller oppå hverandre. Erstatter Ottars 6. etasje eksisterende 2013 (14/05210, før ombyggingen 2014–15) for disse fløyene"
   },
   {
    "id": "6-ratio",

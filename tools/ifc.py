@@ -8,7 +8,8 @@ wing's own kote (tools/wings.json levels; a wing without them gets one storey, "
 on the building outlines (the roof steps as tools/massing.py found them), split at each storey, 0,35 m thick (assumed:
 no drawing gives it); the windows and doors read from the elevations (tools/elevations.py) are cut into them as real
 openings. A slab at each storey's kote and a roof at the top of each block. The walls of the drawn floor plans
-(floors.json) stand on their storey as interior walls, and their room stamps are spaces with code and name. Every
+(floors.json) stand on their storey as interior walls, and their room stamps are spaces with code and name, as
+volumes where tools/roompoly.py found the room's outline. Every
 element says where it came from and how sure it is (Pset Sykehustomta_Kilde).
 
 The worker on the server can import build() and run it on the agent's edits; it needs IfcOpenShell only."""
@@ -159,8 +160,13 @@ def build(site, floors, only=None):
             wid = wing_at(rm["at"])
             if not wid: continue
             sp = new("IfcSpace", name=rm.get("code") or rm["name"]); sp.LongName = rm["name"]
-            sp.ObjectPlacement = m.create_entity("IfcLocalPlacement", RelativePlacement=m.create_entity("IfcAxis2Placement3D", Location=P3(*rm["at"], fl["kote"])))
-            props = {"Kilde": src, "Hvordan": "romstempel på plantegningen (plassert ved stempelet, uten omriss)"}
+            if rm.get("poly"):   # its outline between the walls (tools/roompoly.py): the space as a volume
+                sp.ObjectPlacement = place(); sp.Representation = prism(rm["poly"][:-1], fl["kote"], fl["height"])
+                props = {"Kilde": src, "Hvordan": "romstempel på plantegningen; omriss målt mellom veggene"}
+                props["Areal (målt)"] = f'{rm["area_calc"]} m²'
+            else:
+                sp.ObjectPlacement = m.create_entity("IfcLocalPlacement", RelativePlacement=m.create_entity("IfcAxis2Placement3D", Location=P3(*rm["at"], fl["kote"])))
+                props = {"Kilde": src, "Hvordan": "romstempel på plantegningen (plassert ved stempelet, uten omriss)"}
             if rm.get("area_m2"): props["Areal (tegning)"] = f'{rm["area_m2"]} m²'
             ifcopenshell.api.pset.edit_pset(m, pset=ifcopenshell.api.pset.add_pset(m, product=sp, name="Sykehustomta_Kilde"), properties=props)
             spaces.setdefault(storey(wid), []).append(sp); counts["space"] += 1

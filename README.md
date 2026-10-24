@@ -17,6 +17,9 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
 - `python -I tools/elevations.py public/data/site.json tools/elevations.json <documents folder> <dom.tif> <x0,y0,x1,y1>`:
   windows and doors from the vector facade drawings, placed along their walls in kote, and the operating module (on
   its frame, only the facades show it). Run after massing.py. Needs PyMuPDF.
+- `python -I tools/roompoly.py public/data/floors.json public/data/site.json [--check]`: each room stamp's outline,
+  the space between the drawn walls around it, and its area measured (`area_calc`, shown as "ca." where the drawing
+  gives none; --check compares with the stamped areas, median about 14 % off). Run after floors.mjs.
 - `python -I tools/ifc.py public/data/site.json public/data/floors.json public/data/sykehus.ifc [wing id ...]`: the
   buildings as IFC4 (BIM) for "Last ned som BIM-modell": a building per wing, its storeys, outer walls with the
   facades' windows and doors as real openings, slabs, roofs, the drawn plans' walls and rooms, sources on each element.
