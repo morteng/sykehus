@@ -90,6 +90,10 @@ export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
     if (a.storey) { const n = storeyName(a.storey); if (!floors.some(f => f.name === n) && !wingsAll().some(w => (w.levels || []).some(l => l.name === n))) throw toolErr(`No storey "${a.storey}".`); v.storey = n; }
     if (a.wing) { const w = wingOrErr(a.wing); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; }
     if (a.mode === "plan" || a.mode === "3d") v.mode = a.mode;
+    if (a.mode === "tverrsnitt" || a.mode === "lengdesnitt") {
+      if (!v.wing) throw toolErr("A section needs wing: the wing to cut through.");
+      v.mode = "section"; v.section = a.mode === "lengdesnitt" ? "lengde" : "tverr"; delete v.storey;
+    }
     if (a.from_direction != null) v.yaw = Math.PI - dirDeg(a.from_direction) * Math.PI / 180;
     if (a.tilt_deg != null) v.pitch = clamp(+a.tilt_deg, 5, 85) * Math.PI / 180;
     if (a.distance_m != null) v.dist = clamp(+a.distance_m, 30, 1200);
@@ -184,13 +188,13 @@ export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
     { name: "show_building", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },
         wing: { ...WING, description: "Look at this wing and ring it in yellow" },
-        mode: { type: "string", enum: ["3d", "plan"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar" },
+        mode: { type: "string", enum: ["3d", "plan", "tverrsnitt", "lengdesnitt"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar. tverrsnitt / lengdesnitt: a section across or along the wing (needs wing) through its middle, looked at square on, with what the cut goes through filled black and the wing's storeys and kote on the right" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees (3d)" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d)" },
         distance_m: { type: "number", minimum: 30, maximum: 1200 }, draft: DRAFT }),
-      description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar. With draft: the model with those tried changes. The person can turn, zoom and change storey; the app sends a small picture of the view back, so look at it before describing it. Needs a chat app that shows MCP Apps; otherwise give the link to the website.",
+      description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey; the app sends a small picture of the view back, so look at it before describing it. Needs a chat app that shows MCP Apps; otherwise give the link to the website.",
       run: async (a, req) => { const view = viewOf(a), w = view.wing && wingOf(site, view.wing);
-        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}`;
+        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -265,8 +269,9 @@ export function createMcp({ site, floors, docs, docUrl, SECURITY, readJson }) {
   /* GET /api/utkast/<id>: the page's ?utkast=<id> lays these over the data it loads (public/edits.js) */
   function handleDraft(req, res, id) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
-    try { const d = draftOf(id); return send(res, 200, { draft: d.id, edits: d.edits, saved: false }); }
-    catch { return send(res, 404, { error: "Utkastet finnes ikke (de varer et døgn)." }); }
+    const open = { "access-control-allow-origin": "*" };   // the chat app reads it from the host's frame
+    try { const d = draftOf(id); return send(res, 200, { draft: d.id, edits: d.edits, saved: false }, open); }
+    catch { return send(res, 404, { error: "Utkastet finnes ikke (de varer et døgn)." }, open); }
   }
   return { handleMcp, handleDraft, TOOLS };
 }

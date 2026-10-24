@@ -362,7 +362,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function placeTags() {
     const w = container.clientWidth, h = container.clientHeight, close = mode === "plan" ? view().mPerPx < 0.09 : O.dist < 150, placed = [];
     for (const t of wingTags) {
-      if (storey && !only) { t.el.style.display = "none"; continue; }
+      if ((storey && !only) || mode === "section") { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
       if (v3.z > 1 || x < -100 || y < -30 || x > w + 100 || y > h + 30) { t.el.style.display = "none"; continue; }
@@ -370,6 +370,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const box = [x - t.size[0] / 2 - 3, y - t.size[1] - 3, x + t.size[0] / 2 + 3, y + 3];
       if (placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { t.el.style.display = "none"; continue; }
       placed.push(box); t.el.style.transform = `translate(${(x - t.size[0] / 2).toFixed(0)}px, ${(y - t.size[1]).toFixed(0)}px)`;
+    }
+    for (const t of secTags) {
+      v3.copy(t.at).project(camera); const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
+      t.el.style.display = y < 0 || y > h ? "none" : "block"; t.el.style.transform = `translate(${Math.min(x, w - t.el.offsetWidth - 4).toFixed(0)}px, ${(y - 16).toFixed(0)}px)`;
     }
     for (const [id, list] of roomTags) for (const t of list) {
       if (!shownFloors.has(id) || !close) { t.el.style.display = "none"; continue; }
@@ -397,6 +401,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     return drawn;
   }
   function setStorey(name) {
+    if (section) setMode("3d");
     only = null; const drawn = show(name, new Set(own.map(b => b.id)));
     if (!name) return;
     /* the view goes to the drawing; a storey with no drawing to the buildings it cuts */
@@ -408,6 +413,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   /* one building cut at one of its storeys, the rest whole; the view stays where it is */
   function cutBuilding(id, name) {
+    if (section) setMode("3d");
     const b = own.find(x => x.id === id); only = name ? id : null;
     show(name, new Set(name ? own.filter(x => x.id === id || (b?.wing && x.wing === b.wing)).map(x => x.id) : []));
   }
@@ -419,7 +425,12 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const O = { x: lotC[0], y: lotC[1], h: ground(...lotC) - base + 15, yaw: 0, pitch: 0.62, dist: 380 };   // from the south, north up, as a drawing is read
   function place() {
     const t = new THREE.Vector3(O.x, O.h, -O.y), cp = Math.cos(O.pitch);
-    if (mode === "plan") {
+    if (mode === "section") {
+      /* a section reads as a drawing too: looking square at the cut, no perspective, kote up */
+      const w = container.clientWidth || 600, h = container.clientHeight || 400, half = O.dist * 0.36, n = section.n;
+      Object.assign(ortho, { left: -half * w / h, right: half * w / h, top: half, bottom: -half }); ortho.updateProjectionMatrix();
+      ortho.position.set(t.x - n[0] * 1500, t.y, t.z + n[1] * 1500); ortho.up.set(0, 1, 0); ortho.lookAt(t);
+    } else if (mode === "plan") {
       const w = container.clientWidth || 600, h = container.clientHeight || 400, half = O.dist * 0.36;
       Object.assign(ortho, { left: -half * w / h, right: half * w / h, top: half, bottom: -half }); ortho.updateProjectionMatrix();
       ortho.position.set(t.x, 1500, t.z); ortho.up.set(0, 0, -1); ortho.lookAt(t.x, 0, t.z);
@@ -442,9 +453,102 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a picture taken during a move is the one the move goes to */
   function land() { const g = going; if (g) { hand(); putState(g); } }
   /* what the page shows around the picture: the north arrow's turn, and in the plan the metres per screen pixel */
-  function view() { return { mode, floor, storey, only, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
+  function view() { return { mode, floor, storey, only, section: section && { wing: section.wing, kind: section.kind }, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode !== "3d" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
   /* the plan reads as a drawing: even light, no cast shadows */
-  function setMode(m) { mode = m === "plan" ? "plan" : "3d"; camera = mode === "plan" ? ortho : persp; sunL.castShadow = mode !== "plan"; sky.intensity = mode === "plan" ? 2.8 : 2.2; place(); }
+  function setMode(m) {
+    if (section && m !== "section") endSection();
+    mode = m === "plan" ? "plan" : m === "section" && section ? "section" : "3d"; camera = mode === "3d" ? persp : ortho;
+    sunL.castShadow = mode === "3d"; sky.intensity = mode === "3d" ? 2.2 : 2.8; place();
+  }
+  /* ---------- a section through one wing: across it (tverr) or along it (lengde), through its middle. Everything
+     in front of the cut is taken away (the terrain too), every drawn storey's walls stand, and the wing's storeys are
+     marked with their kote on the right, as on a drawn section. ---------- */
+  let section = null, poche = null; const secPlane = new THREE.Plane(), backPlane = new THREE.Plane(), secTags = [];
+  const pocheMat = new THREE.MeshBasicMaterial({ color: 0x2b2824, side: THREE.DoubleSide });
+  /* what the cut goes through, filled as on a drawn section: outer walls (0,35 m, assumed), the floor slabs at the
+     wing's storeys (0,3 m) and the roof, and the drawn inner walls of every floor sheet (0,15 m) */
+  function pocheOf(c, n, u, lo, hi) {
+    const pos = [], off = 0.03, at = (t, z) => { const v = P([c[0] + u[0] * t + n[0] * off, c[1] + u[1] * t + n[1] * off], z); pos.push(v.x, v.y, v.z); };
+    const rect = (t0, t1, z0, z1) => { at(t0, z0); at(t1, z0); at(t1, z1); at(t0, z0); at(t1, z1); at(t0, z1); };
+    const cross = ring => {   // where the cut line crosses a ring: positions along u, sorted
+      const ts = [];
+      for (let i = 0; i + 1 < ring.length; i++) {
+        const a = ring[i], b = ring[i + 1], sa = (a[0] - c[0]) * n[0] + (a[1] - c[1]) * n[1], sb = (b[0] - c[0]) * n[0] + (b[1] - c[1]) * n[1];
+        if ((sa < 0) === (sb < 0)) continue;
+        const k = sa / (sa - sb), x = a[0] + (b[0] - a[0]) * k, y = a[1] + (b[1] - a[1]) * k;
+        ts.push((x - c[0]) * u[0] + (y - c[1]) * u[1]);
+      }
+      return ts.sort((a, b) => a - b);
+    };
+    for (const b of own) {
+      const ts = cross(b.ring); if (ts.length < 2) continue;
+      const top = b.top ?? b.base + 10, w = (site.wings || []).find(x => x.id === b.wing);
+      const slabs = (w?.levels || []).map(l => l.kote).filter(k => k > b.base - 6 && k < top - 1);
+      for (let i = 0; i + 1 < ts.length; i += 2) {
+        const [t0, t1] = [ts[i], ts[i + 1]];
+        rect(t0, t0 + 0.35, b.base - 0.5, top); rect(t1 - 0.35, t1, b.base - 0.5, top);
+        rect(t0, t1, top - 0.4, top);
+        for (const k of slabs) rect(t0, t1, k - 0.3, k);
+      }
+    }
+    for (const f of floors) for (const line of f.walls || []) for (let i = 0; i + 1 < line.length; i++) {
+      const a = line[i], b = line[i + 1], sa = (a[0] - c[0]) * n[0] + (a[1] - c[1]) * n[1], sb = (b[0] - c[0]) * n[0] + (b[1] - c[1]) * n[1];
+      if ((sa < 0) === (sb < 0)) continue;
+      const k = sa / (sa - sb), x = a[0] + (b[0] - a[0]) * k, y = a[1] + (b[1] - a[1]) * k;
+      if (!own.some(o => inRing([x, y], o.ring))) continue;
+      const t = (x - c[0]) * u[0] + (y - c[1]) * u[1];
+      rect(t - 0.075, t + 0.075, f.kote, f.kote + (f.height || 3));
+    }
+    /* the ground along the cut, as a heavy line */
+    for (let t = lo - 40; t < hi + 40; t += 1) {
+      const z = [t, t + 1].map(q => ground(c[0] + u[0] * q, c[1] + u[1] * q));
+      if (z.some(v => v == null)) continue;
+      at(t, z[0] - 0.35); at(t + 1, z[1] - 0.35); at(t + 1, z[1]); at(t, z[0] - 0.35); at(t + 1, z[1]); at(t, z[0]);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    return new THREE.Mesh(g, pocheMat);
+  }
+  function setSection(wing, kind = "tverr", left = null) {   // left: px the page covers on the left (the wing card)
+    const bs = own.filter(b => b.wing === wing); if (!bs.length) return null;
+    const main = bs.reduce((a, b) => (b.area_m2 || 0) > (a.area_m2 || 0) ? b : a), r = main.ring;
+    let d = [1, 0], L = 0;   // the wing's long direction: its outline's longest side
+    for (let i = 0; i + 1 < r.length; i++) { const dx = r[i + 1][0] - r[i][0], dy = r[i + 1][1] - r[i][1], l = Math.hypot(dx, dy); if (l > L) { L = l; d = [dx / l, dy / l]; } }
+    const pts = bs.flatMap(b => b.ring), c = [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+    const n = kind === "lengde" ? [-d[1], d[0]] : d, u = [-n[1], n[0]];   // n: the plane's normal (towards what stays), u: along the cut
+    const along = pts.map(p => (p[0] - c[0]) * u[0] + (p[1] - c[1]) * u[1]), lo = Math.min(...along), hi = Math.max(...along);
+    const z0 = Math.min(...bs.map(b => b.base)), z1 = Math.max(...bs.map(b => b.top ?? b.base + 10));
+    setStorey(null); hand();
+    section = { wing, kind, n, u };
+    /* world: x east, y up, z south; the kept side is where n points */
+    /* what stays: from the cut to the far side of the wing, so the drawing is the wing, not the town behind it */
+    const depth = Math.max(...pts.map(p => (p[0] - c[0]) * n[0] + (p[1] - c[1]) * n[1])) + 1;
+    secPlane.normal.set(n[0], 0, -n[1]); secPlane.constant = -(n[0] * c[0] + n[1] * c[1]);
+    backPlane.normal.set(-n[0], 0, n[1]); backPlane.constant = n[0] * c[0] + n[1] * c[1] + depth;
+    renderer.clippingPlanes = [secPlane, backPlane];
+    if (poche) { scene.remove(poche); poche.geometry.dispose(); }
+    poche = pocheOf(c, n, u, lo, hi); scene.add(poche);
+    cut.constant = 1e6; for (const g of floorGroups.values()) g.visible = true;
+
+    /* the frame holds the wing's width and height with room round it (the ortho frame is 0,72 × dist high) */
+    const W = container.clientWidth || 600, H = container.clientHeight || 400, card = left ?? (W > 900 ? 440 : 0), labels = 190;   // the wing card on the left, the kote labels on the right
+    const dist = Math.max(40, (hi - lo + 16) / ((W - card - labels) / H), (z1 - z0 + 8) / ((H - 240) / H)) / 0.72, m = dist * 0.72 / H;   // 240 px: the cards above, the bar below
+    /* screen right is −u: the middle of the free part is card/2 px right of the screen's middle */
+    const mid = c.map((v, i) => v + u[i] * ((lo + hi) / 2 + (card - labels) / 2 * m));
+    Object.assign(O, { x: mid[0], y: mid[1], h: (z0 + z1) / 2 - base + 30 * m, dist });
+    for (const t of secTags.splice(0)) t.el.remove();
+    const w = (site.wings || []).find(x => x.id === wing), at = c.map((v, i) => v + u[i] * (lo - 1.5));   // right of the drawing
+    for (const l of w?.levels || []) {
+      const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;font-size:12px;border-bottom:1px solid #23211e;padding:0 2px 1px 18px;background:linear-gradient(90deg,transparent 0 14px,#fbf9f4d9 14px)";
+      el.textContent = `${l.name.replace(" etasje", " etg.")} ${(l.kote >= 0 ? "+" : "") + l.kote.toFixed(2).replace(".", ",")}${l.how && l.how !== "tegning" ? " (" + l.how + ")" : ""}`;
+      tags.appendChild(el); secTags.push({ el, at: P(at, l.kote) });
+    }
+    mode = "section"; camera = ortho; sunL.castShadow = false; sky.intensity = 2.8; place();
+    return { wing, kind };
+  }
+  function endSection() {
+    section = null; renderer.clippingPlanes = []; if (poche) { scene.remove(poche); poche.geometry.dispose(); poche = null; } for (const t of secTags.splice(0)) t.el.remove();
+    for (const g of floorGroups.values()) g.visible = false; show(storey, new Set(own.map(b => b.id)));
+  }
   const el = renderer.domElement, pts = new Map();
   let drag = null, dirty = true;
   el.addEventListener("pointerdown", e => { hand(); el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, pinch: pts.size === 2 ? pinchOf() : null }; });
@@ -452,7 +556,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     if (!drag || !pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2) { const p = pinchOf(); if (drag.pinch) { O.dist = Math.max(30, Math.min(1200, O.dist * drag.pinch.d / p.d)); pan(p.x - drag.pinch.x, p.y - drag.pinch.y); } drag.pinch = p; drag.moved += 10; place(); return; }
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
-    if (drag.pan || mode === "plan") pan(dx, dy); else { O.yaw -= dx * 0.006; O.pitch = Math.max(0.08, Math.min(1.53, O.pitch + dy * 0.005)); }
+    if (drag.pan || mode !== "3d") pan(dx, dy); else { O.yaw -= dx * 0.006; O.pitch = Math.max(0.08, Math.min(1.53, O.pitch + dy * 0.005)); }
     place();
   });
   const up = e => { pts.delete(e.pointerId); if (drag && drag.moved < 6 && !pts.size) pick(e); if (!pts.size) drag = null; };
@@ -484,7 +588,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function pinchOf() { const [a, b] = [...pts.values()]; return { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 }; }
   /* drag the ground under the pointer: screen right is (cos yaw, sin yaw) east/north, screen up (away from the
      camera) is (-sin yaw, cos yaw); the centre moves against the pointer, so the ground goes with it */
-  function pan(dx, dy) { const k = mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : O.dist * 0.0016, yaw = mode === "plan" ? 0 : O.yaw, s = Math.sin(yaw), c = Math.cos(yaw); O.x += (-dx * c - dy * s) * k; O.y += (-dx * s + dy * c) * k; }
+  function pan(dx, dy) {
+    if (mode === "section") { const k = O.dist * 0.72 / (container.clientHeight || 400); O.x += dx * k * section.u[0]; O.y += dx * k * section.u[1]; O.h += dy * k; return; }
+    const k = mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : O.dist * 0.0016, yaw = mode === "plan" ? 0 : O.yaw, s = Math.sin(yaw), c = Math.cos(yaw); O.x += (-dx * c - dy * s) * k; O.y += (-dx * s + dy * c) * k; }
 
   /* ---------- picking ---------- */
   const ray = new THREE.Raycaster(); let selected = null;
@@ -516,7 +622,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   const home = { ...O };
   return {
-    setSun, select, setFloor, setStorey, cutBuilding, setMode, view, get selected() { return selected; },
+    setSun, select, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */

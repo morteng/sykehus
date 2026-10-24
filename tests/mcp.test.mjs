@@ -63,6 +63,9 @@ test("a draft: tried, read back by the page, undone; the shared model is unchang
 test("show_building gives the app its view", async () => {
   const r = await rpc("tools/call", { name: "show_building", arguments: { storey: "6", wing: "Østre nordfløy", mode: "plan" } });
   assert.equal(r.structuredContent.view.storey, "6. etasje"); assert.equal(r.structuredContent.view.mode, "plan");
+  const sec = await rpc("tools/call", { name: "show_building", arguments: { wing: "Sentralblokka", mode: "lengdesnitt" } });
+  assert.equal(sec.structuredContent.view.mode, "section"); assert.equal(sec.structuredContent.view.section, "lengde");
+  assert.equal((await rpc("tools/call", { name: "show_building", arguments: { mode: "tverrsnitt" } })).isError, true);   // a section needs a wing
   const res = await rpc("resources/read", { uri: "ui://sykehus/bygget" });
   assert.match(res.contents[0].text, /mcp-app\.js/);
 });

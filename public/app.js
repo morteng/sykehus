@@ -59,11 +59,19 @@ function showStorey(name) {
   el.style.display = "block";
 }
 function setMode(m) {
-  viewer.setMode(m); $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); hint();
+  viewer.setMode(m); pressMode(); hint();
+}
+function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); }
+/* a section through a wing, across or along it, looked at square on with the wing's floor heights beside it */
+function section(b, kind) {
+  const r = $("info").getBoundingClientRect(), wide = innerWidth > 900;   // on a phone the card is below or over; the drawing takes the screen
+  viewer.setSection(b.wing, kind, wide ? r.right + 10 : 0); pressMode();
+  for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
+  showInfo(b); hint();
 }
 function hint() {
-  const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg") + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  pressMode(); const v = viewer.view(), f = floors.find(x => x.id === v.floor);
+  $("hint").textContent = (v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} gjennom midten av bygget, sett rett på · svart: det snittet går gjennom (yttervegger 0,35 m antatt, innervegger der det finnes plantegning) · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
@@ -84,6 +92,7 @@ function showInfo(b) {
     (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
   el.style.display = "block";
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
+  for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
 }
 /* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
    it at that floor; ▲ ▼ step one storey; "Hele bygget" puts it back */
@@ -95,6 +104,9 @@ function storeyList(b, w) {
       <button style="${s}" ${up == null ? "disabled" : `data-storey="${esc(up)}"`} aria-label="En etasje opp">▲</button>
       <button style="${s}" ${down == null ? "disabled" : `data-storey="${esc(down)}"`} aria-label="En etasje ned">▼</button>
       <button style="${s}" data-storey="" aria-pressed="${!on}">Hele bygget</button></div>
+    <div style="margin-top:6px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Snitt</b>
+      <button style="${s}" data-snitt="tverr" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "tverr"}">Tverrsnitt</button>
+      <button style="${s}" data-snitt="lengde" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "lengde"}">Lengdesnitt</button></div>
     <div style="margin-top:6px;max-height:34vh;overflow-y:auto;display:grid;gap:4px">${ls.map(l =>
       `<button style="${s};text-align:left;display:flex;justify-content:space-between;gap:12px" data-storey="${esc(l.name)}" aria-pressed="${l.name === on}"><span>${esc(l.name)}</span><span>${kote(l.kote)}${l.how && l.how !== "tegning" ? " · " + esc(l.how) : ""}</span></button>`).join("")}</div>`;
 }

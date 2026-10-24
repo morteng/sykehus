@@ -5,6 +5,11 @@ reusing the buildings. Open to everyone to look at and try; saving needs a login
 
     PORT=8090 node server.mjs
 
+The page: the site in 3D; a storey cuts every wing 1,2 m above its floor; "Plan" looks straight down with a scale
+bar; a wing's card cuts it across or along its middle ("Tverrsnitt", "Lengdesnitt"), looked at square on, with what
+the cut goes through filled (outer walls an assumed 0,35 m, slabs at the wing's storeys, inner walls where a plan is
+drawn) and the storeys' kote beside it.
+
 Data, built by the tools (Python runs with `-I`; the drawings are downloaded files and read as data):
 
 - `node tools/site.mjs <lot.json> <dom.tif> <dtm.tif> <x0,y0,x1,y1> [osm.json]`: `public/data/site.json`, the lot,

@@ -32,7 +32,11 @@ handle /mcp* { reverse_proxy 127.0.0.1:8090 }
 handle /api/* { reverse_proxy 127.0.0.1:8090 }
 ```
 
-No CORS needed for the website itself; chat hosts call `/mcp` server to server. The server checks `Origin` on
+The chat app runs in the chat host's sandboxed frame on the host's own origin, and loads `mcp-app.js`, the viewer,
+`data/*` and the textures from this site as a module script: those must carry `Access-Control-Allow-Origin: *`
+(server.mjs sends it on every static file and on `/api/utkast/`; where Caddy serves `public/` itself, add
+`header Access-Control-Allow-Origin *` there). Without it the connector's tools work and the in-chat picture stays
+empty. Chat hosts call `/mcp` server to server. The server checks `Origin` on
 `/mcp` (https origins or localhost only) and limits tool calls to 3000 an hour.
 
 ## Check after start

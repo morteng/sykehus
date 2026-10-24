@@ -18,6 +18,9 @@ import { createMcp } from "./mcp.mjs";
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
 const SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" };
+/* the chat app runs in the host's sandboxed frame, on another origin: its module script, the viewer's imports, the
+   data and the textures are fetched cross-origin. All of it is public and read-only, so any origin may read it. */
+const OPEN = { "access-control-allow-origin": "*" };
 const RELEASE = "https://github.com/morteng/sykehus/releases/download/dokumenter-2026-10-24/";
 
 const site = JSON.parse(readFileSync(join(PUB, "data/site.json"), "utf8"));
@@ -45,6 +48,6 @@ createServer(async (req, res) => {
     const file = normalize(join(PUB, path.endsWith("/") ? path + "index.html" : path));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
     const body = await readFile(file);
-    res.writeHead(200, { ...SECURITY, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache" }).end(req.method === "HEAD" ? undefined : body);
+    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache" }).end(req.method === "HEAD" ? undefined : body);
   } catch { if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Ikke funnet"); }
 }).listen(PORT, () => console.log(`Sykehustomta on http://localhost:${PORT}${docs ? "" : " (no document store: set DOCS)"}`));
