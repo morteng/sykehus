@@ -28,7 +28,7 @@
   #scale .ticks { display: flex; height: 8px; border: 1.5px solid var(--ink); border-top: 0; margin-bottom: 2px; }
   #scale .ticks i { flex: 1; } #scale .ticks i:nth-child(odd) { background: var(--ink); }
   #scale .nums { display: flex; justify-content: space-between; }
-  #info { left: 14px; bottom: 96px; padding: 12px 16px; min-width: 240px; display: none; }
+  #info { left: 14px; bottom: 96px; padding: 12px 16px; min-width: 240px; display: none; max-height: calc(100vh - 200px); overflow-y: auto; }
   #info h2 { margin: 0 0 4px; font-size: 18px; }
   #info dl { margin: 0; display: grid; grid-template-columns: auto auto; gap: 2px 14px; font-size: 15px; }
   #info dt { color: var(--soft); }

@@ -7,8 +7,9 @@
    buildings are plain boxes to their laser top. building:parts on an outline (cut) are left out of its roof: they
    are buildings of their own.
 
-   Floors (floors.json, tools/floors.mjs) are the drawings' walls stood from their kote. Showing a floor cuts the
-   buildings on the lot 1.2 m above it, as a plan is cut, and lays a floor plate in each of them at that level.
+   Storeys are each wing's own (site.json wings[].levels), at its own kote: showing one cuts the buildings 1.2 m above
+   its floor, as a plan is cut, all of them or one, with a floor plate there; where a drawing of that storey exists
+   (floors.json, tools/floors.mjs) its walls stand from their kote.
    The plan view looks straight down, north up, without perspective, so a scale bar holds. */
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./sun.js";
@@ -297,25 +298,40 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }).catch(e => console.warn("trees", e));
   }
 
-  /* ---------- floors: walls from the drawings, a floor plate in each building on the lot, the cut above ---------- */
+  /* ---------- storeys: each wing has its own (site.json wings[].levels, tools/wings.json), at its own kote. A
+     building is cut 1.2 m above the floor of the storey chosen for it, as a plan is cut, with a floor plate there;
+     the walls of a drawing of that storey (floors.json) stand in the buildings the drawing covers. ---------- */
+  const wingOf = new Map((site.wings || []).map(w => [w.id, w]));
+  const levelsOf = b => wingOf.get(b.wing)?.levels || [];
+  /* a storey's kote where a wing has no kote for it: the middle of the wings that have one */
+  const refKote = name => { const ks = (site.wings || []).flatMap(w => (w.levels || []).filter(l => l.name === name).map(l => l.kote)).sort((a, b) => a - b); return ks.length ? ks[ks.length >> 1] : floors.find(f => f.name === name)?.kote ?? null; };
+  const own = site.buildings.filter(b => b.own), cuts = new Map(), plates = new Map(), pm = mat(C.plate);
+  for (const b of own) {
+    cuts.set(b.id, new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6));
+    const plate = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(b.ring.map(([x, y]) => new THREE.Vector2(x, y)))), pm);
+    plate.rotation.x = -Math.PI / 2; plate.receiveShadow = true; plate.visible = false; scene.add(plate); plates.set(b.id, plate);
+  }
   const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6), floorGroups = new Map();
   for (const f of floors) {
-    const grp = new THREE.Group(), wm = mat(C.cutWall, { clippingPlanes: [cut] }), pm = mat(C.plate);
+    const grp = new THREE.Group(), wm = mat(C.cutWall, { clippingPlanes: [cut] });
     for (const r of f.walls) {
       const g = new THREE.ExtrudeGeometry(new THREE.Shape(r.map(([x, y]) => new THREE.Vector2(x, y))), { depth: f.height, bevelEnabled: false });
       const w = new THREE.Mesh(g, wm); w.rotation.x = -Math.PI / 2; w.position.y = f.kote - base; w.castShadow = w.receiveShadow = true; grp.add(w);
     }
-    for (const b of site.buildings) {
-      if (!b.own || b.base >= f.kote || (b.top ?? 0) <= f.kote || (b.lift ?? -1e9) > f.kote) continue;
-      const plate = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(b.ring.map(([x, y]) => new THREE.Vector2(x, y)))), pm);
-      plate.rotation.x = -Math.PI / 2; plate.position.y = f.kote - base - 0.02; plate.receiveShadow = true; grp.add(plate);
-    }
-    /* the view goes to the drawing; a storey with no drawing (only its kote is known) to the buildings it cuts */
-    const pts = f.walls.length ? f.walls.flat() : site.buildings.filter(b => b.own && b.base < f.kote && (b.top ?? 0) > f.kote && b.top - b.base < 40).flatMap(b => b.ring);
+    /* the buildings it covers: those a tenth or more of its wall corners fall in */
+    const pts = f.walls.flat(), covers = new Set(own.filter(b => pts.filter(p => inRing(p, b.ring)).length >= pts.length * 0.1).map(b => b.id));
     const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-    grp.userData = { centre: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) };
+    grp.userData = { covers, centre: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) };
     grp.visible = false; scene.add(grp); floorGroups.set(f.id, grp);
   }
+  /* cut one building at a kote (null: whole again) */
+  function cutAt(b, kote) {
+    const on = kote != null && kote > b.base && kote < (b.top ?? 0) && (b.lift == null || kote >= b.lift - 0.1);
+    cuts.get(b.id).constant = on ? kote + 1.2 - base : 1e6;
+    const p = plates.get(b.id); p.visible = on; if (on) p.position.y = kote - base - 0.02;
+  }
+  /* where a storey stands in a building: its wing's own kote, else where the wings that have it have it */
+  const koteIn = (b, name) => levelsOf(b).find(l => l.name === name)?.kote ?? refKote(name);
   /* the rooms' stamps from the drawing, as on the sheet: name, and the area under it, left edge at the stamp.
      A stamp that would overlap one already placed gives way; larger rooms are placed first. */
   const tags = document.createElement("div"); tags.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;font:12px/1.15 -apple-system,'Helvetica Neue',Arial,sans-serif;color:#23211e";
@@ -337,7 +353,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function placeTags() {
     const w = container.clientWidth, h = container.clientHeight, close = mode === "plan" ? view().mPerPx < 0.09 : O.dist < 150, placed = [];
     for (const t of wingTags) {
-      if (floor) { t.el.style.display = "none"; continue; }
+      if (storey && !only) { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
       if (v3.z > 1 || x < -100 || y < -30 || x > w + 100 || y > h + 30) { t.el.style.display = "none"; continue; }
@@ -357,14 +373,36 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       placed.push(box); t.el.style.transform = `translate(${x.toFixed(0)}px, ${(y - 14).toFixed(0)}px)`;
     }
   }
-  let floor = null;
-  function setFloor(id) {
-    for (const [k, g] of floorGroups) g.visible = k === id;
-    const f = floors.find(x => x.id === id); floor = f ? id : null;
-    cut.constant = f ? f.kote + 1.2 - base : 1e6;
-    if (f) { const g = floorGroups.get(id).userData; Object.assign(O, { x: g.centre[0], y: g.centre[1], h: f.kote - base, dist: Math.max(70, g.size * 1.3) }); place(); }
-    dirty = true;
+  /* the storey shown: in every building (setStorey) or in one (cutBuilding); floor: the drawing whose rooms are named */
+  let floor = null, storey = null, only = null;
+  function show(name, ids) {
+    storey = name; floor = null;
+    for (const b of own) cutAt(b, name && ids.has(b.id) ? koteIn(b, name) : null);
+    let drawn = null;
+    for (const f of floors) {
+      const g = floorGroups.get(f.id), on = !!name && f.name === name && [...g.userData.covers].some(id => ids.has(id));
+      g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; }
+    }
+    floor = drawn?.id ?? null; dirty = true;
+    return drawn;
   }
+  function setStorey(name) {
+    only = null; const drawn = show(name, new Set(own.map(b => b.id)));
+    if (!name) return;
+    /* the view goes to the drawing; a storey with no drawing to the buildings it cuts */
+    const k = drawn?.kote ?? refKote(name), g = drawn && floorGroups.get(drawn.id).userData;
+    const ring = drawn ? null : own.filter(b => { const z = koteIn(b, name); return z != null && z > b.base && z < (b.top ?? 0); }).flatMap(b => b.ring);
+    const c = g ? g.centre : ring.length ? [(Math.min(...ring.map(p => p[0])) + Math.max(...ring.map(p => p[0]))) / 2, (Math.min(...ring.map(p => p[1])) + Math.max(...ring.map(p => p[1]))) / 2] : [O.x, O.y];
+    const s = g ? g.size : ring.length ? Math.max(Math.max(...ring.map(p => p[0])) - Math.min(...ring.map(p => p[0])), Math.max(...ring.map(p => p[1])) - Math.min(...ring.map(p => p[1]))) : 100;
+    Object.assign(O, { x: c[0], y: c[1], h: k - base, dist: Math.max(70, s * 1.3) }); place();
+  }
+  /* one building cut at one of its storeys, the rest whole; the view stays where it is */
+  function cutBuilding(id, name) {
+    const b = own.find(x => x.id === id); only = name ? id : null;
+    show(name, new Set(name ? own.filter(x => x.id === id || (b?.wing && x.wing === b.wing)).map(x => x.id) : []));
+  }
+  /* floors.json ids, as before: the drawing's storey in every building */
+  function setFloor(id) { setStorey(floors.find(f => f.id === id)?.name ?? null); }
 
   /* ---------- camera: orbit around a point, or straight down for the plan ---------- */
   const lotC = site.lot.ring.reduce((a, p) => [a[0] + p[0] / site.lot.ring.length, a[1] + p[1] / site.lot.ring.length], [0, 0]);
@@ -379,7 +417,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     dirty = true; onView(view());
   }
   /* what the page shows around the picture: the north arrow's turn, and in the plan the metres per screen pixel */
-  function view() { return { mode, floor, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
+  function view() { return { mode, floor, storey, only, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
   /* the plan reads as a drawing: even light, no cast shadows */
   function setMode(m) { mode = m === "plan" ? "plan" : "3d"; camera = mode === "plan" ? ortho : persp; sunL.castShadow = mode !== "plan"; sky.intensity = mode === "plan" ? 2.8 : 2.2; place(); }
   const el = renderer.domElement, pts = new Map();
@@ -437,7 +475,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   /* materials are shared within a building, so a building's own copies (made once) light up alone */
   for (const g of meshes.values()) g.traverse(o => { if (o.material) o.material = o.material.clone(); });
-  for (const b of site.buildings) if (b.own) meshes.get(b.id)?.traverse(o => { if (o.material) o.material.clippingPlanes = [cut]; });
+  for (const b of own) meshes.get(b.id)?.traverse(o => { if (o.material) o.material.clippingPlanes = [cuts.get(b.id)]; });
 
   /* ---------- sun ---------- */
   function setSun(date) {
@@ -453,9 +491,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   const home = { ...O };
   return {
-    setSun, select, setFloor, setMode, view, get selected() { return selected; },
+    setSun, select, setFloor, setStorey, cutBuilding, setMode, view, get selected() { return selected; },
     zoom(f) { zoom(f); },
-    home() { setFloor(null); Object.assign(O, home); place(); },
+    home() { setStorey(null); Object.assign(O, home); place(); },
     pose(p) { if (p) { Object.assign(O, p); place(); } return { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); Object.assign(O, { x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); place(); },
     snapshot() { renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },

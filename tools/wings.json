@@ -1,5 +1,5 @@
 {
- "about": "The wings of the hospital block and the buildings around it, by hand from the documents (docs/twin/PLAN.md §1). parts: the numbers tools/wingparts.py gives the parts of the 1:1000 site plan 534362efe171 p1 (largest first). osm: the OSM buildings these parts replace. sure: false where the documents do not settle which part is which. built: years and what was done, from the DIVE analysis 3957fafe78ec unless noted. Part 14 (a strip west of the high-rise) is the 2002 parking deck with legevakt (OSM 1163588204), which stays as it is.",
+ "about": "The wings of the hospital block and the buildings around it, by hand from the documents (docs/twin/PLAN.md §1). parts: the numbers tools/wingparts.py gives the parts of the 1:1000 site plan 534362efe171 p1 (largest first). osm: the OSM buildings these parts replace. sure: false where the documents do not settle which part is which. built: years and what was done, from the DIVE analysis 3957fafe78ec unless noted. Part 14 (a strip west of the high-rise) is the 2002 parking deck with legevakt (OSM 1163588204), which stays as it is. levels: each wing's storeys and their kote; how: 'tegning' (read off the drawing in src), 'beregnet' (worked out as src says), 'antatt' (assumed, src says from what).",
  "source": "534362efe171#p1 (Ottar, Situasjonsplan eksisterende 1:1000, 17.12.2013)",
  "replaces": [
   "r13306175",
@@ -28,6 +28,92 @@
     "3957fafe78ec DIVE",
     "a00300169fdb samlerapport",
     "bb072470fab8 §1.4"
+   ],
+   "levels": [
+    {
+     "name": "1. etasje",
+     "kote": 16.4,
+     "how": "antatt",
+     "src": "ca. 3,9 m under 2. etasje; ingen tegning med kote"
+    },
+    {
+     "name": "2. etasje",
+     "kote": 20.28,
+     "how": "antatt",
+     "src": "som 2. etasje i den gamle blokka (f36d080d5af8)"
+    },
+    {
+     "name": "3. etasje",
+     "kote": 24.24,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "4. etasje",
+     "kote": 28.01,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "5. etasje",
+     "kote": 31.77,
+     "how": "tegning",
+     "src": "dd4c1f44fd50#p1 +31,77"
+    },
+    {
+     "name": "6. etasje",
+     "kote": 35.53,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "7. etasje",
+     "kote": 39.3,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "8. etasje",
+     "kote": 43.06,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "9. etasje",
+     "kote": 46.82,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "10. etasje",
+     "kote": 50.58,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "11. etasje",
+     "kote": 54.35,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "12. etasje",
+     "kote": 58.11,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "13. etasje",
+     "kote": 61.87,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    },
+    {
+     "name": "14. etasje",
+     "kote": 65.64,
+     "how": "beregnet",
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+    }
    ]
   },
   {
@@ -80,7 +166,45 @@
     "3957fafe78ec DIVE",
     "57dc6d477c88#p1 snitt B-B"
    ],
-   "note": "den lange, smale fløyen mellom Vestfløy og Østre nordfløy; laser tak ca. +43,7 (snitt B-B: tak +42,78)"
+   "note": "den lange, smale fløyen mellom Vestfløy og Østre nordfløy; laser tak ca. +43,7 (snitt B-B: tak +42,78)",
+   "levels": [
+    {
+     "name": "2. etasje",
+     "kote": 20.24,
+     "how": "antatt",
+     "src": "som Østfløy"
+    },
+    {
+     "name": "3. etasje",
+     "kote": 23.54,
+     "how": "antatt",
+     "src": "som Østfløy"
+    },
+    {
+     "name": "4. etasje",
+     "kote": 27.76,
+     "how": "antatt",
+     "src": "som Østfløy"
+    },
+    {
+     "name": "5. etasje",
+     "kote": 32.02,
+     "how": "tegning",
+     "src": "57dc6d477c88#p1 snitt B-B"
+    },
+    {
+     "name": "6. etasje",
+     "kote": 35.44,
+     "how": "tegning",
+     "src": "57dc6d477c88#p1 snitt B-B"
+    },
+    {
+     "name": "7. etasje",
+     "kote": 39.11,
+     "how": "tegning",
+     "src": "57dc6d477c88#p1 snitt B-B"
+    }
+   ]
   },
   {
    "id": "vestfloy",
@@ -152,6 +276,38 @@
    "src": [
     "3957fafe78ec DIVE",
     "a349b2b7a97f#p1"
+   ],
+   "levels": [
+    {
+     "name": "3. etasje",
+     "kote": 23.54,
+     "how": "tegning",
+     "src": "1bfc547ce73c#p1"
+    },
+    {
+     "name": "4. etasje",
+     "kote": 27.76,
+     "how": "tegning",
+     "src": "1bfc547ce73c#p1"
+    },
+    {
+     "name": "5. etasje",
+     "kote": 32.02,
+     "how": "tegning",
+     "src": "1bfc547ce73c#p1"
+    },
+    {
+     "name": "6. etasje",
+     "kote": 35.52,
+     "how": "tegning",
+     "src": "1bfc547ce73c#p1"
+    },
+    {
+     "name": "7. etasje",
+     "kote": 38.38,
+     "how": "tegning",
+     "src": "plan 7. etasje eksisterende (Ottar 2013)"
+    }
    ]
   },
   {
@@ -177,6 +333,38 @@
     "352835b248d7#p2",
     "1bfc547ce73c#p1 fasade nord",
     "5c27a428f032#p1 snitt"
+   ],
+   "levels": [
+    {
+     "name": "2. etasje",
+     "kote": 20.24,
+     "how": "tegning",
+     "src": "5c27a428f032#p1 (kjeller)"
+    },
+    {
+     "name": "3. etasje",
+     "kote": 23.54,
+     "how": "tegning",
+     "src": "5c27a428f032#p1"
+    },
+    {
+     "name": "4. etasje",
+     "kote": 27.76,
+     "how": "tegning",
+     "src": "5c27a428f032#p1"
+    },
+    {
+     "name": "5. etasje",
+     "kote": 32.02,
+     "how": "tegning",
+     "src": "5c27a428f032#p1"
+    },
+    {
+     "name": "6. etasje",
+     "kote": 35.52,
+     "how": "tegning",
+     "src": "5c27a428f032#p1 (teknisk rom)"
+    }
    ]
   },
   {
@@ -209,7 +397,9 @@
   {
    "id": "operasjonsmodul",
    "name": "Operasjonsmodulen",
-   "aliases": ["modulbygg hovedoperasjon"],
+   "aliases": [
+    "modulbygg hovedoperasjon"
+   ],
    "parts": [],
    "sure": true,
    "built": "etter 2013 (søkt 17.12.2013)",
@@ -221,6 +411,14 @@
     "1bfc547ce73c#p1 ny fasade mot nord",
     "bc0fee0e71c9#p1 ny fasade mot øst",
     "848553050deb#p1 situasjonsplan"
+   ],
+   "levels": [
+    {
+     "name": "5. etasje",
+     "kote": 32.02,
+     "how": "tegning",
+     "src": "1bfc547ce73c#p1 ny fasade"
+    }
    ]
   },
   {

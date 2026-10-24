@@ -1,11 +1,10 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try. */
 import { createViewer } from "./viewer.js";
 
-/* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys with no
-   plan drawing (site.json levels, kote from a section) join the ladder: chosen, they cut the buildings there. */
-const [site, { floors: drawn }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
-const floors = [...drawn, ...(site.levels || []).filter(l => !drawn.some(f => Math.abs(f.kote - l.kote) < 0.3))
-  .map(l => ({ id: "niva-" + l.id, name: l.name, kote: l.kote, height: l.height, wing: l.wing, walls: [], rooms: [], noplan: true, note: l.note, src: l.src }))];
+/* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
+   wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
+const [site, { floors }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
+const wings = site.wings || [];
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
@@ -26,28 +25,30 @@ const viewer = createViewer({
 /* a high summer sun reads the forms best; choosing the date and hour comes later */
 viewer.setSun(new Date(new Date().getFullYear(), 5, 21, 14));
 
-/* floor buttons: the whole site, then each floor that has a drawing, lowest first */
-const floorBtns = [{ id: null, label: "Hele anlegget" }, ...floors.slice().sort((a, b) => a.kote - b.kote).map(f => ({ id: f.id, label: f.name, sub: kote(f.kote) }))].map(f => {
-  const b = document.createElement("button"); b.innerHTML = f.label + (f.sub ? `<small>${f.sub}</small>` : "");
-  b.setAttribute("aria-pressed", String(f.id === null)); b.onclick = () => pickFloor(f.id); $("floors").append(b); return [f.id, b];
+/* the ladder: the whole site, then every storey some wing has, lowest first ("5" for 5. etasje, as on a section) */
+const order = n => parseInt(n) || 0;
+const storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
+const floorBtns = [{ id: null, label: "Hele anlegget" }, ...storeys.map(n => ({ id: n, label: String(order(n) || n), title: n }))].map(f => {
+  const b = document.createElement("button"); b.textContent = f.label; if (f.title) { b.title = f.title; b.setAttribute("aria-label", f.title); b.style.minWidth = "46px"; b.style.padding = "0 8px"; }
+  b.setAttribute("aria-pressed", String(f.id === null)); b.onclick = () => pickStorey(f.id); $("floors").append(b); return [f.id, b];
 });
-function pickFloor(id) {
-  if (id === null) viewer.home(); else viewer.setFloor(id);
-  for (const [k, b] of floorBtns) b.setAttribute("aria-pressed", String(k === id));
-  hint(); showFloor(floors.find(f => f.id === id));
+function pickStorey(name) {
+  if (name === null) viewer.home(); else viewer.setStorey(name);
+  for (const [k, b] of floorBtns) b.setAttribute("aria-pressed", String(k === name));
+  hint(); showStorey(name);
 }
-/* the chosen floor: its level, storey height, the rooms the drawing stamps and their sum, and the drawing itself */
-function showFloor(f) {
+/* how a kote is known: read off a drawing, worked out, or assumed */
+const how = l => l.how && l.how !== "tegning" ? ` <small style="color:var(--soft)">${esc(l.how)}</small>` : "";
+/* the chosen storey: its kote in each wing that has it, and the drawings of it with their rooms */
+function showStorey(name) {
   const el = $("info");
-  if (!f) { el.style.display = "none"; return; }
-  const rooms = f.rooms || [], sum = rooms.reduce((a, r) => a + (r.area_m2 || 0), 0), withArea = rooms.filter(r => r.area_m2).length;
-  el.innerHTML = `<h2>${f.name} · ${f.wing}</h2><dl>
-    <dt>Gulv</dt><dd>kote ${kote(f.kote)}</dd>
-    <dt>Etasjehøyde</dt><dd>${f.height.toFixed(2).replace(".", ",")} m</dd>
+  if (!name) { el.style.display = "none"; return; }
+  const rows = wings.map(w => [w, (w.levels || []).find(l => l.name === name)]).filter(r => r[1]).sort((a, b) => a[1].kote - b[1].kote);
+  const drawn = floors.filter(f => f.name === name), rooms = drawn.flatMap(f => f.rooms || []), sum = rooms.reduce((a, r) => a + (r.area_m2 || 0), 0), withArea = rooms.filter(r => r.area_m2).length;
+  el.innerHTML = `<h2>${esc(name)}</h2><dl>${rows.map(([w, l]) => `<dt>${esc(w.name)}</dt><dd>kote ${kote(l.kote)}${how(l)}</dd>`).join("")}
     ${withArea ? `<dt>Rom</dt><dd>${withArea}, til sammen ${num(sum)} m²</dd>` : rooms.length ? `<dt>Rom</dt><dd>${rooms.length} navngitt, uten areal på tegningen</dd>` : ""}
-    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:320px">${f.noplan
-      ? `${f.note ? esc(f.note[0].toUpperCase() + f.note.slice(1)) + ". " : ""}Ingen plantegning av denne etasjen i arkivet: bygningene er skåret 1,2 m over gulvet. Kote fra ${sourceLinks(f.src)}.`
-      : f.source}</p>`;
+    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">Bygningene er skåret 1,2 m over gulvet. ${drawn.length
+      ? "Plantegning: " + drawn.map(f => esc(f.source)).join(" · ") : "Ingen plantegning av denne etasjen i arkivet."}</p>`;
   el.style.display = "block";
 }
 function setMode(m) {
@@ -55,7 +56,7 @@ function setMode(m) {
 }
 function hint() {
   const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (f ? `${f.name} ${kote(f.kote)}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg") + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  $("hint").textContent = (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg") + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
@@ -72,8 +73,28 @@ function showInfo(b) {
     <dt>Fotavtrykk</dt><dd>${num(b.area_m2)} m²</dd>
     ${h != null ? `<dt>Høyde</dt><dd>ca. ${h.toFixed(0)} m</dd><dt>Topp</dt><dd>kote ${kote(b.top)}</dd>` : ""}
     <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
+    (w?.levels?.length ? storeyList(b, w) : "") +
     (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
   el.style.display = "block";
+  for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
+}
+/* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
+   it at that floor; ▲ ▼ step one storey; "Hele bygget" puts it back */
+function storeyList(b, w) {
+  const v = viewer.view(), on = v.only === b.id ? v.storey : null, ls = w.levels.slice().sort((a, c) => c.kote - a.kote), i = ls.findIndex(l => l.name === on);
+  const up = i > 0 ? ls[i - 1].name : on ? "" : null, down = i >= 0 ? ls[i + 1]?.name : ls[0].name;
+  const s = "min-height:34px;font-size:15px;padding:0 10px";
+  return `<div style="margin-top:10px;display:flex;gap:6px;align-items:center"><b style="font-size:15px;margin-right:auto">Etasjer</b>
+      <button style="${s}" ${up == null ? "disabled" : `data-storey="${esc(up)}"`} aria-label="En etasje opp">▲</button>
+      <button style="${s}" ${down == null ? "disabled" : `data-storey="${esc(down)}"`} aria-label="En etasje ned">▼</button>
+      <button style="${s}" data-storey="" aria-pressed="${!on}">Hele bygget</button></div>
+    <div style="margin-top:6px;max-height:34vh;overflow-y:auto;display:grid;gap:4px">${ls.map(l =>
+      `<button style="${s};text-align:left;display:flex;justify-content:space-between;gap:12px" data-storey="${esc(l.name)}" aria-pressed="${l.name === on}"><span>${esc(l.name)}</span><span>${kote(l.kote)}${l.how && l.how !== "tegning" ? " · " + esc(l.how) : ""}</span></button>`).join("")}</div>`;
+}
+function peel(b, w, name) {
+  viewer.cutBuilding(b.id, name);
+  for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
+  showInfo(b); hint();
 }
 /* a document as the cards name it: its title and year, the page, a link to it */
 function docLink(d) { return d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title); }
