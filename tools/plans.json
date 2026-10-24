@@ -1,5 +1,5 @@
 {
- "note": "The drawings the floor model is built from. cp: control points 'page_x,page_y,site_x,site_y;...' for tools/georef.py (page points from pdfpaths.py, site metres from site.json). kote: the floor's level (NN2000) from the sections, height: up to the next floor. like: a sheet sharing the background of another; its control points follow from the page offset (tools/sheetshift.py).",
+ "note": "The drawings the floor model is built from. cp: control points 'page_x,page_y,site_x,site_y;...' for tools/georef.py (page points from pdfpaths.py, site metres from site.json). kote: the floor's level (NN2000) from the sections, height: up to the next floor. like: a sheet sharing the background of another; its control points follow from the page offset (tools/sheetshift.py). walls: 'lines' for a sheet drawn in lines (linewalls.py, within region, page points y down); keep / leave: the wings (site.json) whose walls and rooms this sheet gives, or leaves to another; rooms: false where the sheet has no text.",
  "plans": [
   {
    "id": "3-ost",
@@ -24,7 +24,36 @@
    "kote": 32.02,
    "height": 3.5,
    "source": "Ottar Arkitekter, Plan 5. etasje eksisterende, 17.12.2013 (byggesak 14/05210); nivåer fra Snitt fasade øst (14/00026)",
-   "like": "3-ost"
+   "like": "3-ost",
+   "leave": [
+    "ostfloy",
+    "operasjonsmodul"
+   ]
+  },
+  {
+   "id": "5-br05",
+   "name": "5. etasje",
+   "wing": "Østfløy og operasjonsmodulen",
+   "file": "f61225f45a83.pdf",
+   "page": 1,
+   "scale": 200,
+   "walls": "lines",
+   "region": [
+    20,
+    20,
+    636,
+    1170
+   ],
+   "rooms": false,
+   "keep": [
+    "ostfloy",
+    "operasjonsmodul"
+   ],
+   "kote": 32.02,
+   "height": 3.5,
+   "source": "Reinertsen, Brannplan plan 5 hovedoperasjon (modulbygg, ombygging eksist.) BR-05 rev. I as-built 20.05.2015",
+   "cp": "341.9,978.7,75.27,35.16;171.8,301.6,40.65,71.49",
+   "checked": "Østfløys nordøstre hjørne og operasjonsmodulens ytre vestre hjørne (tools/elevations.json); arket er skrevet ut ca. 1,4 % under 1:200, tilpasningen tar det"
   },
   {
    "id": "6-ost",
