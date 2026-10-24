@@ -13,7 +13,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./sun.js";
 
-const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4" };
+const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890" };
 
 export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {} }) {
   const T = site.terrain, base = Math.min(...T.z.filter(v => v != null));
@@ -27,7 +27,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const scene = new THREE.Scene(); scene.background = new THREE.Color(C.sky);
   const persp = new THREE.PerspectiveCamera(40, 1, 1, 4000), ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 4000);
   let camera = persp, mode = "3d";
-  const sky = new THREE.HemisphereLight("#f3f6ff", "#7d806f", 1.6); scene.add(sky);
+  const sky = new THREE.HemisphereLight("#f3f6ff", "#8d8f80", 2.2); scene.add(sky);
   const sunL = new THREE.DirectionalLight("#fff6e8", 2.2); sunL.castShadow = true; sunL.shadow.mapSize.set(4096, 4096);
   Object.assign(sunL.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 1500 }); sunL.shadow.bias = -0.0004; sunL.shadow.normalBias = 0.6;
   scene.add(sunL, sunL.target);
@@ -61,9 +61,44 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
     const w = new THREE.Mesh(g, m); w.castShadow = w.receiveShadow = true; return w;
   }
+  /* facades as the documents describe them (LVPH 2012): the high-rise in natural concrete elements, the other wings
+     in rendered, white-painted concrete; a window to every 2.5 m bay of a 3.5 m storey, drawn once and repeated */
+  function facade(base, frame, glass) {
+    const cv = document.createElement("canvas"); cv.width = 128; cv.height = 180; const g = cv.getContext("2d");
+    g.fillStyle = base; g.fillRect(0, 0, 128, 180);
+    g.fillStyle = frame; g.fillRect(24, 50, 80, 82); g.fillStyle = glass; g.fillRect(28, 54, 72, 74);
+    g.fillStyle = "rgba(0,0,0,.06)"; g.fillRect(0, 176, 128, 4);
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  }
+  const BAY = 2.5, STOREY = 3.5;
+  const wallTex = { render: facade("#f1eee6", "#d9d4ca", "#5d6a73"), concrete: facade("#cfc9bd", "#b8b2a6", "#4f5b63") };
+  /* a building on the lot as blocks (tools/massing.py): flat roofs, and walls only where the roof steps down or the
+     building ends, with the facade counted in bays and storeys from the base so the windows line up */
+  function blocksMesh(b, tex) {
+    const pos = [], uv = [], roof = [], b0 = b.base - 0.5;
+    for (const [ax, ay, bx, by, lo, top] of b.walls || []) {
+      const bot = lo ?? b0, len = Math.hypot(bx - ax, by - ay), along = (ax * (bx - ax) + ay * (by - ay)) / len / BAY;   // bays counted along the wall's line, so the walls on one line share them
+      const A = P([ax, ay], bot), B = P([bx, by], bot), Cc = P([bx, by], top), D = P([ax, ay], top), u0 = along, u1 = along + len / BAY, v0 = (bot - b.base) / STOREY, v1 = (top - b.base) / STOREY;
+      pos.push(A.x, A.y, A.z, B.x, B.y, B.z, Cc.x, Cc.y, Cc.z, A.x, A.y, A.z, Cc.x, Cc.y, Cc.z, D.x, D.y, D.z);
+      uv.push(u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1);
+    }
+    for (const k of b.blocks) {
+      const top = k.top, p = k.p;
+      const q = p.map(pt => P(pt, top));
+      roof.push(...[q[0], q[1], q[2], q[0], q[2], q[3]].flatMap(v => [v.x, v.y, v.z]));
+    }
+    const grp = new THREE.Group();
+    const wg = new THREE.BufferGeometry(); wg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); wg.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); wg.computeVertexNormals();
+    const walls = new THREE.Mesh(wg, mat("#ffffff", { map: tex })); walls.castShadow = walls.receiveShadow = true; grp.add(walls);
+    const rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.Float32BufferAttribute(roof, 3));
+    rg.setAttribute("normal", new THREE.Float32BufferAttribute(roof.map((_, i) => i % 3 === 1 ? 1 : 0), 3));   // flat roofs face up
+    const r = new THREE.Mesh(rg, mat(C.flatRoof)); r.castShadow = r.receiveShadow = true; grp.add(r);
+    return grp;
+  }
   for (const b of site.buildings) {
     const grp = new THREE.Group(), b0 = b.base - 0.5, ring = b.ring;
-    if (!b.own || b.top == null) {
+    if (b.own && b.blocks?.length) grp.add(blocksMesh(b, b.top - b.base > 40 ? wallTex.concrete : wallTex.render));
+    else if (!b.own || b.top == null) {
       const top = b.top ?? b.base + (b.osmHeight || (b.levels || 2) * 3);
       grp.add(wallsTo(ring, b0, () => top, mat(b.own ? C.own : C.nb)));
       const shape = new THREE.Shape(ring.map(([x, y]) => new THREE.Vector2(x, y)));
@@ -160,7 +195,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* what the page shows around the picture: the north arrow's turn, and in the plan the metres per screen pixel */
   function view() { return { mode, floor, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
   /* the plan reads as a drawing: even light, no cast shadows */
-  function setMode(m) { mode = m === "plan" ? "plan" : "3d"; camera = mode === "plan" ? ortho : persp; sunL.castShadow = mode !== "plan"; sky.intensity = mode === "plan" ? 2.6 : 1.6; place(); }
+  function setMode(m) { mode = m === "plan" ? "plan" : "3d"; camera = mode === "plan" ? ortho : persp; sunL.castShadow = mode !== "plan"; sky.intensity = mode === "plan" ? 2.8 : 2.2; place(); }
   const el = renderer.domElement, pts = new Map();
   let drag = null, dirty = true;
   el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, pinch: pts.size === 2 ? pinchOf() : null }; });

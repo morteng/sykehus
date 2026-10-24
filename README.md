@@ -9,6 +9,8 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
 
 - `node tools/site.mjs <lot.json> <dom.tif> <dtm.tif> <x0,y0,x1,y1> [osm.json]`: `public/data/site.json`, the lot,
   the buildings (OpenStreetMap outlines, Kartverket laser heights) and the terrain.
+- `python3 -I tools/massing.py public/data/site.json <dom.tif> <x0,y0,x1,y1>`: clean massing for the buildings on the
+  lot (flat-roofed blocks on each building's grid, at the roof levels the laser finds), written into site.json.
 - `node tools/floors.mjs <drawings folder> <work folder>`: `public/data/floors.json`, the walls of each drawing in
   `tools/plans.json`, placed on the site from its control points and stood at its kote.
 - `python3 -I tools/ingest.py <sources> <data dir> [report.md]`: the document store (`docs.sqlite`, full text).
