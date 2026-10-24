@@ -12,23 +12,26 @@
    The plan view looks straight down, north up, without perspective, so a scale bar holds. */
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./sun.js";
+import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890" };
 
-export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {} }) {
+export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality() }) {
+  const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
   const T = site.terrain, base = Math.min(...T.z.filter(v => v != null));
   const at = (grid, x, y) => { const c = Math.floor((x - T.x0) / T.res), r = Math.floor((T.y1 - y) / T.res); if (c < 0 || r < 0 || c >= T.w || r >= T.h) return null; return grid[r * T.w + c]; };
   const ground = (x, y) => at(T.z, x, y) ?? base;
   const P = ([x, y], h) => new THREE.Vector3(x, h - base, -y);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.localClippingEnabled = true;
+  const renderer = new THREE.WebGLRenderer({ antialias: Q.aa, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(Q.dpr, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.localClippingEnabled = true;
+  renderer.domElement.addEventListener("webglcontextlost", () => lowerNow(Q));
   container.appendChild(renderer.domElement); renderer.domElement.style.cssText = "display:block;width:100%;height:100%;touch-action:none";
   const scene = new THREE.Scene(); scene.background = new THREE.Color(C.sky);
   const persp = new THREE.PerspectiveCamera(40, 1, 1, 4000), ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 4000);
   let camera = persp, mode = "3d";
   const sky = new THREE.HemisphereLight("#f3f6ff", "#8d8f80", 2.2); scene.add(sky);
-  const sunL = new THREE.DirectionalLight("#fff6e8", 2.2); sunL.castShadow = true; sunL.shadow.mapSize.set(4096, 4096);
+  const sunL = new THREE.DirectionalLight("#fff6e8", 2.2); sunL.castShadow = true; sunL.shadow.mapSize.set(Q.shadow, Q.shadow);
   Object.assign(sunL.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 1500 }); sunL.shadow.bias = -0.0004; sunL.shadow.normalBias = 0.6;
   scene.add(sunL, sunL.target);
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide, ...o });
@@ -39,7 +42,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     for (let r = 0; r < T.h; r++) for (let c = 0; c < T.w; c++) { const z = T.z[r * T.w + c] ?? base; pos.push(T.x0 + (c + 0.5) * T.res, z - base - 0.05, -(T.y1 - (r + 0.5) * T.res)); }
     for (let r = 0; r < T.h - 1; r++) for (let c = 0; c < T.w - 1; c++) { const a = r * T.w + c; idx.push(a, a + T.w, a + 1, a + 1, a + T.w, a + T.w + 1); }
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, mat(C.ground)); m.receiveShadow = true; scene.add(m);
+    /* grass (ambientCG Grass004, as in hagekart): one picture to 3 m, a little lighter than the photo so the plan reads */
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(pos.flatMap((v, i) => i % 3 === 0 ? [v / 3] : i % 3 === 2 ? [-v / 3] : []), 2));
+    const gc = document.createElement("canvas"); gc.width = gc.height = 512; const gx = gc.getContext("2d"); gx.fillStyle = C.ground; gx.fillRect(0, 0, 512, 512);
+    const grass = new THREE.CanvasTexture(gc); grass.wrapS = grass.wrapT = THREE.RepeatWrapping; grass.colorSpace = THREE.SRGBColorSpace; grass.anisotropy = 8;
+    const gi = new Image(); gi.onload = () => { gx.drawImage(gi, 0, 0, 512, 512); gx.globalCompositeOperation = "screen"; gx.fillStyle = "rgba(196,205,168,.62)"; gx.fillRect(0, 0, 512, 512); grass.needsUpdate = true; dirty = true; };
+    gi.src = new URL("./tex-grass.jpg", import.meta.url).href;
+    const m = new THREE.Mesh(g, mat("#ffffff", { map: grass })); m.receiveShadow = true; scene.add(m);
     const lot = site.lot.ring.map(p => P(p, ground(...p) + 0.25));
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lot), new THREE.LineDashedMaterial({ color: C.lot, dashSize: 2, gapSize: 1.2 })).computeLineDistances());
   }
@@ -61,17 +70,75 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
     const w = new THREE.Mesh(g, m); w.castShadow = w.receiveShadow = true; return w;
   }
-  /* facades as the documents describe them (LVPH 2012): the high-rise in natural concrete elements, the other wings
-     in rendered, white-painted concrete; a window to every 2.5 m bay of a 3.5 m storey, drawn once and repeated */
-  function facade(base, frame, glass) {
-    const cv = document.createElement("canvas"); cv.width = 128; cv.height = 180; const g = cv.getContext("2d");
-    g.fillStyle = base; g.fillRect(0, 0, 128, 180);
-    g.fillStyle = frame; g.fillRect(24, 50, 80, 82); g.fillStyle = glass; g.fillRect(28, 54, 72, 74);
-    g.fillStyle = "rgba(0,0,0,.06)"; g.fillRect(0, 176, 128, 4);
-    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  /* facades as the photos of the hospital show them (tools/facades.py measured the colours):
+     - the high-rise ("2 Fasadefoto", 2020): light concrete piers with a joint down the middle, and between them a
+       recessed slot holding a pair of blue windows over a shadowed spandrel;
+     - the low wings ("Fotoskisse fasade Forsyningsblokka", 2018): exposed-aggregate panels 1.25 m wide and a ribbon of
+       dark brown windows with the blinds down. Its concrete is warm in the photo's low sun; here it is half way to
+       the same lightness in grey, as it reads in daylight, and the high-rise's shadowed slot is grey where the scan
+       turns it violet.
+     One picture is a 2.5 m bay of a 3.5 m storey, drawn once and repeated, with a relief (normal) and a gloss
+     (roughness) picture beside it, so the glass shines and the slots and joints catch the light. */
+  const FACADE = {
+    tower: { concrete: "#e4e2e5", reveal: "#a3a19e", frame: "#3a3d42", glass: "#4576a8" },
+    low: { concrete: "#ece3d6", frame: "#3b352d", blind: "#827356", glass: "#4f5d66" },
+  };
+  function facade(kind) {
+    const W = 256, H = 358, mx = W / 2.5, my = H / 3.5, c = FACADE[kind];          // pixels per metre
+    const pic = document.createElement("canvas"), gl = document.createElement("canvas"); pic.width = gl.width = W; pic.height = gl.height = H;
+    const g = pic.getContext("2d"), r = gl.getContext("2d"), depth = new Float32Array(W * H);     // depth: 0 at the face, 1 in a recess
+    const box = (x0, y0, x1, y1, col, rough, d) => {   // metres from the bay's left and the storey's top
+      const X0 = Math.round(x0 * mx), Y0 = Math.round(y0 * my), X1 = Math.round(x1 * mx), Y1 = Math.round(y1 * my);
+      g.fillStyle = col; g.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+      if (rough != null) { r.fillStyle = `rgb(0,${rough},0)`; r.fillRect(X0, Y0, X1 - X0, Y1 - Y0); }
+      if (d != null) for (let y = Y0; y < Y1; y++) depth.fill(d, y * W + X0, y * W + X1);
+    };
+    const glass = (x0, y0, x1, y1) => {   // a pane: the sky's light in its top, darker down, and the frame round it
+      box(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, c.frame, 150, 0.6);
+      const gr = g.createLinearGradient(0, y0 * my, 0, y1 * my); gr.addColorStop(0, new THREE.Color(c.glass).lerp(new THREE.Color("#dfe9f3"), 0.35).getStyle()); gr.addColorStop(1, c.glass);
+      box(x0, y0, x1, y1, gr, 25, 0.75);
+    };
+    box(0, 0, 2.5, 3.5, c.concrete, 235, 0);
+    if (kind === "tower") {
+      box(1.1, 0, 2.5, 3.5, c.reveal, 235, 1);                                       // the slot
+      glass(1.22, 1.0, 1.78, 2.35); glass(1.9, 1.0, 2.43, 2.35);                     // the pair of windows
+      box(0.55, 0, 0.565, 3.5, "rgba(60,58,62,.55)", null, 0.5);                     // the pier's joint
+      box(0, 3.47, 1.1, 3.5, "rgba(60,58,62,.45)", null, 0.5);                       // the storey's joint
+    } else {
+      for (const x of [0, 1.25]) box(x, 0, x + 0.015, 3.5, "rgba(70,60,50,.55)", null, 0.5);   // panel joints
+      box(0, 1.15, 2.5, 2.3, c.frame, 150, 0.6);                                     // the ribbon of windows
+      for (const x of [0.06, 1.31]) {
+        box(x, 1.21, x + 1.13, 2.24, c.blind, 120, 0.8);
+        g.fillStyle = "rgba(0,0,0,.16)"; for (let y = 1.21 * my; y < 2.24 * my; y += 3) g.fillRect(x * mx, y, 1.13 * mx, 1);   // slats
+      }
+      box(0, 3.44, 2.5, 3.5, "rgba(0,0,0,.07)", null, null);                         // the sill's shadow line
+    }
+    /* the concrete's grain: small light and dark specks, more of them on the exposed aggregate */
+    const img = g.getImageData(0, 0, W, H), px = img.data, amt = kind === "low" ? 26 : 16;
+    let s = 1234567; const rnd = () => (s = (s * 1103515245 + 12345) >>> 0) / 4294967296;
+    for (let i = 0; i < W * H; i++) { if (depth[i] > 0.55) continue; const n = (rnd() - 0.5) * amt * (rnd() < 0.08 ? 2.2 : 1); px[i * 4] += n; px[i * 4 + 1] += n; px[i * 4 + 2] += n * 0.95; }
+    g.putImageData(img, 0, 0);
+    const tex = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+    if (!Q.relief) return { map: tex(pic, true), roughness: 0.9 };
+    /* relief: the slope of the depth, as a tangent-space normal */
+    const nc = document.createElement("canvas"); nc.width = W; nc.height = H; const nx = nc.getContext("2d"), ni = nx.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const at = (i, j) => depth[((j + H) % H) * W + ((i + W) % W)], dx = (at(x + 1, y) - at(x - 1, y)) * 2, dy = (at(x, y - 1) - at(x, y + 1)) * 2, k = (y * W + x) * 4;
+      const l = Math.hypot(dx, dy, 1); ni.data[k] = (dx / l * 0.5 + 0.5) * 255; ni.data[k + 1] = (dy / l * 0.5 + 0.5) * 255; ni.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; ni.data[k + 3] = 255;
+    }
+    nx.putImageData(ni, 0, 0);
+    return { map: tex(pic, true), roughnessMap: tex(gl), roughness: 1, normalMap: tex(nc), normalScale: new THREE.Vector2(1.2, 1.2), envMap, envMapIntensity: 0.7 };
   }
+  /* a sky for the glass to mirror: light blue overhead, pale at the horizon, the ground's green-grey below */
+  const envMap = Q.relief && (() => {
+    const es = new THREE.Scene(), geo = new THREE.SphereGeometry(100, 32, 16), col = [];
+    for (let i = 0; i < geo.attributes.position.count; i++) { const y = geo.attributes.position.getY(i) / 100; const c = y > 0 ? new THREE.Color("#eef2f4").lerp(new THREE.Color("#8fb4da"), Math.pow(y, 0.6)) : new THREE.Color("#9a9c8c"); col.push(c.r, c.g, c.b); }
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    es.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    const pm = new THREE.PMREMGenerator(renderer), t = pm.fromScene(es, 0.02).texture; pm.dispose(); return t;
+  })();
   const BAY = 2.5, STOREY = 3.5;
-  const wallTex = { render: facade("#f1eee6", "#d9d4ca", "#5d6a73"), concrete: facade("#cfc9bd", "#b8b2a6", "#4f5b63") };
+  const wallTex = { low: facade("low"), tower: facade("tower") };
   /* a building on the lot as blocks (tools/massing.py): flat roofs, and walls only where the roof steps down or the
      building ends, with the facade counted in bays and storeys from the base so the windows line up */
   function blocksMesh(b, tex) {
@@ -89,7 +156,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }
     const grp = new THREE.Group();
     const wg = new THREE.BufferGeometry(); wg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); wg.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); wg.computeVertexNormals();
-    const walls = new THREE.Mesh(wg, mat("#ffffff", { map: tex })); walls.castShadow = walls.receiveShadow = true; grp.add(walls);
+    const walls = new THREE.Mesh(wg, mat("#ffffff", tex)); walls.castShadow = walls.receiveShadow = true; grp.add(walls);
     const rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.Float32BufferAttribute(roof, 3));
     rg.setAttribute("normal", new THREE.Float32BufferAttribute(roof.map((_, i) => i % 3 === 1 ? 1 : 0), 3));   // flat roofs face up
     const r = new THREE.Mesh(rg, mat(C.flatRoof)); r.castShadow = r.receiveShadow = true; grp.add(r);
@@ -97,7 +164,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   for (const b of site.buildings) {
     const grp = new THREE.Group(), b0 = b.base - 0.5, ring = b.ring;
-    if (b.own && b.blocks?.length) grp.add(blocksMesh(b, b.top - b.base > 40 ? wallTex.concrete : wallTex.render));
+    if (b.own && b.blocks?.length) grp.add(blocksMesh(b, b.top - b.base > 40 ? wallTex.tower : wallTex.low));
     else if (!b.own || b.top == null) {
       const top = b.top ?? b.base + (b.osmHeight || (b.levels || 2) * 3);
       grp.add(wallsTo(ring, b0, () => top, mat(b.own ? C.own : C.nb)));
@@ -128,6 +195,56 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       }
     }
     grp.userData.id = b.id; grp.traverse(o => { o.userData.id = b.id; }); scene.add(grp); meshes.set(b.id, grp);
+  }
+
+  /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (ez-tree.js, MIT;
+     bark and leaf pictures CC0 / MIT, docs/tex-credits.txt). Three models are grown once, oak, aspen and pine, with
+     fewer leaves and rounder branches than hagekart's (a few hundred trees here, not a garden's few; quality.js leaves), and every tree is one of them, scaled
+     to its height and crown and turned. Anything that goes wrong leaves the site without trees. ---------- */
+  const treeHash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
+  if (site.trees?.length && !Q.ez) {
+    /* on a slow device: a trunk and a crown of a few flat faces each, every tree in two draws */
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), n = site.trees.length;
+    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.25, 1, 6).translate(0, 0.5, 0), mat("#6b5a48"), n);
+    const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mat("#7f9a5c", { flatShading: true, side: THREE.FrontSide }), n);
+    site.trees.forEach(([x, y, h, r, form], i) => {
+      const g0 = ground(x, y), cone = form === "cone", ch = cone ? h * 0.8 : Math.min(h * 0.7, r * 2.2);
+      m4.compose(P([x, y], g0), q.identity(), new THREE.Vector3(1, h - ch * 0.6, 1)); trunk.setMatrixAt(i, m4);
+      m4.compose(P([x, y], g0 + h - ch / 2), q.setFromAxisAngle(up, treeHash(y, x) * 6.28), new THREE.Vector3(cone ? r * 0.8 : r, ch / 2, cone ? r * 0.8 : r)); crown.setMatrixAt(i, m4);
+    });
+    for (const m of [trunk, crown]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); }
+  }
+  if (site.trees?.length && Q.ez) {
+    const url = n => new URL(n, import.meta.url).href, load = n => new Promise(ok => new THREE.TextureLoader().load(url(n), ok, undefined, () => ok(null)));
+    Promise.all([import("./ez-tree.js"), ...["ez-bark-oak.jpg", "ez-bark-birch.jpg", "ez-bark-pine.jpg", "ez-leaf-oak.png", "ez-leaf-aspen.png", "ez-leaf-pine.png"].map(load)]).then(([EZ, ...tx]) => {
+      for (const t of tx) if (t) { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; }
+      tx.slice(0, 3).forEach(t => { if (t) t.wrapS = t.wrapT = THREE.RepeatWrapping; });
+      const KIND = { oak: ["oak_medium", tx[0], tx[3]], aspen: ["aspen_medium", tx[1], tx[4]], pine: ["pine_medium", tx[2], tx[5]] };
+      const groups = { oak: [], aspen: [], pine: [] };
+      for (const t of site.trees) groups[t[4] === "cone" ? "pine" : treeHash(t[0], t[1]) < 0.35 ? "aspen" : "oak"].push(t);
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+      for (const [kind, list] of Object.entries(groups)) {
+        if (!list.length) continue;
+        const [preset, bark, leaf] = KIND[kind], json = structuredClone(EZ.PRESETS[preset]); json.leaves.count = Math.max(4, Math.round(json.leaves.count * Q.leaves));
+        for (const k in json.branch.segments) json.branch.segments[k] = Math.min(json.branch.segments[k], [5, 4, 3, 3][k]);       // rounder than needed from 30 m away:
+        for (const k in json.branch.sections) json.branch.sections[k] = Math.max(1, Math.round(json.branch.sections[k] * 0.6));  // about 6 000 triangles a tree
+        const tree = new EZ.Tree(); tree.loadFromJson(json);
+        const bg = tree.branchesMesh.geometry, lg = tree.leavesMesh.geometry; bg.computeBoundingBox(); lg.computeBoundingBox();
+        const Ht = Math.max(bg.boundingBox.max.y, lg.boundingBox.max.y), R = Math.max(-lg.boundingBox.min.x, lg.boundingBox.max.x, -lg.boundingBox.min.z, lg.boundingBox.max.z, 1);
+        if (bark && json.bark?.textureScale) bark.repeat.set(json.bark.textureScale.x, 1 / json.bark.textureScale.y);
+        const bm = new THREE.InstancedMesh(bg, new THREE.MeshStandardMaterial({ map: bark, color: json.bark?.tint ?? 0xffffff, roughness: 0.95 }), list.length);
+        const lm = new THREE.InstancedMesh(lg, new THREE.MeshStandardMaterial({ map: leaf, color: kind === "pine" ? "#c9d6c0" : "#d7e3c2", alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 }), list.length);
+        lm.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaf, alphaTest: 0.5 });
+        list.forEach(([x, y, h, r], i) => {
+          const sy = h / Ht, sxz = Math.min(1.4 * sy, Math.max(0.6 * sy, r / R));
+          m4.compose(P([x, y], ground(x, y)), q.setFromAxisAngle(up, treeHash(y, x) * Math.PI * 2), new THREE.Vector3(sxz, sy, sxz));
+          bm.setMatrixAt(i, m4); lm.setMatrixAt(i, m4);
+        });
+        for (const m of [bm, lm]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); }
+        tree.branchesMesh.material.dispose?.(); tree.leavesMesh.material.dispose?.();
+      }
+      dirty = true;
+    }).catch(e => console.warn("trees", e));
   }
 
   /* ---------- floors: walls from the drawings, a floor plate in each building on the lot, the cut above ---------- */
@@ -182,7 +299,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   /* ---------- camera: orbit around a point, or straight down for the plan ---------- */
   const lotC = site.lot.ring.reduce((a, p) => [a[0] + p[0] / site.lot.ring.length, a[1] + p[1] / site.lot.ring.length], [0, 0]);
-  const O = { x: lotC[0], y: lotC[1], h: ground(...lotC) - base + 15, yaw: Math.PI * 0.8, pitch: 0.62, dist: 380 };
+  const O = { x: lotC[0], y: lotC[1], h: ground(...lotC) - base + 15, yaw: 0, pitch: 0.62, dist: 380 };   // from the south, north up, as a drawing is read
   function place() {
     const t = new THREE.Vector3(O.x, O.h, -O.y), cp = Math.cos(O.pitch);
     if (mode === "plan") {
@@ -263,7 +380,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* ---------- drawing ---------- */
   function size() { const w = container.clientWidth || 600, h = container.clientHeight || 400; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); place(); }
   new ResizeObserver(size).observe(container); size(); place();
-  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); placeTags(); dirty = false; } });
+  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); placeTags(); dirty = false; markDone(Q); } });
 
   const home = { ...O };
   return {
