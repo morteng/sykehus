@@ -1,7 +1,8 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try. */
 import { createViewer } from "./viewer.js";
 
-const [site, { floors }] = await Promise.all(["data/site.json", "data/floors.json"].map(u => fetch(u).then(r => r.json())));
+/* floors.json is built locally from the drawings; without it the page shows the site alone */
+const [site, { floors }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
