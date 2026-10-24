@@ -112,6 +112,30 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     grp.userData = { centre: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) };
     grp.visible = false; scene.add(grp); floorGroups.set(f.id, grp);
   }
+  /* the rooms' stamps from the drawing, as on the sheet: name, and the area under it, left edge at the stamp.
+     A stamp that would overlap one already placed gives way; larger rooms are placed first. */
+  const tags = document.createElement("div"); tags.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;font:12px/1.15 -apple-system,'Helvetica Neue',Arial,sans-serif;color:#23211e";
+  if (getComputedStyle(container).position === "static") container.style.position = "relative";
+  container.appendChild(tags);
+  const roomTags = new Map(floors.map(f => [f.id, (f.rooms || []).map(r => {
+    const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 3px #fffbf0,0 0 3px #fffbf0";
+    el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²` : "");
+    tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), area: r.area_m2 || 0 };
+  }).sort((a, b) => b.area - a.area)]));
+  const v3 = new THREE.Vector3();
+  function placeTags() {
+    const w = container.clientWidth, h = container.clientHeight, close = mode === "plan" ? view().mPerPx < 0.09 : O.dist < 150, placed = [];
+    for (const [id, list] of roomTags) for (const t of list) {
+      if (id !== floor || !close) { t.el.style.display = "none"; continue; }
+      v3.copy(t.at).project(camera);
+      const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
+      if (v3.z > 1 || x < -100 || y < -30 || x > w + 10 || y > h + 30) { t.el.style.display = "none"; continue; }
+      t.el.style.display = "block"; t.size ??= [t.el.offsetWidth, t.el.offsetHeight];
+      const box = [x - 2, y - 14 - 2, x + t.size[0] + 2, y - 14 + t.size[1] + 2];
+      if (placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { t.el.style.display = "none"; continue; }
+      placed.push(box); t.el.style.transform = `translate(${x.toFixed(0)}px, ${(y - 14).toFixed(0)}px)`;
+    }
+  }
   let floor = null;
   function setFloor(id) {
     for (const [k, g] of floorGroups) g.visible = k === id;
@@ -180,7 +204,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* ---------- drawing ---------- */
   function size() { const w = container.clientWidth || 600, h = container.clientHeight || 400; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); place(); }
   new ResizeObserver(size).observe(container); size(); place();
-  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); dirty = false; } });
+  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); placeTags(); dirty = false; } });
 
   const home = { ...O };
   return {

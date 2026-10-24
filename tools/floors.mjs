@@ -6,6 +6,8 @@
   node tools/floors.mjs <folder with the drawings (PDF)> <work folder>
 
 The walls are the drawing's grey-filled shapes, in site metres; the viewer stands them from kote to kote + height.
+The rooms are the drawing's stamps (rooms.py): name, area as the architect wrote it, room code, and where the stamp
+stands (its left edge at the name's baseline).
 Python runs isolated (-I): the drawings are downloaded files, read as data. */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -31,7 +33,10 @@ for (const p of plans) {
   /* site = (page * m) @ [[cos, sin], [-sin, cos]] + shift, as georef.py writes it */
   const toSite = ([x, y]) => [+(x * m * c - y * m * s + geo.shift[0]).toFixed(2), +(x * m * s + y * m * c + geo.shift[1]).toFixed(2)];
   const walls = JSON.parse(readFileSync(paths, "utf8")).shapes.filter(sh => sh.k !== "stroke" && grey(sh.fill)).flatMap(sh => sh.p.map(r => r.map(toSite)));
-  floors.push({ id: p.id, name: p.name, wing: p.wing, kote: p.kote, height: p.height, source: p.source, walls });
-  console.log(`${p.id}: ${walls.length} walls, scale fitted 1:${geo.scale_fitted}, rotation ${geo.rotation_deg}°`);
+  const roomsF = `${work}/${p.id}-rooms.json`;
+  execFileSync("python3", ["-I", tools + "rooms.py", `${pdfDir}/${p.file}`, String(p.page), roomsF], { stdio: ["ignore", "ignore", "inherit"] });
+  const rooms = JSON.parse(readFileSync(roomsF, "utf8")).map(r => ({ name: r.name, area_m2: r.area_m2 ?? undefined, code: r.code ?? undefined, at: toSite(r.at) }));
+  floors.push({ id: p.id, name: p.name, wing: p.wing, kote: p.kote, height: p.height, source: p.source, walls, rooms });
+  console.log(`${p.id}: ${walls.length} walls, ${rooms.length} rooms (${rooms.filter(r => r.area_m2).length} with an area), scale fitted 1:${geo.scale_fitted}, rotation ${geo.rotation_deg}°`);
 }
 writeFileSync(new URL("../public/data/floors.json", import.meta.url), JSON.stringify({ v: 1, floors }));
