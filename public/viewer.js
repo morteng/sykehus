@@ -208,7 +208,16 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   });
   const up = e => { pts.delete(e.pointerId); if (drag && drag.moved < 6 && !pts.size) pick(e); if (!pts.size) drag = null; };
   el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("contextmenu", e => e.preventDefault());
-  el.addEventListener("wheel", e => { e.preventDefault(); O.dist = Math.max(30, Math.min(1200, O.dist * Math.exp(e.deltaY * 0.0012))); place(); }, { passive: false });
+  /* a trackpad as in Maps: two fingers move the view the way the fingers go, a pinch (sent as wheel with ctrlKey)
+     zooms; a mouse wheel (whole steps, up and down only) zooms */
+  el.addEventListener("wheel", e => {
+    e.preventDefault();
+    const mouse = e.deltaMode !== 0 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && Number.isInteger(e.deltaY));
+    if (e.ctrlKey) O.dist *= Math.exp(e.deltaY * 0.01);
+    else if (mouse) O.dist *= Math.exp(e.deltaY * 0.0012);
+    else pan(-e.deltaX, -e.deltaY);
+    O.dist = Math.max(30, Math.min(1200, O.dist)); place();
+  }, { passive: false });
   function pinchOf() { const [a, b] = [...pts.values()]; return { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 }; }
   /* drag the ground under the pointer: screen right is (cos yaw, -sin yaw) east/north, screen up is away from the camera */
   function pan(dx, dy) { const k = mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : O.dist * 0.0016, yaw = mode === "plan" ? 0 : O.yaw, s = Math.sin(yaw), c = Math.cos(yaw); O.x += (-dx * c - dy * s) * k; O.y += (dx * s - dy * c) * k; }
