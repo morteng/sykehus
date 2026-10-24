@@ -10,11 +10,13 @@ no drawing gives it); the windows and doors read from the elevations (tools/elev
 openings. A slab at each storey's kote and a roof at the top of each block. The walls of the drawn floor plans
 (floors.json) stand on their storey as interior walls, and their room stamps are spaces with code and name, as
 volumes where tools/roompoly.py found the room's outline. Every
-element says where it came from and how sure it is (Pset Sykehustomta_Kilde).
+element says where it came from and how sure it is (Pset Sykehustomta_Kilde). The ids (GlobalId) are the same each
+time the same data is exported, so a new export can be compared with the last one element by element.
 
 The worker on the server can import build() and run it on the agent's edits; it needs IfcOpenShell only."""
-import sys, json, math
-import ifcopenshell
+import sys, json, math, uuid
+from collections import Counter
+import ifcopenshell, ifcopenshell.guid
 import ifcopenshell.api.root, ifcopenshell.api.unit, ifcopenshell.api.context, ifcopenshell.api.aggregate
 import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature
 
@@ -172,7 +174,37 @@ def build(site, floors, only=None):
             spaces.setdefault(storey(wid), []).append(sp); counts["space"] += 1
     for s, es in inner.items(): ifcopenshell.api.spatial.assign_container(m, products=es, relating_structure=s)
     for s, es in spaces.items(): ifcopenshell.api.aggregate.assign_object(m, products=es, relating_object=s)
+    stable_ids(m)
     return m, counts
+
+
+NS = uuid.UUID("5b1f6c2e-8d0a-4c55-9a43-1f2d7e0c9b11")   # Sykehustomta's own namespace for GlobalIds; never change it
+
+
+def stable_ids(m):
+    """GlobalIds from what an element is, not from chance: its class, the chain of what contains it and its name, and
+    its place among its namesakes there; relationships and property sets from the ids they tie together."""
+    def parent(e):
+        for r in getattr(e, "ContainedInStructure", None) or []: return r.RelatingStructure
+        for r in getattr(e, "Decomposes", None) or []: return r.RelatingObject
+        for r in getattr(e, "VoidsElements", None) or []: return r.RelatingBuildingElement
+        for r in getattr(e, "FillsVoids", None) or []: return r.RelatingOpeningElement
+        return None
+    def path(e, depth=0):
+        p = parent(e)
+        return f"{path(p, depth + 1) if p is not None and depth < 8 else ''}/{e.is_a()}:{e.Name or ''}"
+    seen = Counter()
+    gid = lambda key: ifcopenshell.guid.compress(uuid.uuid5(NS, key).hex)
+    for e in m.by_type("IfcObjectDefinition"):   # by_type keeps creation order, which follows the data's order
+        key = path(e); seen[key] += 1; e.GlobalId = gid(f"{key}#{seen[key]}")
+    for e in m.by_type("IfcRelationship"):
+        ids = [x.GlobalId for a in e for x in (a if isinstance(a, tuple) else [a]) if isinstance(x, ifcopenshell.entity_instance) and x.is_a("IfcRoot")]
+        key = e.is_a() + ":" + ",".join(sorted(ids)); seen[key] += 1; e.GlobalId = gid(f"{key}#{seen[key]}")
+    for e in m.by_type("IfcPropertySetDefinition"):
+        owners = sorted(o.GlobalId for r in getattr(e, "DefinesOccurrence", None) or [] for o in r.RelatedObjects)
+        key = f"{e.Name}:{','.join(owners)}"; seen[key] += 1; e.GlobalId = gid(f"{key}#{seen[key]}")
+    for e in m.by_type("IfcRelDefinesByProperties"):   # again, now that the sets have theirs
+        key = "pset:" + e.RelatingPropertyDefinition.GlobalId; e.GlobalId = gid(key)
 
 if __name__ == "__main__":
     site_f, floors_f, out = sys.argv[1:4]
