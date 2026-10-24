@@ -1,5 +1,5 @@
 {
-  "renderkit": "03480c75b9509c0126708691e623d0eeb2289f00",
+  "renderkit": "31c411048eddacd87aa4ff522cc15b0925734ce5",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -13,6 +13,7 @@
     "ez-bark-pine.jpg": "ebbb78bc84bf3bc2b639e9ebddf63be3b6155f84",
     "ez-leaf-oak.png": "144cc2cbebc45a9f3f63ff24b77c9c998380b879",
     "ez-leaf-aspen.png": "bb5681a2501dc2e2c44d6c7763cbfa4c967259cf",
-    "ez-leaf-pine.png": "f552d709ba62ba95b2ad070083939f99232194ab"
+    "ez-leaf-pine.png": "f552d709ba62ba95b2ad070083939f99232194ab",
+    "camera.js": "4fb5b1f9aa3b99356147eceecca50b84fba73b6c"
   }
 }

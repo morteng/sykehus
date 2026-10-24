@@ -13,6 +13,7 @@
    The plan view looks straight down, north up, without perspective, so a scale bar holds. */
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
+import { ease } from "./renderkit/camera.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
@@ -403,7 +404,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const ring = drawn ? null : own.filter(b => { const z = koteIn(b, name); return z != null && z > b.base && z < (b.top ?? 0); }).flatMap(b => b.ring);
     const c = g ? g.centre : ring.length ? [(Math.min(...ring.map(p => p[0])) + Math.max(...ring.map(p => p[0]))) / 2, (Math.min(...ring.map(p => p[1])) + Math.max(...ring.map(p => p[1]))) / 2] : [O.x, O.y];
     const s = g ? g.size : ring.length ? Math.max(Math.max(...ring.map(p => p[0])) - Math.min(...ring.map(p => p[0])), Math.max(...ring.map(p => p[1])) - Math.min(...ring.map(p => p[1]))) : 100;
-    Object.assign(O, { x: c[0], y: c[1], h: k - base, dist: Math.max(70, s * 1.3) }); place();
+    glide({ x: c[0], y: c[1], h: k - base, dist: Math.max(70, s * 1.3) });
   }
   /* one building cut at one of its storeys, the rest whole; the view stays where it is */
   function cutBuilding(id, name) {
@@ -425,13 +426,28 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     } else { camera.position.set(t.x + O.dist * cp * Math.sin(O.yaw), t.y + O.dist * Math.sin(O.pitch), t.z + O.dist * cp * Math.cos(O.yaw)); camera.lookAt(t); }
     dirty = true; onView(view());
   }
+  /* a move of the view (a storey, a building, home) eases there from where the view is, at the speed it has: renderkit's
+     camera rig (camera.js, as laser's), on this orbit's own numbers (centre, yaw, pitch, log distance). The person's
+     hand (a drag, a wheel, a pinch, the zoom buttons) stops it at once; reduced motion goes there at once. */
+  const motionLow = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+  const stateOf = o => [o.x, o.y, o.h, o.yaw, o.pitch, Math.log(o.dist)];
+  const putState = v => { Object.assign(O, { x: v[0], y: v[1], h: v[2], yaw: v[3], pitch: Math.max(0.08, Math.min(1.53, v[4])), dist: Math.max(30, Math.min(1200, Math.exp(v[5]))) }); place(); };
+  let moving = null, going = null;                                   // the move in flight, and where it goes
+  function glide(to, ms = 900) {
+    const end = stateOf({ ...O, ...to }); going = end;
+    moving = ease(O, { from: stateOf(O), to: end, ms, now: () => performance.now(), raf: f => requestAnimationFrame(f), put: putState,
+      low: !!motionLow?.matches, onStop: () => { if (going === end) going = null; } });
+  }
+  function hand() { moving?.user(); moving = null; }
+  /* a picture taken during a move is the one the move goes to */
+  function land() { const g = going; if (g) { hand(); putState(g); } }
   /* what the page shows around the picture: the north arrow's turn, and in the plan the metres per screen pixel */
   function view() { return { mode, floor, storey, only, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
   /* the plan reads as a drawing: even light, no cast shadows */
   function setMode(m) { mode = m === "plan" ? "plan" : "3d"; camera = mode === "plan" ? ortho : persp; sunL.castShadow = mode !== "plan"; sky.intensity = mode === "plan" ? 2.8 : 2.2; place(); }
   const el = renderer.domElement, pts = new Map();
   let drag = null, dirty = true;
-  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, pinch: pts.size === 2 ? pinchOf() : null }; });
+  el.addEventListener("pointerdown", e => { hand(); el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, pinch: pts.size === 2 ? pinchOf() : null }; });
   el.addEventListener("pointermove", e => {
     if (!drag || !pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2) { const p = pinchOf(); if (drag.pinch) { O.dist = Math.max(30, Math.min(1200, O.dist * drag.pinch.d / p.d)); pan(p.x - drag.pinch.x, p.y - drag.pinch.y); } drag.pinch = p; drag.moved += 10; place(); return; }
@@ -446,14 +462,14 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
      and zooms; a mouse on a Mac sends pixels like a trackpad, so it moves the view, and the + and - buttons zoom. */
   let gesture = null;
   el.addEventListener("wheel", e => {
-    e.preventDefault();
+    e.preventDefault(); hand();
     if (gesture) return;
     if (e.ctrlKey) zoom(Math.exp(e.deltaY * 0.01), e);
     else if (e.deltaMode !== 0) zoom(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.06 : 0.6)), e);
     else { pan(-e.deltaX, -e.deltaY); place(); }
   }, { passive: false });
   /* on an iPad the same gesture events come with the touches, which the pointer handlers already zoom */
-  el.addEventListener("gesturestart", e => { e.preventDefault(); gesture = pts.size ? null : { dist: O.dist }; });
+  el.addEventListener("gesturestart", e => { e.preventDefault(); hand(); gesture = pts.size ? null : { dist: O.dist }; });
   el.addEventListener("gesturechange", e => { e.preventDefault(); if (gesture) zoom(gesture.dist / (e.scale || 1) / O.dist, e); });
   el.addEventListener("gestureend", e => { e.preventDefault(); gesture = null; });
   /* zoom by a factor on the distance; in the plan the ground under the pointer stays put */
@@ -501,10 +517,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const home = { ...O };
   return {
     setSun, select, setFloor, setStorey, cutBuilding, setMode, view, get selected() { return selected; },
-    zoom(f) { zoom(f); },
-    home() { setStorey(null); Object.assign(O, home); place(); },
-    pose(p) { if (p) { Object.assign(O, p); place(); } return { ...O }; },
-    focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); Object.assign(O, { x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); place(); },
-    snapshot() { renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
+    zoom(f) { hand(); zoom(f); },
+    home() { setStorey(null); glide(home); },
+    pose(p) { if (p) { hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
+    focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
+    snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
   };
 }
