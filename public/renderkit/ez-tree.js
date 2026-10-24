@@ -1,5 +1,5 @@
 /*! EZ-Tree tree generator, https://github.com/dgreenheck/ez-tree (v1.1.0). Hagekart joined the source files
-   rng, enums, options, branch and tree into this one module, pointed the imports at its own three.js, left out the
+   rng, enums, options, branch and tree into this one module, pointed the imports at its own three.js (renderkit: ./three.js, which an app's take points at its own), left out the
    trellis and the bundled textures, and kept the presets inline. The licence below applies to this file.
 
    MIT License
@@ -24,7 +24,7 @@
    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 */
-import * as THREE from "./vendor/three.module.js";
+import * as THREE from "../vendor/three.module.js";
 
 const BarkType = {
   Birch: 'birch',

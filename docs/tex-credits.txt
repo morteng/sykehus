@@ -3,7 +3,7 @@ Copied from hagekart (github.com/morteng/hagekart, public/ and docs/), unchanged
 Ground texture tex-grass.jpg is ambientCG Grass004 (1K colour map, downscaled to 512 px), CC0 1.0
 (https://docs.ambientcg.com/license). No attribution required; source: ambientcg.com.
 
-Trees (ez-tree.js, ez-bark-*.jpg, ez-leaf-*.png): EZ-Tree by Daniel Greenheck, MIT licence
+Trees (public/renderkit/ez-tree.js, ez-bark-*.jpg, ez-leaf-*.png, taken from renderkit since U3453): EZ-Tree by Daniel Greenheck, MIT licence
 (docs/LICENSE-ez-tree.txt), https://github.com/dgreenheck/ez-tree v1.1.0. Bark pictures: oak from Poly Haven
 bark_brown_02 (CC0); birch and pine from texturecan.com (CC0, as stated on its front page); downscaled to 512 px.
 Leaf pictures: the EZ-Tree repository's own leaf images (MIT with the repository), downscaled to 256 px.

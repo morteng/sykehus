@@ -27,14 +27,20 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   `tools/plans.json`, placed on the site from its control points and stood at its kote.
 - `python3 -I tools/ingest.py <sources> <data dir> [report.md]`: the document store (`docs.sqlite`, full text).
 
-`tools/osm-buildings.mjs`, `tools/osm-rings.mjs`, `public/sun.js`, `public/quality.js`, `public/ez-tree.js` with its
-bark and leaf pictures, `public/tex-grass.jpg` and `public/vendor/` are copied from hagekart (each says so, or
-`docs/tex-credits.txt` does); they are to move to a shared module once both apps are stable.
+`tools/osm-buildings.mjs`, `tools/osm-rings.mjs`, `public/tex-grass.jpg` and `public/vendor/` are copied from hagekart
+(each says so, or `docs/tex-credits.txt` does).
+
+`public/renderkit/` is renderkit (github.com/morteng/renderkit, private, MIT), the 3D kit shared with laser: the sun
+(`sun.js`), the quality levels (`quality.js`; this site's table and keys are in `public/quality.js`) and EZ-Tree
+(`ez-tree.js`) with its bark and leaf pictures. It is taken by sha, never edited here: `renderkit.lock.json` names the
+sha and each file's git blob id. Take a new sha with `node <renderkit>/tools/take.mjs <sha> renderkit.lock.json`;
+`node --test` fails when a copy is not the file at the locked sha. renderkit is pinned to three 0.184.0 (laser's);
+this site still vendors 0.186.1.
 
 ## Licence and data
 
 The code is MIT (`LICENSE`); three.js in `public/vendor/` is MIT too (`LICENSE-three.txt`), and so is EZ-Tree
-(`docs/LICENSE-ez-tree.txt`). The grass, bark and leaf pictures are CC0 or MIT (`docs/tex-credits.txt`). Add
+(`docs/LICENSE-ez-tree.txt`) and renderkit. The grass, bark and leaf pictures are CC0 or MIT (`docs/tex-credits.txt`). Add
 `?q=low`, `?q=mid` or `?q=high` to the address to choose how much 3D the page draws.
 
 `public/data/site.json` is built from open data: building outlines © OpenStreetMap contributors (ODbL 1.0,
