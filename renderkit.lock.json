@@ -1,0 +1,18 @@
+{
+  "renderkit": "03480c75b9509c0126708691e623d0eeb2289f00",
+  "dest": "public/renderkit",
+  "file": "{}",
+  "import": "./{}",
+  "three": "../vendor/three.module.js",
+  "files": {
+    "sun.js": "2caa173fdc3adcc0a12d2e2fbf28a4dfd9fdd492",
+    "quality.js": "fa251f11621def68ddada3c47032a99dc21584f6",
+    "ez-tree.js": "1ea19545e4ba1bbbc92f62ef66c781f741aac524",
+    "ez-bark-oak.jpg": "b87dbe9a20a745165c8b277a0400462a596f5165",
+    "ez-bark-birch.jpg": "32d6c16e3d9a4d5515ff25692b8639b5154f36d5",
+    "ez-bark-pine.jpg": "ebbb78bc84bf3bc2b639e9ebddf63be3b6155f84",
+    "ez-leaf-oak.png": "144cc2cbebc45a9f3f63ff24b77c9c998380b879",
+    "ez-leaf-aspen.png": "bb5681a2501dc2e2c44d6c7763cbfa4c967259cf",
+    "ez-leaf-pine.png": "f552d709ba62ba95b2ad070083939f99232194ab"
+  }
+}

@@ -1,5 +1,5 @@
-/* Copied from hagekart public/sun.js (claude/stoic-hawking-xw30mk e636f49), 2026-10-24: sunPosition and osloTime only.
-   Keep in step until it moves to a shared module. */
+/* renderkit sun: the sun by place and time. From hagekart public/sun.js (claude/stoic-hawking-xw30mk e636f49) by way of
+   sykehus (a993cb9), 2026-10-24: sunPosition and osloTime only. The one copy (U3453): apps take it by sha. */
 
 const RAD = Math.PI / 180;
 

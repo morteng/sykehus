@@ -12,7 +12,7 @@
    (floors.json, tools/floors.mjs) its walls stand from their kote.
    The plan view looks straight down, north up, without perspective, so a scale bar holds. */
 import * as THREE from "./vendor/three.module.js";
-import { sunPosition } from "./sun.js";
+import { sunPosition } from "./renderkit/sun.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
@@ -248,7 +248,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     grp.userData.id = b.id; grp.traverse(o => { o.userData.id = b.id; }); scene.add(grp); meshes.set(b.id, grp);
   }
 
-  /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (ez-tree.js, MIT;
+  /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (renderkit/ez-tree.js, MIT;
      bark and leaf pictures CC0 / MIT, docs/tex-credits.txt). Three models are grown once, oak, aspen and pine, with
      fewer leaves and rounder branches than hagekart's (a few hundred trees here, not a garden's few; quality.js leaves), and every tree is one of them, scaled
      to its height and crown and turned. Anything that goes wrong leaves the site without trees. ---------- */
@@ -267,7 +267,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   if (site.trees?.length && Q.ez) {
     const url = n => new URL(n, import.meta.url).href, load = n => new Promise(ok => new THREE.TextureLoader().load(url(n), ok, undefined, () => ok(null)));
-    Promise.all([import("./ez-tree.js"), ...["ez-bark-oak.jpg", "ez-bark-birch.jpg", "ez-bark-pine.jpg", "ez-leaf-oak.png", "ez-leaf-aspen.png", "ez-leaf-pine.png"].map(load)]).then(([EZ, ...tx]) => {
+    Promise.all([import("./renderkit/ez-tree.js"), ...["ez-bark-oak.jpg", "ez-bark-birch.jpg", "ez-bark-pine.jpg", "ez-leaf-oak.png", "ez-leaf-aspen.png", "ez-leaf-pine.png"].map(n => load(`renderkit/${n}`))]).then(([EZ, ...tx]) => {
       for (const t of tx) if (t) { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; }
       tx.slice(0, 3).forEach(t => { if (t) t.wrapS = t.wrapT = THREE.RepeatWrapping; });
       const KIND = { oak: ["oak_medium", tx[0], tx[3]], aspen: ["aspen_medium", tx[1], tx[4]], pine: ["pine_medium", tx[2], tx[5]] };
