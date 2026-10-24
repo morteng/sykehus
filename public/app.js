@@ -50,9 +50,10 @@ function setMode(m) {
 }
 function hint() {
   const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (f ? `${f.name} ${kote(f.kote)}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller rull for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller rull for å zoome · klikk et bygg") + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  $("hint").textContent = (f ? `${f.name} ${kote(f.kote)}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg") + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
+$("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
 
 function showInfo(b) {
   const el = $("info");

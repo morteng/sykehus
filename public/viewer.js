@@ -208,19 +208,34 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   });
   const up = e => { pts.delete(e.pointerId); if (drag && drag.moved < 6 && !pts.size) pick(e); if (!pts.size) drag = null; };
   el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("contextmenu", e => e.preventDefault());
-  /* a trackpad as in Maps: two fingers move the view the way the fingers go, a pinch (sent as wheel with ctrlKey)
-     zooms; a mouse wheel (whole steps, up and down only) zooms */
+  /* a trackpad as in Maps: two fingers move the view the way the fingers go, a pinch zooms. Chrome and Firefox send
+     the pinch as a wheel with ctrlKey, Safari as gesture events (and no wheel). A wheel in lines or pages is a mouse
+     and zooms; a mouse on a Mac sends pixels like a trackpad, so it moves the view, and the + and - buttons zoom. */
+  let gesture = null;
   el.addEventListener("wheel", e => {
     e.preventDefault();
-    const mouse = e.deltaMode !== 0 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && Number.isInteger(e.deltaY));
-    if (e.ctrlKey) O.dist *= Math.exp(e.deltaY * 0.01);
-    else if (mouse) O.dist *= Math.exp(e.deltaY * 0.0012);
-    else pan(-e.deltaX, -e.deltaY);
-    O.dist = Math.max(30, Math.min(1200, O.dist)); place();
+    if (gesture) return;
+    if (e.ctrlKey) zoom(Math.exp(e.deltaY * 0.01), e);
+    else if (e.deltaMode !== 0) zoom(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.06 : 0.6)), e);
+    else { pan(-e.deltaX, -e.deltaY); place(); }
   }, { passive: false });
+  /* on an iPad the same gesture events come with the touches, which the pointer handlers already zoom */
+  el.addEventListener("gesturestart", e => { e.preventDefault(); gesture = pts.size ? null : { dist: O.dist }; });
+  el.addEventListener("gesturechange", e => { e.preventDefault(); if (gesture) zoom(gesture.dist / (e.scale || 1) / O.dist, e); });
+  el.addEventListener("gestureend", e => { e.preventDefault(); gesture = null; });
+  /* zoom by a factor on the distance; in the plan the ground under the pointer stays put */
+  function zoom(f, at) {
+    const d = Math.max(30, Math.min(1200, O.dist * f)); f = d / O.dist;
+    if (mode === "plan" && at && at.clientX != null) {
+      const r = el.getBoundingClientRect(), m = O.dist * 0.72 / (r.height || 400);
+      O.x += (at.clientX - r.left - r.width / 2) * m * (1 - f); O.y -= (at.clientY - r.top - r.height / 2) * m * (1 - f);
+    }
+    O.dist = d; place();
+  }
   function pinchOf() { const [a, b] = [...pts.values()]; return { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2 }; }
-  /* drag the ground under the pointer: screen right is (cos yaw, -sin yaw) east/north, screen up is away from the camera */
-  function pan(dx, dy) { const k = mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : O.dist * 0.0016, yaw = mode === "plan" ? 0 : O.yaw, s = Math.sin(yaw), c = Math.cos(yaw); O.x += (-dx * c - dy * s) * k; O.y += (dx * s - dy * c) * k; }
+  /* drag the ground under the pointer: screen right is (cos yaw, sin yaw) east/north, screen up (away from the
+     camera) is (-sin yaw, cos yaw); the centre moves against the pointer, so the ground goes with it */
+  function pan(dx, dy) { const k = mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : O.dist * 0.0016, yaw = mode === "plan" ? 0 : O.yaw, s = Math.sin(yaw), c = Math.cos(yaw); O.x += (-dx * c - dy * s) * k; O.y += (-dx * s + dy * c) * k; }
 
   /* ---------- picking ---------- */
   const ray = new THREE.Raycaster(); let selected = null;
@@ -253,6 +268,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const home = { ...O };
   return {
     setSun, select, setFloor, setMode, view, get selected() { return selected; },
+    zoom(f) { zoom(f); },
     home() { setFloor(null); Object.assign(O, home); place(); },
     pose(p) { if (p) { Object.assign(O, p); place(); } return { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); Object.assign(O, { x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); place(); },
