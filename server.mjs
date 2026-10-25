@@ -74,6 +74,7 @@ createServer(async (req, res) => {
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
     if (path === "/api/versjoner") return mcp.handleVersions(req, res);
+    if (path === "/inn") return res.writeHead(308, { ...SECURITY, location: "/inn/" }).end();   // the fragment (the sign-in link's token) goes along
     const file = normalize(join(PUB, path.endsWith("/") ? path + "index.html" : path));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
     const body = await readFile(file);

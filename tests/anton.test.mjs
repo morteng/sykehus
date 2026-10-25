@@ -9,15 +9,17 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-anton-")), secret = "proxy-secret-for-tests-0123456789", bearer = "door-token-0123456789";
-const seen = [];
+const seen = [], LINK = "L".repeat(32);
 const door = createServer((req, res) => {
   let s = ""; req.on("data", c => s += c); req.on("end", () => {
     const b = s ? JSON.parse(s) : {}; seen.push({ path: req.url, auth: req.headers.authorization, device: req.headers["x-door-device"], body: b });
     if (req.headers.authorization !== `Bearer ${bearer}`) return res.writeHead(401).end("{}");
+    if (req.url === "/internal/sykehus/code" && b.link != null) return b.link === LINK ? res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ person: "lars", device_id: "dev-2", name: "Lars" })) : res.writeHead(404, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "wrong_code" } }));
     if (req.url === "/internal/sykehus/code") return b.code === "4711" ? res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ person: "lars", device_id: "dev-1" })) : res.writeHead(401).end("{}");
     if (req.url === "/internal/sykehus/chat") {
       if (req.headers["x-door-device"] === "revoked") return res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "device_revoked" } }));
       res.writeHead(200, { "content-type": "application/x-ndjson" });
+      if (b.message === "QR") return res.end([{ type: "qr", url: "https://evil.example/inn#" + LINK, minutes: 10 }, { type: "qr", url: "https://sykehus.gulden.no/inn#" + LINK, minutes: 10, label: "Skann med iPaden" }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n");
       res.write(JSON.stringify({ type: "text", delta: "Jeg river " }) + "\n");
       setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write" }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
       return;
@@ -65,6 +67,16 @@ test("a wrong code is refused; the right one sets a signed cookie for that perso
   const forged = cookie.replace(/\.[^.]+$/, ".AAAA");
   assert.equal((await (await fetch(O + "/api/meg", { headers: { cookie: forged } })).json()).person, null);
   assert.equal((await post("/api/logg-inn", { code: "4711" }, { origin: "https://evil.example" })).status, 403);
+});
+
+test("the one-time link from the QR signs in like a code, once (U3539)", async () => {
+  assert.equal((await post("/api/logg-inn", { link: "short" })).status, 400);
+  const bad = await post("/api/logg-inn", { link: "M".repeat(32) }); assert.equal(bad.status, 401); assert.match((await bad.json()).error, /Lenken/);
+  const r = await post("/api/logg-inn", { link: LINK, device: "iPad/iPhone" });
+  assert.equal(r.status, 200); assert.equal((await r.json()).name, "Lars"); assert.match(r.headers.get("set-cookie"), /HttpOnly/);
+  const b = seen.at(-1).body; assert.equal(b.link, LINK); assert.equal(b.code, undefined); assert.equal(b.app, "sykehus");
+  const inn = await fetch(O + "/inn", { redirect: "manual" }); assert.equal(inn.status, 308); assert.equal(inn.headers.get("location"), "/inn/");
+  assert.equal((await fetch(O + "/inn/")).status, 200);
 });
 
 test("signed in on gulden.no (Remote-User with the proxy secret) needs no code; without the secret it is no one", async () => {
@@ -124,6 +136,14 @@ test("«Ny samtale» asks gulden-ai for a new thread and empties every page", as
   assert.equal((await post("/api/anton/ny", {}, { cookie })).status, 200);
   assert.ok((await got).some(e => e.event === "cleared"));
   const b = seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).body; assert.equal(b.session, "sykehus:lars"); assert.equal(b.device_id, undefined); assert.equal(seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).device, "dev-1");
+});
+
+test("a qr line reaches the pages only when it points at this site's /inn/", async () => {
+  const got = events(cookie, o => o.some(e => e.event === "done"));
+  await new Promise(ok => setTimeout(ok, 200));
+  await post("/api/anton", { text: "QR" }, { cookie });
+  const qr = (await got).filter(e => e.event === "qr");
+  assert.equal(qr.length, 1); assert.equal(qr[0].url, "https://sykehus.gulden.no/inn#" + LINK); assert.equal(qr[0].minutes, 10); assert.equal(qr[0].label, "Skann med iPaden");
 });
 
 test("the history names the device in X-Door-Device, never in the query (U3544)", async () => {

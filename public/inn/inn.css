@@ -1,0 +1,11 @@
+/* the sign-in landing page (U3539): one big button, the kit's tokens */
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg, #f6f5f2); color: var(--text, #23211e); font: 400 18px/1.45 var(--font, system-ui, sans-serif); }
+main { max-width: 26rem; padding: 24px 16px; text-align: center; }
+h1 { font-size: 1.4rem; margin: 0 0 12px; }
+button, a#on { display: inline-flex; align-items: center; justify-content: center; min-height: 56px; padding: 0 28px; margin-top: 12px; border-radius: 10px; font-family: inherit; font-size: 1.2rem; font-weight: 600; line-height: 1; text-decoration: none; }
+button { border: 0; background: var(--accent, #23211e); color: var(--on-accent, #fff); cursor: pointer; }
+button:disabled { opacity: .5; }
+a#on { border: 1px solid currentColor; color: inherit; }
+#err { color: var(--danger, #b3261e); min-height: 1.4em; }
+[hidden] { display: none !important; }
+@media (prefers-color-scheme: dark) { body { --bg: #1b1a18; --text: #ece9e3; --accent: #ece9e3; --on-accent: #1b1a18; --danger: #ff8a80; } }

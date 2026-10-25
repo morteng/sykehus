@@ -3,7 +3,9 @@
    to gulden-ai's internal door, which checks them (10 minutes, once, 5 wrong tries void it) and answers with the person
    and a device id, or a refusal. This server then keeps its own signed cookie on that machine for 90 days.
 
-     POST /api/logg-inn  {code, device}   → {person} and the cookie, or 400/401/429 with {error}
+     POST /api/logg-inn  {code, device}   → {person, name} and the cookie, or 400/401/429 with {error}
+                         {link, device}   the same with the one-time link Anton shows as a QR on another machine (U3539):
+                                          /inn/ takes it from the fragment and sends it on one tap
      GET  /api/meg                        → {person} or {person: null}; {anton: true} when the assistant is wired
      POST /api/logg-ut                    → clears the cookie
 
@@ -61,15 +63,15 @@ export function createLogin({ SECURITY, readJson, proxyUser = () => null, fetchI
     if (!ready) return send(res, 503, { error: "Innlogging er ikke satt opp ennå." });
     if (tooMany(req)) return send(res, 429, { error: "For mange forsøk. Vent en time, eller ring Morten." });
     let b; try { b = await readJson(req, 2000); } catch { return send(res, 400, { error: "Skriv de fire sifrene." }); }
-    const code = String(b?.code ?? "").replace(/\s+/g, ""), device = String(b?.device ?? "").slice(0, 80) || "nettleser";
-    if (!/^\d{4}$/.test(code)) return send(res, 400, { error: "Koden er fire sifre." });
+    const code = String(b?.code ?? "").replace(/\s+/g, ""), link = String(b?.link ?? ""), device = String(b?.device ?? "").slice(0, 80) || "nettleser";
+    if (b?.link != null ? !/^[A-Za-z0-9_-]{20,64}$/.test(link) : !/^\d{4}$/.test(code)) return send(res, 400, { error: b?.link != null ? "Lenken er ikke hel. Skann koden på nytt." : "Koden er fire sifre." });
     let r, j = {};
     try {
-      r = await fetchImpl(base + codePath, { method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" }, body: JSON.stringify({ code, device, app: "sykehus" }), signal: AbortSignal.timeout(10000) });
+      r = await fetchImpl(base + codePath, { method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" }, body: JSON.stringify({ ...(b?.link != null ? { link } : { code }), device, app: "sykehus" }), signal: AbortSignal.timeout(10000) });
       j = await r.json().catch(() => ({}));
     } catch (e) { console.error("logg-inn:", e.message); return send(res, 503, { error: "Fikk ikke kontakt. Prøv igjen om litt." }); }
     if (r.status === 429) return send(res, 429, { error: "Koden er låst etter for mange feil. Be Morten om en ny." });
-    if (!r.ok || !LOGIN.test(String(j.person || "")) || typeof j.device_id !== "string" || !j.device_id) return send(res, 401, { error: "Koden stemmer ikke, eller den er for gammel. Be om en ny." });
+    if (!r.ok || !LOGIN.test(String(j.person || "")) || typeof j.device_id !== "string" || !j.device_id) return send(res, 401, { error: b?.link != null ? "Lenken er brukt eller for gammel. Be Anton om en ny." : "Koden stemmer ikke, eller den er for gammel. Be om en ny." });
     res.setHeader("set-cookie", cookie(req, signed({ p: j.person, d: j.device_id.slice(0, 80), e: Math.floor(Date.now() / 1000) + TTL }), TTL));
     return send(res, 200, { person: j.person, name: typeof j.name === "string" ? j.name.slice(0, 80) : null });
   }

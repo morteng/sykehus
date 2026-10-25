@@ -173,3 +173,7 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .draftrow ol.changes li { padding: 2px 0; }
 .draftrow ol.changes li > span { margin-right: var(--sp-2); }
 .draftrow ol.changes button { min-height: 32px; padding: 0 var(--sp-2); font-size: var(--fs-sm); }
+
+/* the sign-in QR in the chat (U3539): white with a quiet zone in both themes, big enough to scan from a metre */
+.talk-item.card.qr .qr-box { margin: var(--sp-2) 0; }
+.talk-item.card.qr .qr-box svg { display: block; width: min(100%, 260px); height: auto; background: #fff; border-radius: 4px; }

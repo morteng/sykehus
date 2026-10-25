@@ -179,6 +179,21 @@ export async function start({ viewer, versionId, panel, valg }) {
       };
       for (const c of copies) { c.querySelector(".go").onclick = () => answer("accept"); c.querySelector(".ckeep").onclick = () => answer("reject"); }
     }
+    /* a one-time sign-in link for another machine (U3539), as a QR to scan with it: big, on white, gone when it runs out */
+    function qrCard(q) {
+      const li = document.createElement("li"); li.className = "talk-item card qr";
+      li.innerHTML = `<div class="talk-body"><b>${esc(q.label)}</b></div><div class="qr-box"></div><div class="cnote">Pek kameraet på iPaden mot ruten, og trykk på lenken som kommer opp. Koden virker én gang, i ${q.minutes} minutter.</div>`;
+      import("./vendor/qrcode.js").then(({ default: qrcode }) => {
+        const c = qrcode(0, "M"); c.addData(q.url); c.make();
+        const n = c.getModuleCount(), q4 = n + 8, svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"), d = [];
+        for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (c.isDark(r, k)) d.push(`M${k + 4} ${r + 4}h1v1h-1z`);
+        svg.setAttribute("viewBox", `0 0 ${q4} ${q4}`); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Kode for å logge inn på en annen maskin");
+        svg.innerHTML = `<rect width="${q4}" height="${q4}" fill="#fff"/><path fill="#000" d="${d.join("")}"/>`;
+        li.querySelector(".qr-box").append(svg);
+      });
+      log.append(li); empty(); panel.reveal("chat"); toEnd();
+      setTimeout(() => { li.querySelector(".qr-box").replaceChildren(); li.querySelector(".cnote").textContent = "Koden er gått ut. Be Anton om en ny."; }, q.minutes * 60e3);
+    }
     function redrawNow() { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.reload(); }
     function goTo(id, title) {
       const li = document.createElement("li"); li.className = "talk-item tool";
@@ -190,6 +205,7 @@ export async function start({ viewer, versionId, panel, valg }) {
       for (const it of h?.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
         else if (it.type === "tool") line("tool", it.label);
+        else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }
       empty();
     }).catch(() => {});
@@ -203,6 +219,7 @@ export async function start({ viewer, versionId, panel, valg }) {
     });
     on("tool", t => { if (t.label) line("tool", t.label); });
     on("approval", card);
+    on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
     on("done", () => { if (redraw) redrawNow(); });
     on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === versionId) { if (running) redraw = true; else redrawNow(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });

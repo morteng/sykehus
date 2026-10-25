@@ -16,7 +16,7 @@
    To gulden-ai (SYKEHUS_ASSISTANT_URL + SYKEHUS_ASSISTANT_PREFIX, default /internal/sykehus; Bearer
    SYKEHUS_ASSISTANT_TOKEN): POST /chat {person, session, message, request_id, ui_lang: "nb", version?}, the device key in X-Door-Device on every call (U3544)
    answered with NDJSON lines text{delta} | tool{key,label,kind} | approval{id,key,tool,summary,expires_at} | ping |
-   done | error{code,message}; POST /approve, POST /cancel, GET /history. Anton's tools are this server's MCP tools,
+   qr{url,minutes,label} (a one-time sign-in link for another machine, U3539) | done | error{code,message}; POST /approve, POST /cancel, GET /history. Anton's tools are this server's MCP tools,
    called by gulden-ai with the proxy secret and Remote-User set to the person.
 
    A turn names the version the page shows when it is the person's own, so "this one" means that version. When any of
@@ -38,6 +38,9 @@ function drawingOf(d) {
 }
 
 /* what was picked in the model when it was sent (valg.js): "this", "these" in the message */
+/* a qr line carries a sign-in link to this site's /inn/ page and nothing else */
+const QR = /^(https:\/\/sykehus\.gulden\.no|http:\/\/(localhost|127\.0\.0\.1):\d+)\/inn\/?#[A-Za-z0-9_-]{20,64}$/;
+
 const KINDS = ["wing", "building", "storey", "room", "facade", "element"];
 function selectionOf(s) {
   if (!s || !Array.isArray(s.items)) return null;
@@ -100,8 +103,10 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       const body = { person, session: session(person), message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
-        if (line.type === "ping" || !["text", "tool", "approval", "done", "error"].includes(line.type)) return;
-        const out = line.type === "error" ? { type: "error", code: codeOf(line, "internal") } : { ...line };
+        if (line.type === "ping" || !["text", "tool", "approval", "qr", "done", "error"].includes(line.type)) return;
+        if (line.type === "qr" && !QR.test(String(line.url))) return;
+        const out = line.type === "error" ? { type: "error", code: codeOf(line, "internal") }
+          : line.type === "qr" ? { type: "qr", url: line.url, minutes: Math.min(15, Math.max(1, +line.minutes || 10)), label: String(line.label || "Skann med iPaden").slice(0, 60) } : { ...line };
         out.reply_to = turn.id;
         if (line.type === "approval" && typeof line.id === "string") t.approvals.set(line.id, { summary: String(line.summary || "").slice(0, 300) });
         publish(person, line.type, out);
