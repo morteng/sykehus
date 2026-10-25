@@ -4,7 +4,8 @@
    facade it is on; shift-click adds, a click on nothing or Esc clears, a chip's × (the kit's g-pick, in the pill) takes one away,
    and a card's «Spør Anton om dette» adds its wing or storey.
 
-   Each item is { kind: "wing" | "building" | "storey" | "room" | "facade", id, label, storey? }, with the ids the
+   Each item is { kind: "wing" | "building" | "new" | "storey" | "room" | "facade", id, label, storey? } (new: a
+   building the after adds, by its id, U3556), with the ids the
    connector's tools take (a wing's id, a storey's name, a room's code or name with its storey, a facade's id), so
    Anton can pass them straight on. Sent with a message as { items, ids, summary } (Fab's {ids, summary} and more). */
 const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
@@ -26,6 +27,8 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
       out.push({ kind: "storey", id: v.storey, label: v.storey });
       if (hit) { out.push({ kind: "room", id: hit.r.code || hit.r.name, storey: v.storey, label: hit.r.code && hit.r.code !== hit.r.name ? `${hit.r.name} (${hit.r.code})` : hit.r.name }); return out; }
     }
+    const n = !b && (site.added || []).find(x => x.id === buildingId && x.kind === "volume");
+    if (n) { out.push({ kind: "new", id: n.id, label: n.name }); return out; }
     if (!b) return out;
     const w = wings.find(x => x.id === b.wing);
     out.push(w ? { kind: "wing", id: w.id, label: w.name } : { kind: "building", id: b.id, label: b.name || (b.own ? `Bygning ${b.id} på tomta` : `Nabobygning ${b.id}`) });
@@ -35,7 +38,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
     }
     return out;
   }
-  function changed() { viewer.mark(items.filter(i => i.kind === "wing" || i.kind === "building").flatMap(i => i.kind === "wing" ? site.buildings.filter(b => b.wing === i.id).map(b => b.id) : [i.id])); onChange(items); }
+  function changed() { viewer.mark(items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new").flatMap(i => i.kind === "wing" ? site.buildings.filter(b => b.wing === i.id).map(b => b.id) : [i.id])); onChange(items); }
   return {
     get items() { return items; },
     pick(buildingId, { shift, at, x, y } = {}) {

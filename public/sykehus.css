@@ -181,7 +181,7 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 
 /* the card over the pick (U3554, float.js): rides over the wing's roof like its name; small, the name, a few facts,
    the acts that fit. Below 900 px it sits in the bottom stack over the sheet. */
-.fl { position: absolute; left: 0; top: 0; z-index: calc(var(--z-canvas) + 1); display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); width: max-content; max-width: min(440px, calc(100% - 16px)); will-change: transform; }
+.fl { position: absolute; left: 0; top: 0; z-index: calc(var(--z-canvas) + 1); display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3) var(--sp-3); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); width: max-content; max-width: min(560px, calc(100% - 16px)); will-change: transform; }
 .fl[hidden] { display: none; }
 .fl-h { display: flex; flex-direction: column; gap: 2px; }
 .fl-h b { font-size: var(--fs-lg, 1.05rem); }
@@ -194,3 +194,10 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 
 /* the draft bar's own acts (U3555): «Del», «Ny kopi» */
 .draftrow .acts { display: inline-flex; gap: var(--sp-2); margin-left: var(--sp-2); vertical-align: middle; }
+
+/* «Endre» in the card over the pick (U3556): the facts as fields, big enough for a finger */
+.fl-form { display: flex; flex-direction: column; gap: var(--sp-2); min-width: min(340px, calc(100vw - 48px)); }
+.fl-form label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+.fl-form input { min-height: 40px; font-size: var(--fs-md); padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+.fl-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+body.placing #view { cursor: crosshair; }

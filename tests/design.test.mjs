@@ -36,3 +36,19 @@ test("wrong input is refused with a reason", () => {
   assert.throws(() => add([], { kind: "demolish", building: "Slottet" }), /Fant ikke/);
   assert.throws(() => add([], { kind: "volume", from: [0, 0], to: [0, 0.2], width: 5, height: 5 }), /mellom 1 og 250/);
 });
+
+test("a new building from the page (U3556): storeys, facts, reshaped, and torn down by its id", () => {
+  const vol = { kind: "volume", id: "nAbc123", name: "Nybygg", shape: "box", from: [-40, -70], to: [-10, -70], width: 12, storeys: 4, material: "concrete", use: "Boliger" };
+  const c = checkEdit(site, floors, vol); assert.equal(c.height, 12.8); assert.equal(c.storeys, 4);
+  let m = applyEdits(site, floors, [c]); const a = m.site.added.find(x => x.id === "nAbc123");
+  assert.equal(a.use, "Boliger"); assert.equal(a.footprint_m2, 360); assert.equal(a.top_kote - a.base_kote, 12.8);
+  assert.throws(() => checkEdit(m.site, m.floors, { ...vol }), /ikke brukt før/);
+  const r = checkEdit(m.site, m.floors, { kind: "reshape", id: "nAbc123", name: "Bolighuset", storeys: 6, from: [-40, -60], to: [-10, -60] });
+  m = applyEdits(site, floors, [c, r]); const b = m.site.added.find(x => x.id === "nAbc123");
+  assert.equal(b.name, "Bolighuset"); assert.equal(b.top_kote - b.base_kote, 19.2); assert.deepEqual(b.from, [-40, -60]);
+  assert.throws(() => checkEdit(m.site, m.floors, { kind: "reshape", id: "nNope0000", name: "x" }), /Fant ikke/);
+  const d = checkEdit(m.site, m.floors, { kind: "demolish", building: "nAbc123" });
+  m = applyEdits(site, floors, [c, r, d]); assert.equal((m.site.added || []).length, 0);
+  const w = checkEdit(site, floors, { kind: "wing", wing: "Østfløy", field: "use", value: "Kontorer", why: "endret på siden" });
+  assert.equal(applyEdits(site, floors, [w]).site.wings.find(x => x.id === "ostfloy").use, "Kontorer");
+});

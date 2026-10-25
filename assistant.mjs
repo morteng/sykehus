@@ -41,7 +41,7 @@ function drawingOf(d) {
 /* a qr line carries a sign-in link to this site's /inn/ page and nothing else */
 const QR = /^(https:\/\/sykehus\.gulden\.no|http:\/\/(localhost|127\.0\.0\.1):\d+)\/inn\/?#[A-Za-z0-9_-]{20,64}$/;
 
-const KINDS = ["wing", "building", "storey", "room", "facade", "element"];
+const KINDS = ["wing", "building", "new", "storey", "room", "facade", "element"];   // new: a building the after adds (its id, for reshape)
 function selectionOf(s) {
   if (!s || !Array.isArray(s.items)) return null;
   const items = s.items.slice(0, 12).filter(i => KINDS.includes(i?.kind) && typeof i.id === "string" && i.id).map(i => ({ kind: i.kind, id: i.id.slice(0, 80), label: String(i.label ?? i.id).slice(0, 120), ...(typeof i.storey === "string" ? { storey: i.storey.slice(0, 40) } : {}) }));

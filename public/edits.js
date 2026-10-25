@@ -10,7 +10,7 @@
    and the after's: demolish, restore, balconies, volume (design.js) */
 import { checkDesign, applyDesign } from "./design.js";
 
-export const WING_FIELDS = ["name", "built", "storeys", "construction", "facade", "note"];
+export const WING_FIELDS = ["name", "built", "storeys", "use", "construction", "facade", "note"];
 const MAX = { text: 400, why: 300, name: 80 };
 const str = (v, n, what) => { if (typeof v !== "string" || !v.trim()) throw new Error(`${what} mangler`); if (v.length > n) throw new Error(`${what} er for lang (høyst ${n} tegn)`); return v.trim(); };
 
@@ -60,7 +60,7 @@ export function checkEdit(site, floors, e) {
     }
     default: {
       const d = checkDesign(site, e, str); if (d) return d;
-      throw new Error(`Ukjent slags endring «${e.kind}»: level, wing, room, note, demolish, restore, balconies eller volume`);
+      throw new Error(`Ukjent slags endring «${e.kind}»: level, wing, room, note, demolish, restore, balconies, volume eller reshape`);
     }
   }
 }

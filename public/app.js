@@ -4,7 +4,7 @@
    «Ønsker» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { applyEdits } from "./edits.js";
-import { createSelection } from "./valg.js?v=20261025b";
+import { createSelection } from "./valg.js?v=20261025d";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
 
@@ -47,9 +47,11 @@ const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json
    other wings stay as they are (Morten 2026-10-25 21:15). The page's objects are refilled, never replaced, so what
    holds them (the selection, the card over the pick) sees the change. */
 const TEARS = e => e.kind === "demolish" || e.kind === "restore";
+/* what the page changes in place: torn down (setGone), new buildings (setAdded), a wing's facts and name (relabel) */
+const LIVE = e => TEARS(e) || e.kind === "volume" || e.kind === "reshape" || e.kind === "wing";
 const modelOf = edits => applyEdits(site0, floors0, edits || []);
 const { site, floors } = modelOf(draft?.edits);
-const shown = modelOf(draft?.edits?.filter(e => !TEARS(e)));   // its own copy: the page's is refilled under it
+const shown = modelOf(draft?.edits?.filter(e => !LIVE(e)));   // its own copy: the page's is refilled under it
 function refill(to, from) {
   if (Array.isArray(to)) { to.splice(0, to.length, ...from); return; }
   for (const k of Object.keys(to)) if (!(k in from)) delete to[k];
@@ -68,7 +70,11 @@ const toCard = () => panel.show("selected", { quiet: true });   // a tap on the 
 
 const viewer = createViewer({
   container: $("view"), site: shown.site, floors: shown.floors,
-  onPick: (id, how) => { valg.pick(id, how); showInfo(site.buildings.find(b => b.id === id)); },
+  onPick: (id, how) => {
+    if (placing) { const at = viewer.hit(how.x, how.y); if (at) placing(at); return; }   // «Nytt bygg» or «Flytt»: where on the ground
+    valg.pick(id, how); const a = (site.added || []).find(x => x.id === id);
+    if (a) showNew(a); else showInfo(site.buildings.find(b => b.id === id));
+  },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
     $("scale").style.display = v.mPerPx ? "block" : "none";
@@ -79,7 +85,13 @@ const viewer = createViewer({
     }
   },
 });
-viewer.setGone((site.demolished || []).map(d => d.id));
+/* the after's live part over the viewer's model: what is torn down hidden, the new buildings drawn, the names as edited */
+function paint() {
+  viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []);
+  viewer.relabel(new Map(site.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
+}
+let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)
+paint();
 try { const p = JSON.parse(sessionStorage.getItem("sykehus-pose") || "null"); sessionStorage.removeItem("sykehus-pose"); if (p) viewer.pose(p); } catch { }   // Anton's redraw comes back to where it was
 /* what is picked in the model, to talk to Anton about (valg.js); the chips are in the pill (anton.js) */
 const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
@@ -304,9 +316,15 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   if (e.kind === "level") return `${w}, ${e.storey}: kote ${kote(e.kote)}${why}`;
   if (e.kind === "wing") return `${w}, ${{ name: "navn", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
   if (e.kind === "room") return `${e.storey}, ${e.room}: ${Object.entries(e.set).map(([k, v]) => `${{ name: "navn", use: "bruk", area_m2: "areal" }[k] || k} ${k === "area_m2" ? v + " m²" : v}`).join(", ")}${why}`;
-  if (e.kind === "demolish") return `Rives: ${e.building === "alle" ? "alle sykehusbyggene" : (wings.find(x => x.id === e.building)?.name || e.building)}${why}`;
+  if (e.kind === "demolish") return `Rives: ${e.building === "alle" ? "alle sykehusbyggene" : (wings.find(x => x.id === e.building)?.name || draft?.edits?.findLast(x => x.id === e.building && (x.kind === "volume" || x.kind === "reshape") && x.name)?.name || e.building)}${why}`;
   if (e.kind === "restore") return `Beholdes: ${wings.find(x => x.id === e.building)?.name || e.building}${why}`;
   if (e.kind === "balconies") return `Balkonger på ${w} mot ${{ N: "nord", Ø: "øst", S: "sør", V: "vest" }[e.side]}, ${String(e.depth).replace(".", ",")} m dype${e.bay ? `, ${String(e.bay).replace(".", ",")} m brede` : ""}${why}`;
+  if (e.kind === "reshape") {
+    const was = draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
+    if (e.name) what.push(`navn «${e.name}»`); if (e.use) what.push(`bruk ${e.use}`); if (e.storeys) what.push(`${e.storeys} etasjer`); if (e.built) what.push(`bygget ${e.built}`); if (e.note) what.push("merknad");
+    if (e.from) what.push("flyttet eller nye mål"); if (e.width) what.push(`${String(e.width).replace(".", ",")} m bredt`); if (e.height) what.push(`${String(e.height).replace(".", ",")} m høyt`);
+    return `${was}: ${what.join(", ")}${why}`;
+  }
   if (e.kind === "volume") return `${e.name}: ${{ box: "kasse", gable: "saltak", triangle: "trekant (A-form)", lean_to: "pulttak" }[e.shape]}, ${String(e.width).replace(".", ",")} × ${String(Math.round(Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) * 10) / 10).replace(".", ",")} m, ${String(e.height).replace(".", ",")} m høy, ${{ glass: "glass", concrete: "betong", steel: "stål", wood: "tre", brick: "tegl" }[e.material]}${why}`;
   const SURF = { grass: "plen", meadow: "eng", planting: "beplantning", gravel: "grus", paving: "belegningsstein", asphalt: "asfalt", water: "vann", wood: "tre" };
   if (e.kind === "surface") return `${e.name ? e.name + ": " : ""}${SURF[e.surface]}${e.plants?.length ? ` (${e.plants.join(", ")})` : ""}${why}`;
@@ -336,31 +354,92 @@ async function show(j) {
   const d = await fetchDraft(); if (d.missing) return toast("Fikk ikke hentet utkastet.");
   draft = d; const m = modelOf(draft.edits);
   const goneNow = new Set((m.site.demolished || []).map(x => x.id));
-  if (valg.items.some(i => i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : goneNow.has(i.id))) { valg.clear(); shut(); }
+  const newNow = new Set((m.site.added || []).map(a => a.id));
+  if (valg.items.some(i => i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : i.kind === "new" ? !newNow.has(i.id) : goneNow.has(i.id))) { valg.clear(); shut(); }
   refill(site, m.site); refill(floors, m.floors);
   refill(drawnSections, drawnSections0.filter(x => !x.wing || wings.some(w => w.id === x.wing)));
-  viewer.setGone([...goneNow]);
+  paint();
   storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
   if (storeyOn && !storeys.includes(storeyOn)) pickStorey(null); else if (storeyOn) showStorey(storeyOn);
   dimStrip(); drawDraft(); ifcLink(); dispatchEvent(new CustomEvent("sykehus:versjoner"));
+  dispatchEvent(new CustomEvent("sykehus:valg", { detail: valg.items }));   // the card over the pick shows the new facts
+  const open = cardOf && (cardOf.kind === "new" ? (site.added || []).find(a => a.id === cardOf.id) : null); if (open) showNew(open);
   const u = new URL(location.href); for (const k of ["utkast", "versjon", "nokkel", "for"]) u.searchParams.delete(k);
   if (versionId) u.searchParams.set("versjon", versionId); else u.searchParams.set("utkast", draftId);
   history.replaceState(null, "", u.href);
 }
-async function riv(targets, name) {
-  if (busy) return; busy = true;
+/* one change from the page, into where() (see there), shown in place; null when it did not go through (said in a toast) */
+async function edit(mine_, failed) {
+  if (busy) return null; busy = true;
   try {
-    /* on someone else's draft or version, one's own starts from what is shown: its demolitions first (the rest of it,
+    /* on someone else's draft or version, one's own starts from what is shown: its live part first (the rest of it,
        if any, is Anton's, and goes with «Ny kopi» or through him) */
-    const from = draft && !draft.missing && !mine() && !ownDraft() ? draft.edits.filter(TEARS) : [];
-    const edits = [...from, ...targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" }))];
+    const from = draft && !draft.missing && !mine() && !ownDraft() ? draft.edits.filter(LIVE) : [];
+    const edits = [...from, ...mine_];
     let j = await change({ ...where(), edits });
     if (j.error && !draftId && kept) { kept = null; j = await change({ edits }); }   // the kept draft is past its day
-    if (j.error) return toast(`Fikk ikke revet: ${j.error}`);
-    await show(j);
-    const n = draft.edits.length, k = targets.length;
-    toast(`${name[0].toUpperCase() + name.slice(1)} er revet i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(n, k) });
+    if (j.error) { toast(`${failed}: ${j.error}`); return null; }
+    await show(j); return { n: draft.edits.length, k: mine_.length };
   } finally { busy = false; }
+}
+async function riv(targets, name) {
+  const r = await edit(targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" })), "Fikk ikke revet"); if (!r) return;
+  toast(`${name[0].toUpperCase() + name.slice(1)} er revet i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
+}
+
+/* new buildings (U3556, Morten 20:18Z «also crud for buildings, names and such»): «Nytt bygg», then a tap on the
+   ground: a box of three storeys, 30 × 12 m, its length across the screen; its card renames it, sets its facts,
+   sizes it, turns it a quarter, «Flytt» moves it to the next tap; «Riv» takes it away. Each is one change, with Angre. */
+const newId = () => "n" + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+const along = () => { const a = viewer.view().north || 0; return [Math.cos(a), Math.sin(a)]; };   // screen right, east and north
+function aim(on, hint) {
+  placing = on; $("mnew").setAttribute("aria-pressed", String(!!on && hint === "ny")); document.body.classList.toggle("placing", !!on);
+  if (on) toast(hint === "ny" ? "Trykk på bakken der det nye bygget skal stå." : "Trykk der bygget skal stå.", { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
+}
+$("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(async ([x, y]) => {
+  aim(null); const [dx, dy] = along(), L = 15, id = newId();
+  const r = await edit([{ kind: "volume", id, name: "Nytt bygg", shape: "box", from: [x - dx * L, y - dy * L], to: [x + dx * L, y + dy * L], width: 12, storeys: 3, material: "concrete", why: "satt opp på siden" }], "Fikk ikke satt opp bygget");
+  if (!r) return;
+  valg.clear(); valg.add({ kind: "new", id, label: "Nytt bygg" }); const a = site.added.find(x => x.id === id); if (a) showNew(a);
+  toast("Nytt bygg satt opp. Trykk «Endre» for navn, etasjer og mål.", { label: "Angre", run: () => undoLast(r.n, r.k) });
+}, "ny");
+async function reshape(id, set, what = "Endret") {
+  const r = await edit([{ kind: "reshape", id, ...set, why: "endret på siden" }], "Fikk ikke endret"); if (!r) return;
+  toast(`${what}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
+}
+function moveNew(a) {
+  aim(([x, y]) => { aim(null); $("toast")?.remove(); const cx = (a.from[0] + a.to[0]) / 2, cy = (a.from[1] + a.to[1]) / 2, d = [x - cx, y - cy];
+    reshape(a.id, { from: [a.from[0] + d[0], a.from[1] + d[1]], to: [a.to[0] + d[0], a.to[1] + d[1]] }, `${a.name} er flyttet`); });
+}
+function turnNew(a) {
+  const cx = (a.from[0] + a.to[0]) / 2, cy = (a.from[1] + a.to[1]) / 2, h = [(a.to[0] - a.from[0]) / 2, (a.to[1] - a.from[1]) / 2];
+  reshape(a.id, { from: [cx + h[1], cy - h[0]], to: [cx - h[1], cy + h[0]] }, `${a.name} er snudd`);
+}
+/* the card's «Endre»: the fields that changed, as one change each (a wing's facts) or one reshape (a new building) */
+async function saveFacts(item, v) {
+  if (item.kind === "new") {
+    const a = site.added.find(x => x.id === item.id), set = {};
+    for (const k of ["name", "use", "built", "note"]) if (v[k] != null && v[k] !== (a[k] ?? "")) set[k] = v[k];
+    if (v.storeys && +v.storeys !== a.storeys) set.storeys = +v.storeys;
+    const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]);
+    if (v.length && Math.abs(+v.length - L) > 0.05) { const c = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2], u = [(a.to[0] - a.from[0]) / L, (a.to[1] - a.from[1]) / L], h = +v.length / 2; set.from = [c[0] - u[0] * h, c[1] - u[1] * h]; set.to = [c[0] + u[0] * h, c[1] + u[1] * h]; }
+    if (v.width && Math.abs(+v.width - a.width) > 0.05) set.width = +v.width;
+    if (!Object.keys(set).length) return;
+    for (const k of ["from", "to"]) if (set[k]) set[k] = set[k].map(q => Math.round(q * 100) / 100);
+    return reshape(item.id, set, `${set.name || a.name} er endret`);
+  }
+  const w = wings.find(x => x.id === item.id), ed = [];
+  for (const k of ["name", "use", "built", "storeys", "note"]) if (v[k] != null && v[k].trim() && v[k].trim() !== String(w[k] ?? "")) ed.push({ kind: "wing", wing: w.id, field: k, value: v[k].trim(), why: "endret på siden" });
+  if (!ed.length) return;
+  const r = await edit(ed, "Fikk ikke endret"); if (!r) return;
+  toast(`${ed.find(e => e.field === "name")?.value || w.name} er endret.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
+}
+/* a new building's card in «Bygget» */
+function showNew(a) {
+  const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+  card(esc(a.name), "Nytt bygg i forslaget", rows([...(a.use ? [["Bruk", esc(a.use)]] : []), ...(a.storeys ? [["Etasjer", String(a.storeys)]] : []), ...(a.built ? [["Bygget", esc(a.built)]] : []),
+    ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`]]) +
+    (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + `<p class="src">Satt opp i forslaget; ikke i IFC-fila ennå.</p>`, { kind: "new", id: a.id, label: a.name });
 }
 async function undo(n) {
   if (busy) return; busy = true;
@@ -396,8 +475,8 @@ function listVersions() {
 listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
-import("./float.js?v=20261025c").then(m => m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
-  onRiv: riv,
+import("./float.js?v=20261025d").then(m => m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+  onRiv: riv, onSave: saveFacts, onMove: moveNew, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
 

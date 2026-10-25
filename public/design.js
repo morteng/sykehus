@@ -11,7 +11,11 @@
         width across it, height to the top (from base_kote; default the lowest ground under it). shape box, gable
         (walls wall_height high, a ridge), triangle (an A frame, roof to the ground) or lean_to (a single slope,
         high on high_side, left or right as one walks from -> to). material glass (a greenhouse), concrete, steel,
-        wood or brick.
+        wood or brick. Optional: id (n and 4–12 letters or digits; the page gives one, so later changes can name it),
+        storeys (1–30; the height then defaults to 3,2 m a storey), use, built, note: the facts its card shows.
+   { kind: "reshape", id, name?, use?, built?, note?, storeys?, from?, to?, width?, height?, why? }   (U3556)
+        changes a new building made by a volume: renames it, sets its facts, moves or resizes it (from, to, width),
+        or makes it taller (storeys, height). A demolish naming its id takes it away again.
 
    What they make (applyDesign): site.added, each { id, kind, name, parts, footprint_m2, volume_m3 }, and
    site.demolished. A part is a profile [across, kote] extruded along an axis [[east, north], [east, north]]: across
@@ -24,6 +28,16 @@ import { checkLandscape, applyLandscape } from "./landscape.js";
 export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];
 export const SHAPES = ["box", "gable", "triangle", "lean_to"];
+export const STOREY_M = 3.2;   // a new building's storey, floor to floor
+const NID = /^n[A-Za-z0-9]{4,12}$/;
+/* the facts a new building's card shows, checked (volume and reshape alike) */
+function facts(e, str, out) {
+  if (e.use != null) out.use = str(String(e.use), 80, "Bruken");
+  if (e.built != null) out.built = str(String(e.built), 40, "Byggeåret");
+  if (e.note != null) out.note = str(String(e.note), 600, "Merknaden");
+  if (e.storeys != null) { const n = +e.storeys; if (!Number.isInteger(n) || n < 1 || n > 30) throw new Error("Etasjene er et helt tall fra 1 til 30"); out.storeys = n; }
+  return out;
+}
 const num = (v, lo, hi, what, dflt) => {
   if (v == null) { if (dflt === undefined) throw new Error(`${what} mangler`); return dflt; }
   const x = +v; if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${what} må være et tall mellom ${lo} og ${hi}`); return Math.round(x * 100) / 100;
@@ -50,7 +64,23 @@ export function targets(site, key) {   // on a model where some are torn down al
 export function checkDesign(site, e, str) {
   const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
   switch (e.kind) {
-    case "demolish": case "restore": targets(site, e.building); return { kind: e.kind, building: String(e.building).trim(), ...w_ };
+    case "demolish": case "restore": {
+      const k = String(e.building ?? "").trim();
+      if (!(e.kind === "demolish" && (site.added || []).some(a => a.id === k))) targets(site, e.building);   // a new building, by its id, goes the same way
+      return { kind: e.kind, building: k, ...w_ };
+    }
+    case "reshape": {
+      const id = String(e.id ?? ""), a = (site.added || []).find(x => x.id === id && x.kind === "volume");
+      if (!a) throw new Error(`Fant ikke det nye bygget «${e.id}»`);
+      const out = facts(e, str, { kind: "reshape", id });
+      if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
+      if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");
+      const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]); if (L < 1 || L > 250) throw new Error("Lengden må være mellom 1 og 250 m");
+      if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
+      if (e.height != null) out.height = num(e.height, 1, 80, "Høyden");
+      if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
+      return Object.assign(out, w_);
+    }
     case "balconies": {
       const w = (site.wings || []).find(x => x.id === String(e.wing ?? "").toLowerCase().trim() || x.name.toLowerCase() === String(e.wing ?? "").toLowerCase().trim());
       if (!w) throw new Error(`Ukjent fløy «${e.wing}»`);
@@ -68,8 +98,9 @@ export function checkDesign(site, e, str) {
       const material = String(e.material ?? "glass"); if (!MATERIALS.includes(material)) throw new Error(`material er ${MATERIALS.join(", ")}`);
       const from = pt(e.from, "from"), to = pt(e.to, "to"), L = Math.hypot(to[0] - from[0], to[1] - from[1]);
       if (L < 1 || L > 250) throw new Error("Fra from til to må være mellom 1 og 250 m");
-      const out = { kind: "volume", name: str(String(e.name ?? (material === "glass" ? "Drivhus" : "Nybygg")), 80, "Navnet"), shape, from, to,
-        width: num(e.width, 1, 120, "Bredden"), height: num(e.height, 1, 80, "Høyden"), material, ...w_ };
+      const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
+      if (out.id && (!NID.test(out.id) || (site.added || []).some(a => a.id === out.id))) throw new Error("id er n og 4–12 bokstaver eller tall, og ikke brukt før");
+      out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), 1, 80, "Høyden"); Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }
       if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
@@ -146,19 +177,22 @@ const round1 = v => Math.round(v * 10) / 10;
 /* the after's changes laid over the model (copies, made by applyEdits): what is taken away goes, what is built is added */
 export function applyDesign(site, floors, edits) {
   applyLandscape(site, edits);
-  const gone = new Set(), added = [];
+  const gone = new Set(), added = [], vols = new Map();   // vols: the new buildings, by id, as their edits leave them
   for (const e of edits) {
-    if (e.kind === "demolish") for (const id of targets(site, e.building)) gone.add(id);
+    if (e.kind === "demolish" && vols.has(e.building)) vols.delete(e.building);
+    else if (e.kind === "demolish") for (const id of targets(site, e.building)) gone.add(id);
     else if (e.kind === "restore") for (const id of targets(site, e.building)) gone.delete(id);
+    else if (e.kind === "reshape") { const v = vols.get(e.id); if (v) { const { kind, id, why, ...set } = e; Object.assign(v, set); if (set.storeys != null && set.height == null) v.height = Math.round(set.storeys * STOREY_M * 100) / 100; } }
     else if (e.kind === "balconies") {
       const parts = balconyParts(site, e), slabs = parts.filter(p => p.role === "slab");
       added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${e.side}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
         count: slabs.length, footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
-    } else if (e.kind === "volume") {
-      const { parts, base } = volumeParts(site, e), L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]);
-      added.push({ id: `volum-${added.length + 1}`, kind: "volume", name: e.name, shape: e.shape, material: e.material, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-        footprint_m2: round1(L * e.width), volume_m3: Math.round(profArea(parts[0].profile) * L), why: e.why });
-    }
+    } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
+  }
+  for (const [id, e] of vols) {
+    const { parts, base } = volumeParts(site, e), L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]);
+    added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
+      footprint_m2: round1(L * e.width), volume_m3: Math.round(profArea(parts[0].profile) * L), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));

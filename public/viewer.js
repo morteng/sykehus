@@ -264,7 +264,16 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
      across to the left of the axis; glass seen through, as a greenhouse is ---------- */
   const ADDED = { glass: mat("#cfe6e2", { transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.1, depthWrite: false }), concrete: mat("#ddd8cc"),
     steel: mat(C.steel, { roughness: 0.5, metalness: 0.4 }), wood: mat("#b48a5a"), brick: mat("#a65b44") };
-  for (const a of site.added || []) {
+  /* drawn again in place when the after changes (setAdded, U3556): the old ones taken away and freed */
+  const addedGroups = new Map();
+  function setAdded(list) {
+    for (const g of addedGroups.values()) { scene.remove(g); g.traverse(o => o.geometry?.dispose()); }
+    addedGroups.clear();
+    for (const a of list || []) drawAdded(a);
+    if (selected && !meshes.has(selected) && !addedGroups.has(selected)) selected = null;
+    dirty = true;
+  }
+  function drawAdded(a) {
     const grp = new THREE.Group();
     for (const p of a.parts) {
       const [[x0, y0], [x1, y1]] = p.axis, L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.01) continue;
@@ -272,12 +281,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       /* the shape's x is across (to the left of the axis), y up, its depth along the axis: P maps east, north to x, -z */
       const d = new THREE.Vector3((x1 - x0) / L, 0, -(y1 - y0) / L), n = new THREE.Vector3(-(y1 - y0) / L, 0, -(x1 - x0) / L);
       const m4 = new THREE.Matrix4().makeBasis(n, new THREE.Vector3(0, 1, 0), d).setPosition(x0, 0, -y0);
-      const mesh = new THREE.Mesh(g.applyMatrix4(m4), ADDED[p.mat] || ADDED.concrete);
+      const mesh = new THREE.Mesh(g.applyMatrix4(m4), (ADDED[p.mat] || ADDED.concrete).clone());   // its own, to light up alone
       mesh.castShadow = p.mat !== "glass"; mesh.receiveShadow = true; grp.add(mesh);
       if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
     }
-    grp.userData.added = a.id; scene.add(grp);
+    grp.userData.added = a.id; grp.userData.id = a.id; grp.traverse(o => { o.userData.id = a.id; }); scene.add(grp); addedGroups.set(a.id, grp);
   }
+  for (const a of site.added || []) drawAdded(a);
   /* the after's ground (landscape.js): each surface and path laid on the terrain, its triangles cut down to the
      terrain's grid so it follows the slope, each later one a little higher than the one before (a bed in a lawn, a
      path across it) */
@@ -662,19 +672,20 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const ray = new THREE.Raycaster(); let selected = null;
   function pick(e) {
     const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-    const hit = ray.intersectObjects([...meshes.values()].filter(g => g.visible), true)[0]; select(hit?.object.userData.id || null);
+    const hit = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...addedGroups.values()], true).find(h => h.object.isMesh); select(hit?.object.userData.id || null);
     onPick(selected, { shift: e.shiftKey, x: e.clientX, y: e.clientY, at: hit ? [hit.point.x, -hit.point.z, hit.point.y + base] : null });   // where on it, for a room or a facade
   }
   /* more than one building lit, for a selection of several (app.js «Valgt») */
   let marked = [];
+  const groupOf = id => meshes.get(id) || addedGroups.get(id);
   function mark(ids) {
-    for (const id of marked) if (id !== selected) meshes.get(id)?.traverse(o => o.material?.emissive?.set("#000"));
-    marked = ids.filter(id => meshes.has(id)); for (const id of marked) meshes.get(id).traverse(o => o.material?.emissive?.set("#6b5200")); dirty = true;
+    for (const id of marked) if (id !== selected) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
+    marked = ids.filter(id => groupOf(id)); for (const id of marked) groupOf(id).traverse(o => o.material?.emissive?.set("#6b5200")); dirty = true;
   }
   function select(id) {
-    if (selected) meshes.get(selected)?.traverse(o => o.material?.emissive?.set("#000"));
-    selected = id && meshes.has(id) ? id : null;
-    if (selected) meshes.get(selected).traverse(o => o.material?.emissive?.set("#6b5200"));
+    if (selected) groupOf(selected)?.traverse(o => o.material?.emissive?.set("#000"));
+    selected = id && groupOf(id) ? id : null;
+    if (selected) groupOf(selected).traverse(o => o.material?.emissive?.set("#6b5200"));
     dirty = true;
   }
   /* materials are shared within a building, so a building's own copies (made once) light up alone */
@@ -710,7 +721,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   const home = { ...O };
   return {
-    setSun, select, setGone, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    /* a renamed wing's name over its roof (the after's wing edits, in place) */
+    relabel(names) { for (const t of wingTags) { const n = names.get(t.id); if (n && t.el.textContent !== n) { t.el.textContent = n; t.size = null; } } dirty = true; },
+    setSun, select, setGone, setAdded, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
