@@ -12,11 +12,11 @@ const dir = mkdtempSync(join(tmpdir(), "sykehus-anton-")), secret = "proxy-secre
 const seen = [];
 const door = createServer((req, res) => {
   let s = ""; req.on("data", c => s += c); req.on("end", () => {
-    const b = s ? JSON.parse(s) : {}; seen.push({ path: req.url, auth: req.headers.authorization, body: b });
+    const b = s ? JSON.parse(s) : {}; seen.push({ path: req.url, auth: req.headers.authorization, device: req.headers["x-door-device"], body: b });
     if (req.headers.authorization !== `Bearer ${bearer}`) return res.writeHead(401).end("{}");
     if (req.url === "/internal/sykehus/code") return b.code === "4711" ? res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ person: "lars", device_id: "dev-1" })) : res.writeHead(401).end("{}");
     if (req.url === "/internal/sykehus/chat") {
-      if (b.device_id === "revoked") return res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "device_revoked" } }));
+      if (req.headers["x-door-device"] === "revoked") return res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "device_revoked" } }));
       res.writeHead(200, { "content-type": "application/x-ndjson" });
       res.write(JSON.stringify({ type: "text", delta: "Jeg river " }) + "\n");
       setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write" }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
@@ -75,7 +75,7 @@ test("signed in on gulden.no (Remote-User with the proxy secret) needs no code; 
   assert.equal(r.status, 202);
   await new Promise(ok => setTimeout(ok, 300));
   const body = seen.filter(s => s.path === "/internal/sykehus/chat").at(-1).body;
-  assert.equal(body.person, "morten"); assert.equal(body.device_id, "gulden.no"); assert.equal(body.session, "sykehus:morten");
+  assert.equal(body.person, "morten"); assert.equal(body.device_id, undefined); assert.equal(seen.filter(x => x.path === "/internal/sykehus/chat").at(-1).device, "gulden.no"); assert.equal(body.session, "sykehus:morten");
 });
 
 test("the cookie is not a login on /mcp", async () => {
@@ -94,7 +94,7 @@ test("a message is relayed as the person's turn and streamed back to their pages
   assert.deepEqual(ev.filter(e => e.event === "text").map(e => e.delta), ["Jeg river ", "Vestfløy."]);
   assert.ok(ev.filter(e => ["text", "tool", "done"].includes(e.event)).every(e => e.reply_to === id));
   const body = seen.find(s => s.path === "/internal/sykehus/chat" && s.body.person === "lars").body;
-  assert.equal(body.person, "lars"); assert.equal(body.session, "sykehus:lars"); assert.equal(body.device_id, "dev-1"); assert.equal(body.version.id, v.version);
+  assert.equal(body.person, "lars"); assert.equal(body.session, "sykehus:lars"); assert.equal(body.device_id, undefined); assert.equal(seen.filter(x => x.path === "/internal/sykehus/chat").at(-1).device, "dev-1"); assert.equal(body.version.id, v.version);
   // the page's own list now has Lars's private version, with the key that opens it
   const mine = (await (await fetch(O + "/api/versjoner", { headers: { cookie } })).json()).versions;
   assert.equal(mine[0].mine, true); assert.ok(mine[0].nokkel);
@@ -123,7 +123,13 @@ test("«Ny samtale» asks gulden-ai for a new thread and empties every page", as
   await new Promise(ok => setTimeout(ok, 200));
   assert.equal((await post("/api/anton/ny", {}, { cookie })).status, 200);
   assert.ok((await got).some(e => e.event === "cleared"));
-  const b = seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).body; assert.equal(b.session, "sykehus:lars"); assert.equal(b.device_id, "dev-1");
+  const b = seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).body; assert.equal(b.session, "sykehus:lars"); assert.equal(b.device_id, undefined); assert.equal(seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).device, "dev-1");
+});
+
+test("the history names the device in X-Door-Device, never in the query (U3544)", async () => {
+  assert.equal((await fetch(O + "/api/anton/historikk", { headers: { cookie } })).status, 200);
+  const h = seen.filter(s => s.path.startsWith("/internal/sykehus/history")).at(-1);
+  assert.equal(h.device, "dev-1"); assert.doesNotMatch(h.path, /device/);
 });
 
 test("signing out clears the cookie", async () => {

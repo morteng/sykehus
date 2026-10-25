@@ -14,7 +14,7 @@
      POST /api/anton/ny          «Ny samtale»: gulden-ai starts the thread afresh (/new-chat); every page empties
 
    To gulden-ai (SYKEHUS_ASSISTANT_URL + SYKEHUS_ASSISTANT_PREFIX, default /internal/sykehus; Bearer
-   SYKEHUS_ASSISTANT_TOKEN): POST /chat {person, session, device_id, message, request_id, ui_lang: "nb", version?}
+   SYKEHUS_ASSISTANT_TOKEN): POST /chat {person, session, message, request_id, ui_lang: "nb", version?}, the device key in X-Door-Device on every call (U3544)
    answered with NDJSON lines text{delta} | tool{key,label,kind} | approval{id,key,tool,summary,expires_at} | ping |
    done | error{code,message}; POST /approve, POST /cancel, GET /history. Anton's tools are this server's MCP tools,
    called by gulden-ai with the proxy secret and Remote-User set to the person.
@@ -57,10 +57,10 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
   const queueView = t => ({ type: "queue", running: t.running ? { id: t.running.id, text: t.running.text } : null, waiting: t.queue.map(q => ({ id: q.id, text: q.text })) });
   versions?.watch?.(v => publish(v.owner, "steps", { type: "steps", version: v.id, title: v.title, changes: v.edits.length, updated: v.updated }));
 
-  const call = async (path, body, query) => {
+  const call = async (path, body, query, device) => {
     const q = query ? "?" + new URLSearchParams(query) : "";
     try {
-      const r = await fetchImpl(door + path + q, { method: body ? "POST" : "GET", headers: { authorization: `Bearer ${login.bearer}`, accept: "application/json", ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+      const r = await fetchImpl(door + path + q, { method: body ? "POST" : "GET", headers: { authorization: `Bearer ${login.bearer}`, accept: "application/json", "x-door-device": device, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
       return [r.status, await r.json().catch(() => ({}))];
     } catch (e) { console.error("anton", path, e.message); return [503, { error: { code: "unavailable" } }]; }
   };
@@ -69,11 +69,11 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
   const refusedDevice = (st, j) => st === 401 || codeOf(j, "") === "device_revoked";
 
   /* POST /chat and hand each NDJSON line on; [200] after done or error, else the status and body */
-  async function chat(body, onLine, stop) {
+  async function chat(body, device, onLine, stop) {
     const ac = new AbortController(); let timer = setTimeout(() => ac.abort(), SILENCE);
     stop.abort = () => ac.abort();
     try {
-      const r = await fetchImpl(door + "/chat", { method: "POST", headers: { authorization: `Bearer ${login.bearer}`, "content-type": "application/json", accept: "application/x-ndjson" }, body: JSON.stringify(body), signal: ac.signal });
+      const r = await fetchImpl(door + "/chat", { method: "POST", headers: { authorization: `Bearer ${login.bearer}`, "content-type": "application/json", accept: "application/x-ndjson", "x-door-device": device }, body: JSON.stringify(body), signal: ac.signal });
       if (!r.ok) return [r.status, await r.json().catch(() => ({}))];
       const dec = new TextDecoder(); let buf = "";
       for await (const chunk of r.body) {
@@ -97,7 +97,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       const turn = t.running = t.queue.shift();
       publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
-      const body = { person, session: session(person), device_id: turn.device, message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+      const body = { person, session: session(person), message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
         if (line.type === "ping" || !["text", "tool", "approval", "done", "error"].includes(line.type)) return;
@@ -108,7 +108,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       };
       let st, j;
       try {
-        for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
+        for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, turn.device, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
       } catch (e) { console.error("anton turn", e); st = 500; j = { error: { code: "internal" } }; }
       if (st !== 200) {
         if (refusedDevice(st, j)) { publish(person, "signed_out", { type: "signed_out" }); t.queue.length = 0; }
@@ -142,19 +142,19 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
     if (path === "/api/anton/godkjenn") {
       const id = String(b?.approval_id ?? ""), decision = b?.decision === "accept" ? "accept" : "reject";
       if (!t.approvals.has(id)) return send(res, 404, { error: "Spørsmålet er ikke lenger åpent." });
-      const [st, j] = await call("/approve", { person: me.person, session: session(me.person), device_id: me.device, approval_id: id, decision });
+      const [st, j] = await call("/approve", { person: me.person, session: session(me.person), approval_id: id, decision }, null, me.device);
       if (st === 200) { t.approvals.delete(id); publish(me.person, "approval_done", { type: "approval_done", id, decision }); }
       return send(res, st === 200 ? 200 : 502, st === 200 ? { ok: true } : { error: codeOf(j, "unavailable") });
     }
     if (path === "/api/anton/stopp") {
       if (!t.running) return send(res, 200, { ok: true });
-      const [st] = await call("/cancel", { person: me.person, session: session(me.person), device_id: me.device });
+      const [st] = await call("/cancel", { person: me.person, session: session(me.person) }, null, me.device);
       if (st !== 200 && t.stop) { t.stop.stopped = true; t.stop.abort(); }
       return send(res, 200, { ok: true });
     }
     if (path === "/api/anton/ny") {
       if (t.running || t.queue.length) return send(res, 409, { error: "Vent til Anton har svart." });
-      const [st, j] = await call("/new-chat", { person: me.person, session: session(me.person), device_id: me.device });
+      const [st, j] = await call("/new-chat", { person: me.person, session: session(me.person) }, null, me.device);
       if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
       if (st !== 200) return send(res, 502, { error: codeOf(j, "unavailable") });
       publish(me.person, "cleared", { type: "cleared" }); return send(res, 200, { ok: true });
@@ -171,7 +171,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
   }
 
   async function history(res, me) {
-    const [st, j] = await call("/history", null, { person: me.person, session: session(me.person), device_id: me.device });
+    const [st, j] = await call("/history", null, { person: me.person, session: session(me.person) }, me.device);
     if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
     const items = Array.isArray(j.items) ? j.items : Array.isArray(j) ? j : [];
     return send(res, st === 200 ? 200 : 502, { items: items.slice(-50), queue: queueView(thread(me.person)), ...(st === 200 ? {} : { error: codeOf(j, "unavailable") }) });

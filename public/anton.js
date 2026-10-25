@@ -83,13 +83,14 @@ export async function start({ viewer, versionId, panel, valg }) {
       <p class="src">Maskinen husker deg i tre måneder. Uten innlogging kan du se alt, men ikke lagre.</p>`;
     const code = $("code");
     code.oninput = () => { code.value = code.value.replace(/\D/g, "").slice(0, 4); if (code.value.length === 4) $("codeForm").requestSubmit(); };
+    let sending = false;   // the fourth digit submits, and so may the button or Enter: the code goes once
     $("codeForm").onsubmit = async e => {
-      e.preventDefault(); $("codeErr").textContent = "";
+      e.preventDefault(); if (sending) return; sending = true; $("codeErr").textContent = "";
       const device = /Mac/.test(navigator.userAgent) ? "Mac" : /iPad|iPhone/.test(navigator.userAgent) ? "iPad/iPhone" : /Windows/.test(navigator.userAgent) ? "Windows" : "nettleser";
       const r = await json("api/logg-inn", { code: code.value, device });
       const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
       if (r?.ok) return location.reload();
-      $("codeErr").textContent = j.error || "Det gikk ikke."; code.value = ""; code.focus();
+      sending = false; $("codeErr").textContent = j.error || "Det gikk ikke."; code.value = ""; code.focus();
     };
   }
 
