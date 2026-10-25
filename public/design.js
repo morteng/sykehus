@@ -11,7 +11,10 @@
         width across it, height to the top (from base_kote; default the lowest ground under it). shape box, gable
         (walls wall_height high, a ridge), triangle (an A frame, roof to the ground) or lean_to (a single slope,
         high on high_side, left or right as one walks from -> to). material glass (a greenhouse), concrete, steel,
-        wood or brick. Optional: id (n and 4–12 letters or digits; the page gives one, so later changes can name it),
+        wood or brick. pyramid: four sloping faces to one top over the middle (from -> to is its length, width its
+        breadth); terraces: steps (2–10) one on another, each step_depth metres (default 3) narrower than the one under
+        it, kept flush on high_side (the back; left or right walking from -> to). on: a wing (its id or name) whose roof
+        it stands on, so its foot is that roof's kote under its middle (a roof garden, a greenhouse on a roof). Optional: id (n and 4–12 letters or digits; the page gives one, so later changes can name it),
         storeys (1–30; the height then defaults to 3,2 m a storey), use, built, note: the facts its card shows.
    { kind: "reshape", id, name?, use?, built?, note?, storeys?, from?, to?, width?, height?, why? }   (U3556)
         changes a new building made by a volume: renames it, sets its facts, moves or resizes it (from, to, width),
@@ -20,14 +23,15 @@
    What they make (applyDesign): site.added, each { id, kind, name, parts, footprint_m2, volume_m3 }, and
    site.demolished. A part is a profile [across, kote] extruded along an axis [[east, north], [east, north]]: across
    is metres to the left of the axis as one walks along it, so a box, a gable, a slope and a balcony slab are all one
-   kind of thing, which the viewer draws and the IFC writes the same way.
+   kind of thing, which the viewer draws and the IFC writes the same way. A pyramid is the one that is not: its part
+   is its faces as triangles, tris [[[east, north, kote] × 3], …].
 
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
 import { checkLandscape, applyLandscape } from "./landscape.js";
 
 export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];
-export const SHAPES = ["box", "gable", "triangle", "lean_to"];
+export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
 /* the facts a new building's card shows, checked (volume and reshape alike) */
@@ -103,7 +107,17 @@ export function checkDesign(site, e, str) {
       out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), 1, 80, "Høyden"); Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }
-      if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
+      if (shape === "terraces") {
+        out.steps = num(e.steps, 2, 10, "Trinnene (steps)", 3); if (!Number.isInteger(out.steps)) throw new Error("steps er et helt tall fra 2 til 10");
+        out.step_depth = num(e.step_depth, 0.5, 20, "Dybden på hvert trinn (step_depth)", 3);
+        if (out.step_depth * (out.steps - 1) >= out.width) throw new Error(`Med ${out.steps} trinn på ${out.step_depth} m blir det øverste uten bredde: gjør bredden større enn ${out.step_depth * (out.steps - 1)} m, eller trinnene grunnere`);
+        out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to): den siden trinnene er i flukt med");
+      }
+      if (e.on != null) {
+        const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k);
+        if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
+        out.on = w.id; if (roofUnder(site, out) == null) throw new Error(`Midten av ${out.name} står ikke på taket til ${w.name}: flytt from og to så midten er innenfor fløyen`);
+      } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
       return out;
     }
   }
@@ -116,6 +130,13 @@ export function groundAt(site, [x, y]) {
   const c = Math.floor((x - T.x0) / T.res), r = Math.floor((T.y1 - y) / T.res);
   const z = c >= 0 && r >= 0 && c < T.w && r < T.h ? T.z[r * T.w + c] : null;
   return z ?? Math.min(...T.z.filter(v => v != null));
+}
+
+/* the roof a volume set on a wing stands on: the highest of that wing's blocks (or outlines) under its middle */
+export function roofUnder(site, e) {
+  const m = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2]; let top = null;
+  for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && inRing(m, k.p)) top = Math.max(top ?? -Infinity, k.top);
+  return top;
 }
 
 /* balconies: every outline wall of the wing that faces the side, at each storey it stands over */
@@ -161,7 +182,17 @@ function balconyParts(site, e) {
 function volumeParts(site, e) {
   const { from, to, width: W, height: H } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
   const corners = [-h, h].flatMap(s => [from, to].map(p => [p[0] + n[0] * s, p[1] + n[1] * s]));
-  const z = e.base_kote ?? Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
+  const z = (e.on ? roofUnder(site, e) : null) ?? e.base_kote ?? Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
+  if (e.shape === "pyramid") {
+    const top = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, z + H];
+    const q = [[from[0] - n[0] * h, from[1] - n[1] * h], [to[0] - n[0] * h, to[1] - n[1] * h], [to[0] + n[0] * h, to[1] + n[1] * h], [from[0] + n[0] * h, from[1] + n[1] * h]].map(p => [...p, z]);
+    return { parts: [{ axis: [from, to], tris: [0, 1, 2, 3].map(i => [q[i], q[(i + 1) % 4], top]).concat([[q[0], q[2], q[1]], [q[0], q[3], q[2]]]), mat: e.material, role: "volume" }], base: z };
+  }
+  if (e.shape === "terraces") {
+    const k = e.steps, sh = H / k, back = e.high_side === "right" ? -h : h, dir = e.high_side === "right" ? 1 : -1;
+    return { parts: Array.from({ length: k }, (_, i) => { const front = back + dir * (W - i * e.step_depth), [s0, s1] = [Math.min(back, front), Math.max(back, front)];
+      return { axis: [from, to], profile: [[s0, z + i * sh], [s1, z + i * sh], [s1, z + (i + 1) * sh], [s0, z + (i + 1) * sh]], mat: e.material, role: "volume" }; }), base: z };
+  }
   const wh = e.wall_height ?? 0, prof = {
     box: [[-h, 0], [h, 0], [h, H], [-h, H]],
     gable: [[-h, 0], [h, 0], [h, wh], [0, H], [-h, wh]],
@@ -192,7 +223,7 @@ export function applyDesign(site, floors, edits) {
   for (const [id, e] of vols) {
     const { parts, base } = volumeParts(site, e), L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]);
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: Math.round(profArea(parts[0].profile) * L), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));
@@ -218,4 +249,50 @@ export function grossVolume(b) {
   const A = p => Math.abs(p.reduce((a, q, i) => { const r = p[(i + 1) % p.length]; return a + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
   if (b.blocks?.length) return Math.round(b.blocks.reduce((a, k) => a + A(k.p) * (k.top - (b.lift ?? b.base)), 0));
   return b.top != null ? Math.round(A(b.ring) * (b.top - b.base)) : null;
+}
+
+/* how each new building sits (U3557, the toolkit audit: numbers beside the picture beat a picture alone): which wings
+   and buildings its footprint overlaps and by how many m², the nearest one it does not touch and the gap to it, the
+   ground under it (lowest and highest), and what its foot stands on: the ground, a roof, nothing (it floats), or under
+   the ground (it is buried) */
+const rectOf = a => { const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d), n = [-d[1] / L * a.width / 2, d[0] / L * a.width / 2];
+  return [[a.from[0] - n[0], a.from[1] - n[1]], [a.to[0] - n[0], a.to[1] - n[1]], [a.to[0] + n[0], a.to[1] + n[1]], [a.from[0] + n[0], a.from[1] + n[1]]]; };
+const ringArea = r => Math.abs(r.reduce((s, p, i) => { const q = r[(i + 1) % r.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+/* a ring clipped to a convex one (Sutherland–Hodgman); the convex one counter-clockwise */
+function clip(subject, convex) {
+  let out = subject.slice(); const ccw = convex.reduce((s, p, i) => { const q = convex[(i + 1) % convex.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0) > 0 ? convex : convex.slice().reverse();
+  for (let i = 0; i < ccw.length && out.length; i++) {
+    const a = ccw[i], b = ccw[(i + 1) % ccw.length], inside = p => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0;
+    const cut = (p, q) => { const d1 = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]), d2 = (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]), t = d1 / (d1 - d2); return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]; };
+    const inp = out; out = [];
+    for (let k = 0; k < inp.length; k++) { const p = inp[k], q = inp[(k + 1) % inp.length];
+      if (inside(q)) { if (!inside(p)) out.push(cut(p, q)); out.push(q); } else if (inside(p)) out.push(cut(p, q)); }
+  }
+  return out;
+}
+const segDist = (p, a, b) => { const d = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2 || 1))); return Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t); };
+const ringGap = (r, s) => Math.min(...r.flatMap((p, i) => s.map((q, j) => Math.min(segDist(p, q, s[(j + 1) % s.length]), segDist(q, r[i], r[(i + 1) % r.length])))));
+export function fitOf(site) {
+  const open = r => r.length > 1 && r[0][0] === r.at(-1)[0] && r[0][1] === r.at(-1)[1] ? r.slice(0, -1) : r;
+  const things = [...site.buildings.reduce((m, b) => { const k = b.wing || b.id, w = (site.wings || []).find(x => x.id === b.wing);
+    const name = w ? w.name : b.own ? `bygning ${b.id} på tomta` : `nabobygg ${b.id}`; if (!m.has(k)) m.set(k, { name, rings: [], top: -Infinity }); const t = m.get(k); t.rings.push(open(b.ring)); t.top = Math.max(t.top, b.top ?? b.base); return m; }, new Map()).values()];
+  const vols = (site.added || []).filter(a => a.kind === "volume");
+  return vols.map(a => {
+    const r = rectOf(a), others = [...things, ...vols.filter(v => v !== a).map(v => ({ name: v.name, rings: [rectOf(v)], top: v.top_kote }))];
+    const overlaps = [], gaps = [];
+    for (const t of others) {
+      if (a.on && t.name === (site.wings || []).find(w => w.id === a.on)?.name) continue;   // the roof it stands on
+      const m2 = t.rings.reduce((s, ring) => { const c = clip(ring, r); return s + (c.length > 2 ? ringArea(c) : 0); }, 0);
+      if (m2 > 0.5) overlaps.push({ with: t.name, m2: Math.round(m2) }); else gaps.push({ to: t.name, m: Math.round(Math.min(...t.rings.map(ring => ringGap(r, ring))) * 10) / 10 });
+    }
+    gaps.sort((x, y) => x.m - y.m);
+    const g = [...r, [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2]].map(p => groundAt(site, p)), lo = Math.min(...g), hi = Math.max(...g);
+    const base = a.base_kote, stands = a.on ? `på taket til ${(site.wings || []).find(w => w.id === a.on)?.name || a.on}, kote ${base}`
+      : base > hi + 0.5 ? `på ingenting: foten er ${Math.round((base - hi) * 10) / 10} m over bakken (svever)`
+      : base < lo - 0.5 ? `under bakken: foten er ${Math.round((lo - base) * 10) / 10} m under det laveste terrenget`
+      : hi - base > 1.5 ? `på bakken i skråning: terrenget stiger ${Math.round((hi - base) * 10) / 10} m inn over foten på den høye siden` : "på bakken";
+    const lot = site.lot?.ring ? r.filter(p => inRing(p, site.lot.ring)).length : null;
+    return { id: a.id, name: a.name, stands_on: stands, ground_kote: [Math.round(lo * 10) / 10, Math.round(hi * 10) / 10], base_kote: base, top_kote: a.top_kote,
+      overlaps, nearest: gaps.slice(0, 2), ...(lot != null ? { on_lot: lot === 4 ? "helt på tomta" : lot === 0 ? "utenfor tomta" : `${lot} av 4 hjørner på tomta` } : {}) };
+  });
 }

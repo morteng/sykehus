@@ -276,6 +276,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function drawAdded(a) {
     const grp = new THREE.Group();
     for (const p of a.parts) {
+      if (p.tris) {   // a pyramid: its faces as they are (design.js)
+        const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(p.tris.flat().flatMap(q => { const v = P(q, q[2]); return [v.x, v.y, v.z]; }), 3)); g.computeVertexNormals();
+        const m = (ADDED[p.mat] || ADDED.concrete).clone(); m.side = THREE.DoubleSide;
+        const mesh = new THREE.Mesh(g, m); mesh.castShadow = p.mat !== "glass"; mesh.receiveShadow = true; grp.add(mesh);
+        if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
+        continue;
+      }
       const [[x0, y0], [x1, y1]] = p.axis, L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.01) continue;
       const g = new THREE.ExtrudeGeometry(new THREE.Shape(p.profile.map(([s, z]) => new THREE.Vector2(s, z - base))), { depth: L, bevelEnabled: false });
       /* the shape's x is across (to the left of the axis), y up, its depth along the axis: P maps east, north to x, -z */

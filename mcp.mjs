@@ -12,6 +12,8 @@ import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
+import { picture, aimAt, VIEWS } from "./render.mjs";
+import { fitOf } from "./public/design.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
    and the older revisions' initialize for clients that still send it. MCP Apps 2026-01-26 (io.modelcontextprotocol/ui). */
@@ -155,31 +157,50 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
   const DRAFT = { type: "string", description: "A draft id from try_change, or a version id (v…): answer from the model with those changes laid over it" };
   const POINTS = { type: "array", items: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, maxItems: 200 };
-  const EDIT = { type: "object", description: "One change. kind level: {wing, storey, kote, why}; kind wing: {wing, field (name|built|storeys|use|construction|facade|note), value, why}; kind room: {storey, room (code or name), set: {name?, use?, area_m2?}, why}; kind note: {text, wing?, storey?, at?: [east_m, north_m], why?}. why says where it comes from (drawing and page, a measurement, the architect's own judgement). " +
-      "The after (a design): kind demolish / restore: {building: a wing, a building id or \"alle\" for every hospital building; demolish alle then restore the ones to keep}; " +
-      "kind balconies: {wing, side (N|Ø|S|V: the facades facing it, within 45°), from_storey?, to_storey? (default all above the ground floor), depth? (m, 0.8-4, default 1.8), bay? (m wide each, else along the whole wall), gap? (m between, default 0.6), railing? (glass|steel|concrete)}; " +
-      "kind volume: {name, shape (box|gable|triangle = A frame, roof to the ground|lean_to = one slope), from, to ([east_m, north_m]: the middle or ridge line), width (m across), height (m to the top), wall_height? (gable, lean_to: the low eaves), high_side? (lean_to: left|right walking from -> to), base_kote? (default the lowest ground under it), material? (glass = a greenhouse|concrete|steel|wood|brick), id? (n + 4-12 letters/digits, to name it later), storeys? (1-30; height then defaults to 3.2 m each), use?, built?, note?}; " +
-      "kind reshape: {id (a new building's, from show_draft's after.built), name?, use?, built?, note?, storeys?, from?, to?, width?, height?}: renames, re-facts, moves or resizes a new building; demolish {building: its id} takes it away. " +
-      "The ground (landscaping): kind surface: {ring ([[east_m, north_m], …], 3+ points), surface (grass|meadow|planting = a bed|gravel|paving|asphalt|water), name?, plants? (hagekart ids or Latin names, for a bed)}; " +
-      "kind path: {line (2+ points), width? (m, default 2), surface? (gravel|paving|asphalt|wood), name?}; " +
-      "kind trees: {species (hagekart's id from its search_plants, e.g. lind, or a Latin name; check_species first: banned species are refused), points? ([[east_m, north_m], …]) or line + spacing? (m, default 8), height?, crown? (m wide; default hagekart's height and spread)}; " +
-      "kind fell: {ring}: takes down today's trees inside it. " +
-      "about_wing gives a wing's footprint and kote; site positions are metres east and north of the site origin.",
-    properties: { kind: { type: "string", enum: ["level", "wing", "room", "note", "demolish", "restore", "balconies", "volume", "reshape", "surface", "path", "trees", "fell"] }, id: { type: "string" }, storeys: { type: "integer" }, use: { type: "string" }, built: { type: "string" }, note: { type: "string" }, wing: { type: "string" }, storey: { type: "string" }, kote: { type: "number" }, field: { type: "string" }, value: { type: "string" },
-      room: { type: "string" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false },
-      text: { type: "string" }, at: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, why: { type: "string" },
-      building: { type: "string" }, side: { type: "string", enum: ["N", "Ø", "S", "V"] }, from_storey: { type: "string" }, to_storey: { type: "string" }, depth: { type: "number" }, bay: { type: "number" }, gap: { type: "number" },
-      railing: { type: "string", enum: ["glass", "steel", "concrete"] }, name: { type: "string" }, shape: { type: "string", enum: ["box", "gable", "triangle", "lean_to"] },
-      from: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, to: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 },
-      width: { type: "number" }, height: { type: "number" }, wall_height: { type: "number" }, high_side: { type: "string", enum: ["left", "right"] }, base_kote: { type: "number" },
-      material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"] },
-      ring: POINTS, line: POINTS, points: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water", "wood"] },
-      plants: { type: "array", items: { type: "string" }, maxItems: 30 }, species: { type: "string" }, spacing: { type: "number" }, crown: { type: "number" } }, required: ["kind"], additionalProperties: false };
+  /* one schema per kind (the toolkit audit: a call is checked against its own kind's fields before it is sent) */
+  const PT = { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2, description: "[east_m, north_m] from the site origin" };
+  const WHY = { type: "string", description: "Where it comes from: a drawing and page, a measurement, the person's wish, the architect's judgement" };
+  const K = (kind, about, props, required = []) => ({ type: "object", description: about, properties: { kind: { const: kind }, ...props, why: WHY }, required: ["kind", ...required], additionalProperties: false });
+  const FACTS = { storeys: { type: "integer", minimum: 1, maximum: 30, description: "Storeys; the height then defaults to 3.2 m each" }, use: { type: "string" }, built: { type: "string" }, note: { type: "string" } };
+  const SHAPE = { type: "string", enum: ["box", "gable", "triangle", "lean_to", "pyramid", "terraces"], description: "box; gable (walls wall_height high and a ridge along from -> to); triangle (an A frame: two slopes from the ridge to the ground, NOT a pyramid); lean_to (one slope); pyramid (four sloping faces to one point over the middle); terraces (steps one on another, each step_depth narrower, flush at the back on high_side: stepped terraces, not balconies)" };
+  const EDIT = { description: "One change; its kind picks its fields. Site positions are metres east and north of the site origin; about_wing gives a wing's footprint and kote.", anyOf: [
+    K("level", "A storey's floor kote in a wing", { wing: WING, storey: STOREY, kote: { type: "number" } }, ["wing", "storey", "kote"]),
+    K("wing", "A fact on a wing's card", { wing: WING, field: { type: "string", enum: ["name", "built", "storeys", "use", "construction", "facade", "note"] }, value: { type: "string" } }, ["wing", "field", "value"]),
+    K("room", "A room's name, use or area", { storey: STOREY, room: { type: "string", description: "Its code or name" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false } }, ["storey", "room", "set"]),
+    K("note", "A note on the model", { text: { type: "string" }, wing: WING, storey: STOREY, at: PT }, ["text"]),
+    K("demolish", "Tear down: a wing, a building id, a new building's id, or \"alle\" for every hospital building (then restore the ones to keep)", { building: { type: "string" } }, ["building"]),
+    K("restore", "Put back what a demolish took", { building: { type: "string" } }, ["building"]),
+    K("balconies", "Balconies on a wing's facades facing side (within 45°)", { wing: WING, side: { type: "string", enum: ["N", "Ø", "S", "V"] }, from_storey: STOREY, to_storey: STOREY, depth: { type: "number", minimum: 0.8, maximum: 4, description: "m out, default 1.8" }, bay: { type: "number", description: "m wide each, else along the whole wall" }, gap: { type: "number", description: "m between bays, default 0.6" }, railing: { type: "string", enum: ["glass", "steel", "concrete"] } }, ["wing", "side"]),
+    K("volume", "A new building or structure over its middle or ridge line from -> to", { name: { type: "string" }, shape: SHAPE, from: PT, to: PT, width: { type: "number", minimum: 1, maximum: 120, description: "m across the line" }, height: { type: "number", minimum: 1, maximum: 80, description: "m from its foot to the top" },
+      wall_height: { type: "number", description: "gable, lean_to: the low eaves" }, high_side: { type: "string", enum: ["left", "right"], description: "lean_to: the high side; terraces: the back, where the steps are flush (walking from -> to)" },
+      steps: { type: "integer", minimum: 2, maximum: 10, description: "terraces: how many (default 3)" }, step_depth: { type: "number", minimum: 0.5, maximum: 20, description: "terraces: m each step is narrower than the one under it (default 3)" },
+      on: { type: "string", description: "A wing (id or name) whose roof it stands on: its foot is that roof's kote under its middle (a roof garden, a greenhouse on a roof)" },
+      base_kote: { type: "number", description: "Its foot's kote; default the lowest ground under it (leave out with on)" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "glass = a greenhouse" },
+      id: { type: "string", description: "n and 4-12 letters/digits, to name it later" }, ...FACTS }, ["shape", "from", "to", "width"]),
+    K("reshape", "Change a new building: rename, re-fact, move or resize it", { id: { type: "string", description: "Its id, from show_draft's after.built or fit" }, name: { type: "string" }, from: PT, to: PT, width: { type: "number" }, height: { type: "number" }, ...FACTS }, ["id"]),
+    K("surface", "A surface on the ground", { ring: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"] }, name: { type: "string" }, plants: { type: "array", items: { type: "string" }, maxItems: 30, description: "hagekart ids or Latin names, for a bed" } }, ["ring", "surface"]),
+    K("path", "A path", { line: POINTS, width: { type: "number", description: "m, default 2" }, surface: { type: "string", enum: ["gravel", "paving", "asphalt", "wood"] }, name: { type: "string" } }, ["line"]),
+    K("trees", "Trees planted (hagekart's species; check_species first: banned species are refused)", { species: { type: "string" }, points: POINTS, line: POINTS, spacing: { type: "number", description: "m along line, default 8" }, height: { type: "number" }, crown: { type: "number", description: "m wide" } }, ["species"]),
+    K("fell", "Take down today's trees inside a ring", { ring: POINTS }, ["ring"]),
+  ] };
   /* what a draft builds and takes away, without the geometry: for the agent to report back */
   const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
     demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
     built: (m.site.added || []).map(({ parts, ...a }) => a),
     ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g), planted: m.site.planted, trees_felled: m.site.felled } : {}) } : null;
+  const VIEW_NAME = { type: "string", enum: Object.keys(VIEWS), description: "isometrisk (from the south-west, from above; default), plan (straight down, north up), N / Ø / S / V (from that side, low), NØ / SØ / SV / NV (from that corner, higher)" };
+  /* a picture of a model (render.mjs) and what it shows, in words */
+  const hospital = (() => { const ps = site.buildings.filter(b => b.own).flatMap(b => b.ring); return [ps.reduce((s, p) => s + p[0], 0) / ps.length, ps.reduce((s, p) => s + p[1], 0) / ps.length, 25]; })();
+  async function look(s, a = {}) {
+    const name = VIEWS[a.view_name] ? a.view_name : "isometrisk", v = { ...VIEWS[name] }, f = a.focus ? aimAt(s, a.focus) : null;
+    if (a.focus && !f) throw toolErr(`Fant ikke «${a.focus}» å se på: en fløy, en bygnings id eller et nytt bygg (id eller navn).`);
+    if (a.from_direction != null) { v.from = dirDeg(a.from_direction); if (v.plan) delete v.plan; v.tilt ??= 30; }
+    if (a.tilt_deg != null && !v.plan) v.tilt = a.tilt_deg;
+    const dist = a.distance_m ?? (f ? Math.max(50, f.size * 2.6) : v.plan ? 220 : 330);
+    const png = await picture(s, { ...v, target: f ? f.target : hospital, dist, focus: f ? f.ids : [], width: a.width || 1024, height: a.height || 640 });
+    const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+    return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(v.tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, ${f.name} i oransje` : ""}. Nordpilen øverst til høyre.` };
+  }
   const TOOLS = [
     { name: "about_site", title: "Tomta og fløyene", ro: true, schema: S({ draft: DRAFT }),
       description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
@@ -216,8 +237,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           return { id: f.id, name: f.name, wall_length_m: round1(Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1])), per_storey: per,
             openings: f.openings.map(o => ({ kind: o.kind, along_m: o.u.map(round1), sill_kote: round1(o.z[0]), head_kote: round1(o.z[1]), panes: o.panes.length })), sheet: f.src.map(docRef) }; }) }; } },
     /* documents: see below */
-    { name: "try_change", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" } }, ["edits"]),
-      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. Signed in, leave version and draft out: the changes go into the version the person has open on the website (their «Mitt etter»), and their page redraws with them. The before, the shared model, is never changed. Say where each change comes from in why.",
+    { name: "try_change", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" },
+      include_screenshot: { type: "boolean", description: "A picture of the model after the change comes back (default true). false for the middle steps of a sequence; look at the last one" },
+      view_name: VIEW_NAME }, ["edits"]),
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. Signed in, leave version and draft out: the changes go into the version the person has open on the website (their «Mitt etter»), and their page redraws with them. The before, the shared model, is never changed. Say where each change comes from in why. " +
+        "The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
       run: async (a, req) => {
         let d, v = null;
         if (!a.version && !a.draft && versions && userOf(req)) a = { ...a, version: openOf(userOf(req)).id };
@@ -225,11 +249,18 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         for (const [i, e] of a.edits.entries()) { try { const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
-        const after = afterOf(applyEdits(site, floors, d.edits));
-        if (v) { if (ok.length) versions.save(v); return { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), saved: true }; }
-        d.t = Date.now(); keepDraft(d);
-        return { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), saved: false,
-          note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; } },
+        const m = applyEdits(site, floors, d.edits), after = afterOf(m), fit = fitOf(m.site);
+        let out;
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
+        else { d.t = Date.now(); keepDraft(d);
+          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: false,
+            note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
+        if (a.include_screenshot === false || !ok.length) return out;
+        /* the picture of what it made (the FreeCAD MCP's pattern): aimed at the last new or changed building, else the whole site */
+        const last = ok.findLast(e => e.kind === "volume" || e.kind === "reshape"), id = last && (last.id ?? m.site.added?.findLast(x => x.kind === "volume" && x.name === last.name)?.id);
+        try { const { png, text } = await look(m.site, { view_name: a.view_name, focus: id && m.site.added?.some(x => x.id === id) ? id : null });
+          return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text }], structuredContent: out } };
+        } catch (e) { console.error("look:", e.message); return out; } } },
     { name: "show_draft", title: "Se et utkast eller en versjon", ro: true, schema: S({ draft: { type: "string", description: "A draft id or a version id (v…)" } }, ["draft"]),
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
@@ -290,6 +321,15 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const t = a.title_contains ? `%${String(a.title_contains).slice(0, 60)}%` : null;
         const rows = docs.prepare(`SELECT id, title, kind, year, file, pages, has_text, urls FROM docs WHERE 1=1 ${a.kind ? "AND kind=?" : ""} ${t ? "AND title LIKE ?" : ""} ORDER BY kind, year, title LIMIT 250`).all(...[a.kind, t].filter(Boolean));
         return { documents: rows.map(docOut) }; } },
+    { name: "look", title: "Se på modellen", ro: true, schema: S({ view_name: VIEW_NAME, focus: { type: "string", description: "A wing (id or name), a building id, or a new building's id or name: aimed at and picked out in orange" },
+        from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees; overrides view_name's" },
+        tilt_deg: { type: "number", minimum: 5, maximum: 85 }, distance_m: { type: "number", minimum: 30, maximum: 1200 },
+        draft: DRAFT, width: { type: "integer", minimum: 320, maximum: 1280 }, height: { type: "integer", minimum: 240, maximum: 960 } }),
+      description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With draft: the model with those changes (a version id works too); without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
+      run: async (a, req) => {
+        const who = userOf(req), open = who && versions ? versions.get(pages?.open.get(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
+        const { png, text } = await look(m.site, a);
+        return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: text + (id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.") }] } }; } },
     { name: "show_building", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },
         wing: { ...WING, description: "Look at this wing and ring it in yellow" },
@@ -298,11 +338,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d)" },
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
         drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, draft: DRAFT }),
-      description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey; the app sends a small picture of the view back, so look at it before describing it. Needs a chat app that shows MCP Apps; otherwise give the link to the website.",
+      description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it. To see the model yourself, use look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link.",
       run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing), who = userOf(req);
         /* through the pill: the person's open pages go to this view (assistant.mjs pages.show), else say they did not */
         const moved = who && pages ? pages.show(who, { ...view, ...(view.draft ? {} : { version: pages.open.get(who) || null }) }) : null;
-        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
+        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -433,7 +473,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       }
       if (me && versions && !a.version && !a.draft && !a.undo) a.version = work().id;
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
-      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
+      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
       if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg og byggenes navn og opplysninger.");   // the rest goes through Anton
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
