@@ -53,6 +53,35 @@
   #tip { top: 14px; left: 50%; transform: translateX(-50%); padding: 8px 16px; font-size: 15px; color: var(--soft); pointer-events: none; transition: opacity .6s; }
   #tip.gone { opacity: 0; }
   @media (max-width: 640px) { .lbl { display: none; } #tip { top: auto; bottom: 230px; max-width: calc(100vw - 24px); text-align: center; } #draft { top: auto; bottom: 230px; max-width: calc(100vw - 24px); } #info, #scale { bottom: 150px; } #bar { flex-direction: column; gap: 8px; width: calc(100vw - 24px); } #bar .sep { display: none; } #floors { max-width: 100%; overflow-x: auto; } }
+  /* signing in: the four digits, big */
+  #code { font: 600 34px/1 ui-monospace, Menlo, monospace; letter-spacing: .35em; width: 5.2em; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; text-align: center; margin-right: 8px; }
+  #info .err { color: var(--red); min-height: 1.2em; margin: 6px 0 0; }
+  button.pri { background: var(--ink); border-color: var(--ink); color: #fff; }
+  /* Anton: laser's pill (atomstack hurricane/server/web/laser.css .pill, 2026-10-25), larger; the talk above it */
+  #anton { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); width: min(620px, calc(100vw - 28px)); display: flex; flex-direction: column; gap: 8px; }
+  body.anton #info, body.anton #scale { bottom: 170px; }
+  body.anton #info { max-height: calc(100vh - 280px); }
+  #anton .pill { position: static; display: flex; align-items: flex-end; gap: 6px; min-height: 56px; padding: 6px; border-radius: 14px; }
+  #anton .pill:has(textarea:focus) { border-color: var(--ink); }
+  #anton .pillmid { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; align-self: center; padding: 0 6px; }
+  #anton textarea { width: 100%; border: 0; background: transparent; resize: none; font: inherit; font-size: 18px; line-height: 24px; padding: 8px 2px; max-height: 118px; overflow-y: auto; outline: none; color: var(--ink); }
+  #anton .busy { margin: 0 2px; font-size: 14px; color: var(--soft); } #anton .busy:empty { display: none; }
+  #anton .hist, #anton .round { flex: none; display: grid; place-items: center; width: 46px; height: 46px; min-height: 0; padding: 0; border-radius: 12px; border: 0; }
+  #anton .hist { background: transparent; color: var(--soft); } #anton .hist:hover { background: #0000000d; color: var(--ink); }
+  #anton .round { background: var(--ink); color: #fff; } #anton .round.stop { background: var(--red); }
+  #anton svg { width: 52%; height: 52%; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #anton svg .f { fill: currentColor; stroke: none; }
+  #talk { position: static; max-height: min(45vh, 420px); overflow-y: auto; padding: 10px 14px; }
+  #talkLog { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 17px; }
+  #talkLog b { display: block; font-size: 13px; color: var(--soft); font-weight: 600; }
+  #talkLog .from-me { justify-self: end; max-width: 85%; background: #ecebe6; padding: 8px 12px; border-radius: 12px; }
+  #talkLog .from-anton div { white-space: pre-wrap; }
+  #talkLog .tool { font-size: 14px; color: var(--soft); }
+  #talkLog .err { color: var(--red); font-size: 15px; }
+  #talkLog .ask { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fff; }
+  #talkLog .acts { display: flex; gap: 8px; margin-top: 8px; }
+  @media (max-width: 640px) { #anton { bottom: 150px; } body.anton #info, body.anton #scale { bottom: 230px; } }
+  @media print { #anton { display: none !important; } }
   #sheet { display: none; }
   @page { size: A4 landscape; margin: 10mm; }
   @media print {
@@ -74,7 +103,7 @@
 </head>
 <body>
 <div id="view"></div>
-<div id="title" class="card"><h1>Gamle Drammen sykehus</h1><p>Dronninggata 28 · gnr. 114 bnr. 272</p><p><a href="data/sykehus.ifc" download="gamle-drammen-sykehus.ifc" title="Fløyer, etasjer, vegger, dekker, vinduer og dører, med kilder; åpnes i FreeCAD, Solibri, Revit og andre BIM-verktøy">Last ned som BIM-modell (IFC, 12 MB)</a></p><p id="ideas" hidden><a href="#" id="ideasLink">Forslag til «etter»</a></p></div>
+<div id="title" class="card"><h1>Gamle Drammen sykehus</h1><p>Dronninggata 28 · gnr. 114 bnr. 272</p><p><a href="data/sykehus.ifc" download="gamle-drammen-sykehus.ifc" title="Fløyer, etasjer, vegger, dekker, vinduer og dører, med kilder; åpnes i FreeCAD, Solibri, Revit og andre BIM-verktøy">Last ned som BIM-modell (IFC, 12 MB)</a></p><p id="ideas" hidden><a href="#" id="ideasLink">Forslag til «etter»</a></p><p id="me" hidden><a href="#" id="loginLink">Logg inn</a></p></div>
 <div id="north" class="card" title="Nord"><svg viewBox="-20 -20 40 40" aria-label="Nordpil"><path d="M0 -8 L7 17 L0 12 L-7 17 Z" fill="#23211e"/><text x="0" y="-10" text-anchor="middle" font-size="11" font-weight="700" fill="#23211e">N</text></svg></div>
 <div id="scale" class="card"><div class="ticks"><i></i><i></i><i></i><i></i></div><div class="nums"><span>0</span><span id="scaleEnd"></span></div></div>
 <div id="info" class="card"></div>

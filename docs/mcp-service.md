@@ -37,6 +37,12 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
   and reading versions stay open. Tool calls are counted per login and per hashed address; anonymous calls are held
   to 600 an hour per address, a login to 1000. `GET /api/bruk` gives the counts for the last 14 days, to the proxy
   secret or from this machine only.
+- Signing in on the page and Anton's pill (login.mjs, assistant.mjs), all four needed or «Logg inn» stays hidden:
+  `SYKEHUS_COOKIE_SECRET` (32+ characters, signs the 90-day cookie), `SYKEHUS_ASSISTANT_URL` (gulden-ai's internal
+  base URL), `SYKEHUS_ASSISTANT_TOKEN` (the bearer for it); optional `SYKEHUS_CODE_PATH` (default
+  `/internal/sykehus/code`) and `SYKEHUS_ASSISTANT_PREFIX` (default `/internal/sykehus`, + `/chat`, `/approve`,
+  `/cancel`, `/history`). The cookie counts on the page's `/api/*` only, never on `/mcp`. `/api/anton/strom` is
+  server-sent events: no response buffering at the edge (`flush_interval -1`).
 
 ## Caddy
 

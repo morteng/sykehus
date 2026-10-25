@@ -1,0 +1,123 @@
+/* Signing in and Anton on the page. «Logg inn» on the title card asks for the four digits Morten reads on the phone
+   (login.mjs); signed in, the pill at the bottom talks to Anton (assistant.mjs), and the conversation shows above it.
+   The pill and its behaviour are laser's (atomstack hurricane/server/web/lobbychat.js and laser.css .pill,
+   2026-10-25): one box with a round send button that turns into Stop while Anton works, the history button, the reply
+   growing above, approval cards. Here it is plainer, larger and Norwegian, for one person and one site.
+
+   When Anton saves one of the person's versions the server says "steps": the page shows that version again, from the
+   same place (after the reply is done, so nothing is cut off). */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const SEND = `<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`, STOP = `<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" class="f"/></svg>`;
+const HIST = `<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>`;
+const CODES = {
+  unavailable: "Anton svarer ikke akkurat nå. Prøv igjen om et minutt.", timeout: "Anton sluttet å svare. Prøv igjen.",
+  limit: "Mange meldinger på kort tid. Vent noen minutter.", busy: "Anton er opptatt. Meldingen din venter.",
+  too_long: "Meldingen er for lang.", not_allowed: "Anton kan ikke gjøre det for deg.", approval_expired: "Spørsmålet gikk ut. Spør på nytt.",
+  approval_unknown: "Spørsmålet er allerede besvart.", internal: "Noe gikk galt. Prøv igjen.",
+};
+const POSE = "sykehus-pose";
+
+export async function start({ viewer, versionId, info, closable, CLOSE }) {
+  /* back from a redraw: the camera where it was */
+  try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
+  const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
+  const link = $("loginLink");
+  if (!me.login) return;
+  $("me").hidden = false;
+  if (!me.person) { link.onclick = e => { e.preventDefault(); askCode(); }; return; }
+  link.textContent = `Logget inn som ${me.person} · Logg ut`;
+  link.onclick = async e => { e.preventDefault(); await fetch("api/logg-ut", { method: "POST" }); location.reload(); };
+  pill(me.person);
+
+  /* the four digits, big, in the card */
+  function askCode() {
+    info.innerHTML = `${CLOSE}<h2>Logg inn</h2><p style="margin:4px 0 10px">Skriv de fire sifrene du har fått på telefonen.</p>
+      <form id="codeForm" autocomplete="off"><input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" aria-label="Koden, fire sifre" autofocus>
+      <button type="submit" class="pri">Logg inn</button></form><p id="codeErr" class="err" role="alert"></p>
+      <p class="src">Maskinen husker deg i tre måneder. Uten innlogging kan du se alt, men ikke lagre.</p>`;
+    info.style.display = "block"; closable(info);
+    const code = $("code"); code.focus();
+    code.oninput = () => { code.value = code.value.replace(/\D/g, "").slice(0, 4); if (code.value.length === 4) $("codeForm").requestSubmit(); };
+    $("codeForm").onsubmit = async e => {
+      e.preventDefault(); $("codeErr").textContent = "";
+      const device = /Mac/.test(navigator.userAgent) ? "Mac" : /iPad|iPhone/.test(navigator.userAgent) ? "iPad/iPhone" : /Windows/.test(navigator.userAgent) ? "Windows" : "nettleser";
+      const r = await fetch("api/logg-inn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.value, device }) }).catch(() => null);
+      const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
+      if (r?.ok) return location.reload();
+      $("codeErr").textContent = j.error || "Det gikk ikke."; code.value = ""; code.focus();
+    };
+  }
+
+  function pill(person) {
+    document.body.classList.add("anton");
+    const box = document.createElement("div"); box.id = "anton";
+    box.innerHTML = `<div id="talk" class="card" hidden><ol id="talkLog"></ol></div>
+      <div class="pill card"><button class="hist" id="talkHist" title="Samtalen" aria-label="Vis samtalen">${HIST}</button>
+        <div class="pillmid"><div class="busy" id="talkBusy"></div><textarea id="talkIn" rows="1" placeholder="Spør Anton, eller be ham tegne …" aria-label="Melding til Anton"></textarea></div>
+        <button class="round send" id="talkSend" title="Send" aria-label="Send">${SEND}</button></div>`;
+    document.body.append(box);
+    const log = $("talkLog"), talk = $("talk"), input = $("talkIn"), btn = $("talkSend"), busy = $("talkBusy");
+    const replies = new Map(), told = new Set();
+    let running = null, redraw = false, waiting = 0;
+    const show = (on = true) => { talk.hidden = !on; if (on) talk.scrollTop = talk.scrollHeight; };
+    function line(cls, text, who) {
+      const li = document.createElement("li"); li.className = cls;
+      if (who) li.append(Object.assign(document.createElement("b"), { textContent: who }));
+      const b = document.createElement("div"); b.textContent = text; li.append(b); log.append(li); show(); return b;
+    }
+    function state() {
+      btn.innerHTML = running ? STOP : SEND; btn.className = "round " + (running ? "stop" : "send");
+      btn.title = btn.ariaLabel = running ? "Stopp" : "Send";
+      busy.textContent = running ? (waiting ? `Anton tenker … (${waiting} venter)` : "Anton tenker …") : "";
+    }
+    $("talkHist").onclick = () => show(talk.hidden);
+    $("view").addEventListener("pointerdown", () => show(false));   // the model first: touching it folds the talk away
+    input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
+    input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
+    btn.onclick = () => running && !input.value.trim() ? fetch("api/anton/stopp", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }) : sendIt();
+    async function sendIt() {
+      const text = input.value.trim(); if (!text) return;
+      const r = await fetch("api/anton", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, version: versionId }) }).catch(() => null);
+      if (r?.status === 401) return signedOut();
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return; }
+      input.value = ""; input.oninput();
+    }
+    function signedOut() { fetch("api/logg-ut", { method: "POST" }).finally(() => location.reload()); }
+    function card(a) {
+      const li = document.createElement("li"); li.className = "ask";
+      li.innerHTML = `<div>${esc(a.summary || "Anton vil gjøre noe som trenger ditt ja.")}</div><div class="acts"><button class="pri">Ja, gjør det</button><button>Nei</button></div>`;
+      const [yes, no] = li.querySelectorAll("button");
+      const answer = async d => { yes.disabled = no.disabled = true; const r = await fetch("api/anton/godkjenn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ approval_id: a.id, decision: d }) }).catch(() => null);
+        li.querySelector(".acts").textContent = r?.ok ? (d === "accept" ? "Ja." : "Nei.") : "Fikk ikke svart."; };
+      yes.onclick = () => answer("accept"); no.onclick = () => answer("reject");
+      log.append(li); show();
+    }
+    function redrawNow() { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.reload(); }
+    function goTo(id, title) {
+      const li = document.createElement("li"); li.className = "tool";
+      li.innerHTML = `Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a>`; log.append(li); show();
+    }
+
+    // the history first, then live
+    fetch("api/anton/historikk").then(r => r.status === 401 ? signedOut() : r.json()).then(h => {
+      for (const it of h?.items || []) {
+        if (it.type === "message") line(it.from === "assistant" ? "from-anton" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
+        else if (it.type === "tool") line("tool", it.label);
+      }
+      if (!log.children.length) line("from-anton", "Hei! Jeg er Anton. Be meg rive bygg, legge til balkonger, tegne et drivhus eller noe annet på tomta, så tegner jeg det i en versjon du kan vise fram.", "Anton");
+      show(false);
+    }).catch(() => {});
+    const es = new EventSource("api/anton/strom");
+    const on = (ev, f) => es.addEventListener(ev, e => { try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });
+    on("queue", q => { running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
+    on("message", m => line("from-me", m.text));
+    on("text", t => { let b = replies.get(t.reply_to); if (!b) { b = line("from-anton", "", "Anton"); replies.set(t.reply_to, b); } b.textContent += t.delta || ""; show(); });
+    on("tool", t => { if (t.label) line("tool", t.label); });
+    on("approval", card);
+    on("error", e => line("err", CODES[e.code] || CODES.internal));
+    on("done", () => { if (redraw) redrawNow(); });
+    on("steps", s => { if (s.version === versionId) { if (running) redraw = true; else redrawNow(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
+    on("signed_out", signedOut);
+  }
+}

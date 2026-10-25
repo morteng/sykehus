@@ -48,6 +48,7 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
   const grantOf = bearer => { const h = sha64(bearer), g = store.grants.find(x => x.access_hash === h); if (!g || g.access_exp < Date.now() / 1000) return null;
     if (!g.last_used || Date.now() - Date.parse(g.last_used) > 3600e3) { g.last_used = new Date().toISOString(); save(); } return g; };
   function userOf(req) {
+    if (req.webUser) return req.webUser;   // server.mjs sets it from login.mjs's cookie, on the page's own /api routes only
     const p = proxyUser(req); if (p) return p;
     const m = /^Bearer\s+(\S{16,400})$/i.exec(req.headers.authorization || ""); if (!m) return null;
     const who = tokens[createHash("sha256").update(m[1]).digest("hex")];

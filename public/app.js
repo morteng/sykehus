@@ -251,10 +251,13 @@ fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ ver
   $("ideasLink").onclick = e => {
     e.preventDefault(); const el = $("info");
     el.innerHTML = `${CLOSE}<h2>Forslag til «etter»</h2><p class="src" style="margin-top:0">Tegnet med Claude over modellen av bygningene i dag. Hver åpner i 3D.</p><ul class="ideas">${versions.map(v =>
-      `<li><a href="?versjon=${encodeURIComponent(v.version)}">${esc(v.title)}<small>${esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></a></li>`).join("")}</ul>`;
+      `<li><a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}">${esc(v.title)}<small>${v.mine ? `din, ${{ privat: "privat", lenke: "bare med lenken", offentlig: "offentlig" }[v.sharing]}` : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></a></li>`).join("")}</ul>`;
     el.style.display = "block"; closable(el);
   };
 }).catch(() => {});
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
+/* signing in, and Anton for the signed in (anton.js) */
+import("./anton.js").then(m => m.start({ viewer, versionId, info: $("info"), closable, CLOSE })).catch(e => console.error("anton:", e));
+
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));

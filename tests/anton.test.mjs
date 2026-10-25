@@ -1,0 +1,103 @@
+/* Signing in with a code (login.mjs) and Anton's relay (assistant.mjs), against a stand-in for gulden-ai's internal door.
+   node --test tests/anton.test.mjs */
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+
+const dir = mkdtempSync(join(tmpdir(), "sykehus-anton-")), secret = "proxy-secret-for-tests-0123456789", bearer = "door-token-0123456789";
+const seen = [];
+const door = createServer((req, res) => {
+  let s = ""; req.on("data", c => s += c); req.on("end", () => {
+    const b = s ? JSON.parse(s) : {}; seen.push({ path: req.url, auth: req.headers.authorization, body: b });
+    if (req.headers.authorization !== `Bearer ${bearer}`) return res.writeHead(401).end("{}");
+    if (req.url === "/internal/sykehus/code") return b.code === "4711" ? res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ person: "lars", device_id: "dev-1" })) : res.writeHead(401).end("{}");
+    if (req.url === "/internal/sykehus/chat") {
+      if (b.device_id === "revoked") return res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "device_revoked" } }));
+      res.writeHead(200, { "content-type": "application/x-ndjson" });
+      res.write(JSON.stringify({ type: "text", delta: "Jeg river " }) + "\n");
+      setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write" }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
+      return;
+    }
+    if (req.url.startsWith("/internal/sykehus/history")) return res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ items: [{ type: "message", from: "lars", text: "hei" }] }));
+    res.writeHead(404).end("{}");
+  });
+});
+await new Promise(ok => door.listen(0, ok));
+const PORT = 9000 + Math.floor(Math.random() * 900);
+const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, DOCS: "",
+  SYKEHUS_COOKIE_SECRET: "cookie-secret-for-tests-0123456789abcdef", SYKEHUS_ASSISTANT_URL: `http://127.0.0.1:${door.address().port}`, SYKEHUS_ASSISTANT_TOKEN: bearer }, stdio: ["ignore", "pipe", "inherit"] });
+await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
+after(() => { srv.kill(); door.close(); });
+const O = `http://localhost:${PORT}`;
+const post = (p, body, h = {}) => fetch(O + p, { method: "POST", headers: { "content-type": "application/json", ...h }, body: JSON.stringify(body) });
+
+/* the events on a stream until want() is satisfied */
+async function events(cookie, want, ms = 4000) {
+  const ac = new AbortController(), out = [], t = setTimeout(() => ac.abort(), ms);
+  try {
+    const r = await fetch(O + "/api/anton/strom", { headers: { cookie }, signal: ac.signal });
+    const dec = new TextDecoder(); let buf = "";
+    for await (const c of r.body) {
+      buf += dec.decode(c, { stream: true }); let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) { const blk = buf.slice(0, i); buf = buf.slice(i + 2); const ev = /^event: (.*)$/m.exec(blk), d = /^data: (.*)$/m.exec(blk); if (ev && d) out.push({ event: ev[1], ...JSON.parse(d[1]) }); }
+      if (want(out)) break;
+    }
+  } catch { } finally { clearTimeout(t); ac.abort(); }
+  return out;
+}
+
+let cookie;
+test("a wrong code is refused; the right one sets a signed cookie for that person", async () => {
+  assert.equal((await (await fetch(O + "/api/meg")).json()).person, null);
+  assert.equal((await post("/api/logg-inn", { code: "12" })).status, 400);
+  assert.equal((await post("/api/logg-inn", { code: "0000" })).status, 401);
+  const r = await post("/api/logg-inn", { code: "47 11", device: "iMac" });
+  assert.equal(r.status, 200);
+  const set = r.headers.get("set-cookie"); assert.match(set, /HttpOnly/); assert.match(set, /SameSite=Lax/);
+  cookie = set.split(";")[0];
+  assert.equal(seen.at(-1).body.device, "iMac"); assert.equal(seen.at(-1).auth, `Bearer ${bearer}`);
+  assert.equal((await (await fetch(O + "/api/meg", { headers: { cookie } })).json()).person, "lars");
+  const forged = cookie.replace(/\.[^.]+$/, ".AAAA");
+  assert.equal((await (await fetch(O + "/api/meg", { headers: { cookie: forged } })).json()).person, null);
+  assert.equal((await post("/api/logg-inn", { code: "4711" }, { origin: "https://evil.example" })).status, 403);
+});
+
+test("the cookie is not a login on /mcp", async () => {
+  const r = await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "new_version", arguments: { title: "x" } } }) });
+  assert.equal(r.status, 401);
+});
+
+test("a message is relayed as the person's turn and streamed back to their pages", async () => {
+  assert.equal((await fetch(O + "/api/anton/strom")).status, 401);
+  const v = (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "new_version", arguments: { title: "Lars sin" } } }) })).json()).result.structuredContent;
+  const got = events(cookie, o => o.some(e => e.event === "done"));
+  await new Promise(ok => setTimeout(ok, 200));
+  const r = await post("/api/anton", { text: "Riv vestfløya", version: v.version }, { cookie });
+  assert.equal(r.status, 202);
+  const ev = await got, { id } = await r.json();
+  assert.deepEqual(ev.filter(e => e.event === "text").map(e => e.delta), ["Jeg river ", "Vestfløy."]);
+  assert.ok(ev.filter(e => ["text", "tool", "done"].includes(e.event)).every(e => e.reply_to === id));
+  const body = seen.find(s => s.path === "/internal/sykehus/chat").body;
+  assert.equal(body.person, "lars"); assert.equal(body.session, "sykehus:lars"); assert.equal(body.device_id, "dev-1"); assert.equal(body.version.id, v.version);
+  // the page's own list now has Lars's private version, with the key that opens it
+  const mine = (await (await fetch(O + "/api/versjoner", { headers: { cookie } })).json()).versions;
+  assert.equal(mine[0].mine, true); assert.ok(mine[0].nokkel);
+  assert.equal((await (await fetch(O + "/api/versjoner")).json()).versions.length, 0);
+  assert.equal((await fetch(`${O}/api/versjon/${v.version}`, { headers: { cookie } })).status, 200);
+  // Anton changes the version (through the MCP tools, as Lars): the page is told to redraw it
+  const steps = events(cookie, o => o.some(e => e.event === "steps"));
+  await new Promise(ok => setTimeout(ok, 200));
+  await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "try_change", arguments: { version: v.version, edits: [{ kind: "demolish", building: "Vestfløy" }] } } }) });
+  const s = (await steps).find(e => e.event === "steps"); assert.equal(s.version, v.version); assert.equal(s.changes, 1);
+  const h = await (await fetch(O + "/api/anton/historikk", { headers: { cookie } })).json();
+  assert.equal(h.items[0].text, "hei");
+});
+
+test("signing out clears the cookie", async () => {
+  const r = await post("/api/logg-ut", {}, { cookie });
+  assert.match(r.headers.get("set-cookie"), /Max-Age=0/);
+});

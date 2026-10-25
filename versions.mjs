@@ -22,7 +22,7 @@ const newKey = () => randomBytes(9).toString("base64url");
 export function createVersions(dir = process.env.SYKEHUS_VERSIONS_DIR) {
   if (!dir) return null;
   mkdirSync(dir, { recursive: true });
-  const all = new Map();
+  const all = new Map(), watchers = [];
   for (const f of readdirSync(dir)) {
     if (!f.endsWith(".json") || !ID.test(f.slice(0, -5))) continue;
     try { const v = JSON.parse(readFileSync(join(dir, f), "utf8")); if (v.id === f.slice(0, -5)) { v.sharing ||= v.public ? "offentlig" : "privat"; delete v.public; v.key ||= newKey(); v.own ||= newKey(); all.set(v.id, v); } } catch (e) { console.error("versions: skipping", f, e.message); }
@@ -40,6 +40,8 @@ export function createVersions(dir = process.env.SYKEHUS_VERSIONS_DIR) {
       const now = new Date().toISOString(), v = { id, owner, title, edits: edits.slice(0, MAX_EDITS), sharing: "privat", key: newKey(), own: newKey(), created: now, updated: now };
       write(v); all.set(id, v); return v;
     },
-    save(v) { if (v.edits.length > MAX_EDITS) throw new Error(`En versjon holder høyst ${MAX_EDITS} endringer`); v.updated = new Date().toISOString(); write(v); all.set(v.id, v); return v; },
+    save(v) { if (v.edits.length > MAX_EDITS) throw new Error(`En versjon holder høyst ${MAX_EDITS} endringer`); v.updated = new Date().toISOString(); write(v); all.set(v.id, v); for (const f of watchers) try { f(v); } catch (e) { console.error("versions watcher:", e.message); } return v; },
+    /* told of every save (assistant.mjs: the owner's open pages redraw it) */
+    watch: f => watchers.push(f),
   };
 }

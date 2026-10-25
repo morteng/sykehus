@@ -1,0 +1,159 @@
+/* Anton on the page: the pill at the bottom, for a person signed in here (login.mjs). The page never talks to
+   gulden-ai; this server holds each person's queue and relays one turn at a time to gulden-ai's internal door, and
+   sends what comes back to every page the person has open. The shapes are laser's (atomstack
+   docs/contract-shared-assistant-chat.md and hurricane/server/assistant_chat.py, 2026-10-25), with one thread per
+   person, session "sykehus:<person>".
+
+     GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
+     GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
+     POST /api/anton             {text, version?}  a message; it waits its turn (5 waiting at most)
+     POST /api/anton/godkjenn    {approval_id, decision: "accept"|"reject"}
+     POST /api/anton/stopp       ends the running turn
+
+   To gulden-ai (SYKEHUS_ASSISTANT_URL + SYKEHUS_ASSISTANT_PREFIX, default /internal/sykehus; Bearer
+   SYKEHUS_ASSISTANT_TOKEN): POST /chat {person, session, device_id, message, request_id, ui_lang: "nb", version?}
+   answered with NDJSON lines text{delta} | tool{key,label,kind} | approval{id,key,tool,summary,expires_at} | ping |
+   done | error{code,message}; POST /approve, POST /cancel, GET /history. Anton's tools are this server's MCP tools,
+   called by gulden-ai with the proxy secret and Remote-User set to the person.
+
+   A turn names the version the page shows when it is the person's own, so "this one" means that version. When any of
+   a person's versions is saved (by Anton or anyone), their pages get "steps" and redraw it. */
+import { randomUUID } from "node:crypto";
+
+const WAITING = 5, LONGEST = 4000, PER_10_MIN = 20, SILENCE = 180e3, PING = 15e3, BUSY_TRIES = 20;
+
+export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl = fetch }) {
+  const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
+  const door = login.base + prefix, ready = login.ready;
+  const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
+  const threads = new Map();   // person → { queue: [turn], running, subs: Set<res>, approvals: Map, sent: [times], stop }
+  const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), sent: [], stop: null }; threads.set(p, t); } return t; };
+  const session = p => `sykehus:${p}`;
+  const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  function publish(person, event, data) { const t = threads.get(person); if (!t) return; for (const r of t.subs) r.write(sse(event, data)); }
+  const queueView = t => ({ type: "queue", running: t.running ? { id: t.running.id, text: t.running.text } : null, waiting: t.queue.map(q => ({ id: q.id, text: q.text })) });
+  versions?.watch?.(v => publish(v.owner, "steps", { type: "steps", version: v.id, title: v.title, changes: v.edits.length, updated: v.updated }));
+
+  const call = async (path, body, query) => {
+    const q = query ? "?" + new URLSearchParams(query) : "";
+    try {
+      const r = await fetchImpl(door + path + q, { method: body ? "POST" : "GET", headers: { authorization: `Bearer ${login.bearer}`, accept: "application/json", ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
+      return [r.status, await r.json().catch(() => ({}))];
+    } catch (e) { console.error("anton", path, e.message); return [503, { error: { code: "unavailable" } }]; }
+  };
+  const codeOf = (j, d) => typeof j?.error?.code === "string" ? j.error.code : typeof j?.code === "string" ? j.code : d;
+  /* gulden-ai refused the device (revoked in Settings › People): sign the person out on every page */
+  const refusedDevice = (st, j) => st === 401 || codeOf(j, "") === "device_revoked";
+
+  /* POST /chat and hand each NDJSON line on; [200] after done or error, else the status and body */
+  async function chat(body, onLine, stop) {
+    const ac = new AbortController(); let timer = setTimeout(() => ac.abort(), SILENCE);
+    stop.abort = () => ac.abort();
+    try {
+      const r = await fetchImpl(door + "/chat", { method: "POST", headers: { authorization: `Bearer ${login.bearer}`, "content-type": "application/json", accept: "application/x-ndjson" }, body: JSON.stringify(body), signal: ac.signal });
+      if (!r.ok) return [r.status, await r.json().catch(() => ({}))];
+      const dec = new TextDecoder(); let buf = "";
+      for await (const chunk of r.body) {
+        clearTimeout(timer); timer = setTimeout(() => ac.abort(), SILENCE);
+        buf += dec.decode(chunk, { stream: true });
+        let i; while ((i = buf.indexOf("\n")) >= 0) {
+          const raw = buf.slice(0, i); buf = buf.slice(i + 1);
+          let line; try { line = JSON.parse(raw); } catch { continue; }
+          if (line && typeof line.type === "string") { onLine(line); if (line.type === "done" || line.type === "error") return [200, {}]; }
+        }
+      }
+      return [502, { error: { code: "unavailable" } }];
+    } catch (e) { return stop.stopped ? [200, {}] : [e.name === "AbortError" ? 504 : 503, { error: { code: e.name === "AbortError" ? "timeout" : "unavailable" } }]; }
+    finally { clearTimeout(timer); }
+  }
+
+  async function run(person) {
+    const t = thread(person);
+    if (t.running) return;
+    while (t.queue.length) {
+      const turn = t.running = t.queue.shift();
+      publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at });
+      publish(person, "queue", queueView(t));
+      const body = { person, session: session(person), device_id: turn.device, message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}) };
+      const stop = t.stop = { stopped: false, abort: () => {} };
+      const onLine = line => {
+        if (line.type === "ping" || !["text", "tool", "approval", "done", "error"].includes(line.type)) return;
+        const out = line.type === "error" ? { type: "error", code: codeOf(line, "internal") } : { ...line };
+        out.reply_to = turn.id;
+        if (line.type === "approval" && typeof line.id === "string") t.approvals.set(line.id, { summary: String(line.summary || "").slice(0, 300) });
+        publish(person, line.type, out);
+      };
+      let st, j;
+      try {
+        for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
+      } catch (e) { console.error("anton turn", e); st = 500; j = { error: { code: "internal" } }; }
+      if (st !== 200) {
+        if (refusedDevice(st, j)) { publish(person, "signed_out", { type: "signed_out" }); t.queue.length = 0; }
+        publish(person, "error", { type: "error", code: codeOf(j, "unavailable"), reply_to: turn.id });
+      }
+      t.running = null; t.stop = null; t.approvals.clear();
+      publish(person, "queue", queueView(t));
+    }
+  }
+
+  async function post(req, res, me, path) {
+    if (req.headers.origin && (() => { try { return new URL(req.headers.origin).host !== req.headers.host; } catch { return true; } })()) return send(res, 403, { error: "Feil opphav" });
+    let b; try { b = await readJson(req, 20000); } catch { return send(res, 400, { error: "Uleselig" }); }
+    const t = thread(me.person);
+    if (path === "/api/anton") {
+      const text = String(b?.text ?? "").trim();
+      if (!text) return send(res, 400, { error: "Skriv noe først." });
+      if (text.length > LONGEST) return send(res, 413, { error: `Høyst ${LONGEST} tegn i en melding.` });
+      if (t.queue.length >= WAITING) return send(res, 429, { error: "Det venter allerede mange meldinger. Vent til Anton har svart." });
+      const now = Date.now(); t.sent = t.sent.filter(x => now - x < 600e3);
+      if (t.sent.length >= PER_10_MIN) return send(res, 429, { error: "Mange meldinger på kort tid. Vent noen minutter." });
+      t.sent.push(now);
+      const v = versions?.get(String(b?.version ?? "")), version = v && v.owner === me.person ? { id: v.id, title: v.title, changes: v.edits.length } : null;
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version };
+      t.queue.push(turn); publish(me.person, "queue", queueView(t)); run(me.person);
+      return send(res, 202, { id: turn.id });
+    }
+    if (path === "/api/anton/godkjenn") {
+      const id = String(b?.approval_id ?? ""), decision = b?.decision === "accept" ? "accept" : "reject";
+      if (!t.approvals.has(id)) return send(res, 404, { error: "Spørsmålet er ikke lenger åpent." });
+      const [st, j] = await call("/approve", { person: me.person, session: session(me.person), device_id: me.device, approval_id: id, decision });
+      if (st === 200) { t.approvals.delete(id); publish(me.person, "approval_done", { type: "approval_done", id, decision }); }
+      return send(res, st === 200 ? 200 : 502, st === 200 ? { ok: true } : { error: codeOf(j, "unavailable") });
+    }
+    if (path === "/api/anton/stopp") {
+      if (!t.running) return send(res, 200, { ok: true });
+      const [st] = await call("/cancel", { person: me.person, session: session(me.person), device_id: me.device });
+      if (st !== 200 && t.stop) { t.stop.stopped = true; t.stop.abort(); }
+      return send(res, 200, { ok: true });
+    }
+    return send(res, 404, { error: "Ikke funnet" });
+  }
+
+  function stream(req, res, me) {
+    res.writeHead(200, { ...SECURITY, "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" });
+    const t = thread(me.person); t.subs.add(res);
+    res.write(sse("queue", queueView(t)));
+    const ping = setInterval(() => res.write(": ping\n\n"), PING);
+    req.on("close", () => { clearInterval(ping); t.subs.delete(res); });
+  }
+
+  async function history(res, me) {
+    const [st, j] = await call("/history", null, { person: me.person, session: session(me.person), device_id: me.device });
+    if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
+    const items = Array.isArray(j.items) ? j.items : Array.isArray(j) ? j : [];
+    return send(res, st === 200 ? 200 : 502, { items: items.slice(-50), queue: queueView(thread(me.person)), ...(st === 200 ? {} : { error: codeOf(j, "unavailable") }) });
+  }
+
+  /* true when the request was ours */
+  async function route(req, res, path) {
+    if (!path.startsWith("/api/anton")) return false;
+    const me = login.personOf(req);
+    if (!ready) { send(res, 503, { error: "Anton er ikke koblet til ennå." }); return true; }
+    if (!me) { send(res, 401, { error: "signed_out" }); return true; }
+    if (path === "/api/anton/strom" && req.method === "GET") { stream(req, res, me); return true; }
+    if (path === "/api/anton/historikk" && req.method === "GET") { await history(res, me); return true; }
+    if (req.method === "POST") { await post(req, res, me, path); return true; }
+    send(res, 404, { error: "Ikke funnet" }); return true;
+  }
+  return { route, publish };
+}

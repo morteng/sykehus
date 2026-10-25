@@ -358,7 +358,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   }
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
-    return send(res, 200, { versions: (versions?.list({}) || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated })) }, { "access-control-allow-origin": "*" });
+    const me = req.webUser ?? null;   // signed in on the page: their own versions too, each with the key that opens it
+    return send(res, 200, { versions: (versions?.list({ viewer: me }) || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated,
+      ...(me && v.owner === me ? { mine: true, sharing: v.sharing, ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
   }
   return { handleMcp, handleDraft, handleVersion, handleVersions, TOOLS };
 }
