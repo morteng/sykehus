@@ -41,10 +41,11 @@ const floorBtns = [{ id: null, label: "Hele anlegget" }, ...storeys.map(n => ({ 
   const b = document.createElement("button"); b.textContent = f.label; if (f.title) { b.title = f.title; b.setAttribute("aria-label", f.title); b.style.minWidth = "46px"; b.style.padding = "0 8px"; }
   b.setAttribute("aria-pressed", String(f.id === null)); b.onclick = () => pickStorey(f.id); $("floors").append(b); return [f.id, b];
 });
+if (storeys.length) floorBtns[0][1].after(Object.assign(document.createElement("span"), { className: "lbl", textContent: "Etasje" }));
 function pickStorey(name) {
   if (name === null) viewer.home(); else viewer.setStorey(name);
   for (const [k, b] of floorBtns) b.setAttribute("aria-pressed", String(k === name));
-  hint(); showStorey(name);
+  pressMode(); showStorey(name);
 }
 /* how a kote is known: read off a drawing, worked out, or assumed */
 const how = l => l.how && l.how !== "tegning" ? ` <small style="color:var(--soft)">${esc(l.how)}</small>` : "";
@@ -54,15 +55,25 @@ function showStorey(name) {
   if (!name) { el.style.display = "none"; return; }
   const rows = wings.map(w => [w, (w.levels || []).find(l => l.name === name)]).filter(r => r[1]).sort((a, b) => a[1].kote - b[1].kote);
   const drawn = floors.filter(f => f.name === name), rooms = drawn.flatMap(f => f.rooms || []), sum = rooms.reduce((a, r) => a + (r.area_m2 || 0), 0), withArea = rooms.filter(r => r.area_m2).length, calc = rooms.filter(r => !r.area_m2 && r.area_calc);
-  el.innerHTML = `<h2>${esc(name)}</h2><dl>${rows.map(([w, l]) => `<dt>${esc(w.name)}</dt><dd>kote ${kote(l.kote)}${how(l)}</dd>`).join("")}
+  el.innerHTML = `${CLOSE}<h2>${esc(name)}</h2><dl>${rows.map(([w, l]) => `<dt>${esc(w.name)}</dt><dd>kote ${kote(l.kote)}${how(l)}</dd>`).join("")}
     ${withArea ? `<dt>Rom</dt><dd>${withArea}, til sammen ${num(sum)} m²</dd>` : rooms.length ? `<dt>Rom</dt><dd>${rooms.length} navngitt, uten areal på tegningen</dd>` : ""}
-    ${calc.length ? `<dt>Målt</dt><dd>${calc.length} rom uten areal på tegningen, ca. ${num(Math.round(calc.reduce((a, r) => a + r.area_calc, 0)))} m² mellom veggene</dd>` : ""}
-    </dl><p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">Bygningene er skåret 1,2 m over gulvet; skravert gulv: ingen plantegning av etasjen der. ${drawn.length
-      ? "Plantegning: " + drawn.map(f => esc(f.source)).join(" · ") : "Ingen plantegning av denne etasjen i arkivet."}</p>`;
-  el.style.display = "block";
+    ${calc.length ? `<dt>Målt</dt><dd>${calc.length} rom til, ca. ${num(Math.round(calc.reduce((a, r) => a + r.area_calc, 0)))} m² mellom veggene</dd>` : ""}
+    </dl><div class="src">Snitt 1,2 m over gulv. Skravert gulv: ingen plantegning av etasjen der.${drawn.length
+      ? `<br>${drawn.length === 1 ? "Plantegning" : "Plantegninger"}:<ul>${drawn.map(f => `<li title="${esc(f.source)}">${esc(plainSource(f))}</li>`).join("")}</ul>` : "<br>Ingen plantegning av denne etasjen i arkivet."}</div>`;
+  el.style.display = "block"; closable(el);
 }
+/* a floor's source as the card says it: the drawing, and for a traced one how it was read; the whole note (with the
+   tools that read it) stays in the data and shows on hover */
+function plainSource(f) {
+  if (!f.id.startsWith("spor-")) return f.source;
+  const sheet = f.source.split(", sporet")[0];
+  return `${sheet}. ${/vektor/.test(f.source) ? "Vegger og rom lest fra vektortegningen" : "Vegger og rom lest maskinelt fra skannet"}, ikke kontrollert.`;
+}
+/* the card's ×, and Esc, put it away */
+const CLOSE = `<button class="x" aria-label="Lukk" title="Lukk (Esc)">×</button>`;
+function closable(el) { el.querySelector(".x").onclick = () => { el.style.display = "none"; }; }
 function setMode(m) {
-  viewer.setMode(m); pressMode(); hint();
+  viewer.setMode(m); pressMode();
 }
 function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; }
 /* the plan or the section as a sheet to print: the picture with its names, a title block with what it is, a scale
@@ -100,22 +111,39 @@ function facade(b, k) {
   const r = $("info").getBoundingClientRect(), wide = innerWidth > 900, from = LOOK[k];
   viewer.setSection(b.wing, "fasade", wide ? r.right + 10 : 0, null, [-from[0], -from[1]]); pressMode();
   for (const [kk, btn] of floorBtns) btn.setAttribute("aria-pressed", String(kk === null));
-  showInfo(b); hint();
-}   // the drawn section shown, if the cut is one
+  showInfo(b);
+}
 function section(b, kind, drawn = null) {
   sheet = drawn; side = null; showInfo(b);   // the card first: with a sheet it grows, and the drawing is framed beside it
   const r = $("info").getBoundingClientRect(), wide = innerWidth > 900;   // on a phone the card is below or over; the drawing takes the screen
   viewer.setSection(b.wing, kind, wide ? r.right + 10 : 0, drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
   for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
-  showInfo(b); hint();
-}
-const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
-function hint() {
-  pressMode(); const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (v.mode === "section" && v.section.kind === "fasade" ? `Fasade mot ${SIDE[side]}, sett rett på${(site.facades || []).some(f => f.building === v.section.wing && f.name.endsWith(SIDE[side])) ? " · vinduene fra tegningen" : " · vinduene etter foto, ikke tegning"} · dra for å flytte · 3D eller Plan for å gå ut` : v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} ${sheet ? " som på tegningen" : " gjennom midten"} · svart: det snittet går gjennom · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · " + TAP + " på et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  showInfo(b);
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
+/* the keys: + and − zoom, ↑ ↓ (or Page Up / Down) a storey up or down the ladder, Esc puts the card away */
+addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
+  else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
+  else if (e.key === "Escape") $("info").style.display = "none";
+  else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {
+    const i = floorBtns.findIndex(([, b]) => b.getAttribute("aria-pressed") === "true"), j = Math.max(0, Math.min(floorBtns.length - 1, i + (/Up$/.test(e.key) ? 1 : -1)));
+    if (j !== i) { pickStorey(floorBtns[j][0]); floorBtns[j][1].scrollIntoView({ block: "nearest", inline: "nearest" }); }
+  } else return;
+  e.preventDefault();
+});
+/* the first visit: how to move about, once; gone at the first touch or after a while */
+const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
+let seen = false; try { seen = !!localStorage.getItem("sykehus-tips"); localStorage.setItem("sykehus-tips", "1"); } catch {}
+if (!seen) {
+  const tip = Object.assign(document.createElement("div"), { id: "tip", className: "card", textContent: TAP === "trykk"
+    ? "Dra for å snu · to fingre for å flytte og zoome · trykk på et bygg" : "Dra for å snu · høyre knapp eller to fingre for å flytte · + − for å zoome · klikk et bygg" });
+  document.body.append(tip);
+  const gone = () => { tip.classList.add("gone"); setTimeout(() => tip.remove(), 700); removeEventListener("pointerdown", gone); };
+  addEventListener("pointerdown", gone); setTimeout(gone, 9000);
+}
 
 /* a building: for a wing of the hospital, what the documents say about it (site.json wings), then its size and
    heights from the laser */
@@ -125,14 +153,14 @@ function showInfo(b) {
   if (!b) { el.style.display = "none"; return; }
   const h = b.top != null ? b.top - b.base : null, w = (site.wings || []).find(x => x.id === b.wing);
   const about = w ? [["Bygget", w.built], ["Etasjer", w.storeys], ["Konstruksjon", w.construction], ["Fasade", w.facade]].filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") : "";
-  el.innerHTML = `<h2>${w ? esc(w.name) : b.own ? "Bygning på tomta" : "Nabobygning"}</h2><dl>${about}
+  el.innerHTML = `${CLOSE}<h2>${w ? esc(w.name) : b.own ? "Bygning på tomta" : "Nabobygning"}</h2><dl>${about}
     <dt>Fotavtrykk</dt><dd>${num(b.area_m2)} m²</dd>
     ${h != null ? `<dt>Høyde</dt><dd>ca. ${h.toFixed(0)} m</dd><dt>Topp</dt><dd>kote ${kote(b.top)}</dd>` : ""}
     <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
     (w?.levels?.length ? storeyList(b, w) : "") +
     (w ? sectionRow(w) : "") +
     (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>${sheetStrip(w)}` : "");
-  el.style.display = "block";
+  el.style.display = "block"; closable(el);
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
   for (const btn of el.querySelectorAll("[data-fasade]")) btn.onclick = () => facade(b, btn.dataset.fasade);
@@ -159,7 +187,7 @@ function sectionRow(w) {
       <button style="${s}" data-snitt="lengde" aria-pressed="${on("lengde")}">Lengdesnitt</button></div>
     <div style="margin-top:6px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Fasade</b>${["N", "Ø", "S", "V"].map(k => {
       const drawn = (site.facades || []).some(f => f.building === w.id && f.name.endsWith(SIDE[k]));
-      return `<button style="${s};min-width:44px" data-fasade="${k}" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade" && side === k}" title="Fasaden mot ${SIDE[k]}${drawn ? ", vinduer fra tegning" : ""}">${k}${drawn ? "*" : ""}</button>`; }).join("")}</div>${v.mode === "section" && v.section.wing === w.id && v.section.kind !== "fasade" ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}${drawnList(w, v, s)}`;
+      return `<button style="${s};min-width:44px" data-fasade="${k}" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade" && side === k}" title="Fasaden mot ${SIDE[k]}${drawn ? ", vinduer fra tegning" : ""}">${k}${drawn ? "*" : ""}</button>`; }).join("")}</div>${v.mode === "section" && v.section.wing === w.id && v.section.kind !== "fasade" ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}${v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade" ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Fasaden mot ${SIDE[side]}, sett rett på. ${(site.facades || []).some(f => f.building === w.id && f.name.endsWith(SIDE[side])) ? "Vinduene fra tegningen." : "Vinduene etter foto, ikke fra tegning."} (* = fasade med tegning)</p>` : ""}${drawnList(w, v, s)}`;
 }
 /* the wing's drawn sections: each cuts the model where the sheet does, with the sheet beside it */
 function drawnList(w, v, s) {
@@ -173,7 +201,7 @@ function drawnList(w, v, s) {
 function peel(b, w, name) {
   viewer.cutBuilding(b.id, name);
   for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
-  showInfo(b); hint();
+  pressMode(); showInfo(b);
 }
 /* a document as the cards name it: its title and year, the page, a link to it */
 function docLink(d) { return d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title); }
