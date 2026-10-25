@@ -1,12 +1,9 @@
-# The route B worker: IfcOpenShell only (no FreeCAD), to measure what that route needs.
-FROM mambaorg/micromamba:1.5.10
-USER root
-RUN micromamba install -y -n base -c conda-forge ifcopenshell numpy \
- && micromamba clean -a -y
-ENV PATH=/opt/conda/bin:$PATH HOME=/tmp
-RUN python -c "import ifcopenshell, ifcopenshell.api, ifcopenshell.geom, json, sys; \
+# The route B worker (U3570's site constructions): Python with IfcOpenShell's wheel and numpy, no FreeCAD. Under 1 GB.
+FROM python:3.12-slim
+RUN pip install --no-cache-dir "ifcopenshell>=0.8.4,<0.9" lark numpy \
+ && python -c "import ifcopenshell, ifcopenshell.api, ifcopenshell.geom, json, sys; \
 json.dump({'ifcopenshell': ifcopenshell.version, 'python': sys.version.split()[0]}, open('/opt/versions.json', 'w'))" \
  && cat /opt/versions.json
-ENTRYPOINT []
+ENV HOME=/tmp
 USER 1000
 WORKDIR /work

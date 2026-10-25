@@ -56,7 +56,17 @@ def glb(p):
         return {"ok": False, "bytes": len(b)}
     n = struct.unpack("<I", b[12:16])[0]
     j = json.loads(b[20:20 + n])
-    return {"ok": True, "bytes": len(b), "meshes": len(j.get("meshes", [])), "nodes": len(j.get("nodes", []))}
+    # a glb with nodes and no meshes has no geometry (pm 23:44Z: A1-fix's, from FreeCAD, was 267 nodes and 0 meshes)
+    acc, tris = j.get("accessors", []), 0
+    for m in j.get("meshes", []):
+        for p in m.get("primitives", []):
+            if p.get("mode", 4) != 4:
+                continue
+            k = p.get("indices", p.get("attributes", {}).get("POSITION"))
+            if k is not None and k < len(acc):
+                tris += acc[k].get("count", 0) // 3
+    meshes = len(j.get("meshes", []))
+    return {"ok": meshes > 0 and tris > 0, "bytes": len(b), "meshes": meshes, "triangles": tris, "nodes": len(j.get("nodes", []))}
 
 
 def run():
