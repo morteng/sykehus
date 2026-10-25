@@ -49,7 +49,7 @@ const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json
    holds them (the selection, the card over the pick) sees the change. */
 const TEARS = e => e.kind === "demolish" || e.kind === "restore";
 /* what the page changes in place: torn down (setGone), new buildings (setAdded), a wing's facts and name (relabel) */
-const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "note"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees
+const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "note", "level", "room"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees; level setLevels; room setRooms
 const modelOf = edits => applyEdits(site0, floors0, edits || []);
 const { site, floors } = modelOf(draft?.edits);
 const shown = modelOf(draft?.edits?.filter(e => !LIVE(e)));   // its own copy: the page's is refilled under it
@@ -88,7 +88,7 @@ const viewer = createViewer({
 });
 /* the after's live part over the viewer's model: what is torn down hidden, the new buildings drawn, the names as edited */
 function paint() {
-  viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []);
+  viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []); viewer.setLevels(site.wings || []); viewer.setRooms(floors);
   viewer.relabel(new Map(site.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
 }
 let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)

@@ -443,12 +443,20 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const tags = document.createElement("div"); tags.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;font:12px/1.15 -apple-system,'Helvetica Neue',Arial,sans-serif;color:#23211e";
   if (getComputedStyle(container).position === "static") container.style.position = "relative";
   container.appendChild(tags);
-  const roomTags = new Map(floors.map(f => [f.id, (f.rooms || []).map(r => {
+  const tagsOf = f => (f.rooms || []).map(r => {
     const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;padding:1px 3px;border-radius:3px;background:#fbf9f4c4;text-shadow:0 0 2px #fffbf0";
     el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²`
       : r.area_calc ? `<br><span title="Målt mellom veggene på tegningen, ikke skrevet på den">ca. ${Math.round(r.area_calc)} m²</span>` : "");
     tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), xy: r.at, area: r.area_m2 || r.area_calc || 0 };
-  }).sort((a, b) => b.area - a.area)]));
+  }).sort((a, b) => b.area - a.area);
+  const stampKey = f => JSON.stringify((f.rooms || []).map(r => [r.name, r.area_m2, r.area_calc]));
+  const roomTags = new Map(floors.map(f => { const l = tagsOf(f); l.key = stampKey(f); return [f.id, l]; }));
+  /* a room renamed or its area set (an edit of kind room): its floor's stamps made again in place */
+  function setRooms(fs) {
+    for (const f of fs || []) { const was = roomTags.get(f.id); if (!was) continue; const now = stampKey(f);
+      if (was.key === now) continue; for (const t of was) t.el.remove(); const list = tagsOf(f); list.key = now; roomTags.set(f.id, list); }
+    dirty = true;
+  }
   /* the wings' names over their roofs (site.json wings, tools/wings.py), while the whole site is shown */
   const wingTags = site.buildings.filter(b => b.own && b.name).map(b => {
     const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;font-size:14px;font-weight:600;padding:2px 7px;border-radius:6px;background:#fbf9f4e6;border:1px solid #d8d2c6";
@@ -520,6 +528,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     if (section) setMode("3d");
     const b = own.find(x => x.id === id); only = name ? id : null;
     show(name, new Set(name ? own.filter(x => x.id === id || (b?.wing && x.wing === b.wing)).map(x => x.id) : []));
+  }
+  /* a storey's kote set in a wing (an edit of kind level): its levels taken over, the storey shown cut anew there */
+  function setLevels(ws) {
+    for (const w of ws || []) { const o = wingOf.get(w.id); if (o && JSON.stringify(o.levels || []) !== JSON.stringify(w.levels || [])) o.levels = structuredClone(w.levels || []); }
+    if (storey) show(storey, shownIds); dirty = true;
   }
   /* floors.json ids, as before: the drawing's storey in every building */
   function setFloor(id) { setStorey(floors.find(f => f.id === id)?.name ?? null); }
@@ -759,7 +772,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   return {
     /* a renamed wing's name over its roof (the after's wing edits, in place) */
     relabel(names) { for (const t of wingTags) { const n = names.get(t.id); if (n && t.el.textContent !== n) { t.el.textContent = n; t.size = null; } } dirty = true; },
-    setSun, select, setGone, setAdded, setLandscape, setTrees, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    setSun, select, setGone, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
