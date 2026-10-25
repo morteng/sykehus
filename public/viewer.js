@@ -347,9 +347,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* drawn again in place when the after plants or fells (setTrees): the models grown once, the instances anew */
   const treeMeshes = [];
   let grown = null, treeGen = 0;   // EZ-Tree's three models, grown on the first draw; which setTrees is the last
+  let treeList = site.trees || [];   // the trees drawn last: the planted ones (a seventh item, their planting's id) are picked by their trunks
   function setTrees(list) {
-    treeGen++; for (const m of treeMeshes.splice(0)) { scene.remove(m); m.dispose?.(); }
-    drawTrees(list || []); dirty = true;
+    treeList = list || []; treeGen++; for (const m of treeMeshes.splice(0)) { scene.remove(m); m.dispose?.(); }
+    drawTrees(list || []); ringTrees(treePicked, treeHov); dirty = true;
   }
   function drawTrees(trees) {
     if (!trees.length) return;
@@ -748,13 +749,26 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* more than one building lit, for a selection of several (app.js «Valgt») */
   let marked = [];
   const groupOf = id => meshes.get(id) || addedGroups.get(id) || groundMeshes.find(m => m.userData.id === id);
+  /* a planting picked or under the pointer: a ring on the ground round each of its trees (they share their materials) */
+  const treeRings = new THREE.Group(); scene.add(treeRings);
+  function ringTrees(picked, hov) {
+    for (const o of treeRings.children) o.geometry.dispose(); treeRings.clear();
+    for (const [ids, color] of [[hov, "#fff6d6"], [picked, "#ffcf33"]]) for (const t of treeList) if (t[6] && ids.includes(t[6])) {
+      const g0 = ground(t[0], t[1]) + 0.3, pts = []; for (let k = 0; k <= 32; k++) { const a = k / 32 * Math.PI * 2; pts.push(P([t[0] + Math.cos(a) * t[3], t[1] + Math.sin(a) * t[3]], g0)); }
+      const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true })); l.renderOrder = 15; treeRings.add(l);
+    }
+    dirty = true;
+  }
+  let treePicked = [], treeHov = [];
   function mark(ids) {
+    treePicked = ids.filter(id => /^tre-/.test(id)); ringTrees(treePicked, treeHov);
     for (const id of marked) if (id !== selected) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
     marked = ids.filter(id => groupOf(id)); for (const id of marked) groupOf(id).traverse(o => o.material?.emissive?.set("#6b5200")); dirty = true;
   }
   /* the pick before the click (U3569, renderkit select.js): a lighter glow on what a click would take */
   let hovered = [];
   function hover(ids) {
+    const th = ids.filter(id => /^tre-/.test(id)); if (th.join() !== treeHov.join()) { treeHov = th; ringTrees(treePicked, treeHov); }
     const lit = new Set([...marked, selected].filter(Boolean));
     for (const id of hovered) if (!lit.has(id)) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
     hovered = ids.filter(id => groupOf(id) && !lit.has(id)); for (const id of hovered) groupOf(id).traverse(o => o.material?.emissive?.set("#3d3420")); dirty = true;
@@ -836,6 +850,14 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     hitAt(cx, cy) {
       const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
       const h = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes], true).find(x => x.object.isMesh);
+      /* a planted tree in front of that: the ray within most of its crown of its trunk's line (U3569) */
+      let tree = null; const near = new THREE.Vector3();
+      for (const t of treeList) if (t[6]) {
+        const g0 = ground(t[0], t[1]), d2 = ray.ray.distanceSqToSegment(P([t[0], t[1]], g0), P([t[0], t[1]], g0 + t[2]), near);
+        const along = near.distanceTo(ray.ray.origin);
+        if (d2 < (t[3] * 0.8) ** 2 && (!h || along < h.distance + 1) && (!tree || along < tree.along)) tree = { along, t, p: near.clone() };
+      }
+      if (tree) return { id: tree.t[6], at: [tree.p.x, -tree.p.z, tree.p.y + base] };
       return h ? { id: h.object.userData.id || null, at: [h.point.x, -h.point.z, h.point.y + base] } : null;
     },
     hover,

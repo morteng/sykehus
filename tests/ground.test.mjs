@@ -30,3 +30,16 @@ test("demolish by its id takes it away, and the others keep their ids", () => {
   const s2 = after([pool, lawn, path, d, { kind: "surface", ring: [[40, 0], [45, 0], [45, 5]], surface: "gravel" }]);
   assert.deepEqual(s2.landscape.map(x => x.id), ["flate-2", "sti-3", "flate-4"]);
 });
+
+test("a planting has an id: reshape sets its height and crown, demolish takes its trees away", () => {
+  const birch = { kind: "trees", species: "Betula pendula", points: [[0, 30], [8, 30], [16, 30]], height: 10, crown: 6 };
+  const s0 = after([pool, birch]);
+  assert.deepEqual(s0.plantings.map(g => [g.id, g.count]), [["tre-1", 3]]);
+  assert.equal(s0.trees.filter(t => t[6] === "tre-1").length, 3);
+  const r = check([pool, birch], { kind: "reshape", id: "tre-1", height: 14, crown: 8 });
+  const s1 = after([pool, birch, r]);
+  assert.ok(s1.trees.filter(t => t[6] === "tre-1").every(t => t[2] === 14 && t[3] === 4));
+  const s2 = after([pool, birch, check([pool, birch], { kind: "demolish", building: "tre-1" })]);
+  assert.equal(s2.trees.filter(t => t[6]).length, 0); assert.deepEqual(s2.plantings, []); assert.equal(s2.landscape[0].id, "flate-1");
+  assert.equal(after([birch, pool]).landscape[0].id, "flate-1", "a planting does not take a surface's number");
+});

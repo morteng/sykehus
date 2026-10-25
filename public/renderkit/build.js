@@ -110,10 +110,11 @@ export function snapBody(s, others, { grid = 1, step = 15, tol = 1.2, reach = 40
 /* the three.js part. The app gives:
    THREE, el (the canvas), host (for the numbers), scene, camera() (the one in use), P([e, n], kote) → Vector3 (the
    app's world), ground(e, n) → kote, others(id) → [{ id, name, ring }], lot (a ring or null), storey (m, a storey's
-   height), redraw(), onCommit(id, body, how), onBusy(on) (the picker stands aside), tip(text) (optional)
+   height), redraw(), onCommit(id, body, how) → false when refused (or a promise of it), onBusy(on) (the picker stands
+   aside), baseFor(body) → the kote its foot will stand at there (optional; else where it stands now)
    attach(item) shows the handles for item { id, from, to, width, height, base, group (its Object3D) }; move(item)
    starts a move with no button held («Flytt»): the ghost follows, a click places. */
-export function createBuild({ THREE, el, host = el.parentElement, scene, camera, P, ground, others, lot = null, storey = 3.2, redraw, onCommit, onBusy = () => {} }) {
+export function createBuild({ THREE, el, host = el.parentElement, scene, camera, P, ground, others, lot = null, storey = 3.2, redraw, onCommit, onBusy = () => {}, baseFor = null }) {
   const G = new THREE.Group(); G.renderOrder = 20; scene.add(G); G.visible = false;
   const ACC = 0x2f6fde, OK = 0x3fae5a, BAD = 0xd6453d;
   const onTop = (m) => { m.depthTest = false; m.depthWrite = false; m.transparent = true; return m; };
@@ -138,7 +139,9 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
   num.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;z-index:6;white-space:nowrap;font:600 13px/1.3 system-ui,sans-serif;padding:4px 8px;border-radius:8px;background:rgba(255,255,255,.94);box-shadow:0 1px 4px rgba(0,0,0,.2);color:#1d1b18";
   host.append(num);
 
-  let item = null, s0 = null, cur = null, target = null, op = null, ghost = null, fit = null, raf = 0, last = 0, keyRun = null;
+  /* s0: where it stands now; g0: where its shapes were drawn (the app draws them anew after a change); real: the thing
+     itself is posed (let go, or a preview), back: it is easing back to where its shapes are */
+  let item = null, s0 = null, g0 = null, cur = null, target = null, op = null, ghost = null, fit = null, raf = 0, last = 0, keyRun = null, real = false, back = false;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const aim = e => { const r = el.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera()); return ray; };
   /* where on the ground at the body's foot the pointer points */
@@ -151,7 +154,9 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
   const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
 
   function attach(it) {
-    item = it; s0 = { ...bodyOf(it), base: it.base }; cur = { ...s0, lift: 0 }; target = { ...cur };
+    if (item && it.id === item.id && it.group === item.group) return;   // the same shapes: where it stands (posed, maybe) is this file's
+    if (item && real && item.group !== it.group) { item.group.matrix.identity(); item.group.matrixAutoUpdate = true; }   // the old shapes, if the app keeps them
+    item = it; s0 = { ...bodyOf(it), base: it.base }; g0 = { ...s0, c: s0.c.slice() }; cur = { ...s0, lift: 0 }; target = { ...cur }; real = false; back = false;
     G.visible = true; place(cur); redraw();
   }
   function detach() { if (op) cancel(); item = null; G.visible = false; num.hidden = true; clearGuides(); redraw(); }
@@ -176,14 +181,18 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
     ghost.traverse(o => { if (o.isMesh) { o.material = ghostOk; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 19; } else if (o.isLine || o.isLineSegments) o.visible = false; });
     ghost.matrixAutoUpdate = false; scene.add(ghost); item.group.visible = false;
   }
-  function poseGhost(s) {
-    const T = new THREE.Matrix4(), y0 = P([0, 0], item.base).y, c0 = P(s0.c, item.base), c1 = P(s.c, item.base + (s.lift || 0));
-    T.makeTranslation(-c0.x, -y0, -c0.z)
-      .premultiply(new THREE.Matrix4().makeRotationY(-rad(s0.a)))
-      .premultiply(new THREE.Matrix4().makeScale(s.L / s0.L, s0.H ? s.H / s0.H : 1, s.W / s0.W))
+  /* from where its shapes were drawn (g0) to s: moved, turned and stretched */
+  function matrixFor(s) {
+    const T = new THREE.Matrix4(), y0 = P([0, 0], item.base).y, c0 = P(g0.c, item.base), c1 = P(s.c, (s.base ?? item.base) + (s.lift || 0));
+    return T.makeTranslation(-c0.x, -y0, -c0.z)
+      .premultiply(new THREE.Matrix4().makeRotationY(-rad(g0.a)))
+      .premultiply(new THREE.Matrix4().makeScale(s.L / g0.L, g0.H ? s.H / g0.H : 1, s.W / g0.W))
       .premultiply(new THREE.Matrix4().makeRotationY(rad(s.a)))
       .premultiply(new THREE.Matrix4().makeTranslation(c1.x, c1.y, c1.z));
-    ghost.matrix.copy(T); ghost.matrixWorldNeedsUpdate = true;
+  }
+  function poseOn(o, s) { o.matrixAutoUpdate = false; o.matrix.copy(matrixFor(s)); o.matrixWorldNeedsUpdate = true; }
+  function poseGhost(s) {
+    poseOn(ghost, s);
     const g = P(s.c, ground(...s.c) + 0.05); shadow.position.copy(g); shadow.rotation.y = rad(s.a); shadow.scale.set(s.L * 1.25, 1, s.W * 1.25); shadow.visible = true;
     shadow.material.opacity = 0.35 + 0.4 * Math.min(1, (s.lift || 0) / 0.8);
   }
@@ -197,11 +206,11 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
   function tick(t) {
     raf = 0; const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
     const f = 1 - Math.exp(-dt * 20), da = wrap(target.a - cur.a);
-    cur = { ...cur, c: [cur.c[0] + (target.c[0] - cur.c[0]) * f, cur.c[1] + (target.c[1] - cur.c[1]) * f], a: cur.a + da * f, L: cur.L + (target.L - cur.L) * f, W: cur.W + (target.W - cur.W) * f, H: cur.H + (target.H - cur.H) * f, lift: cur.lift + ((op ? 0.6 : 0) - cur.lift) * f };
-    if (ghost) poseGhost(cur);
+    cur = { ...cur, c: [cur.c[0] + (target.c[0] - cur.c[0]) * f, cur.c[1] + (target.c[1] - cur.c[1]) * f], a: cur.a + da * f, L: cur.L + (target.L - cur.L) * f, W: cur.W + (target.W - cur.W) * f, H: cur.H + (target.H - cur.H) * f, base: cur.base + (target.base - cur.base) * f, lift: cur.lift + ((op ? 0.6 : 0) - cur.lift) * f };
+    if (ghost) poseGhost(cur); else if (real && item) poseOn(item.group, cur);   // real: the thing itself, where it was let go, till the app draws it anew
     place(cur); label(); redraw();
-    const still = Math.hypot(target.c[0] - cur.c[0], target.c[1] - cur.c[1]) < 0.005 && Math.abs(da) < 0.05 && Math.abs(target.L - cur.L) + Math.abs(target.W - cur.W) + Math.abs(target.H - cur.H) < 0.005 && Math.abs((op ? 0.6 : 0) - cur.lift) < 0.005;
-    if (!still) raf = requestAnimationFrame(tick); else last = 0;
+    const still = Math.hypot(target.c[0] - cur.c[0], target.c[1] - cur.c[1]) < 0.005 && Math.abs(da) < 0.05 && Math.abs(target.L - cur.L) + Math.abs(target.W - cur.W) + Math.abs(target.H - cur.H) < 0.005 && Math.abs((op ? 0.6 : 0) - cur.lift) < 0.005 && Math.abs((target.base ?? 0) - (cur.base ?? 0)) < 0.005;
+    if (!still) raf = requestAnimationFrame(tick); else { last = 0; if (real && item && back) { item.group.matrix.identity(); item.group.matrixWorldNeedsUpdate = true; real = false; back = false; redraw(); } }
   }
   const go = () => { if (!raf) raf = requestAnimationFrame(tick); };
 
@@ -239,6 +248,7 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
     const o = rest(item.id);
     let g = [];
     if (snap) { const r = snapBody(s, o, snap); s = { ...s, ...r.s }; g = r.guides; }
+    s.base = baseFor ? baseFor(toBody(s)) : item.base;
     target = s; fit = fitBody(target, o, lot); drawGuides(g);
     if (ghost) ghost.traverse(m => { if (m.isMesh) m.material = fit.fits ? ghostOk : ghostBad; });
     go();
@@ -255,13 +265,25 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
     const o = op; op = null; onBusy(false); clearGuides(); num.hidden = true;
     const changed = Math.hypot(target.c[0] - o.from.c[0], target.c[1] - o.from.c[1]) > 0.01 || Math.abs(wrap(target.a - o.from.a)) > 0.05 || Math.abs(target.L - o.from.L) + Math.abs(target.W - o.from.W) + Math.abs(target.H - o.from.H) > 0.01;
     if (!changed || !fit?.fits) { if (changed && fit && !fit.fits) tipOut(`${fit.why}: satt tilbake`); restore(o.from); return; }
-    finish(o.kind);
+    finish(o.kind, o.from);
   }
-  function finish(how) {
-    const body = toBody(target); s0 = { ...target, c: target.c.slice() };
-    if (ghost) { scene.remove(ghost); ghost = null; } shadow.visible = false; item.group.visible = true;
-    onCommit(item.id, body, how);
+  /* let go: the thing itself takes the ghost's place, size and angle in this frame and stays there (pm 23:58Z, Morten
+     «it snapped to previous position then to the new one»); the app's answer either draws it anew there, or refuses
+     and it eases back with why */
+  function finish(how, from) {
+    const body = toBody(target), was = from; s0 = { ...target, c: target.c.slice() };
+    if (ghost) { scene.remove(ghost); ghost = null; } shadow.visible = false;
+    real = true; back = false; poseOn(item.group, cur); item.group.visible = true; go();
+    const id = item.id;
+    Promise.resolve(onCommit(id, body, how)).then(ok => { if (ok === false && item?.id === id) unpreview(was); }, () => { if (item?.id === id) unpreview(was); });
   }
+  /* the Endre fields: the thing goes to body at once, eased; unpreview puts it back when the change is refused */
+  function preview(body) {
+    if (!item || op) return; const s = bodyOf(body), from = { ...target, c: target.c.slice() };
+    target = { ...target, ...s, H: body.height ?? target.H }; target.base = baseFor ? baseFor(toBody(target)) : item.base; s0 = { ...target, c: target.c.slice() }; real = true; back = false; go();
+    return () => unpreview(from);
+  }
+  function unpreview(from) { target = { ...from, c: from.c.slice() }; s0 = { ...target, c: target.c.slice() }; real = true; back = true; go(); }
   function restore(from) { target = { ...from, c: from.c.slice() }; cur = { ...target, lift: 0 }; if (ghost) { scene.remove(ghost); ghost = null; } shadow.visible = false; item.group.visible = true; place(cur); redraw(); }
   function cancel() { if (!op) return; const o = op; op = null; onBusy(false); clearGuides(); num.hidden = true; restore(o.from); }
   let tipEl = null;
@@ -330,7 +352,7 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
   el.addEventListener("pointerdown", down, true); addEventListener("pointermove", move); addEventListener("pointerup", up, true);
   addEventListener("keydown", key, true); el.addEventListener("wheel", wheel, { capture: true, passive: false }); el.addEventListener("contextmenu", menu, true);
   return {
-    attach, detach, move: moveFree, cancel, get busy() { return !!op; }, get item() { return item; },
+    attach, detach, move: moveFree, cancel, preview, get busy() { return !!op; }, get item() { return item; },
     frame() { if (item) place(cur); },
     destroy() { detach(); scene.remove(G, shadow, guides); num.remove(); el.removeEventListener("pointerdown", down, true); removeEventListener("pointermove", move); removeEventListener("pointerup", up, true); removeEventListener("keydown", key, true); el.removeEventListener("wheel", wheel, true); el.removeEventListener("contextmenu", menu, true); },
   };

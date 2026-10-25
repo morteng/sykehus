@@ -14,7 +14,7 @@ const segDist = ([x, y], [ax, ay], [bx, by]) => { const dx = bx - ax, dy = by - 
 
 /* a surface's or a path's name: its own, else what it is */
 export const SURFACE_NO = { grass: "Plen", meadow: "Eng", planting: "Beplantning", gravel: "Grus", paving: "Belegningsstein", asphalt: "Asfalt", water: "Vann", wood: "Tre" };
-export const groundName = g => g.name || (g.kind === "path" ? `Sti (${(SURFACE_NO[g.surface] || g.surface).toLowerCase()})` : g.surface === "water" ? "Vann" : SURFACE_NO[g.surface] || "Flate");
+export const groundName = g => g.kind === "trees" ? `${g.name || g.species}${g.count > 1 ? ` × ${g.count}` : ""}` : g.name || (g.kind === "path" ? `Sti (${(SURFACE_NO[g.surface] || g.surface).toLowerCase()})` : g.surface === "water" ? "Vann" : SURFACE_NO[g.surface] || "Flate");
 
 export function createSelection({ site, floors, viewer, onChange = () => {} }) {
   let items = [];
@@ -33,7 +33,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
       out.push({ kind: "storey", id: v.storey, label: v.storey });
       if (hit) { out.push({ kind: "room", id: hit.r.code || hit.r.name, storey: v.storey, label: hit.r.code && hit.r.code !== hit.r.name ? `${hit.r.name} (${hit.r.code})` : hit.r.name }); return out; }
     }
-    const g = !b && (site.landscape || []).find(x => x.id === buildingId);   // a pool, a lawn, a path (U3569)
+    const g = !b && ((site.landscape || []).find(x => x.id === buildingId) || (site.plantings || []).find(x => x.id === buildingId));   // a pool, a lawn, a path, a planting (U3569)
     if (g) { out.push({ kind: "ground", id: g.id, label: groundName(g) }); return out; }
     const n = !b && (site.added || []).find(x => x.id === buildingId && x.kind === "volume");
     if (n) { out.push({ kind: "new", id: n.id, label: n.name }); return out; }
@@ -46,7 +46,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
     }
     return out;
   }
-  function changed() { viewer.mark(items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new").flatMap(i => i.kind === "wing" ? site.buildings.filter(b => b.wing === i.id).map(b => b.id) : [i.id])); onChange(items); }
+  function changed() { viewer.mark(items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground").flatMap(i => i.kind === "wing" ? site.buildings.filter(b => b.wing === i.id).map(b => b.id) : [i.id])); onChange(items); }
   return {
     get items() { return items; },
     pick(buildingId, { shift, at, x, y } = {}) {

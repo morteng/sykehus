@@ -15,7 +15,9 @@
 
    What they make (applyLandscape): site.landscape [{ id, kind, name, surface, ring, area_m2 | length_m, plants }],
    the new trees added to site.trees ([east, north, height, crown radius, form], as tools/trees.py writes them, with a
-   sixth item, the species id or name), site.planted [{ species, name, count }] and site.felled (how many). */
+   sixth item, the species id or name, and a seventh, its planting's id), site.plantings [{ id: tre-1, species, name,
+   latin, count, height, crown }] (each trees change, picked and changed or taken away by its id, U3569),
+   site.planted [{ species, name, count }] and site.felled (how many). */
 import { PLANTS } from "./plants.js";
 
 export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"];
@@ -89,15 +91,18 @@ export function checkLandscape(site, e, str) {
 
 /* a surface or a path by its id (flate-1, sti-2): changed (reshape) or taken away (demolish), U3569 (Morten 22:41Z «i
    can only select and manipulate buildings, not objects like the "pool"») */
-export const GROUND_ID = /^(flate|sti)-\d+$/;
+export const GROUND_ID = /^(flate|sti|tre)-\d+$/;   // tre: a planting, the trees one change planted
 export function checkGroundEdit(site, e, str) {
-  const id = String(e.kind === "demolish" ? e.building ?? "" : e.id ?? "").trim(), g = (site.landscape || []).find(x => x.id === id);
-  if (!g) { const ls = (site.landscape || []).map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; forslaget har ingen flater eller stier ennå"}`); }
+  const id = String(e.kind === "demolish" ? e.building ?? "" : e.id ?? "").trim(), g = (site.landscape || []).find(x => x.id === id) || (site.plantings || []).find(x => x.id === id);
+  if (!g) { const ls = [...(site.landscape || []), ...(site.plantings || [])].map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; forslaget har ingen flater, stier eller trær ennå"}`); }
   const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
   if (e.kind === "demolish") return { kind: "demolish", building: id, ...w_ };
   const out = { kind: "reshape", id };
   if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
-  if (g.kind === "surface") {
+  if (g.kind === "trees") {
+    if (e.height != null) out.height = num(e.height, 0.3, 40, "Høyden");
+    if (e.crown != null) out.crown = num(e.crown, 0.3, 30, "Kronebredden (crown)");
+  } else if (g.kind === "surface") {
     if (e.surface != null) { if (!SURFACES.includes(String(e.surface))) throw new Error(`surface er ${SURFACES.join(", ")}`); out.surface = String(e.surface); }
     if (e.ring != null) { out.ring = pts(e.ring, "ring", 3); const a = ringArea(out.ring); if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²"); }
     if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
@@ -133,9 +138,17 @@ export function pathRing(line, width) {
 }
 
 export function applyLandscape(site, edits) {
-  let land = [], n = 0, felled = 0, trees = (site.trees || []).slice(); const planted = new Map();   // n: the ids given, so one taken away leaves the others' ids as they were
+  /* n, nt: the ids given, so one taken away leaves the others' ids as they were; a planting's id has its own count, so
+     the surfaces and paths keep the ids they had before plantings had any */
+  let land = [], plantings = [], n = 0, nt = 0, felled = 0, trees = (site.trees || []).slice();
   for (const e of edits) {
-    if (e.kind === "demolish" && GROUND_ID.test(e.building)) land = land.filter(g => g.id !== e.building);
+    if (e.kind === "demolish" && /^tre-/.test(e.building)) { trees = trees.filter(t => t[6] !== e.building); plantings = plantings.filter(g => g.id !== e.building); }
+    else if (e.kind === "demolish" && GROUND_ID.test(e.building)) land = land.filter(g => g.id !== e.building);
+    else if (e.kind === "reshape" && /^tre-/.test(e.id)) {
+      const g = plantings.find(x => x.id === e.id); if (!g) continue;
+      if (e.height != null) g.height = e.height; if (e.crown != null) g.crown = e.crown; if (e.why != null) g.why = e.why;
+      for (const t of trees) if (t[6] === e.id) { t[2] = g.height; t[3] = g.crown / 2; }
+    }
     else if (e.kind === "reshape" && GROUND_ID.test(e.id)) {
       const g = land.find(x => x.id === e.id); if (!g) continue;
       for (const k of ["name", "surface", "plants", "why"]) if (e[k] != null) g[k] = e[k];
@@ -148,10 +161,12 @@ export function applyLandscape(site, edits) {
     else if (e.kind === "trees") {
       const p = plantOf(e.species), cat = p.cat === "conifer" ? "conifer" : /shrub|hedge|rose/.test(p.cat) ? "shrub" : "tree";
       const h = e.height ?? p.ht ?? DEFAULT[cat].ht, r = (e.crown ?? p.sp ?? DEFAULT[cat].sp) / 2, form = p.cat === "conifer" || /cone|pine|column/.test(p.form || "") ? "cone" : "round";
-      const at = treePoints(e); for (const [x, y] of at) trees.push([x, y, h, r, form, e.species]);
-      const k = e.species, q = planted.get(k) || { species: k, name: p.no, latin: p.la || null, count: 0 }; q.count += at.length; planted.set(k, q);
+      const id = `tre-${++nt}`, at = treePoints(e); for (const [x, y] of at) trees.push([x, y, h, r, form, e.species, id]);
+      plantings.push({ id, kind: "trees", species: e.species, name: p.no, latin: p.la || null, count: at.length, height: h, crown: Math.round(r * 200) / 100, why: e.why });
     }
   }
-  if (!land.length && !n && !planted.size && !felled) return;
-  site.trees = trees; site.landscape = land; site.planted = [...planted.values()]; site.felled = felled;
+  if (!land.length && !n && !nt && !felled) return;
+  const planted = new Map();
+  for (const g of plantings) { const q = planted.get(g.species) || { species: g.species, name: g.name, latin: g.latin, count: 0 }; q.count += g.count; planted.set(g.species, q); }
+  site.trees = trees; site.landscape = land; site.plantings = plantings; site.planted = [...planted.values()]; site.felled = felled;
 }

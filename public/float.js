@@ -10,7 +10,7 @@
    - the panel open: the acts sit in «Bygget»'s card (#selActs, app.js card()), and nothing floats;
    - the panel folded: a small card beside the pick, never over it, that folds to a chip (its «–», or Esc) with the
      pick kept; the chip opens it again. Below 900 px it sits in the bottom stack, over the sheet (Fab's .bstack). */
-import { SURFACE_NO, groundName } from "./valg.js?v=20261025e";
+import { SURFACE_NO, groundName } from "./valg.js?v=20261025f";
 import { groundAt } from "./renderkit/fit.js";
 const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"], PATHS = ["gravel", "paving", "asphalt", "wood"];   // landscape.js's
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -41,8 +41,17 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
   };
   const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   /* a surface or a path (U3569): what it is laid with, how big */
-  const groundFacts = g => [g.name ? SURFACE_NO[g.surface] : null, g.kind === "path" ? `${m1(g.length_m)} × ${m1(g.width)} m` : `${num(g.area_m2)} m²`, g.plants?.length ? `${g.plants.length} arter` : null].filter(Boolean);
+  const groundFacts = g => g.kind === "trees" ? [`${g.count} ${g.count === 1 ? "tre" : "trær"}`, `${m1(g.height)} m høye`, `${m1(g.crown)} m krone`] : [g.name ? SURFACE_NO[g.surface] : null, g.kind === "path" ? `${m1(g.length_m)} × ${m1(g.width)} m` : `${num(g.area_m2)} m²`, g.plants?.length ? `${g.plants.length} arter` : null].filter(Boolean);
   function groundForm(host, i, g) {
+    if (g.kind === "trees") {   // a planting: how tall, how wide the crown
+      host.innerHTML = `<form class="fl-form" autocomplete="off"><div class="fl-h"><b>Endre ${esc(groundName(g))}</b></div>
+        <div class="fl-two"><label>Høyde, m<input name="height" value="${m1(g.height)}" inputmode="decimal"></label><label>Krone, m<input name="crown" value="${m1(g.crown)}" inputmode="decimal"></label></div>
+        <div class="fl-acts"><button type="submit" class="riv">Ferdig</button><button type="button" data-x>Avbryt</button></div></form>`;
+      const fm = host.querySelector("form");
+      fm.onsubmit = e => { e.preventDefault(); const v = Object.fromEntries(new FormData(fm)); for (const k of ["height", "crown"]) if (v[k]) v[k] = v[k].replace(",", "."); editing = null; render(); onSave(i, v); };
+      host.querySelector("[data-x]").onclick = () => { editing = null; render(); };
+      fm.querySelector("input").focus(); return;
+    }
     const opts = (g.kind === "path" ? PATHS : SURFACES).map(k => `<option value="${k}"${k === g.surface ? " selected" : ""}>${esc(SURFACE_NO[k] || k)}</option>`).join("");
     host.innerHTML = `<form class="fl-form" autocomplete="off"><div class="fl-h"><b>Endre ${esc(groundName(g))}</b></div>
       <label>Navn<input name="name" value="${esc(g.name ?? "")}" maxlength="80" placeholder="${esc(groundName({ ...g, name: null }))}"></label>
@@ -119,14 +128,15 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     const slot = document.getElementById("selActs");
     const picked = valg.items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground");
     const v = viewer.view();
-    const groups = picked.map(i => i.kind === "ground" ? { i, gr: (site.landscape || []).find(x => x.id === i.id), bs: [] } : i.kind === "new" ? { i, a: (site.added || []).find(x => x.id === i.id), bs: [] }
+    const groups = picked.map(i => i.kind === "ground" ? { i, gr: (site.landscape || []).find(x => x.id === i.id) || (site.plantings || []).find(x => x.id === i.id), bs: [] } : i.kind === "new" ? { i, a: (site.added || []).find(x => x.id === i.id), bs: [] }
       : i.kind === "wing" ? { i, w: wings.find(x => x.id === i.id), bs: site.buildings.filter(b => b.wing === i.id) } : { i, w: null, bs: site.buildings.filter(b => b.id === i.id) }).filter(g => g.bs.length || g.a || g.gr);
     if (!groups.length || v.mode === "section" || v.storey && !v.only) { el.hidden = true; box = null; editing = null; if (slot) slot.innerHTML = ""; return; }
     const key = groups.length === 1 ? valg.key(groups[0].i) : null;
     if (editing && editing !== key) editing = null;
     if (inPane()) { el.hidden = true; box = null; if (slot) fill(slot, groups, false); return; }
     if (slot) slot.innerHTML = "";
-    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr).flatMap(g => g.gr.ring.map(p => [p[0], p[1], groundAt(site, p)]))];
+    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr?.ring).flatMap(g => g.gr.ring.map(p => [p[0], p[1], groundAt(site, p)])),
+      ...groups.filter(g => g.gr?.kind === "trees").flatMap(g => (site.trees || []).filter(t => t[6] === g.gr.id).flatMap(t => [[t[0] - t[3], t[1], groundAt(site, t)], [t[0] + t[3], t[1], groundAt(site, t) + t[2]]]))];
     el.classList.toggle("folded", folded && !editing);
     if (folded && !editing) chip(groups); else fill(el, groups, true);
     el.hidden = false; size = null; dock(); place();

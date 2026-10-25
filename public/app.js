@@ -5,9 +5,10 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
-import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025e";
+import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025f";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
+import { baseOf } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
@@ -225,10 +226,11 @@ addEventListener("keydown", e => {
 });
 /* the first visit: how to move about, once; gone at the first touch or after a while */
 const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
-let seen = false; try { seen = !!localStorage.getItem("sykehus-tips"); localStorage.setItem("sykehus-tips", "1"); } catch {}
+/* -2: shown once more when Shift and a drag stopped panning (U3569) */
+let seen = false; try { seen = !!localStorage.getItem("sykehus-tips-2"); localStorage.setItem("sykehus-tips-2", "1"); } catch {}
 if (!seen) {
   const tip = Object.assign(document.createElement("div"), { id: "tip", textContent: TAP === "trykk"
-    ? "Dra for å snu · to fingre for å flytte og zoome · trykk på et bygg" : "Dra for å snu · høyre knapp eller to fingre for å flytte · + − for å zoome · klikk et bygg" });
+    ? "Dra for å snu · to fingre for å flytte og zoome · trykk på et bygg" : "Dra for å snu · høyre knapp eller to fingre for å flytte · + − for å zoome · klikk et bygg · Shift og dra velger flere" });
   $("stage").append(tip);
   const gone = () => { tip.classList.add("gone"); setTimeout(() => tip.remove(), 700); removeEventListener("pointerdown", gone); };
   addEventListener("pointerdown", gone); setTimeout(gone, 9000);
@@ -369,7 +371,7 @@ function nameOf(id) {
   if (id === "alle") return "Alle sykehusbyggene";
   const low = String(id).toLowerCase(), w = (site0.wings || []).find(x => x.id === id || x.name.toLowerCase() === low); if (w) return w.name;   // Anton names wings too
   const a = draft?.edits?.findLast(x => x.id === id && (x.kind === "volume" || x.kind === "reshape") && x.name); if (a) return a.name;
-  if (/^(flate|sti)-\d+$/.test(id)) { const g = (site.landscape || []).find(x => x.id === id); return g ? groundName(g) : id.startsWith("sti") ? "En sti" : "En flate"; }   // a surface or a path (U3569)
+  if (/^(flate|sti|tre)-\d+$/.test(id)) { const g = [...(site.landscape || []), ...(site.plantings || [])].find(x => x.id === id); return g ? groundName(g) : id.startsWith("sti") ? "En sti" : id.startsWith("tre") ? "Trær" : "En flate"; }   // a surface or a path (U3569)
   const b = site0.buildings.find(x => x.id === id); if (!b) return String(id);
   if (b.wing) return (site0.wings || []).find(x => x.id === b.wing)?.name || "Bygning på tomta";
   return b.own ? "Bygning på tomta" : `Nabobygg${KIND[b.type] ? ` (${KIND[b.type]})` : ""}`;
@@ -459,7 +461,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   if (e.kind === "restore") return `Beholdes: ${nameOf(e.building)}${why}`;
   if (e.kind === "balconies") return `Balkonger på ${w} mot ${{ N: "nord", Ø: "øst", S: "sør", V: "vest" }[e.side]}, ${String(e.depth).replace(".", ",")} m dype${e.bay ? `, ${String(e.bay).replace(".", ",")} m brede` : ""}${why}`;
   if (e.kind === "reshape") {
-    const was = /^(flate|sti)-\d+$/.test(e.id) ? nameOf(e.id) : draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
+    const was = /^(flate|sti|tre)-\d+$/.test(e.id) ? nameOf(e.id) : draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
     if (e.surface) what.push((SURFACE_NO[e.surface] || e.surface).toLowerCase()); if (e.ring || e.line) what.push("ny form");
     if (e.name) what.push(`navn «${e.name}»`); if (e.use) what.push(`bruk ${e.use}`); if (e.storeys) what.push(`${e.storeys} etasjer`); if (e.built) what.push(`bygget ${e.built}`); if (e.note) what.push("merknad");
     if (e.from) what.push("flyttet eller nye mål"); if (e.width) what.push(`${String(e.width).replace(".", ",")} m bredt`); if (e.height) what.push(`${String(e.height).replace(".", ",")} m høyt`);
@@ -495,7 +497,7 @@ async function show(j) {
   draft = d; const m = modelOf(draft.edits);
   const goneNow = new Set((m.site.demolished || []).map(x => x.id));
   const newNow = new Set((m.site.added || []).map(a => a.id));
-  const groundNow = new Set((m.site.landscape || []).map(g => g.id));
+  const groundNow = new Set([...(m.site.landscape || []), ...(m.site.plantings || [])].map(g => g.id));
   if (valg.items.some(i => i.kind === "ground" ? !groundNow.has(i.id) : i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : i.kind === "new" ? !newNow.has(i.id) : goneNow.has(i.id))) { valg.clear(); shut(); }
   refill(site, m.site); refill(floors, m.floors);
   refill(drawnSections, drawnSections0.filter(x => !x.wing || wings.some(w => w.id === x.wing)));
@@ -505,7 +507,7 @@ async function show(j) {
   dimStrip(); drawDraft(); drawViews(); ifcLink(); dispatchEvent(new CustomEvent("sykehus:versjoner"));
   dispatchEvent(new CustomEvent("sykehus:valg", { detail: valg.items }));   // the card over the pick shows the new facts
   const open = cardOf && (cardOf.kind === "new" ? (site.added || []).find(a => a.id === cardOf.id) : null); if (open) showNew(open);
-  const openG = cardOf?.kind === "ground" && (site.landscape || []).find(g => g.id === cardOf.id); if (openG) showGround(openG);
+  const openG = cardOf?.kind === "ground" && [...(site.landscape || []), ...(site.plantings || [])].find(g => g.id === cardOf.id); if (openG) showGround(openG);
   const u = new URL(location.href); for (const k of ["utkast", "versjon", "nokkel", "for"]) u.searchParams.delete(k);
   if (versionId) u.searchParams.set("versjon", versionId); else u.searchParams.set("utkast", draftId);
   history.replaceState(null, "", u.href);
@@ -546,8 +548,8 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
   toast("Nytt bygg satt opp. Trykk «Endre» for navn, etasjer og mål.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }, "ny");
 async function reshape(id, set, what = "Endret") {
-  const r = await edit([{ kind: "reshape", id, ...set, why: "endret på siden" }], "Fikk ikke endret"); if (!r) return;
-  toast(`${what}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
+  const r = await edit([{ kind: "reshape", id, ...set, why: "endret på siden" }], "Fikk ikke endret"); if (!r) return false;
+  toast(`${what}.`, { label: "Angre", run: () => undoLast(r.n, r.k) }); return true;
 }
 function moveNew(a) {
   aim(([x, y]) => { aim(null); $("toast")?.remove(); const cx = (a.from[0] + a.to[0]) / 2, cy = (a.from[1] + a.to[1]) / 2, d = [x - cx, y - cy];
@@ -560,8 +562,12 @@ function turnNew(a) {
 /* the card's «Endre»: the fields that changed, as one change each (a wing's facts) or one reshape (a new building) */
 async function saveFacts(item, v) {
   if (item.kind === "ground") {   // a surface or a path: its name, what it is laid with, a path's width
-    const g = (site.landscape || []).find(x => x.id === item.id); if (!g) return;
+    const g = (site.landscape || []).find(x => x.id === item.id) || (site.plantings || []).find(x => x.id === item.id); if (!g) return;
     const set = {};
+    if (g.kind === "trees") {
+      for (const k of ["height", "crown"]) if (v[k] && Number.isFinite(+v[k]) && Math.abs(+v[k] - g[k]) > 0.05) set[k] = +v[k];
+      return Object.keys(set).length ? reshape(item.id, set, `${groundName(g)} er endret`) : undefined;
+    }
     if (v.name != null && v.name.trim() !== (g.name ?? "")) set.name = v.name.trim();
     if (v.surface && v.surface !== g.surface) set.surface = v.surface;
     if (g.kind === "path" && v.width && Math.abs(+v.width - g.width) > 0.05) set.width = +v.width;
@@ -581,7 +587,9 @@ async function saveFacts(item, v) {
     if (v.width && Math.abs(+v.width - a.width) > 0.05) set.width = +v.width;
     if (!Object.keys(set).length) return;
     for (const k of ["from", "to"]) if (set[k]) set[k] = set[k].map(q => Math.round(q * 100) / 100);
-    return reshape(item.id, set, `${set.name || a.name} er endret`);
+    /* the building goes there at once (pm 23:58Z: never back to where it was before it moves); back if refused */
+    const undoPreview = build.item?.id === item.id && (set.from || set.width || set.storeys) ? build.preview({ from: set.from || a.from, to: set.to || a.to, width: set.width ?? a.width, height: set.storeys ? set.storeys * 3.2 : a.top_kote - a.base_kote }) : null;
+    const ok = await reshape(item.id, set, `${set.name || a.name} er endret`); if (!ok) undoPreview?.(); return ok;
   }
   const w = wings.find(x => x.id === item.id), ed = [];
   for (const k of ["name", "use", "built", "storeys", "note"]) if (v[k] != null && v[k].trim() && v[k].trim() !== String(w[k] ?? "")) ed.push({ kind: "wing", wing: w.id, field: k, value: v[k].trim(), why: "endret på siden" });
@@ -593,6 +601,12 @@ async function saveFacts(item, v) {
 const PLANT_NO = new Map(PLANTS.map(p => [p.id, p.no]));
 function showGround(g) {
   const plant = id => PLANT_NO.get(id) || id;
+  if (g.kind === "trees") {   // a planting
+    card(esc(groundName(g)), "Trær i forslaget", rows([["Art", `${esc(g.name || g.species)}${g.latin && g.latin !== g.name ? ` (<i>${esc(g.latin)}</i>)` : ""}`], ["Antall", String(g.count)],
+      ["Høyde", `${String(g.height).replace(".", ",")} m`], ["Krone", `${String(g.crown).replace(".", ",")} m bred`]]) +
+      (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Plantet i forslaget; størrelsen fra hagekart der arten er kjent.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
+    return;
+  }
   card(esc(groundName(g)), g.kind === "path" ? "Sti i forslaget" : g.surface === "water" ? "Vann i forslaget" : "Flate i forslaget", rows([
     [g.kind === "path" ? "Dekke" : "Materiale", esc(SURFACE_NO[g.surface] || g.surface)],
     ...(g.kind === "path" ? [["Lengde", `${String(g.length_m).replace(".", ",")} m`], ["Bredde", `${String(g.width).replace(".", ",")} m`]] : []),
@@ -645,7 +659,7 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261025g").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+import("./float.js?v=20261025h").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: a => { syncBuild(); build.move(); }, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
@@ -701,7 +715,7 @@ function cardFor(keys) {
   const hitKeys = lastHit ? valg.keysAt(lastHit) : [], i = valg.items.find(x => hitKeys.includes(valg.key(x))) || valg.items.at(-1);
   if (!i) return;
   const id = i.kind === "wing" ? site.buildings.find(b => b.wing === i.id)?.id : i.kind === "facade" ? lastHit?.id : i.id;
-  const a = (site.added || []).find(x => x.id === id), g = (site.landscape || []).find(x => x.id === id), b = site.buildings.find(x => x.id === id);
+  const a = (site.added || []).find(x => x.id === id), g = (site.landscape || []).find(x => x.id === id) || (site.plantings || []).find(x => x.id === id), b = site.buildings.find(x => x.id === id);
   if (a) showNew(a); else if (g) showGround(g); else if (b) showInfo(b);
 }
 const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
@@ -719,12 +733,14 @@ const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K
     return [...site.buildings.filter(b => !gone.has(b.id) && b.ring?.length > 2).map(b => ({ id: b.id, name: buildingName(b), ring: b.ring })),
       ...(site.added || []).filter(a => a.kind === "volume" && a.id !== id && !gone.has(a.id)).map(a => ({ id: a.id, name: a.name, ring: cornersOf(bodyOf(a)) }))]; },
   onBusy: on => picker.pause(on),
+  /* where its foot will stand there: design.js's rule, with the base_kote its own edit gave, if any */
+  baseFor: body => { const a = (site.added || []).find(x => x.id === build.item?.id); if (!a) return build.item?.base ?? 0; const e0 = draft?.edits?.find(x => x.kind === "volume" && x.id === a.id); return baseOf(site, { ...a, ...body, base_kote: e0?.base_kote }); },
   onCommit: (id, body, how) => {
     const a = (site.added || []).find(x => x.id === id); if (!a) return;
     const set = { from: body.from, to: body.to };
     if (Math.abs(body.width - a.width) > 0.01) set.width = body.width;
     if (how === "top") { if (a.storeys) set.storeys = Math.max(1, Math.round(body.height / 3.2)); else set.height = body.height; }
-    reshape(id, set, `${a.name} er ${{ move: "flyttet", ring: "snudd", end: "gjort lengre eller kortere", side: "gjort bredere eller smalere", top: "gjort høyere eller lavere" }[how] || "endret"}`);
+    return reshape(id, set, `${a.name} er ${{ move: "flyttet", ring: "snudd", end: "gjort lengre eller kortere", side: "gjort bredere eller smalere", top: "gjort høyere eller lavere" }[how] || "endret"}`);
   } });
 function syncBuild() {
   if (build.busy) return;
@@ -735,3 +751,5 @@ function syncBuild() {
 }
 addEventListener("sykehus:valg", syncBuild); addEventListener("sykehus:painted", syncBuild);
 viewer.follow(() => build.frame());
+/* ?debug: the parts, for a test that watches the model frame by frame */
+if (new URLSearchParams(location.search).has("debug")) window.sykehusDebug = { viewer, build, picker, valg, K, site };

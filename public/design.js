@@ -175,10 +175,16 @@ function balconyParts(site, e) {
 }
 
 /* a volume's one part: its cross-section over the middle line */
+/* a new building's foot: on the roof it stands on, at its base_kote, else the lowest ground under its corners and middle
+   (the page's build tools stand the ghost there too, U3569) */
+export function baseOf(site, e) {
+  const { from, to, width: W } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
+  const corners = [-h, h].flatMap(s => [from, to].map(p => [p[0] + n[0] * s, p[1] + n[1] * s]));
+  return (e.on ? roofUnder(site, e) : null) ?? e.base_kote ?? Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
+}
 function volumeParts(site, e) {
   const { from, to, width: W, height: H } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
-  const corners = [-h, h].flatMap(s => [from, to].map(p => [p[0] + n[0] * s, p[1] + n[1] * s]));
-  const z = (e.on ? roofUnder(site, e) : null) ?? e.base_kote ?? Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
+  const z = baseOf(site, e);
   if (e.shape === "pyramid") {
     const top = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, z + H];
     const q = [[from[0] - n[0] * h, from[1] - n[1] * h], [to[0] - n[0] * h, to[1] - n[1] * h], [to[0] + n[0] * h, to[1] + n[1] * h], [from[0] + n[0] * h, from[1] + n[1] * h]].map(p => [...p, z]);
