@@ -96,6 +96,25 @@
   #info .st { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 10px; background: #ecebe6; margin-left: 4px; }
   #info .st.laget { background: #dcebd9; } #info .st.nei { background: #f1dcdc; } #info .st.sett { background: #e3e8f1; }
   #info .wishes select { font: inherit; font-size: 13px; margin-left: 6px; }
+  /* «Tegn» (tegn.js): the picture stands still under the pen, framed in blue; the rest of the page steps aside */
+  #anton .tegn { min-height: 46px; padding: 0 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 16px; }
+  #anton .tegn svg { width: 20px; height: 20px; }
+  body.tegner > *:not(#tegn):not(#view) { visibility: hidden; }
+  #tegn { position: fixed; inset: 0; z-index: 20; }
+  #tegnInk { position: absolute; inset: 0; touch-action: none; cursor: crosshair; box-shadow: inset 0 0 0 5px #2f6db0; }
+  #tegn .card { position: absolute; }
+  #tegnTools { top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; align-items: center; }
+  #tegnTools .lbl { font-size: 15px; color: var(--soft); padding: 0 6px 0 8px; max-width: 6.5em; line-height: 1.2; }
+  #tegnTools button { min-height: 48px; display: inline-flex; align-items: center; gap: 6px; }
+  #tegn .dot { width: 48px; padding: 0; justify-content: center; border-radius: 50%; }
+  #tegn .dot i { width: 26px; height: 26px; border-radius: 50%; display: block; }
+  #tegn .dot[aria-pressed="true"] { background: #fff; color: var(--ink); border: 3px solid var(--ink); }
+  #tegn .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+  #tegn svg.i { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #tegnSend { left: 50%; bottom: 18px; transform: translateX(-50%); width: min(760px, calc(100vw - 28px)); display: flex; gap: 10px; padding: 10px; align-items: stretch; }
+  #tegnText { flex: 1; font: inherit; font-size: 18px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; resize: none; color: var(--ink); }
+  #tegnSend button { min-height: 56px; display: inline-flex; align-items: center; gap: 8px; }
+  #talkLog img.drawn { display: block; width: 200px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 6px; }
   @media print { #anton { display: none !important; } }
   #sheet { display: none; }
   @page { size: A4 landscape; margin: 10mm; }

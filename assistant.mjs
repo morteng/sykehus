@@ -6,7 +6,9 @@
 
      GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
      GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
-     POST /api/anton             {text, version?}  a message; it waits its turn (5 waiting at most)
+     POST /api/anton             {text, version?, drawing?}  a message; it waits its turn (5 waiting at most). drawing
+                                 (tegn.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
+                                 camera, mode, size}, passed on as it is
      POST /api/anton/godkjenn    {approval_id, decision: "accept"|"reject"}
      POST /api/anton/stopp       ends the running turn
      POST /api/anton/ny          «Ny samtale»: gulden-ai starts the thread afresh (/new-chat); every page empties
@@ -22,6 +24,18 @@
 import { randomUUID } from "node:crypto";
 
 const WAITING = 5, LONGEST = 4000, PER_10_MIN = 20, SILENCE = 180e3, PING = 15e3, BUSY_TRIES = 20;
+
+/* a drawing from the page, checked and tidied: a JPEG of at most 2,5 MB, at most 60 strokes of 60 site points */
+function drawingOf(d) {
+  const image = String(d?.image ?? "");
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image) || image.length > 2.5e6) throw new Error("Tegningen kom ikke fram riktig. Prøv igjen.");
+  const fin = v => typeof v === "number" && Number.isFinite(v);
+  const strokes = (Array.isArray(d.strokes) ? d.strokes : []).slice(0, 60).map(s => ({ colour: String(s?.colour ?? "").slice(0, 20),
+    points: (Array.isArray(s?.points) ? s.points : []).slice(0, 60).filter(p => Array.isArray(p) && p.length === 3 && p.every(fin) && Math.abs(p[0]) < 2000 && Math.abs(p[1]) < 2000) }));
+  const camera = d.camera && typeof d.camera === "object" ? Object.fromEntries(Object.entries(d.camera).filter(([k, v]) => /^[a-z]{1,8}$/.test(k) && fin(v))) : {};
+  return { image, strokes, camera, mode: ["3d", "plan", "section"].includes(d.mode) ? d.mode : "3d", size: Array.isArray(d.size) && d.size.every(fin) ? d.size.slice(0, 2) : null,
+    note: "strokes are in site metres [east, north, kote] from the site origin, where each point of the line hit the model; the picture shows what the person saw and drew" };
+}
 
 export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl = fetch }) {
   const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
@@ -73,9 +87,9 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
     if (t.running) return;
     while (t.queue.length) {
       const turn = t.running = t.queue.shift();
-      publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at });
+      publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}) });
       publish(person, "queue", queueView(t));
-      const body = { person, session: session(person), device_id: turn.device, message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}) };
+      const body = { person, session: session(person), device_id: turn.device, message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}) };
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
         if (line.type === "ping" || !["text", "tool", "approval", "done", "error"].includes(line.type)) return;
@@ -99,7 +113,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
 
   async function post(req, res, me, path) {
     if (req.headers.origin && (() => { try { return new URL(req.headers.origin).host !== req.headers.host; } catch { return true; } })()) return send(res, 403, { error: "Feil opphav" });
-    let b; try { b = await readJson(req, 20000); } catch { return send(res, 400, { error: "Uleselig" }); }
+    let b; try { b = await readJson(req, path === "/api/anton" ? 3e6 : 20000); } catch { return send(res, 400, { error: "Uleselig" }); }
     const t = thread(me.person);
     if (path === "/api/anton") {
       const text = String(b?.text ?? "").trim();
@@ -110,7 +124,9 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       if (t.sent.length >= PER_10_MIN) return send(res, 429, { error: "Mange meldinger på kort tid. Vent noen minutter." });
       t.sent.push(now);
       const v = versions?.get(String(b?.version ?? "")), version = v && v.owner === me.person ? { id: v.id, title: v.title, changes: v.edits.length } : null;
-      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version };
+      let drawing = null;
+      if (b?.drawing != null) { try { drawing = drawingOf(b.drawing); } catch (e) { return send(res, 400, { error: e.message }); } }
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing };
       t.queue.push(turn); publish(me.person, "queue", queueView(t)); run(me.person);
       return send(res, 202, { id: turn.id });
     }

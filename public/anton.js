@@ -17,6 +17,8 @@ const CODES = {
   approval_unknown: "Spørsmålet er allerede besvart.", internal: "Noe gikk galt. Prøv igjen.",
 };
 const POSE = "sykehus-pose";
+const PEN = `<svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>`;
+const TEGN = new URLSearchParams(location.search).has("tegn");   // hidden until the pill is live (ruling 2026-10-25 17:31Z)
 
 export async function start({ viewer, versionId, info, closable, CLOSE }) {
   /* back from a redraw: the camera where it was */
@@ -81,7 +83,7 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
     document.body.classList.add("anton");
     const box = document.createElement("div"); box.id = "anton";
     box.innerHTML = `<div id="talk" class="card" hidden><div class="talkhead"><button id="talkNew" class="link" title="Glem samtalen og begynn på nytt">Ny samtale</button></div><ol id="talkLog"></ol></div>
-      <div class="pill card"><button class="hist" id="talkHist" title="Samtalen" aria-label="Vis samtalen">${HIST}</button>
+      <div class="pill card"><button class="hist" id="talkHist" title="Samtalen" aria-label="Vis samtalen">${HIST}</button>${TEGN ? `<button class="tegn" id="talkTegn" title="Tegn på et bilde av modellen">${PEN}Tegn</button>` : ""}
         <div class="pillmid"><div class="busy" id="talkBusy"></div><textarea id="talkIn" rows="1" placeholder="Spør Anton, eller be ham tegne …" aria-label="Melding til Anton"></textarea></div>
         <button class="round send" id="talkSend" title="Send" aria-label="Send">${SEND}</button></div>`;
     document.body.append(box);
@@ -89,9 +91,10 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
     const replies = new Map(), told = new Set();
     let running = null, redraw = false, waiting = 0;
     const show = (on = true) => { talk.hidden = !on; if (on) talk.scrollTop = talk.scrollHeight; };
-    function line(cls, text, who) {
+    function line(cls, text, who, image) {
       const li = document.createElement("li"); li.className = cls;
       if (who) li.append(Object.assign(document.createElement("b"), { textContent: who }));
+      if (image) li.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "drawn" }));
       const b = document.createElement("div"); b.textContent = text; li.append(b); log.append(li); show(); return b;
     }
     function state() {
@@ -108,13 +111,15 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
     input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
     btn.onclick = () => running && !input.value.trim() ? fetch("api/anton/stopp", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }) : sendIt();
-    async function sendIt() {
-      const text = input.value.trim(); if (!text) return;
-      const r = await fetch("api/anton", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, version: versionId }) }).catch(() => null);
-      if (r?.status === 401) return signedOut();
-      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return; }
-      input.value = ""; input.oninput();
+    async function sendIt(drawn) {
+      const text = drawn ? drawn.text : input.value.trim(); if (!text) return false;
+      const r = await fetch("api/anton", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, version: versionId, ...(drawn ? { drawing: drawn.drawing } : {}) }) }).catch(() => null);
+      if (r?.status === 401) { signedOut(); return false; }
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return false; }
+      if (!drawn) { input.value = ""; input.oninput(); }
+      return true;
     }
+    if (TEGN) $("talkTegn").onclick = () => import("./tegn.js").then(m => m.startDrawing({ viewer, labels: viewer.labels, send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
     function signedOut() { if (gone) return; gone = true; if (me.via === "gulden.no") { line("err", "Anton kan ikke jobbe for denne innloggingen akkurat nå."); return; } fetch("api/logg-ut", { method: "POST" }).finally(() => location.reload()); }
     function card(a) {
@@ -144,7 +149,7 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
     const es = new EventSource("api/anton/strom");
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
-    on("message", m => line("from-me", m.text));
+    on("message", m => line("from-me", m.text, null, m.image));
     on("text", t => { let b = replies.get(t.reply_to); if (!b) { b = line("from-anton", "", "Anton"); replies.set(t.reply_to, b); } b.textContent += t.delta || ""; show(); });
     on("tool", t => { if (t.label) line("tool", t.label); });
     on("approval", card);
