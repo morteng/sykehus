@@ -72,7 +72,10 @@ test("claude.ai's way in: register, consent behind gulden.no, code with PKCE, to
   const reg = await (await fetch(O + "/oauth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }) })).json();
   const verifier = randomBytes(32).toString("base64url"), challenge = createHash("sha256").update(verifier).digest("base64url");
   const q = new URLSearchParams({ response_type: "code", client_id: reg.client_id, redirect_uri: "https://claude.ai/api/mcp/auth_callback", code_challenge: challenge, code_challenge_method: "S256", state: "s1" });
-  assert.equal((await fetch(`${O}/oauth/authorize?${q}`)).status, 401, "no gulden.no login, no consent");
+  const out = await fetch(`${O}/oauth/authorize?${q}`);
+  assert.equal(out.status, 401, "no gulden.no login, no consent");
+  const rd = new URL(/href="([^"]+)"/.exec(await out.text())[1].replace(/&amp;/g, "&")).searchParams.get("rd");
+  assert.equal(rd, `${O}/oauth/authorize?${q}`, "a way to sign in, and back to this page");
   const html = await (await fetch(`${O}/oauth/authorize?${q}`, { headers: lars })).text();
   const form = /name="form" value="([^"]+)"/.exec(html)[1];
   const forged = await fetch(O + "/oauth/approve", { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", "remote-user": "lars", "x-sykehus-proxy-auth": "wrong" }, body: `form=${form}&answer=yes` });

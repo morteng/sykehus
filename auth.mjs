@@ -113,7 +113,7 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
     :root{--ink:#23211e;--soft:#6c675f;--paper:#fbf9f4;--line:#d8d2c6}body{margin:0;background:#dfe8ee;color:var(--ink);font:17px/1.45 -apple-system,"Helvetica Neue",Arial,sans-serif}
     main{max-width:480px;margin:8vh auto;padding:0 16px}.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:22px;box-shadow:0 2px 10px #0002}
     h1{font-size:22px;margin:0 0 10px}p{margin:10px 0}.mut{color:var(--soft);font-size:15px}.err{color:#b0122b}.acts{display:flex;gap:10px;margin-top:18px}
-    button{font:inherit;min-height:46px;padding:0 18px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}button.pri{background:var(--ink);border-color:var(--ink);color:#fff}
+    button{font:inherit;min-height:46px;padding:0 18px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}button.pri,.btn.pri{background:var(--ink);border-color:var(--ink);color:#fff}.btn{display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border-radius:8px;border:1px solid var(--line);text-decoration:none}
     </style></head><body><main><div class="card">${body}</div></main></body></html>`); };
   /* back to the app: only to a redirect its registration allows */
   const backTo = (uri, q) => { const u = new URL(uri); for (const [k, v] of Object.entries(q)) if (v) u.searchParams.set(k, v); return u.href; };
@@ -126,7 +126,10 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
       if (!redirectOk(client.redirect_uris, String(q.redirect_uri || ""))) throw err(400, "redirect_uri is not registered for this client");
     } catch (e) { return page(res, 400, "Kan ikke koble til", `<h1>Kan ikke koble til</h1><p class="err">${escH(e.message)}</p><p class="mut">Appen som sendte deg hit, ba om noe Sykehustomta ikke kan godta.</p>`); }
     const who = proxyUser(req);
-    if (!who) return page(res, 401, "Logg inn", `<h1>Logg inn først</h1><p>For å lagre egne versjoner kobler du ${escH(client.name)} til Sykehustomta med gulden.no-innloggingen din.</p><p class="mut">Denne siden skal ligge bak innloggingen på gulden.no; åpne lenken fra appen på nytt.</p>`);
+    /* not signed in on gulden.no: its sign-in, and back here after (SYKEHUS_LOGIN_URL, default auth.gulden.no) */
+    const login = `${process.env.SYKEHUS_LOGIN_URL || "https://auth.gulden.no/"}?rd=${encodeURIComponent(originOf(req) + url.pathname + url.search)}`;
+    if (!who) return page(res, 401, "Logg inn", `<h1>Logg inn først</h1><p>For å lagre egne versjoner kobler du ${escH(client.name)} til Sykehustomta med gulden.no-innloggingen din.</p>
+      <div class="acts"><a class="btn pri" href="${escH(login)}">Logg inn på gulden.no</a></div><p class="mut">Etterpå kommer du tilbake hit og kan gi tilgang.</p>`);
     const id = token(); forms.set(id, { who, client, redirect_uri: q.redirect_uri, state: q.state || "", challenge: q.code_challenge, exp: Date.now() + FORM_TTL });
     return page(res, 200, "Koble til", `<h1>Koble ${escH(client.name)} til Sykehustomta</h1>
       <p>Du er logget inn som <b>${escH(who)}</b>. ${escH(client.name)} får lage og endre <b>dine egne versjoner</b> av «etter», i ditt navn. Alt annet på Sykehustomta er åpent uansett.</p>
