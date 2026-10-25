@@ -114,6 +114,13 @@
   #tegnSend { left: 50%; bottom: 18px; transform: translateX(-50%); width: min(760px, calc(100vw - 28px)); display: flex; gap: 10px; padding: 10px; align-items: stretch; }
   #tegnText { flex: 1; font: inherit; font-size: 18px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; resize: none; color: var(--ink); }
   #tegnSend button { min-height: 56px; display: inline-flex; align-items: center; gap: 8px; }
+  /* «Valgt» (valg.js): the chip above the text, as Fab's .pill-about */
+  #anton .pill-about { display: flex; align-items: center; gap: 4px; margin: 2px 2px 0; font-size: 14px; color: #2f6db0; }
+  #anton .pill-about[hidden] { display: none; }
+  #anton .pill-about span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #anton .pill-about button { min-height: 28px; width: 28px; padding: 0; border: 0; background: none; color: var(--soft); font-size: 18px; flex: none; }
+  #anton .pill-about button:hover { color: var(--ink); }
+  #talkLog .about { display: block; font-size: 13px; color: #2f6db0; margin-bottom: 2px; }
   #talkLog img.drawn { display: block; width: 200px; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 6px; }
   @media print { #anton { display: none !important; } }
   #sheet { display: none; }

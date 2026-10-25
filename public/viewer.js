@@ -660,7 +660,14 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const ray = new THREE.Raycaster(); let selected = null;
   function pick(e) {
     const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-    const hit = ray.intersectObjects([...meshes.values()], true)[0]; select(hit?.object.userData.id || null); onPick(selected);
+    const hit = ray.intersectObjects([...meshes.values()], true)[0]; select(hit?.object.userData.id || null);
+    onPick(selected, { shift: e.shiftKey, x: e.clientX, y: e.clientY, at: hit ? [hit.point.x, -hit.point.z, hit.point.y + base] : null });   // where on it, for a room or a facade
+  }
+  /* more than one building lit, for a selection of several (app.js «Valgt») */
+  let marked = [];
+  function mark(ids) {
+    for (const id of marked) if (id !== selected) meshes.get(id)?.traverse(o => o.material?.emissive?.set("#000"));
+    marked = ids.filter(id => meshes.has(id)); for (const id of marked) meshes.get(id).traverse(o => o.material?.emissive?.set("#6b5200")); dirty = true;
   }
   function select(id) {
     if (selected) meshes.get(selected)?.traverse(o => o.material?.emissive?.set("#000"));
@@ -693,7 +700,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
     get labels() { return tags; },
-    setNames(on) { names = !!on; dirty = true; },   // the names and kote over the picture, for a printed sheet
+    setNames(on) { names = !!on; dirty = true; }, mark,   // the names and kote over the picture, for a printed sheet
     /* for tools drawn over the model (trace.js): add and take away things, a site point under the pointer at a
        kote, and where a site point at a kote is on the screen */
     add(o) { scene.add(o); dirty = true; }, remove(o) { scene.remove(o); dirty = true; }, redraw() { dirty = true; },

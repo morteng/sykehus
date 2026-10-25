@@ -6,7 +6,7 @@
 
      GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
      GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
-     POST /api/anton             {text, version?, drawing?}  a message; it waits its turn (5 waiting at most). drawing
+     POST /api/anton             {text, version?, drawing?, selection?}  a message; it waits its turn (5 waiting at most). drawing
                                  (tegn.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
                                  camera, mode, size}, passed on as it is
      POST /api/anton/godkjenn    {approval_id, decision: "accept"|"reject"}
@@ -35,6 +35,14 @@ function drawingOf(d) {
   const camera = d.camera && typeof d.camera === "object" ? Object.fromEntries(Object.entries(d.camera).filter(([k, v]) => /^[a-z]{1,8}$/.test(k) && fin(v))) : {};
   return { image, strokes, camera, mode: ["3d", "plan", "section"].includes(d.mode) ? d.mode : "3d", size: Array.isArray(d.size) && d.size.every(fin) ? d.size.slice(0, 2) : null,
     note: "strokes are in site metres [east, north, kote] from the site origin, where each point of the line hit the model; the picture shows what the person saw and drew" };
+}
+
+/* what was picked in the model when it was sent (valg.js): "this", "these" in the message */
+const KINDS = ["wing", "building", "storey", "room", "facade", "element"];
+function selectionOf(s) {
+  if (!s || !Array.isArray(s.items)) return null;
+  const items = s.items.slice(0, 12).filter(i => KINDS.includes(i?.kind) && typeof i.id === "string" && i.id).map(i => ({ kind: i.kind, id: i.id.slice(0, 80), label: String(i.label ?? i.id).slice(0, 120), ...(typeof i.storey === "string" ? { storey: i.storey.slice(0, 40) } : {}) }));
+  return items.length ? { items, ids: items.map(i => i.id), summary: String(s.summary ?? items.map(i => i.label).join(" · ")).slice(0, 300) } : null;
 }
 
 export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl = fetch }) {
@@ -87,9 +95,9 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
     if (t.running) return;
     while (t.queue.length) {
       const turn = t.running = t.queue.shift();
-      publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}) });
+      publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
-      const body = { person, session: session(person), device_id: turn.device, message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}) };
+      const body = { person, session: session(person), device_id: turn.device, message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
         if (line.type === "ping" || !["text", "tool", "approval", "done", "error"].includes(line.type)) return;
@@ -126,7 +134,8 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       const v = versions?.get(String(b?.version ?? "")), version = v && v.owner === me.person ? { id: v.id, title: v.title, changes: v.edits.length } : null;
       let drawing = null;
       if (b?.drawing != null) { try { drawing = drawingOf(b.drawing); } catch (e) { return send(res, 400, { error: e.message }); } }
-      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing };
+      const selection = selectionOf(b?.selection);
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection };
       t.queue.push(turn); publish(me.person, "queue", queueView(t)); run(me.person);
       return send(res, 202, { id: turn.id });
     }

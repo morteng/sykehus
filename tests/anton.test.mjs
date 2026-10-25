@@ -109,6 +109,15 @@ test("a message is relayed as the person's turn and streamed back to their pages
   assert.equal(h.items[0].text, "hei");
 });
 
+test("what is picked goes with the message, tidied, and its summary shows on the pages", async () => {
+  const got = events(cookie, o => o.some(e => e.event === "done"));
+  await new Promise(ok => setTimeout(ok, 200));
+  await post("/api/anton", { text: "Riv denne", selection: { items: [{ kind: "wing", id: "ostfloy", label: "Østfløy" }, { kind: "room", id: "312", storey: "3. etasje", label: "Kontor (312)" }, { kind: "bad", id: "x" }], summary: "Østfløy · Kontor (312)" } }, { cookie });
+  const msg = (await got).find(e => e.event === "message"); assert.equal(msg.about, "Østfløy · Kontor (312)");
+  const body = seen.filter(s => s.path === "/internal/sykehus/chat").at(-1).body;
+  assert.deepEqual(body.selection.ids, ["ostfloy", "312"]); assert.equal(body.selection.items[1].storey, "3. etasje");
+});
+
 test("«Ny samtale» asks gulden-ai for a new thread and empties every page", async () => {
   const got = events(cookie, o => o.some(e => e.event === "cleared"));
   await new Promise(ok => setTimeout(ok, 200));

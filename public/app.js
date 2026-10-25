@@ -1,6 +1,7 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try. */
 import { createViewer } from "./viewer.js";
 import { applyEdits } from "./edits.js";
+import { createSelection } from "./valg.js";
 
 /* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
    wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
@@ -21,7 +22,7 @@ const num = v => Math.round(v).toLocaleString("nb-NO");
 
 const viewer = createViewer({
   container: $("view"), site, floors,
-  onPick: id => showInfo(site.buildings.find(b => b.id === id)),
+  onPick: (id, how) => { showInfo(site.buildings.find(b => b.id === id)); valg?.pick(id, how); },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
     $("scale").style.display = v.mPerPx ? "block" : "none";
@@ -32,6 +33,8 @@ const viewer = createViewer({
     }
   },
 });
+/* ?valg: picking things to talk to Anton about (valg.js), hidden until the pill is live */
+const valg = qs.has("valg") ? createSelection({ site, floors, viewer, onChange: items => dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })) }) : null;
 /* a high summer sun reads the forms best; choosing the date and hour comes later */
 viewer.setSun(new Date(new Date().getFullYear(), 5, 21, 14));
 
@@ -133,7 +136,7 @@ addEventListener("keydown", e => {
   if (e.key === "n" || e.key === "N") setNames(!names);
   else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
-  else if (e.key === "Escape") $("info").style.display = "none";
+  else if (e.key === "Escape") { $("info").style.display = "none"; valg?.clear(); }
   else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {
     const i = floorBtns.findIndex(([, b]) => b.getAttribute("aria-pressed") === "true"), j = Math.max(0, Math.min(floorBtns.length - 1, i + (/Up$/.test(e.key) ? 1 : -1)));
     if (j !== i) { pickStorey(floorBtns[j][0]); floorBtns[j][1].scrollIntoView({ block: "nearest", inline: "nearest" }); }
@@ -268,6 +271,6 @@ fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ ver
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 /* signing in, and Anton for the signed in (anton.js) */
-import("./anton.js").then(m => m.start({ viewer, versionId, info: $("info"), closable, CLOSE })).catch(e => console.error("anton:", e));
+import("./anton.js").then(m => m.start({ viewer, versionId, info: $("info"), closable, CLOSE, valg })).catch(e => console.error("anton:", e));
 
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));

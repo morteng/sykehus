@@ -39,3 +39,8 @@ Morten's decisions on how Sykehustomta is built, newest last. Each names when an
   floors (do we need them as separate buttons? folow anton/gulden conventions more» and «the sidebar system fab uses is
   pretty nie. erhaos pm can task a designer to hep?»: a redesign, Anton first, with fab's sidebar; a designer's frames
   first (asked of pm), then built from them.
+- **2026-10-25 17:39Z (via pm):** «the way user can select edges and objects in fab and then talk to anton about the
+  selection is useful. can sykehus anton do that? should be integated through the kit?»: a click picks a wing, a
+  building, a storey's room or a facade (shift adds, Esc or ✕ clears); a chip «Valgt: …» in the pill as Fab's
+  pill-about; each message carries selection {items: [{kind, id, label, storey?}], ids, summary} with the connector's
+  ids. The chip moves to the kit when the designer specs it. Behind ?valg until the pill is live.
