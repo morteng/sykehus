@@ -161,7 +161,7 @@ export async function start({ viewer, versionId, panel, valg }) {
       if (!drawn) { input.value = ""; input.oninput(); }
       return true;
     }
-    $("talkTegn").onclick = () => import("./tegn.js").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
+    $("talkTegn").onclick = () => import("./tegn.js?v=20261025b").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
     function signedOut() { if (gone) return; gone = true; if (me.via === "gulden.no") { line("err", "Anton kan ikke jobbe for denne innloggingen akkurat nå."); return; } json("api/logg-ut").finally(() => location.reload()); }
     /* a question that needs a yes: in the log, and over the pill while the chat is shut; either answers both */

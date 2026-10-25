@@ -4,7 +4,7 @@
    «Ønsker» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { applyEdits } from "./edits.js";
-import { createSelection } from "./valg.js";
+import { createSelection } from "./valg.js?v=20261025b";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
 
@@ -274,8 +274,8 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 /* signing in, and Anton for the signed in (anton.js) */
-import("./anton.js").then(m => m.start({ viewer, versionId, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261025b").then(m => m.start({ viewer, versionId, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
-requestAnimationFrame(() => import("./streets.js").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
+requestAnimationFrame(() => import("./streets.js?v=20261025b").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
 
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));

@@ -11,7 +11,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { loadStreets } from "./renderkit/streets.js";
 import { createStreetMeshes, streetContext } from "./renderkit/streets3d.js";
-import { siteGrid, siteBox } from "./utm.js";
+import { siteGrid, siteBox } from "./utm.js?v=20261025b";
 
 /* through this server (gater.mjs): the page's Content-Security-Policy lets it fetch from its own origin only */
 export const STREETS_API = "/gater";
