@@ -1,0 +1,127 @@
+/* The after's landscape: what is laid on the ground and planted, as changes like design.js's (the before's terrain and
+   trees stay as they are). Points are [east, north] in metres from the site origin.
+
+   { kind: "surface", ring, surface, name?, plants?, why? }
+        an area laid as grass, meadow, planting (a bed), gravel, paving, asphalt or water; plants are hagekart ids
+        (or Latin names) for a bed, listed, not drawn one by one
+   { kind: "path", line, width?, surface?, name?, why? }
+        a path or a road along line (2 or more points), width metres (default 2), gravel, paving, asphalt or wood
+   { kind: "trees", species, points? | line + spacing?, height?, crown?, why? }
+        trees or shrubs: species is hagekart's id (search_plants) or a Latin name; at points, or along line
+        every spacing metres (default 8). Sized from hagekart's height and spread unless height and crown (the width)
+        are given. A species banned in Norway is refused. points is a list of [east, north].
+   { kind: "fell", ring, why? }
+        the trees there today inside ring are taken down
+
+   What they make (applyLandscape): site.landscape [{ id, kind, name, surface, ring, area_m2 | length_m, plants }],
+   the new trees added to site.trees ([east, north, height, crown radius, form], as tools/trees.py writes them, with a
+   sixth item, the species id or name), site.planted [{ species, name, count }] and site.felled (how many). */
+import { PLANTS } from "./plants.js";
+
+export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"];
+export const PATHS = ["gravel", "paving", "asphalt", "wood"];
+const MAX_POINTS = 200, MAX_TREES = 300;
+const BY_ID = new Map(PLANTS.map(p => [p.id, p])), BY_LA = new Map(PLANTS.filter(p => p.la).map(p => [p.la.toLowerCase(), p]));
+/* for a species outside hagekart's list, a size by what it is (pm, 2026-10-25): a tree unless it says shrub */
+const DEFAULT = { tree: { ht: 12, sp: 7, form: "round" }, conifer: { ht: 18, sp: 6, form: "cone" }, shrub: { ht: 2.5, sp: 2, form: "dome" } };
+
+const pt = (v, what) => {
+  if (!Array.isArray(v) || v.length !== 2) throw new Error(`${what} er [øst, nord] i meter fra tomtas origo`);
+  const [x, y] = v.map(Number); if (![x, y].every(Number.isFinite) || Math.abs(x) > 500 || Math.abs(y) > 500) throw new Error(`${what} må ligge innen 500 m fra tomtas origo`);
+  return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+};
+const pts = (v, what, min) => {
+  if (!Array.isArray(v) || v.length < min || v.length > MAX_POINTS) throw new Error(`${what} er ${min} til ${MAX_POINTS} punkter [øst, nord]`);
+  return v.map((p, i) => pt(p, `${what}[${i}]`));
+};
+const num = (v, lo, hi, what, dflt) => {
+  if (v == null) { if (dflt === undefined) throw new Error(`${what} mangler`); return dflt; }
+  const x = +v; if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${what} må være et tall mellom ${lo} og ${hi}`); return Math.round(x * 100) / 100;
+};
+export const ringArea = r => Math.abs(r.reduce((a, q, i) => { const s = r[(i + 1) % r.length]; return a + q[0] * s[1] - s[0] * q[1]; }, 0)) / 2;
+const lineLength = l => l.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - l[i][0], p[1] - l[i][1]), 0);
+const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
+const round1 = v => Math.round(v * 10) / 10;
+
+/* a species as hagekart knows it, or a Latin name it does not; banned ones refused */
+export function plantOf(s) {
+  const k = String(s ?? "").trim(); if (!k) throw new Error("species mangler: hagekarts id (search_plants) eller et latinsk navn");
+  const p = BY_ID.get(k.toLowerCase()) || BY_LA.get(k.toLowerCase());
+  if (p?.banned) throw new Error(`${p.no} (${p.la}) er forbudt å plante i Norge.`);
+  if (p) return p;
+  if (!/^[A-Z][a-z]+( [a-z×-]+){0,3}$/.test(k)) throw new Error(`Kjenner ikke «${k}». Bruk hagekarts id fra search_plants, eller det latinske navnet (slekt og art).`);
+  return { id: null, no: k, la: k, cat: "tree", ...DEFAULT.tree };
+}
+
+/* one landscape change, checked: its tidy form, or null when it is not one */
+export function checkLandscape(site, e, str) {
+  const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
+  const name = (d) => e.name == null ? undefined : str(String(e.name), 80, "Navnet") || d;
+  switch (e.kind) {
+    case "surface": {
+      const ring = pts(e.ring, "ring", 3), a = ringArea(ring);
+      if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²");
+      const surface = String(e.surface ?? ""); if (!SURFACES.includes(surface)) throw new Error(`surface er ${SURFACES.join(", ")}`);
+      const out = { kind: "surface", ring, surface, ...w_ }, n = name(); if (n) out.name = n;
+      if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
+      return out;
+    }
+    case "path": {
+      const line = pts(e.line, "line", 2), L = lineLength(line); if (L < 1) throw new Error("Stien må være minst 1 m lang");
+      const surface = String(e.surface ?? "gravel"); if (!PATHS.includes(surface)) throw new Error(`surface for en sti er ${PATHS.join(", ")}`);
+      const out = { kind: "path", line, width: num(e.width, 0.5, 20, "Bredden", 2), surface, ...w_ }, n = name(); if (n) out.name = n;
+      return out;
+    }
+    case "trees": {
+      const p = plantOf(e.species), out = { kind: "trees", species: p.id || p.la, ...w_ };
+      if (e.points != null) out.points = pts(e.points, "points", 1);
+      else if (e.line != null) { out.line = pts(e.line, "line", 2); out.spacing = num(e.spacing, 1, 50, "Avstanden (spacing)", 8); }
+      else throw new Error("Gi points (punktene) eller line (en linje å plante langs)");
+      if (e.height != null) out.height = num(e.height, 0.3, 40, "Høyden");
+      if (e.crown != null) out.crown = num(e.crown, 0.3, 30, "Kronebredden (crown)");
+      if (treePoints(out).length > MAX_TREES) throw new Error(`Høyst ${MAX_TREES} trær i én endring`);
+      return out;
+    }
+    case "fell": { const ring = pts(e.ring, "ring", 3); if (ringArea(ring) < 1) throw new Error("Området er for lite"); return { kind: "fell", ring, ...w_ }; }
+  }
+  return null;
+}
+
+function treePoints(e) {
+  if (e.points) return e.points;
+  const out = [], l = e.line; let carry = 0;
+  for (let i = 1; i < l.length; i++) {
+    const [a, b] = [l[i - 1], l[i]], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (let t = carry; t <= L + 1e-6; t += e.spacing) out.push([round1(a[0] + (b[0] - a[0]) * t / L), round1(a[1] + (b[1] - a[1]) * t / L)]);
+    carry = (carry - L) % e.spacing; if (carry < 0) carry += e.spacing;
+  }
+  return out;
+}
+/* a path's outline: its line offset half the width to each side (mitred, the mitre held to 3 widths) */
+export function pathRing(line, width) {
+  const h = width / 2, L = [], R = [];
+  for (let i = 0; i < line.length; i++) {
+    const dir = j => { const a = line[Math.max(0, j)], b = line[Math.min(line.length - 1, j + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
+    const d0 = dir(i - 1), d1 = dir(i), m = [d0[0] + d1[0], d0[1] + d1[1]], ml = Math.hypot(...m) || 1, t = [m[0] / ml, m[1] / ml];
+    const n = [-t[1], t[0]], k = Math.min(3, 1 / Math.max(0.33, n[0] * -d1[1] + n[1] * d1[0]));
+    L.push([line[i][0] + n[0] * h * k, line[i][1] + n[1] * h * k]); R.push([line[i][0] - n[0] * h * k, line[i][1] - n[1] * h * k]);
+  }
+  return [...L, ...R.reverse()];
+}
+
+export function applyLandscape(site, edits) {
+  const land = [], planted = new Map(); let felled = 0, trees = (site.trees || []).slice();
+  for (const e of edits) {
+    if (e.kind === "surface") land.push({ id: `flate-${land.length + 1}`, kind: "surface", name: e.name || null, surface: e.surface, ring: e.ring, area_m2: round1(ringArea(e.ring)), plants: e.plants || [], why: e.why });
+    else if (e.kind === "path") land.push({ id: `sti-${land.length + 1}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), why: e.why });
+    else if (e.kind === "fell") { const n = trees.length; trees = trees.filter(t => !inRing(t, e.ring)); felled += n - trees.length; }
+    else if (e.kind === "trees") {
+      const p = plantOf(e.species), cat = p.cat === "conifer" ? "conifer" : /shrub|hedge|rose/.test(p.cat) ? "shrub" : "tree";
+      const h = e.height ?? p.ht ?? DEFAULT[cat].ht, r = (e.crown ?? p.sp ?? DEFAULT[cat].sp) / 2, form = p.cat === "conifer" || /cone|pine|column/.test(p.form || "") ? "cone" : "round";
+      const at = treePoints(e); for (const [x, y] of at) trees.push([x, y, h, r, form, e.species]);
+      const k = e.species, q = planted.get(k) || { species: k, name: p.no, latin: p.la || null, count: 0 }; q.count += at.length; planted.set(k, q);
+    }
+  }
+  if (!land.length && !planted.size && !felled) return;
+  site.trees = trees; site.landscape = land; site.planted = [...planted.values()]; site.felled = felled;
+}

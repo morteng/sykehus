@@ -16,7 +16,10 @@
    What they make (applyDesign): site.added, each { id, kind, name, parts, footprint_m2, volume_m3 }, and
    site.demolished. A part is a profile [across, kote] extruded along an axis [[east, north], [east, north]]: across
    is metres to the left of the axis as one walks along it, so a box, a gable, a slope and a balcony slab are all one
-   kind of thing, which the viewer draws and the IFC writes the same way. */
+   kind of thing, which the viewer draws and the IFC writes the same way.
+
+   The ground (surfaces, paths, trees, felling) is landscape.js's. */
+import { checkLandscape, applyLandscape } from "./landscape.js";
 
 export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];
@@ -73,7 +76,7 @@ export function checkDesign(site, e, str) {
       return out;
     }
   }
-  return null;
+  return checkLandscape(site, e, str);
 }
 
 /* the ground under a point, from the site's terrain grid (as the viewer reads it) */
@@ -142,6 +145,7 @@ const round1 = v => Math.round(v * 10) / 10;
 
 /* the after's changes laid over the model (copies, made by applyEdits): what is taken away goes, what is built is added */
 export function applyDesign(site, floors, edits) {
+  applyLandscape(site, edits);
   const gone = new Set(), added = [];
   for (const e of edits) {
     if (e.kind === "demolish") for (const id of targets(site, e.building)) gone.add(id);

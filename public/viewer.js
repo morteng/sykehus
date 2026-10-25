@@ -67,6 +67,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   })();
 
   /* ---------- buildings ---------- */
+  const ringArea2 = r => r.reduce((a, q, i) => { const s = r[(i + 1) % r.length]; return a + q[0] * s[1] - s[0] * q[1]; }, 0);   // twice the signed area, > 0 anticlockwise
   const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
   const meshes = new Map();
   function wallsTo(ring, b0, topAt, m) {
@@ -276,6 +277,28 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
     }
     grp.userData.added = a.id; scene.add(grp);
+  }
+  /* the after's ground (landscape.js): each surface and path laid on the terrain, its triangles cut down to the
+     terrain's grid so it follows the slope, each later one a little higher than the one before (a bed in a lawn, a
+     path across it) */
+  const GROUND = { grass: "#a3c072", meadow: "#bcc47e", planting: "#6f8c4c", gravel: "#d3cab6", paving: "#bdb6aa", asphalt: "#66655f", water: "#7fa8c2", wood: "#a8825a" };
+  const groundMat = Object.fromEntries(Object.entries(GROUND).map(([k, c]) => [k, mat(c, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, ...(k === "water" ? { roughness: 0.15, metalness: 0.1 } : {}) })]));
+  for (const [n, g] of (site.landscape || []).entries()) {
+    const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
+    const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []), pos = [], lim = Math.max(1, T.res) * 1.4;
+    const lift = 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
+    const put = p => { const v = P(p, ground(...p) + lift); pos.push(v.x, v.y, v.z); };
+    const split = (a, b, c, d) => {
+      const e = [[a, b], [b, c], [c, a]].map(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1])), m = Math.max(...e);
+      if (m <= lim || d > 9) { put(a); put(b); put(c); return; }
+      const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+      if (m === e[0]) { const k = mid(a, b); split(a, k, c, d + 1); split(k, b, c, d + 1); }
+      else if (m === e[1]) { const k = mid(b, c); split(a, b, k, d + 1); split(a, k, c, d + 1); }
+      else { const k = mid(c, a); split(a, b, k, d + 1); split(k, b, c, d + 1); }
+    };
+    for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, groundMat[g.surface] || groundMat.grass); m.receiveShadow = true; m.userData.added = g.id; scene.add(m);
   }
 
   /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (renderkit/ez-tree.js, MIT;

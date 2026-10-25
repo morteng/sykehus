@@ -137,23 +137,31 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const WING = { type: "string", description: `Wing name or id: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}` };
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
   const DRAFT = { type: "string", description: "A draft id from try_change, or a version id (v…): answer from the model with those changes laid over it" };
+  const POINTS = { type: "array", items: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, maxItems: 200 };
   const EDIT = { type: "object", description: "One change. kind level: {wing, storey, kote, why}; kind wing: {wing, field (name|built|storeys|construction|facade|note), value, why}; kind room: {storey, room (code or name), set: {name?, use?, area_m2?}, why}; kind note: {text, wing?, storey?, at?: [east_m, north_m], why?}. why says where it comes from (drawing and page, a measurement, the architect's own judgement). " +
       "The after (a design): kind demolish / restore: {building: a wing, a building id or \"alle\" for every hospital building; demolish alle then restore the ones to keep}; " +
       "kind balconies: {wing, side (N|Ø|S|V: the facades facing it, within 45°), from_storey?, to_storey? (default all above the ground floor), depth? (m, 0.8-4, default 1.8), bay? (m wide each, else along the whole wall), gap? (m between, default 0.6), railing? (glass|steel|concrete)}; " +
       "kind volume: {name, shape (box|gable|triangle = A frame, roof to the ground|lean_to = one slope), from, to ([east_m, north_m]: the middle or ridge line), width (m across), height (m to the top), wall_height? (gable, lean_to: the low eaves), high_side? (lean_to: left|right walking from -> to), base_kote? (default the lowest ground under it), material? (glass = a greenhouse|concrete|steel|wood|brick)}. " +
+      "The ground (landscaping): kind surface: {ring ([[east_m, north_m], …], 3+ points), surface (grass|meadow|planting = a bed|gravel|paving|asphalt|water), name?, plants? (hagekart ids or Latin names, for a bed)}; " +
+      "kind path: {line (2+ points), width? (m, default 2), surface? (gravel|paving|asphalt|wood), name?}; " +
+      "kind trees: {species (hagekart's id from its search_plants, e.g. lind, or a Latin name; check_species first: banned species are refused), points? ([[east_m, north_m], …]) or line + spacing? (m, default 8), height?, crown? (m wide; default hagekart's height and spread)}; " +
+      "kind fell: {ring}: takes down today's trees inside it. " +
       "about_wing gives a wing's footprint and kote; site positions are metres east and north of the site origin.",
-    properties: { kind: { type: "string", enum: ["level", "wing", "room", "note", "demolish", "restore", "balconies", "volume"] }, wing: { type: "string" }, storey: { type: "string" }, kote: { type: "number" }, field: { type: "string" }, value: { type: "string" },
+    properties: { kind: { type: "string", enum: ["level", "wing", "room", "note", "demolish", "restore", "balconies", "volume", "surface", "path", "trees", "fell"] }, wing: { type: "string" }, storey: { type: "string" }, kote: { type: "number" }, field: { type: "string" }, value: { type: "string" },
       room: { type: "string" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false },
       text: { type: "string" }, at: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, why: { type: "string" },
       building: { type: "string" }, side: { type: "string", enum: ["N", "Ø", "S", "V"] }, from_storey: { type: "string" }, to_storey: { type: "string" }, depth: { type: "number" }, bay: { type: "number" }, gap: { type: "number" },
       railing: { type: "string", enum: ["glass", "steel", "concrete"] }, name: { type: "string" }, shape: { type: "string", enum: ["box", "gable", "triangle", "lean_to"] },
       from: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, to: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 },
       width: { type: "number" }, height: { type: "number" }, wall_height: { type: "number" }, high_side: { type: "string", enum: ["left", "right"] }, base_kote: { type: "number" },
-      material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"] } }, required: ["kind"], additionalProperties: false };
+      material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"] },
+      ring: POINTS, line: POINTS, points: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water", "wood"] },
+      plants: { type: "array", items: { type: "string" }, maxItems: 30 }, species: { type: "string" }, spacing: { type: "number" }, crown: { type: "number" } }, required: ["kind"], additionalProperties: false };
   /* what a draft builds and takes away, without the geometry: for the agent to report back */
-  const afterOf = m => (m.site.demolished || m.site.added) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
+  const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
     demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
-    built: (m.site.added || []).map(({ parts, ...a }) => a) } : null;
+    built: (m.site.added || []).map(({ parts, ...a }) => a),
+    ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g), planted: m.site.planted, trees_felled: m.site.felled } : {}) } : null;
   const TOOLS = [
     { name: "about_site", title: "Tomta og fløyene", ro: true, schema: S({ draft: DRAFT }),
       description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
@@ -191,7 +199,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             openings: f.openings.map(o => ({ kind: o.kind, along_m: o.u.map(round1), sill_kote: round1(o.z[0]), head_kote: round1(o.z[1]), panes: o.panes.length })), sheet: f.src.map(docRef) }; }) }; } },
     /* documents: see below */
     { name: "try_change", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" } }, ["edits"]),
-      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. The before, the shared model, is never changed. Say where each change comes from in why.",
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. The before, the shared model, is never changed. Say where each change comes from in why.",
       run: async (a, req) => {
         let d, v = null;
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }

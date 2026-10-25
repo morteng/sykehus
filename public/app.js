@@ -241,6 +241,11 @@ function describe(e) {
   if (e.kind === "restore") return `Beholdes: ${wings.find(x => x.id === e.building)?.name || e.building}${why}`;
   if (e.kind === "balconies") return `Balkonger på ${w} mot ${{ N: "nord", Ø: "øst", S: "sør", V: "vest" }[e.side]}, ${String(e.depth).replace(".", ",")} m dype${e.bay ? `, ${String(e.bay).replace(".", ",")} m brede` : ""}${why}`;
   if (e.kind === "volume") return `${e.name}: ${{ box: "kasse", gable: "saltak", triangle: "trekant (A-form)", lean_to: "pulttak" }[e.shape]}, ${String(e.width).replace(".", ",")} × ${String(Math.round(Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) * 10) / 10).replace(".", ",")} m, ${String(e.height).replace(".", ",")} m høy, ${{ glass: "glass", concrete: "betong", steel: "stål", wood: "tre", brick: "tegl" }[e.material]}${why}`;
+  const SURF = { grass: "plen", meadow: "eng", planting: "beplantning", gravel: "grus", paving: "belegningsstein", asphalt: "asfalt", water: "vann", wood: "tre" };
+  if (e.kind === "surface") return `${e.name ? e.name + ": " : ""}${SURF[e.surface]}${e.plants?.length ? ` (${e.plants.join(", ")})` : ""}${why}`;
+  if (e.kind === "path") return `${e.name || "Sti"}: ${SURF[e.surface]}, ${String(e.width).replace(".", ",")} m bred${why}`;
+  if (e.kind === "trees") return `Planter ${e.points ? e.points.length : "en rekke"} ${e.species}${why}`;
+  if (e.kind === "fell") return `Feller trærne i et område${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
 
