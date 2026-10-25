@@ -27,7 +27,7 @@
    is its faces as triangles, tris [[[east, north, kote] × 3], …].
 
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
-import { checkLandscape, applyLandscape } from "./landscape.js";
+import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./landscape.js";
 import { fitOf, surfaceFit, groundAt, inRing } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
@@ -71,11 +71,13 @@ export function checkDesign(site, e, str) {
   switch (e.kind) {
     case "demolish": case "restore": {
       const k = String(e.building ?? "").trim();
+      if (e.kind === "demolish" && GROUND_ID.test(k)) return checkGroundEdit(site, e, str);   // a surface or a path, by its id
       if (!(e.kind === "demolish" && (site.added || []).some(a => a.id === k))) targets(site, e.building);   // a new building, by its id, goes the same way
       return { kind: e.kind, building: k, ...w_ };
     }
     case "reshape": {
       const id = String(e.id ?? ""), a = (site.added || []).find(x => x.id === id && x.kind === "volume");
+      if (GROUND_ID.test(id)) return checkGroundEdit(site, e, str);
       /* teaches what reshape is for (21:22Z: «reshape» id «basseng» was meant as a new pool) */
       if (!a) { const n = (site.added || []).filter(x => x.kind === "volume"); throw new Error(`Fant ikke det nye bygget «${e.id}». reshape endrer et nytt bygg som alt står i forslaget${n.length ? ` (${n.slice(0, 8).map(x => `«${x.id}»`).join(", ")})` : "; forslaget har ingen nye bygg ennå"}. Et nytt bygg er kind volume; et basseng, en plass eller en plen er kind surface (surface: "water" for vann) med ring.`); }
       const out = facts(e, str, { kind: "reshape", id });
@@ -204,6 +206,7 @@ export function applyDesign(site, floors, edits) {
   applyLandscape(site, edits);
   const gone = new Set(), added = [], vols = new Map();   // vols: the new buildings, by id, as their edits leave them
   for (const e of edits) {
+    if ((e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id)) continue;   // landscape.js's
     if (e.kind === "demolish" && vols.has(e.building)) vols.delete(e.building);
     else if (e.kind === "demolish") for (const id of targets(site, e.building)) gone.add(id);
     else if (e.kind === "restore") for (const id of targets(site, e.building)) gone.delete(id);

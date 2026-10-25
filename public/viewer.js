@@ -316,7 +316,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* drawn again in place when the after changes (setLandscape, 21:07Z «when i edit the whole page reloads»: a pool is a surface) */
   const groundMeshes = [];
   function setLandscape(list) {
-    for (const m of groundMeshes.splice(0)) { scene.remove(m); m.geometry.dispose(); }
+    for (const m of groundMeshes.splice(0)) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
     drawLandscape(list); dirty = true;
   }
   function drawLandscape(list) { for (const [n, g] of (list || []).entries()) {
@@ -334,7 +334,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     };
     for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, groundMat[g.surface] || groundMat.grass); m.receiveShadow = true; m.userData.added = g.id; scene.add(m); groundMeshes.push(m);
+    /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
+    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; scene.add(m); groundMeshes.push(m);
   } }
   drawLandscape(site.landscape);
 
@@ -741,15 +742,22 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const ray = new THREE.Raycaster(); let selected = null;
   function pick(e) {
     const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-    const hit = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...addedGroups.values()], true).find(h => h.object.isMesh); select(hit?.object.userData.id || null);
+    const hit = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...addedGroups.values(), ...groundMeshes], true).find(h => h.object.isMesh); select(hit?.object.userData.id || null);
     onPick(selected, { shift: e.shiftKey, x: e.clientX, y: e.clientY, at: hit ? [hit.point.x, -hit.point.z, hit.point.y + base] : null });   // where on it, for a room or a facade
   }
   /* more than one building lit, for a selection of several (app.js «Valgt») */
   let marked = [];
-  const groupOf = id => meshes.get(id) || addedGroups.get(id);
+  const groupOf = id => meshes.get(id) || addedGroups.get(id) || groundMeshes.find(m => m.userData.id === id);
   function mark(ids) {
     for (const id of marked) if (id !== selected) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
     marked = ids.filter(id => groupOf(id)); for (const id of marked) groupOf(id).traverse(o => o.material?.emissive?.set("#6b5200")); dirty = true;
+  }
+  /* the pick before the click (U3569, renderkit select.js): a lighter glow on what a click would take */
+  let hovered = [];
+  function hover(ids) {
+    const lit = new Set([...marked, selected].filter(Boolean));
+    for (const id of hovered) if (!lit.has(id)) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
+    hovered = ids.filter(id => groupOf(id) && !lit.has(id)); for (const id of hovered) groupOf(id).traverse(o => o.material?.emissive?.set("#3d3420")); dirty = true;
   }
   function select(id) {
     if (selected) groupOf(selected)?.traverse(o => o.material?.emissive?.set("#000"));
@@ -824,6 +832,15 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       return h ? [Math.round(h.point.x * 10) / 10, Math.round(-h.point.z * 10) / 10, Math.round((h.point.y + base) * 100) / 100] : null;
     },
     follow(f) { followers.add(f); dirty = true; return () => followers.delete(f); },
+    /* what a pointer at cx, cy is on: a building's or a new building's id, and the point [east, north, kote] */
+    hitAt(cx, cy) {
+      const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+      const h = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes], true).find(x => x.object.isMesh);
+      return h ? { id: h.object.userData.id || null, at: [h.point.x, -h.point.z, h.point.y + base] } : null;
+    },
+    hover,
+    /* for renderkit build.js: the scene, the camera in use, the canvas, the site's frame, a thing's shapes, a redraw */
+    kit() { return { THREE, scene, camera: () => camera, el, P, ground, groupOf, redraw: () => { dirty = true; } }; },
     /* where a site point at a kote is on the screen, and whether it is in front of the camera */
     project(p, kote) { const v = P(p, kote).project(camera); return [(v.x + 1) / 2 * container.clientWidth, (1 - v.y) / 2 * container.clientHeight, v.z <= 1]; },
     snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },

@@ -87,6 +87,29 @@ export function checkLandscape(site, e, str) {
   return null;
 }
 
+/* a surface or a path by its id (flate-1, sti-2): changed (reshape) or taken away (demolish), U3569 (Morten 22:41Z «i
+   can only select and manipulate buildings, not objects like the "pool"») */
+export const GROUND_ID = /^(flate|sti)-\d+$/;
+export function checkGroundEdit(site, e, str) {
+  const id = String(e.kind === "demolish" ? e.building ?? "" : e.id ?? "").trim(), g = (site.landscape || []).find(x => x.id === id);
+  if (!g) { const ls = (site.landscape || []).map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; forslaget har ingen flater eller stier ennå"}`); }
+  const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
+  if (e.kind === "demolish") return { kind: "demolish", building: id, ...w_ };
+  const out = { kind: "reshape", id };
+  if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
+  if (g.kind === "surface") {
+    if (e.surface != null) { if (!SURFACES.includes(String(e.surface))) throw new Error(`surface er ${SURFACES.join(", ")}`); out.surface = String(e.surface); }
+    if (e.ring != null) { out.ring = pts(e.ring, "ring", 3); const a = ringArea(out.ring); if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²"); }
+    if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
+  } else {
+    if (e.surface != null) { if (!PATHS.includes(String(e.surface))) throw new Error(`surface for en sti er ${PATHS.join(", ")}`); out.surface = String(e.surface); }
+    if (e.line != null) { out.line = pts(e.line, "line", 2); if (lineLength(out.line) < 1) throw new Error("Stien må være minst 1 m lang"); }
+    if (e.width != null) out.width = num(e.width, 0.5, 20, "Bredden");
+  }
+  if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
+  return Object.assign(out, w_);
+}
+
 function treePoints(e) {
   if (e.points) return e.points;
   const out = [], l = e.line; let carry = 0;
@@ -110,10 +133,17 @@ export function pathRing(line, width) {
 }
 
 export function applyLandscape(site, edits) {
-  const land = [], planted = new Map(); let felled = 0, trees = (site.trees || []).slice();
+  let land = [], n = 0, felled = 0, trees = (site.trees || []).slice(); const planted = new Map();   // n: the ids given, so one taken away leaves the others' ids as they were
   for (const e of edits) {
-    if (e.kind === "surface") land.push({ id: `flate-${land.length + 1}`, kind: "surface", name: e.name || null, surface: e.surface, ring: e.ring, area_m2: round1(ringArea(e.ring)), plants: e.plants || [], why: e.why });
-    else if (e.kind === "path") land.push({ id: `sti-${land.length + 1}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), why: e.why });
+    if (e.kind === "demolish" && GROUND_ID.test(e.building)) land = land.filter(g => g.id !== e.building);
+    else if (e.kind === "reshape" && GROUND_ID.test(e.id)) {
+      const g = land.find(x => x.id === e.id); if (!g) continue;
+      for (const k of ["name", "surface", "plants", "why"]) if (e[k] != null) g[k] = e[k];
+      if (g.kind === "surface" && e.ring) { g.ring = e.ring; g.area_m2 = round1(ringArea(e.ring)); }
+      if (g.kind === "path" && (e.line || e.width != null)) { g.line = e.line || g.line; g.width = e.width ?? g.width; g.ring = pathRing(g.line, g.width); g.length_m = round1(lineLength(g.line)); g.area_m2 = round1(lineLength(g.line) * g.width); }
+    }
+    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, ring: e.ring, area_m2: round1(ringArea(e.ring)), plants: e.plants || [], why: e.why });
+    else if (e.kind === "path") land.push({ id: `sti-${++n}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), why: e.why });
     else if (e.kind === "fell") { const n = trees.length; trees = trees.filter(t => !inRing(t, e.ring)); felled += n - trees.length; }
     else if (e.kind === "trees") {
       const p = plantOf(e.species), cat = p.cat === "conifer" ? "conifer" : /shrub|hedge|rose/.test(p.cat) ? "shrub" : "tree";
@@ -122,6 +152,6 @@ export function applyLandscape(site, edits) {
       const k = e.species, q = planted.get(k) || { species: k, name: p.no, latin: p.la || null, count: 0 }; q.count += at.length; planted.set(k, q);
     }
   }
-  if (!land.length && !planted.size && !felled) return;
+  if (!land.length && !n && !planted.size && !felled) return;
   site.trees = trees; site.landscape = land; site.planted = [...planted.values()]; site.felled = felled;
 }

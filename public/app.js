@@ -5,7 +5,8 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
-import { createSelection } from "./valg.js?v=20261025d";
+import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025e";
+import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
 
@@ -74,8 +75,8 @@ const viewer = createViewer({
   container: $("view"), site: shown.site, floors: shown.floors,
   onPick: (id, how) => {
     if (placing) { const at = viewer.hit(how.x, how.y); if (at) placing(at); return; }   // «Nytt bygg» or «Flytt»: where on the ground
-    valg.pick(id, how); const a = (site.added || []).find(x => x.id === id);
-    if (a) showNew(a); else showInfo(site.buildings.find(b => b.id === id));
+    valg.pick(id, how); const a = (site.added || []).find(x => x.id === id), g = (site.landscape || []).find(x => x.id === id);
+    if (a) showNew(a); else if (g) showGround(g); else showInfo(site.buildings.find(b => b.id === id));
   },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
@@ -315,7 +316,7 @@ const GROUPS = [
   { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell"].includes(e.kind), tip: "Ta det ut igjen" },
   { k: "note", name: "Notater", of: () => true, tip: "Ta notatet ut igjen" },
 ];
-const PAGE_WHY = /^(revet|endret|satt opp) på siden$/;
+const PAGE_WHY = /^(revet|endret|satt opp|fjernet) på siden$/;
 const clock = t => t ? new Date(t).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }) : "";
 function drawDraft() {
   drawWhere();
@@ -367,6 +368,7 @@ function nameOf(id) {
   if (id === "alle") return "Alle sykehusbyggene";
   const low = String(id).toLowerCase(), w = (site0.wings || []).find(x => x.id === id || x.name.toLowerCase() === low); if (w) return w.name;   // Anton names wings too
   const a = draft?.edits?.findLast(x => x.id === id && (x.kind === "volume" || x.kind === "reshape") && x.name); if (a) return a.name;
+  if (/^(flate|sti)-\d+$/.test(id)) { const g = (site.landscape || []).find(x => x.id === id); return g ? groundName(g) : id.startsWith("sti") ? "En sti" : "En flate"; }   // a surface or a path (U3569)
   const b = site0.buildings.find(x => x.id === id); if (!b) return String(id);
   if (b.wing) return (site0.wings || []).find(x => x.id === b.wing)?.name || "Bygning på tomta";
   return b.own ? "Bygning på tomta" : `Nabobygg${KIND[b.type] ? ` (${KIND[b.type]})` : ""}`;
@@ -456,7 +458,8 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   if (e.kind === "restore") return `Beholdes: ${nameOf(e.building)}${why}`;
   if (e.kind === "balconies") return `Balkonger på ${w} mot ${{ N: "nord", Ø: "øst", S: "sør", V: "vest" }[e.side]}, ${String(e.depth).replace(".", ",")} m dype${e.bay ? `, ${String(e.bay).replace(".", ",")} m brede` : ""}${why}`;
   if (e.kind === "reshape") {
-    const was = draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
+    const was = /^(flate|sti)-\d+$/.test(e.id) ? nameOf(e.id) : draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
+    if (e.surface) what.push((SURFACE_NO[e.surface] || e.surface).toLowerCase()); if (e.ring || e.line) what.push("ny form");
     if (e.name) what.push(`navn «${e.name}»`); if (e.use) what.push(`bruk ${e.use}`); if (e.storeys) what.push(`${e.storeys} etasjer`); if (e.built) what.push(`bygget ${e.built}`); if (e.note) what.push("merknad");
     if (e.from) what.push("flyttet eller nye mål"); if (e.width) what.push(`${String(e.width).replace(".", ",")} m bredt`); if (e.height) what.push(`${String(e.height).replace(".", ",")} m høyt`);
     return `${was}: ${what.join(", ")}${why}`;
@@ -491,7 +494,8 @@ async function show(j) {
   draft = d; const m = modelOf(draft.edits);
   const goneNow = new Set((m.site.demolished || []).map(x => x.id));
   const newNow = new Set((m.site.added || []).map(a => a.id));
-  if (valg.items.some(i => i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : i.kind === "new" ? !newNow.has(i.id) : goneNow.has(i.id))) { valg.clear(); shut(); }
+  const groundNow = new Set((m.site.landscape || []).map(g => g.id));
+  if (valg.items.some(i => i.kind === "ground" ? !groundNow.has(i.id) : i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : i.kind === "new" ? !newNow.has(i.id) : goneNow.has(i.id))) { valg.clear(); shut(); }
   refill(site, m.site); refill(floors, m.floors);
   refill(drawnSections, drawnSections0.filter(x => !x.wing || wings.some(w => w.id === x.wing)));
   paint();
@@ -500,6 +504,7 @@ async function show(j) {
   dimStrip(); drawDraft(); drawViews(); ifcLink(); dispatchEvent(new CustomEvent("sykehus:versjoner"));
   dispatchEvent(new CustomEvent("sykehus:valg", { detail: valg.items }));   // the card over the pick shows the new facts
   const open = cardOf && (cardOf.kind === "new" ? (site.added || []).find(a => a.id === cardOf.id) : null); if (open) showNew(open);
+  const openG = cardOf?.kind === "ground" && (site.landscape || []).find(g => g.id === cardOf.id); if (openG) showGround(openG);
   const u = new URL(location.href); for (const k of ["utkast", "versjon", "nokkel", "for"]) u.searchParams.delete(k);
   if (versionId) u.searchParams.set("versjon", versionId); else u.searchParams.set("utkast", draftId);
   history.replaceState(null, "", u.href);
@@ -518,9 +523,9 @@ async function edit(mine_, failed) {
     await show(j); return { n: draft.edits.length, k: mine_.length };
   } finally { busy = false; }
 }
-async function riv(targets, name) {
-  const r = await edit(targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" })), "Fikk ikke revet"); if (!r) return;
-  toast(`${name[0].toUpperCase() + name.slice(1)} er revet i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
+async function riv(targets, name, ground = false) {   // ground: a surface or a path, taken away (U3569)
+  const r = await edit(targets.map(t => ({ kind: "demolish", building: t, why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet"); if (!r) return;
+  toast(`${name[0].toUpperCase() + name.slice(1)} er ${ground ? "fjernet" : "revet"} i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
 
 /* new buildings (U3556, Morten 20:18Z «also crud for buildings, names and such»): «Nytt bygg», then a tap on the
@@ -553,6 +558,16 @@ function turnNew(a) {
 }
 /* the card's «Endre»: the fields that changed, as one change each (a wing's facts) or one reshape (a new building) */
 async function saveFacts(item, v) {
+  if (item.kind === "ground") {   // a surface or a path: its name, what it is laid with, a path's width
+    const g = (site.landscape || []).find(x => x.id === item.id); if (!g) return;
+    const set = {};
+    if (v.name != null && v.name.trim() !== (g.name ?? "")) set.name = v.name.trim();
+    if (v.surface && v.surface !== g.surface) set.surface = v.surface;
+    if (g.kind === "path" && v.width && Math.abs(+v.width - g.width) > 0.05) set.width = +v.width;
+    if (!Object.keys(set).length) return;
+    if (set.name === "") delete set.name;
+    return reshape(item.id, set, `${set.name || groundName(g)} er endret`);
+  }
   if (item.kind === "new") {
     const a = site.added.find(x => x.id === item.id), set = {};
     for (const k of ["name", "use", "built", "note"]) if (v[k] != null && v[k] !== (a[k] ?? "")) set[k] = v[k];
@@ -569,6 +584,16 @@ async function saveFacts(item, v) {
   if (!ed.length) return;
   const r = await edit(ed, "Fikk ikke endret"); if (!r) return;
   toast(`${ed.find(e => e.field === "name")?.value || w.name} er endret.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
+}
+/* a surface's or a path's card in «Bygget» (U3569): what it is, its size, its plants */
+const PLANT_NO = new Map(PLANTS.map(p => [p.id, p.no]));
+function showGround(g) {
+  const plant = id => PLANT_NO.get(id) || id;
+  card(esc(groundName(g)), g.kind === "path" ? "Sti i forslaget" : g.surface === "water" ? "Vann i forslaget" : "Flate i forslaget", rows([
+    [g.kind === "path" ? "Dekke" : "Materiale", esc(SURFACE_NO[g.surface] || g.surface)],
+    ...(g.kind === "path" ? [["Lengde", `${String(g.length_m).replace(".", ",")} m`], ["Bredde", `${String(g.width).replace(".", ",")} m`]] : []),
+    ["Areal", `${num(g.area_m2)} m²`], ...(g.plants?.length ? [["Planter", g.plants.map(p => esc(plant(p))).join(", ")]] : [])]) +
+    (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Lagt i forslaget; ikke i IFC-fila.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
 }
 /* a new building's card in «Bygget» */
 function showNew(a) {
@@ -616,7 +641,7 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261025e").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+import("./float.js?v=20261025f").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: moveNew, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));

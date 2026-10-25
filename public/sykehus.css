@@ -217,7 +217,7 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 /* «Endre» in the card over the pick (U3556): the facts as fields, big enough for a finger */
 .fl-form { display: flex; flex-direction: column; gap: var(--sp-2); min-width: min(340px, calc(100vw - 48px)); }
 .fl-form label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
-.fl-form input { min-height: 40px; font-size: var(--fs-md); padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+.fl-form input, .fl-form select { min-height: 40px; font-size: var(--fs-md); padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
 .fl-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 body.placing #view { cursor: crosshair; }
 

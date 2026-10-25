@@ -10,6 +10,9 @@
    - the panel open: the acts sit in «Bygget»'s card (#selActs, app.js card()), and nothing floats;
    - the panel folded: a small card beside the pick, never over it, that folds to a chip (its «–», or Esc) with the
      pick kept; the chip opens it again. Below 900 px it sits in the bottom stack, over the sheet (Fab's .bstack). */
+import { SURFACE_NO, groundName } from "./valg.js?v=20261025e";
+import { groundAt } from "./renderkit/fit.js";
+const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"], PATHS = ["gravel", "paving", "asphalt", "wood"];   // landscape.js's
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const num = v => Math.round(v).toLocaleString("nb-NO");
 const FOLD = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg>`;
@@ -37,6 +40,19 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     return [a.from, a.to].flatMap(p => [1, -1].flatMap(s => [[p[0] + s * n[0], p[1] + s * n[1], a.base_kote], [p[0] + s * n[0], p[1] + s * n[1], a.top_kote]]));
   };
   const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+  /* a surface or a path (U3569): what it is laid with, how big */
+  const groundFacts = g => [g.name ? SURFACE_NO[g.surface] : null, g.kind === "path" ? `${m1(g.length_m)} × ${m1(g.width)} m` : `${num(g.area_m2)} m²`, g.plants?.length ? `${g.plants.length} arter` : null].filter(Boolean);
+  function groundForm(host, i, g) {
+    const opts = (g.kind === "path" ? PATHS : SURFACES).map(k => `<option value="${k}"${k === g.surface ? " selected" : ""}>${esc(SURFACE_NO[k] || k)}</option>`).join("");
+    host.innerHTML = `<form class="fl-form" autocomplete="off"><div class="fl-h"><b>Endre ${esc(groundName(g))}</b></div>
+      <label>Navn<input name="name" value="${esc(g.name ?? "")}" maxlength="80" placeholder="${esc(groundName({ ...g, name: null }))}"></label>
+      <div class="fl-two"><label>${g.kind === "path" ? "Dekke" : "Materiale"}<select name="surface">${opts}</select></label>${g.kind === "path" ? `<label>Bredde, m<input name="width" value="${m1(g.width)}" inputmode="decimal"></label>` : `<label>Areal<input value="${num(g.area_m2)} m²" disabled></label>`}</div>
+      <div class="fl-acts"><button type="submit" class="riv">Ferdig</button><button type="button" data-x>Avbryt</button></div></form>`;
+    const fm = host.querySelector("form");
+    fm.onsubmit = e => { e.preventDefault(); const v = Object.fromEntries(new FormData(fm)); if (v.width) v.width = v.width.replace(",", "."); editing = null; render(); onSave(i, v); };
+    host.querySelector("[data-x]").onclick = () => { editing = null; render(); };
+    fm.querySelector("input").focus();
+  }
 
   /* «Endre»: the facts that may be set from the page, and for a new building its length and width */
   function form(host, i, w, a) {
@@ -58,9 +74,15 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
   function fill(host, groups, card) {
     const all = groups.flatMap(g => g.bs), news = groups.filter(g => g.a);
     const key = groups.length === 1 ? valg.key(groups[0].i) : null;
-    if (key && editing === key) { form(host, groups[0].i, groups[0].w, groups[0].a); return; }
+    if (key && editing === key) { if (groups[0].gr) groundForm(host, groups[0].i, groups[0].gr); else form(host, groups[0].i, groups[0].w, groups[0].a); return; }
     const head = (b, sub) => card ? `<div class="fl-h"><span class="fl-t"><b>${b}</b><button type="button" class="fl-fold" data-fold title="Skjul kortet (Esc); bygget er fortsatt valgt" aria-label="Skjul kortet">${FOLD}</button></span><span>${sub}</span></div>` : "";
-    if (groups.length === 1 && groups[0].a) {
+    if (groups.length === 1 && groups[0].gr) {
+      const { i, gr } = groups[0];
+      host.innerHTML = `${head(esc(groundName(gr)), groundFacts(gr).map(esc).join(" · "))}
+        <div class="fl-acts"><button type="button" data-ed>Endre</button><button type="button" data-riv>Riv</button><button type="button" data-ask>Spør Anton</button></div>`;
+      host.querySelector("[data-riv]").onclick = () => onRiv([gr.id], groundName(gr).toLowerCase(), true);
+      host.querySelector("[data-ed]").onclick = () => { editing = valg.key(i); render(); };
+    } else if (groups.length === 1 && groups[0].a) {
       const { i, a } = groups[0];
       host.innerHTML = `${head(esc(a.name), newFacts(a).map(esc).join(" · "))}
         <div class="fl-acts"><button type="button" data-ed>Endre</button><button type="button" data-mv>Flytt</button><button type="button" data-tu title="Snu bygget en kvart runde">Snu</button><button type="button" data-riv>Riv</button><button type="button" data-ask>Spør Anton</button></div>`;
@@ -76,17 +98,17 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
       host.querySelector("[data-et]")?.addEventListener("click", () => onStoreys(bs[0]));
       host.querySelector("[data-ed]")?.addEventListener("click", () => { editing = valg.key(i); render(); });
     } else {
-      const n = groups.length, what = groups.every(g => g.w) ? "fløyer" : "bygg";
-      host.innerHTML = `${head(`${n} ${what} valgt`, `${num(all.reduce((a, b) => a + (b.area_m2 || 0), 0) + news.reduce((s, g) => s + g.a.footprint_m2, 0))} m² grunnflate`)}
+      const n = groups.length, what = groups.every(g => g.w) ? "fløyer" : groups.every(g => g.gr) ? "flater" : groups.some(g => g.gr) ? "valgt" : "bygg";
+      host.innerHTML = `${head(what === "valgt" ? `${n} valgt` : `${n} ${what} valgt`, `${num(all.reduce((a, b) => a + (b.area_m2 || 0), 0) + news.reduce((s, g) => s + g.a.footprint_m2, 0) + groups.reduce((s, g) => s + (g.gr?.area_m2 || 0), 0))} m²`)}
         <div class="fl-acts"><button type="button" class="riv" data-riv>Riv alle ${n}</button><button type="button" data-ask>Spør Anton</button></div>`;
-      host.querySelector("[data-riv]").onclick = () => onRiv(groups.map(g => g.a ? g.a.id : g.w ? g.w.id : g.bs[0].id), `${n} bygg`);
+      host.querySelector("[data-riv]").onclick = () => onRiv(groups.map(g => g.gr ? g.gr.id : g.a ? g.a.id : g.w ? g.w.id : g.bs[0].id), `${n} ${what === "valgt" ? "ting" : what}`);
     }
     host.querySelector("[data-ask]")?.addEventListener("click", () => { if (!document.body.classList.contains("talk-on")) panel.reveal("chat"); dispatchEvent(new CustomEvent("sykehus:ask")); });
     host.querySelector("[data-fold]")?.addEventListener("click", () => setFolded(true));
   }
   /* the chip: the name and a «+» to open the card again */
   function chip(groups) {
-    const name = groups.length > 1 ? `${groups.length} valgt` : groups[0].a ? groups[0].a.name : groups[0].w ? groups[0].w.name : groups[0].i.label;
+    const name = groups.length > 1 ? `${groups.length} valgt` : groups[0].gr ? groundName(groups[0].gr) : groups[0].a ? groups[0].a.name : groups[0].w ? groups[0].w.name : groups[0].i.label;
     el.innerHTML = `<button type="button" class="fl-chip" data-open title="Vis kortet" aria-expanded="false"><span>${esc(name)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button>`;
     el.querySelector("[data-open]").onclick = () => setFolded(false);
   }
@@ -94,16 +116,16 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
 
   function render() {
     const slot = document.getElementById("selActs");
-    const picked = valg.items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new");
+    const picked = valg.items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground");
     const v = viewer.view();
-    const groups = picked.map(i => i.kind === "new" ? { i, a: (site.added || []).find(x => x.id === i.id), bs: [] }
-      : i.kind === "wing" ? { i, w: wings.find(x => x.id === i.id), bs: site.buildings.filter(b => b.wing === i.id) } : { i, w: null, bs: site.buildings.filter(b => b.id === i.id) }).filter(g => g.bs.length || g.a);
+    const groups = picked.map(i => i.kind === "ground" ? { i, gr: (site.landscape || []).find(x => x.id === i.id), bs: [] } : i.kind === "new" ? { i, a: (site.added || []).find(x => x.id === i.id), bs: [] }
+      : i.kind === "wing" ? { i, w: wings.find(x => x.id === i.id), bs: site.buildings.filter(b => b.wing === i.id) } : { i, w: null, bs: site.buildings.filter(b => b.id === i.id) }).filter(g => g.bs.length || g.a || g.gr);
     if (!groups.length || v.mode === "section" || v.storey && !v.only) { el.hidden = true; box = null; editing = null; if (slot) slot.innerHTML = ""; return; }
     const key = groups.length === 1 ? valg.key(groups[0].i) : null;
     if (editing && editing !== key) editing = null;
     if (inPane()) { el.hidden = true; box = null; if (slot) fill(slot, groups, false); return; }
     if (slot) slot.innerHTML = "";
-    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a))];
+    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr).flatMap(g => g.gr.ring.map(p => [p[0], p[1], groundAt(site, p)]))];
     el.classList.toggle("folded", folded && !editing);
     if (folded && !editing) chip(groups); else fill(el, groups, true);
     el.hidden = false; size = null; dock(); place();
