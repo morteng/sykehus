@@ -28,6 +28,7 @@ import { createVersions } from "./versions.mjs";
 import { createAuth } from "./auth.mjs";
 import { createLogin } from "./login.mjs";
 import { createAssistant } from "./assistant.mjs";
+import { createStreets } from "./gater.mjs";
 import { createWishes } from "./wishes.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
@@ -59,12 +60,13 @@ const versions = createVersions(), login = createLogin({ SECURITY, readJson, pro
 const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
 const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes });
 const anton = createAssistant({ SECURITY, readJson, login, versions });
+const streets = createStreets({ site, SECURITY });
 
 createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x"), path = decodeURIComponent(url.pathname);
     if (path === "/mcp") return await mcp.handleMcp(req, res);
-    if (await auth.route(req, res, url)) return;
+    if (await auth.route(req, res, url) || await streets.route(req, res, path, url)) return;
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path)) return;
     if (path.startsWith("/api/versjon")) req.webUser = login.personOf(req)?.person ?? null;   // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));

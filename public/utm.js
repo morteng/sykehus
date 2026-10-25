@@ -27,6 +27,14 @@ export function utmToLngLat([E, N]) {
   return [(lon0 + Math.atan2(Math.sinh(eta), Math.cos(xi))) * 180 / Math.PI, p * 180 / Math.PI];
 }
 
+/* the terrain's box in lon/lat, [south, west, north, east] (as renderkit streets.js asks for it): the streets are
+   fetched for this box only, and the server's /gater passes this box only (gater.mjs) */
+export function siteBox(site) {
+  const T = site.terrain, g = siteGrid(site.origin), x1 = T.x0 + T.w * T.res, y0 = T.y1 - T.h * T.res;
+  const c = [[T.x0, T.y1], [x1, T.y1], [T.x0, y0], [x1, y0]].map(g.toLngLat);
+  return [Math.min(...c.map(p => p[1])), Math.min(...c.map(p => p[0])), Math.max(...c.map(p => p[1])), Math.max(...c.map(p => p[0]))];
+}
+
 /* the same on the site: metres east and north of the origin */
 export const siteGrid = ([ox, oy]) => ({
   fromLngLat: q => { const [x, y] = lngLatToUtm(q); return [x - ox, y - oy]; },

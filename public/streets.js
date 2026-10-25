@@ -1,5 +1,6 @@
 /* The streets around the site, as hagekart draws them (U3530): roads with their kerbs and markings, pavements, paths,
-   fences, walls, car parks, lamps and benches, from OSM and NVDB through hagekart's open /api/streets and /api/nvdb,
+   fences, walls, car parks, lamps and benches, from OSM and NVDB through hagekart's open /api/streets and /api/nvdb
+   (fetched by this server, gater.mjs),
    drawn by renderkit's streets3d.js (taken by renderkit.lock.json). Fetched after the model shows; anything that goes
    wrong leaves the site without streets.
 
@@ -10,9 +11,10 @@
 import * as THREE from "./vendor/three.module.js";
 import { loadStreets } from "./renderkit/streets.js";
 import { createStreetMeshes, streetContext } from "./renderkit/streets3d.js";
-import { siteGrid } from "./utm.js";
+import { siteGrid, siteBox } from "./utm.js";
 
-export const STREETS_API = "https://hagekart.gulden.no";
+/* through this server (gater.mjs): the page's Content-Security-Policy lets it fetch from its own origin only */
+export const STREETS_API = "/gater";
 
 export async function addStreets({ viewer, site, api = STREETS_API }) {
   const T = site.terrain, low = Math.min(...T.z.filter(v => v != null)), grid = siteGrid(site.origin);
@@ -26,9 +28,7 @@ export async function addStreets({ viewer, site, api = STREETS_API }) {
     cellAt(x, y) { const c = Math.floor((x - T.x0) / T.res), r = Math.floor((T.y1 - y) / T.res); return c < 0 || r < 0 || c >= T.w || r >= T.h ? -1 : r * T.w + c; },
     toUtm: q => grid.fromLngLat(q),
   };
-  const corners = [[T.x0, T.y1], [T.x0 + T.w * T.res, T.y1], [T.x0, T.y1 - T.h * T.res], [T.x0 + T.w * T.res, T.y1 - T.h * T.res]].map(grid.toLngLat);
-  const bbox = [Math.min(...corners.map(p => p[1])), Math.min(...corners.map(p => p[0])), Math.max(...corners.map(p => p[1])), Math.max(...corners.map(p => p[0]))];
-  const sts = await loadStreets(bbox, { toUtm: F.toUtm, base: api });
+  const sts = await loadStreets(siteBox(site), { toUtm: F.toUtm, base: api });
   if (!sts.length) return null;
   F.streetCtx = streetContext(F, sts);
   F.streetCtx.trunks = (site.trees || []).filter(t => t[2] >= 4).map(([x, y, h]) => ({ x, y, r: Math.min(0.6, 0.12 + 0.02 * h) }));
