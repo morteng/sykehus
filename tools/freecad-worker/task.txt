@@ -1,0 +1,9 @@
+Build this construction as a BIM model with a standalone Python script.
+
+A square glass pyramid greenhouse. Its base is 30 m × 30 m, centred on (0, 0), with the sides running east–west and north–south, and its foot at kote 12.0 (the ground). Its apex is at kote 28.0, 16 m above the ground.
+- Frame: steel members, square hollow 0.10 m. There is one member along each of the 4 hip edges, from corner to apex. On every face there are horizontal members parallel to the base edge, every 3.0 m up the slope measured along the face's centreline. Along the base edge there are rafters every 3.0 m, running from the base edge up toward the apex: each stops where it meets a hip, or runs to the apex. The bottom ring of 4 members along the base edges counts too.
+- Glazing: one flat glass pane in each opening between the members, 0.01 m thick.
+- Foundation: a concrete slab 0.30 m thick under the whole base, its top at kote 12.0.
+- A door 2.0 m wide × 2.5 m high in the middle of the south face's bottom edge. It may be an opening with a door element in it, or just a door element standing there.
+- Name the parameters base = 30, top = 28 (the apex kote), ground = 12, module = 3.0 and profile = 0.10, and keep them in the model (a spreadsheet or a property set).
+- The script writes greenhouse.ifc (IFC4) and greenhouse.glb (glTF binary) in the current directory, and at the end prints one JSON line: {"members": n, "panes": n, "apex_kote": z, "base_m": b}.

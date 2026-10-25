@@ -1,0 +1,5 @@
+# The bake-off's model caller: network, the env file read by name, never a worker.
+FROM python:3.12-slim
+RUN pip install --no-cache-dir "anthropic>=0.70"
+COPY bakeoff.py task.txt /bake/
+ENTRYPOINT ["python", "-I", "/bake/bakeoff.py"]
