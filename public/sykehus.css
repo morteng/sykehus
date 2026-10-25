@@ -191,3 +191,6 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .fl-acts button { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); white-space: nowrap; }
 .fl-acts button.riv { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .fl.docked { position: static; max-width: none; transform: none; }
+
+/* the draft bar's own acts (U3555): «Del», «Ny kopi» */
+.draftrow .acts { display: inline-flex; gap: var(--sp-2); margin-left: var(--sp-2); vertical-align: middle; }

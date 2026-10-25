@@ -13,10 +13,31 @@ import { levels } from "./kit/levels.js";
 const [site0, { floors: floors0 }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
 /* ?utkast=<id>: changes tried through the connector (mcp.mjs try_change), laid over the data and shown as not saved */
 /* ?versjon=<id>: a saved version of the after (versions.mjs), someone's own, public to look at */
-const qs = new URLSearchParams(location.search), versionId = qs.get("versjon");
-let draftId = qs.get("utkast"), draft = null;   // a «Riv» on the model itself starts a draft in place (U3542)
-const fetchDraft = async () => { try { const r = await fetch(versionId ? `api/versjon/${encodeURIComponent(versionId)}${qs.get("nokkel") ? `?nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `api/utkast/${encodeURIComponent(draftId)}`); return r.ok ? await r.json() : { missing: true }; } catch { return { missing: true }; } };
+const qs = new URLSearchParams(location.search);
+let versionId = qs.get("versjon"), nokkel = qs.get("nokkel"), draftId = qs.get("utkast"), draft = null;   // a «Riv» on the model itself starts a draft in place (U3542)
+const fetchDraft = async () => { try { const r = await fetch(versionId ? `api/versjon/${encodeURIComponent(versionId)}${nokkel ? `?nokkel=${encodeURIComponent(nokkel)}` : ""}` : `api/utkast/${encodeURIComponent(draftId)}`); return r.ok ? await r.json() : { missing: true }; } catch { return { missing: true }; } };
+/* everything is kept as it is made (U3555, Morten 20:18Z «everything should be autosaved, only sharing is manual»):
+   signed in, the person's work is one private version (the server's «work»), opened here unless the address names
+   another or asks for the before (?for); signed out, the draft is on the server a day and its id in this browser,
+   and signing in moves it into the person's version */
+const KEPT = "sykehus-utkast", me = await fetch("api/meg").then(r => r.json()).catch(() => ({}));
+let kept = null; try { kept = localStorage.getItem(KEPT); } catch { }
+const post = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then(r => r.ok ? r.json() : null).catch(() => null);
+if (me.person && kept) {
+  const j = await post("api/endring", { adopt: kept });
+  try { localStorage.removeItem(KEPT); } catch { }
+  if (j?.version && (!versionId && !qs.has("for") || draftId === kept)) { versionId = j.version; nokkel = null; draftId = null; }
+}
+if (!versionId && !draftId && !qs.has("for")) {
+  if (me.person) { const w = (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.find(v => v.mine && v.work); if (w) versionId = w.version; }
+  else if (kept) draftId = kept;
+}
 if (versionId || draftId) draft = await fetchDraft();
+if (draft?.missing && draftId === kept) { try { localStorage.removeItem(KEPT); } catch { } }
+if (draft && !draft.missing && !qs.has(versionId ? "versjon" : "utkast")) {   // the work opened by itself: its own address, to come back to
+  const u = new URL(location.href); u.searchParams.delete("nokkel"); u.searchParams.set(versionId ? "versjon" : "utkast", versionId || draftId); history.replaceState(null, "", u.href);
+}
+const mine = () => !!versionId && !!draft?.version && !!me.person && draft.owner === me.person;
 /* the drawn sections, by hand from the sheets (data/sections.json) */
 const thumbs = await fetch("data/ark/index.json").then(r => r.ok ? r.json() : {}).catch(() => ({}));   // small pictures of the sheets (tools/thumbs.py)
 const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
@@ -259,12 +280,22 @@ function drawDraft() {
   if (!draft) return;
   const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
   $("draftRow").innerHTML = `<div class="draftrow">${draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
-    : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
-    : `<b>Utkast, ikke lagret</b> · ${ch}. <a href="./">Se modellen uten</a>`
-      + ""}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span><button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button></li>`).join("")}</ol>` : ""}</div>`;
+    : mine() ? `<b>${esc(draft.title)}</b> · lagret · ${ch} · ${{ privat: "bare du ser den", lenke: "delt med lenke", offentlig: "offentlig" }[draft.sharing] || ""}. <a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button><button type="button" class="sm" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button></span>`
+    : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./?for">Se før</a>`
+    : `<b>Utkast</b> · lagret på denne maskinen et døgn · ${ch}. ${me.person ? "" : "Logg inn for å beholde det. "}<a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button></span>`}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span>${draft.version && !mine() ? "" : `<button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button>`}</li>`).join("")}</ol>` : ""}</div>`;
   for (const b of $("draftRow").querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
+  $("draftRow").querySelector("[data-del]")?.addEventListener("click", share);
+  $("draftRow").querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); toast("Ny kopi. Endringene her går inn i den."); });
 }
 drawDraft();
+/* «Del», the one thing done by hand: a version is opened to those with its link, a draft's own link is given */
+async function share() {
+  let link;
+  if (mine()) { const j = await change({ share: versionId }); if (j.error) return toast(`Fikk ikke delt: ${j.error}`); link = j.link; draft.sharing = j.sharing; drawDraft(); }
+  else link = new URL(`./?utkast=${encodeURIComponent(draftId)}`, location.href).href;
+  try { await navigator.clipboard.writeText(link); toast("Lenken er kopiert. Alle med den ser dette, også uten innlogging."); }
+  catch { toast(`Lenken: ${link}`); }
+}
 function describe(e) {   // by the wings as they were, since a wing torn down is gone from site.wings
   const wings = site0.wings || [], w = wings.find(x => x.id === e.wing)?.name || e.wing;
   const why = e.why ? ` (${e.why})` : "";
@@ -286,7 +317,9 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
    after, never in the data: into the draft shown, or the signed-in person's own version shown, else a new draft (a
    day, no login). The page then shows the draft from the same place, with «Angre» over the view; «Forslag» lists
    every change with its own «Angre». What is torn down leaves nothing on the model. */
-const where = () => versionId ? { version: versionId } : draftId && draft && !draft.missing ? { draft: draftId } : {};
+/* where a change goes: one's own version shown, the draft shown, else one's own work (signed in, the server's; signed
+   out, the draft this browser keeps, if it is still there), else a new draft */
+const where = () => mine() ? { version: versionId } : !versionId && draftId && draft && !draft.missing ? { draft: draftId } : !me.person && kept ? { draft: kept } : {};
 let busy = false;   // one change at a time
 async function change(body) {
   const r = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
@@ -296,7 +329,8 @@ async function change(body) {
 /* the draft or version after a change, in place: its edits fetched, the model laid anew over the same objects, the
    viewer told what is gone, the strip, «Forslag» and the IFC link redrawn, the address changed without a reload */
 async function show(j) {
-  if (j.draft && !versionId) draftId = j.draft;
+  if (j.version) { versionId = j.version; nokkel = null; draftId = null; }
+  else if (j.draft) { versionId = null; draftId = kept = j.draft; try { localStorage.setItem(KEPT, j.draft); } catch { } }
   const d = await fetchDraft(); if (d.missing) return toast("Fikk ikke hentet utkastet.");
   draft = d; const m = modelOf(draft.edits);
   const goneNow = new Set((m.site.demolished || []).map(x => x.id));
@@ -306,14 +340,17 @@ async function show(j) {
   viewer.setGone([...goneNow]);
   storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
   if (storeyOn && !storeys.includes(storeyOn)) pickStorey(null); else if (storeyOn) showStorey(storeyOn);
-  dimStrip(); drawDraft(); ifcLink();
-  const u = new URL(location.href); if (!versionId) u.searchParams.set("utkast", draftId);
+  dimStrip(); drawDraft(); ifcLink(); dispatchEvent(new CustomEvent("sykehus:versjoner"));
+  const u = new URL(location.href); for (const k of ["utkast", "versjon", "nokkel", "for"]) u.searchParams.delete(k);
+  if (versionId) u.searchParams.set("versjon", versionId); else u.searchParams.set("utkast", draftId);
   history.replaceState(null, "", u.href);
 }
 async function riv(targets, name) {
   if (busy) return; busy = true;
   try {
-    const j = await change({ ...where(), edits: targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" })) });
+    const edits = targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" }));
+    let j = await change({ ...where(), edits });
+    if (j.error && !draftId && kept) { kept = null; j = await change({ edits }); }   // the kept draft is past its day
     if (j.error) return toast(`Fikk ikke revet: ${j.error}`);
     await show(j);
     const n = draft.edits.length, k = targets.length;
@@ -337,7 +374,7 @@ async function undoLast(n, k) { for (let i = 0; i < k - 1; i++) { const j = awai
 /* the IFC with the after's demolitions taken out (the server's ifcfilter.mjs) */
 function ifcLink() {
   if (!draft || draft.missing) return;
-  const a = document.querySelector("header a.ab-ic[href*='ifc']"), q = versionId ? `versjon=${encodeURIComponent(versionId)}${qs.get("nokkel") ? `&nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `utkast=${encodeURIComponent(draftId)}`;
+  const a = document.querySelector("header a.ab-ic[href*='ifc']"), q = versionId ? `versjon=${encodeURIComponent(versionId)}${nokkel ? `&nokkel=${encodeURIComponent(nokkel)}` : ""}` : `utkast=${encodeURIComponent(draftId)}`;
   a.href = `api/ifc?${q}`; a.removeAttribute("download");
   a.title = "Last ned modellen med endringene (IFC): det som er revet er tatt ut. Det som er bygget nytt er ikke med i fila ennå."; a.setAttribute("aria-label", "Last ned modellen med endringene");
 }

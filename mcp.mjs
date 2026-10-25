@@ -9,7 +9,8 @@ import { randomBytes } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
@@ -84,10 +85,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return (a ? "…" : "") + text.slice(a, b).replace(/\s+/g, " ").trim() + (b < text.length ? "…" : "");
   }
 
-  // ---------- drafts: changes tried on the model, kept here for a day, never written to the data ----------
-  const drafts = new Map(), DRAFT_MS = 24 * 3600e3, MAX_DRAFTS = 500, MAX_EDITS = 200;
+  // ---------- drafts: changes tried on the model, kept a day from their last change, never written to the data ----------
+  /* kept on disk too (U3555, Morten 20:18Z «everything should be autosaved»): a file a draft in
+     SYKEHUS_VERSIONS_DIR/utkast, written whole and renamed over, read back at start, so a restart keeps them */
+  const drafts = new Map(), DRAFT_MS = 24 * 3600e3, MAX_DRAFTS = 500, MAX_EDITS = 200, DID = /^[A-Za-z0-9_-]{8}$/;
+  const ddir = process.env.SYKEHUS_VERSIONS_DIR ? join(process.env.SYKEHUS_VERSIONS_DIR, "utkast") : null;
+  if (ddir) { mkdirSync(ddir, { recursive: true }); for (const f of readdirSync(ddir)) { if (!f.endsWith(".json") || !DID.test(f.slice(0, -5))) continue;
+    try { const d = JSON.parse(readFileSync(join(ddir, f), "utf8")); if (d.id === f.slice(0, -5) && Date.now() - d.t <= DRAFT_MS && Array.isArray(d.edits)) drafts.set(d.id, d); else unlinkSync(join(ddir, f)); } catch (e) { console.error("drafts: skipping", f, e.message); } } }
+  const keepDraft = d => { if (!ddir) return; const p = join(ddir, d.id + ".json"); try { writeFileSync(p + ".tmp", JSON.stringify(d)); renameSync(p + ".tmp", p); } catch (e) { console.error("drafts: write", e.message); } };
+  const dropDraft = id => { drafts.delete(String(id)); if (ddir && DID.test(String(id))) try { unlinkSync(join(ddir, id + ".json")); } catch { } };
   const newId = () => randomBytes(6).toString("base64url");
-  const draftOf = id => { const d = drafts.get(String(id)); if (!d || Date.now() - d.t > DRAFT_MS) { drafts.delete(String(id)); throw toolErr(`No draft "${id}" (drafts last a day). Start a new one with try_change.`); } return d; };
+  const draftOf = id => { const d = drafts.get(String(id)); if (!d || Date.now() - d.t > DRAFT_MS) { dropDraft(id); throw toolErr(`No draft "${id}" (drafts last a day). Start a new one with try_change.`); } return d; };
   const draftUrl = (o, id) => `${o}/?utkast=${id}`;
   /* a version (versions.mjs) by its id, for anyone to look at; and one to change, for its owner only */
   const versionOf = (id, req) => { const v = versions?.get(id); if (!v || (req && !versions.visible(v, userOf(req)))) throw toolErr(versions ? `No version "${id}" that you can see (a private version opens for its owner only). list_versions shows them.` : "Versions are not kept on this server."); return v; };
@@ -205,12 +213,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => {
         let d, v = null;
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
-        else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) drafts.delete(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
+        else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         for (const [i, e] of a.edits.entries()) { try { const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
         const after = afterOf(applyEdits(site, floors, d.edits));
         if (v) { if (ok.length) versions.save(v); return { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), saved: true }; }
-        d.t = Date.now();
+        d.t = Date.now(); keepDraft(d);
         return { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), saved: false,
           note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; } },
     { name: "show_draft", title: "Se et utkast eller en versjon", ro: true, schema: S({ draft: { type: "string", description: "A draft id or a version id (v…)" } }, ["draft"]),
@@ -222,7 +230,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => {
         const v = /^v.{8}$/.test(String(a.draft)) ? ownVersion(a.draft, req) : null, edits = v ? v.edits : draftOf(a.draft).edits;
         if (a.n > edits.length) throw toolErr(`It has ${edits.length} changes.`);
-        const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v);
+        const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v); else { const d = draftOf(a.draft); d.t = Date.now(); keepDraft(d); }
         return { ...(v ? versionOut(v, originOf(req), req) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
     { name: "new_version", title: "Ny versjon", write: true, schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
       description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts privat (only they see it); set_sharing makes it lenke (anyone with the link) or offentlig (on the front page). from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
@@ -378,7 +386,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const me = req.webUser ?? null;   // signed in on the page: their own versions too, each with the key that opens it
     return send(res, 200, { versions: (versions?.list({ viewer: me }) || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated,
-      ...(me && v.owner === me ? { mine: true, sharing: v.sharing, ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
+      ...(me && v.owner === me ? { mine: true, sharing: v.sharing, ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
   }
   /* POST /api/endring: the page's «Riv» and «Angre» (U3542), the same as try_change and undo_change: {edits, draft?,
      version?} adds (no draft: a new one), {undo: n, draft | version} takes the n-th out. A version is the signed-in
@@ -388,11 +396,34 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     let a; try { a = await readJson(req, 1e5); } catch { return send(res, 400, { error: "Ugyldig forespørsel." }); }
     try {
       bump(`web:${req.socket.remoteAddress}`, 60, 600e3);
+      const me = req.webUser ?? null, o = originOf(req);
+      /* signed in, the person's work is one private version, saved on every change (U3555): the one marked work */
+      const work = () => { const v = versions.list({ owner: me, viewer: me }).find(x => x.work); if (v) return v;
+        const n = versions.create(me, "Mitt etter"); n.work = true; return versions.save(n); };
+      if (a.adopt || a.copy || a.share) {
+        if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
+        if (a.adopt) {   // a draft made signed out, moved into the person's version at sign-in; then the draft is gone
+          const d = draftOf(a.adopt), v = work(); v.edits.push(...structuredClone(d.edits).slice(0, MAX_VERSION_EDITS - v.edits.length)); versions.save(v); dropDraft(d.id);
+          return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own, adopted: d.edits.length });
+        }
+        if (a.copy) {   // «Ny kopi»: a second alternative, which becomes the one worked on
+          const from = ownVersion(String(a.copy), req), n = versions.list({ owner: me, viewer: me }).length + 1;
+          const v = versions.create(me, `Mitt etter ${n}`, structuredClone(from.edits));
+          for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
+          v.work = true; versions.save(v);
+          return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
+        }
+        const v = ownVersion(String(a.share), req);   // «Del»: anyone with the link sees it, signed out too
+        if (v.sharing === "privat") { v.sharing = "lenke"; versions.save(v); }
+        return send(res, 200, versionOut(v, o, req));
+      }
+      if (me && versions && !a.version && !a.draft && !a.undo) a.version = work().id;
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
       const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 10) : [], ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
       if (!a.undo && args.edits.some(e => !["demolish", "restore"].includes(e?.kind))) throw toolErr("Fra siden: bare riv og sett opp igjen.");   // the rest goes through Anton
-      const out = await tool.run(args, req);
+      const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
+      if (mine && mine.owner === me) out.nokkel = mine.own;
       if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).join(" "), ...out });
       return send(res, 200, out);
     } catch (e) { return send(res, e.tool ? 400 : 500, { error: e.tool ? e.message : "Noe gikk galt." }); }
