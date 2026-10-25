@@ -18,3 +18,6 @@ Morten's decisions on how Sykehustomta is built, newest last. Each names when an
   postMessage bridge `ui/initialize` … `ui/update-model-context`). Older clients' `initialize` still works.
   Authorization, when saving comes: OAuth per 2026-07-28, Client ID Metadata Documents rather than dynamic
   client registration.
+- **2026-10-25 17:00Z (via pm):** «and the floating lables have to be optional, make the ui/ux nice and polished and
+  simple and intuitive»: the names over the 3D view and plan (the wings', the rooms' stamps) have an on/off button,
+  «Navn» in the bar (key N), remembered in that browser; a section's kote stay. And a polish pass on the page.

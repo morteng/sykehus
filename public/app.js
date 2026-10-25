@@ -121,12 +121,17 @@ function section(b, kind, drawn = null) {
   for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
   showInfo(b);
 }
+/* the names over the picture: on unless this viewer took them away (remembered in this browser) */
+let names = true; try { names = localStorage.getItem("sykehus-navn") !== "av"; } catch { }
+function setNames(on) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); try { localStorage.setItem("sykehus-navn", on ? "på" : "av"); } catch { } }
+setNames(names); $("names").onclick = () => setNames(!names);
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
 /* the keys: + and − zoom, ↑ ↓ (or Page Up / Down) a storey up or down the ladder, Esc puts the card away */
 addEventListener("keydown", e => {
   if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
-  if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
+  if (e.key === "n" || e.key === "N") setNames(!names);
+  else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
   else if (e.key === "Escape") $("info").style.display = "none";
   else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {

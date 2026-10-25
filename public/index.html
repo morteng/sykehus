@@ -21,7 +21,10 @@
   .sep { width: 1px; align-self: stretch; background: var(--line); }
   button { font: inherit; font-size: 17px; min-height: 46px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
   button:hover { border-color: var(--soft); }
+  button { transition: background-color .12s, border-color .12s, color .12s; }
   button[aria-pressed="true"] { background: var(--on); color: #fff; border-color: var(--on); }
+  button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid #2f6db0; outline-offset: 2px; }
+  #title a { text-underline-offset: 2px; text-decoration-color: #23211e66; } #title a:hover { text-decoration-color: currentColor; }
   button small { display: block; font-size: 13px; opacity: .75; line-height: 1; margin-top: -2px; }
   #north { top: 14px; right: 14px; width: 64px; height: 64px; display: grid; place-items: center; }
   #north svg { width: 46px; height: 46px; transition: transform .1s; }
@@ -52,7 +55,7 @@
   /* the first visit only: how to move about, gone at the first touch or after a while */
   #tip { top: 14px; left: 50%; transform: translateX(-50%); padding: 8px 16px; font-size: 15px; color: var(--soft); pointer-events: none; transition: opacity .6s; }
   #tip.gone { opacity: 0; }
-  @media (max-width: 640px) { .lbl { display: none; } #tip { top: auto; bottom: 230px; max-width: calc(100vw - 24px); text-align: center; } #draft { top: auto; bottom: 230px; max-width: calc(100vw - 24px); } #info, #scale { bottom: 150px; } #bar { flex-direction: column; gap: 8px; width: calc(100vw - 24px); } #bar .sep { display: none; } #floors { max-width: 100%; overflow-x: auto; } }
+  @media (max-width: 640px) { .lbl { display: none; } #tip { top: auto; bottom: 230px; max-width: calc(100vw - 24px); text-align: center; } #draft { top: auto; bottom: 230px; max-width: calc(100vw - 24px); } #info, #scale { bottom: 150px; } #bar { flex-wrap: wrap; justify-content: center; gap: 8px; width: calc(100vw - 24px); } #bar .sep { display: none; } #floors { flex: 1 0 100%; max-width: 100%; overflow-x: auto; } }
   /* signing in: the four digits, big */
   #code { font: 600 34px/1 ui-monospace, Menlo, monospace; letter-spacing: .35em; width: 5.2em; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; text-align: center; margin-right: 8px; }
   #info .err { color: var(--red); min-height: 1.2em; margin: 6px 0 0; }
@@ -113,6 +116,10 @@
   <div class="group">
     <button id="m3d" aria-pressed="true">3D</button>
     <button id="mplan" aria-pressed="false">Plan</button>
+  </div>
+  <div class="sep"></div>
+  <div class="group">
+    <button id="names" aria-pressed="true" title="Vis eller skjul navnene på fløyene og rommene (N)">Navn</button>
     <button id="print" hidden title="Skriv ut det du ser som et ark, med målestokk og kilder">Skriv ut</button>
   </div>
 </div>

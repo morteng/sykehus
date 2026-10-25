@@ -398,7 +398,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   if (getComputedStyle(container).position === "static") container.style.position = "relative";
   container.appendChild(tags);
   const roomTags = new Map(floors.map(f => [f.id, (f.rooms || []).map(r => {
-    const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 3px #fffbf0,0 0 3px #fffbf0";
+    const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;padding:1px 3px;border-radius:3px;background:#fbf9f4c4;text-shadow:0 0 2px #fffbf0";
     el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²`
       : r.area_calc ? `<br><span title="Målt mellom veggene på tegningen, ikke skrevet på den">ca. ${Math.round(r.area_calc)} m²</span>` : "");
     tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), area: r.area_m2 || r.area_calc || 0 };
@@ -411,9 +411,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     return { el, at: P(c, (b.top ?? b.base + 10) + 2), area: b.area_m2 || 0 };
   }).sort((a, b) => b.area - a.area);
   const v3 = new THREE.Vector3();
+  let names = true;   // the wings' and rooms' names over the picture; the page can take them away (a section's kote stay)
   function placeTags() {
+    if (!names) { for (const t of [...wingTags, ...[...roomTags.values()].flat()]) t.el.style.display = "none"; }
     const w = container.clientWidth, h = container.clientHeight, close = mode === "plan" ? view().mPerPx < 0.09 : O.dist < 150, placed = [];
-    for (const t of wingTags) {
+    for (const t of names ? wingTags : []) {
       if ((storey && !only) || mode === "section") { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
@@ -421,13 +423,14 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       t.el.style.display = "block"; t.size ??= [t.el.offsetWidth, t.el.offsetHeight];
       const box = [x - t.size[0] / 2 - 3, y - t.size[1] - 3, x + t.size[0] / 2 + 3, y + 3];
       if (placed.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) { t.el.style.display = "none"; continue; }
-      placed.push(box); t.el.style.transform = `translate(${(x - t.size[0] / 2).toFixed(0)}px, ${(y - t.size[1]).toFixed(0)}px)`;
+      const left = Math.max(4, Math.min(w - t.size[0] - 4, x - t.size[0] / 2));   // a name near the edge stays whole
+      placed.push(box); t.el.style.transform = `translate(${left.toFixed(0)}px, ${(y - t.size[1]).toFixed(0)}px)`;
     }
     for (const t of secTags) {
       v3.copy(t.at).project(camera); const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
       t.el.style.display = y < 0 || y > h ? "none" : "block"; t.el.style.transform = `translate(${Math.min(x, w - t.el.offsetWidth - 4).toFixed(0)}px, ${(y - 16).toFixed(0)}px)`;
     }
-    for (const [id, list] of roomTags) for (const t of list) {
+    for (const [id, list] of names ? roomTags : []) for (const t of list) {
       if (!shownFloors.has(id) || !close) { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
@@ -689,7 +692,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
-    get labels() { return tags; },   // the names and kote over the picture, for a printed sheet
+    get labels() { return tags; },
+    setNames(on) { names = !!on; dirty = true; },   // the names and kote over the picture, for a printed sheet
     /* for tools drawn over the model (trace.js): add and take away things, a site point under the pointer at a
        kote, and where a site point at a kote is on the screen */
     add(o) { scene.add(o); dirty = true; }, remove(o) { scene.remove(o); dirty = true; }, redraw() { dirty = true; },
