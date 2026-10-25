@@ -2,6 +2,7 @@
 reads): rectangles along the sheet's own axes, in the sheet's points (PDF points, y down).
 
   python -I tools/scanwalls.py <pdf> <page> <scan index.json> <sheet id> <out.json> [x0,y0,x1,y1 (pt, the plan's part of the page)] [--debug out.png]
+     [--mask words.json (the text tools/scanrooms.py read, --debug, blanked first)]
   python -I tools/scanwalls.py - - <scan index.json> <sheet id> <out.json> --lines <linewalls.json> [--rooms <rooms.json>]   (a vector sheet)
 
 How: the page is drawn at about 8 pixels a point's worth of 1:200 (4 000 px across an A3), made black and white, and
@@ -18,7 +19,7 @@ import numpy as np
 import pymupdf
 from scipy import ndimage as ndi
 
-opts = {k: sys.argv[i + 1] for i, k in enumerate(sys.argv) if k in ("--debug", "--lines", "--rooms")}
+opts = {k: sys.argv[i + 1] for i, k in enumerate(sys.argv) if k in ("--debug", "--lines", "--rooms", "--mask")}
 args = [a for i, a in enumerate(sys.argv[1:], 1) if not a.startswith("--") and sys.argv[i - 1] not in opts]
 pdf, page, index, sid, out = args[:5]
 region = [float(v) for v in args[5].split(",")] if len(args) > 5 else None
@@ -33,7 +34,7 @@ if "--lines" in opts:
     rooms = [{"name": r["name"], "area_m2": r.get("area_m2"), "code": r.get("code"), "at": [round(r["at"][0], 2), round(Hp - r["at"][1], 2)]}
              for r in (json.load(open(opts["--rooms"], encoding="utf-8")) if "--rooms" in opts else [])]
     trace = {k: sheet.get(k) for k in ("id", "storey", "kote", "height", "how", "wing", "building", "doc", "page", "title", "size")}
-    trace.update(cp=[], walls=walls, rooms=rooms, traced="vegger fra vektortegningens linjer (tools/linewalls.py)" + (", rom fra tegningens stempler (tools/rooms.py)" if rooms else ""))
+    trace.update(cp=[], walls=walls, rooms=rooms, traced="vegger fra vektortegningens linjer (tools/linewalls.py)" + (", rom fra tegningens stempler (tools/rooms.py eller stamps.py)" if rooms else ""))
     json.dump(trace, open(out, "w", encoding="utf-8")); print(f"{sid}: {len(walls)} walls, {len(rooms)} rooms from the vector drawing"); sys.exit(0)
 doc = pymupdf.open(pdf); pg = doc[int(page) - 1]
 W, H = pg.rect.width, pg.rect.height
@@ -44,6 +45,12 @@ pix = pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), colorspace=pymupdf.csGRAY
 img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
 m_px = m_per_pt / zoom                                          # metres a pixel
 dark = img < int(sheet.get("dark", 150))                        # the scan's grey counts as ink below this
+if "--mask" in opts:
+    # the words tools/scanrooms.py read (its --debug file, page points): text is not wall, so it is blanked first
+    for w in json.load(open(opts["--mask"], encoding="utf-8")):
+        if w["conf"] < 0.3: continue
+        x0, y0, x1, y1 = [int(round(v * zoom)) for v in w["b"]]
+        dark[max(0, y0 - 2):y1 + 2, max(0, x0 - 2):x1 + 2] = False
 if region:
     x0, y0, x1, y1 = [int(round(v * zoom)) for v in region]
     keep = np.zeros_like(dark); keep[y0:y1, x0:x1] = True; dark &= keep
@@ -56,21 +63,27 @@ angles = np.arange(-2, 2.01, 0.1); best = max(angles, key=sharp)
 angles = np.arange(best - 0.1, best + 0.101, 0.02); best = float(max(angles, key=sharp))
 straight = ndi.rotate(dark, best, reshape=False, order=0) if abs(best) > 0.005 else dark
 
-run = max(4, int(round(0.6 / m_px)))                            # a wall runs at least 0.6 m straight
+run = max(4, int(round(float(sheet.get("run", 0.6)) / m_px)))     # a wall runs at least 0.6 m straight (the scan index may say more)
 rects = []
 # 1. walls filled solid, or drawn as two lines the scan has run together: straight dark bands at least `tmin` thick
 #    (single lines, text and furniture are thinner and are taken away by the square), runs at least `run` long
 tmin = max(2, int(round(float(sheet.get("tmin", 0.07)) / m_px)))
-thick = ndi.binary_opening(straight, structure=np.ones((tmin, tmin)))
+# a coarse scan (SB 12, 150 dpi: a pixel is 15 cm at 1:200) draws a wall as two one-pixel lines with a pixel of white
+# between: `close` (metres, the scan index) fills that gap first, each way apart so corners do not fill
+src = straight
+if sheet.get("close"):
+    k = max(2, int(round(float(sheet["close"]) / m_px)))
+    src = ndi.binary_closing(straight, structure=np.ones((k, 1))) | ndi.binary_closing(straight, structure=np.ones((1, k)))
+thick = ndi.binary_opening(src, structure=np.ones((tmin, tmin)))
 for st in (np.ones((1, run)), np.ones((run, 1))):
     lab, n = ndi.label(ndi.binary_opening(thick, structure=st))
     for ys, xs in ndi.find_objects(lab):
         h, w = ys.stop - ys.start, xs.stop - xs.start
-        if max(h, w) >= run and min(h, w) <= 1.2 / m_px: rects.append((xs.start, ys.start, xs.stop, ys.stop))
+        if max(h, w) >= run and min(h, w) <= float(sheet.get("tmax", 1.2)) / m_px: rects.append((xs.start, ys.start, xs.stop, ys.stop))
 # 2. walls drawn as two lines: long thin straight lines (text and furniture are not continuous that far), paired with
 #    a parallel line `pair` metres away (6 to 22 cm unless the index says) along at least `run` of both; the wall is the band between them
 pmin, pmax = sheet.get("pair", [0.06, 0.22])                    # how far apart a wall's two lines are (the scan index)
-gmin, gmax, lw = int(round(pmin / m_px)), int(round(pmax / m_px)), max(2, int(round(0.07 / m_px)))
+gmin, gmax, lw = int(round(pmin / m_px)), int(round(pmax / m_px)), max(2, int(round(float(sheet.get("lw", 0.07)) / m_px)))   # lw: how thick one drawn line is at most
 def lines(img, horiz):
     lab, n = ndi.label(ndi.binary_opening(img, structure=np.ones((1, run)) if horiz else np.ones((run, 1))))
     out = []

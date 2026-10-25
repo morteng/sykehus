@@ -1,5 +1,5 @@
 {
- "about": "Scanned floor plans to trace (public/trace.js), from the document store; size is the PDF page in points, scale the sheet's own (1:scale). Kote from the wing's storey ladder; where no drawing gives it, how says so. dark, tmin: how tools/scanwalls.py reads the sheet (grey below dark is ink; walls at least tmin metres). north: the sheet's north arrow, degrees clockwise from the sheet's up (picks the quarter turn in tools/tracefit.py). placed: where tools/tracefit.py put the sheet (two control points, sheet x, y, site x, y), the trace mode's first guess.",
+ "about": "Scanned floor plans to trace (public/trace.js), from the document store; size is the PDF page in points, scale the sheet's own (1:scale). Kote from the wing's storey ladder; where no drawing gives it, how says so. dark, tmin: how tools/scanwalls.py reads the sheet (grey below dark is ink; walls at least tmin metres). north: the sheet's north arrow, degrees clockwise from the sheet's up (picks the quarter turn in tools/tracefit.py). close, run, tmax, lw: for a coarse scan, the gap between a wall's two lines filled, the shortest wall, the thickest, and how thick one line is (metres). placed: where tools/tracefit.py put the sheet (two control points, sheet x, y, site x, y), the trace mode's first guess.",
  "sheets": [
   {
    "id": "vest-6",
@@ -62,7 +62,17 @@
      30.984,
      44.609
     ]
-   ]
+   ],
+   "dark": 200,
+   "tmin": 0.2,
+   "close": 0.2,
+   "run": 1.2,
+   "tmax": 0.5,
+   "pair": [
+    0.25,
+    0.5
+   ],
+   "lw": 0.2
   },
   {
    "id": "fs-2",

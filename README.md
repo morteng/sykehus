@@ -49,6 +49,11 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   mode: the sheet under the map, place it by point pairs, draw, move and delete walls and room stamps, download the
   trace. Traces are kept in `tools/traces/`; `node tools/trace-import.mjs` puts them in floors.json as floors
   `spor-<id>`. Run order: floors.mjs, trace-import.mjs, roompoly.py, ifc.py.
+- Room stamps on the traced sheets: `python -I tools/scanrooms.py <pdf> <page> public/data/skann/index.json
+  <trace.json> [--debug words.json]` reads a scan's stamps (code, name, area) with the Mac's own text recognition
+  (`tools/ocr.swift`, compiled on first use; macOS only) into the trace; its words, given to scanwalls.py as `--mask`,
+  keep text from being taken for walls. `python -I tools/stamps.py <pdf> <page> <rooms.json>` reads the stamps of a
+  vector sheet that writes them turned a quarter (SB 11), for scanwalls.py `--rooms`.
 - `python3 -I tools/thumbs.py public/data/site.json twin-pack/sheets public/data/ark`: small pictures of the drawings
   the wing cards name (a click opens the PDF at the page). Needs Pillow.
 - `python3 -I tools/ingest.py <sources> <data dir> [report.md]`: the document store (`docs.sqlite`, full text).
