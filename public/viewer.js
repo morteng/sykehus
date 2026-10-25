@@ -317,7 +317,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const groundMeshes = [];
   function setLandscape(list) {
     for (const m of groundMeshes.splice(0)) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
-    drawLandscape(list); dirty = true;
+    drawLandscape(list); if (rimFor) rimGround(true); dirty = true;
   }
   function drawLandscape(list) { for (const [n, g] of (list || []).entries()) {
     const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
@@ -335,7 +335,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
     /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
-    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; scene.add(m); groundMeshes.push(m);
+    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; scene.add(m); groundMeshes.push(m);
   } }
   drawLandscape(site.landscape);
 
@@ -573,8 +573,35 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const w = container.clientWidth || 600, h = container.clientHeight || 400, half = O.dist * 0.36;
       Object.assign(ortho, { left: -half * w / h, right: half * w / h, top: half, bottom: -half }); ortho.updateProjectionMatrix();
       ortho.position.set(t.x, 1500, t.z); ortho.up.set(0, 0, -1); ortho.lookAt(t.x, 0, t.z);
-    } else { camera.position.set(t.x + O.dist * cp * Math.sin(O.yaw), t.y + O.dist * Math.sin(O.pitch), t.z + O.dist * cp * Math.cos(O.yaw)); camera.lookAt(t); }
+    } else {
+      /* never under the ground: the centre at least 1 m over the terrain under it, the eye at least 3 m over the
+         terrain under it (raised by tilting down, as a person would) */
+      /* and the centre on the terrain: past its edge there is no ground to stand on (pm 23:17Z: wheel ticks took the view
+         off the map, under the terrain's edge) */
+      const mx = Math.min(60, T.w * T.res / 4), my = Math.min(60, T.h * T.res / 4);
+      O.x = Math.max(T.x0 + mx, Math.min(T.x0 + T.w * T.res - mx, O.x)); O.y = Math.max(T.y1 - T.h * T.res + my, Math.min(T.y1 - my, O.y));
+      t.x = O.x; t.z = -O.y;
+      const tg = ground(O.x, O.y) - base + 1; if (O.h < tg) { O.h = tg; t.y = tg; }
+      let cp = Math.cos(O.pitch), ex = t.x + O.dist * cp * Math.sin(O.yaw), ez = t.z + O.dist * cp * Math.cos(O.yaw);
+      const eg = ground(ex, -ez) - base + 3;
+      if (t.y + O.dist * Math.sin(O.pitch) < eg) {
+        O.pitch = Math.min(1.53, Math.asin(Math.min(1, (eg - t.y) / O.dist)));
+        cp = Math.cos(O.pitch); ex = t.x + O.dist * cp * Math.sin(O.yaw); ez = t.z + O.dist * cp * Math.cos(O.yaw);
+      }
+      camera.position.set(ex, t.y + O.dist * Math.sin(O.pitch), ez); camera.lookAt(t);
+    }
+    if (rimFor) rimGround();
     dirty = true; onView(view());
+  }
+  /* where the ray under the pointer meets the terrain (site x, y and world height), walking out along it */
+  function groundUnder(cx, cy) {
+    const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+    const o = ray.ray.origin, d = ray.ray.direction;
+    /* a building in front of the ground: toward its face, so the zoom stops 30 m short of it, not inside it */
+    const b = ray.intersectObjects([...meshes.values(), ...addedGroups.values()].filter(g => g.visible), true).find(x => x.object.isMesh && shown(x.object));
+    if (b) return [b.point.x, -b.point.z, b.point.y];
+    for (let s = 0; s < 2500; s += 2) { const x = o.x + d.x * s, y = o.y + d.y * s, z = o.z + d.z * s; if (y <= ground(x, -z) - base) return [x, -z, y]; }
+    return null;
   }
   /* a move of the view (a storey, a building, home) eases there from where the view is, at the speed it has: renderkit's
      camera rig (camera.js, as laser's), on this orbit's own numbers (centre, yaw, pitch, log distance). The person's
@@ -717,6 +744,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     if (gesture) return;
     if (e.ctrlKey) zoom(Math.exp(e.deltaY * 0.01), e);
     else if (e.deltaMode !== 0) zoom(Math.exp(e.deltaY * (e.deltaMode === 1 ? 0.06 : 0.6)), e);
+    /* a notched wheel in Chrome and Safari says pixels too, but in whole notches of 120 and straight up or down */
+    else if (!e.deltaX && e.wheelDeltaY && e.wheelDeltaY % 120 === 0) zoom(Math.exp(-Math.sign(e.wheelDeltaY) * 0.18), e);
     else { pan(-e.deltaX, -e.deltaY); place(); }
   }, { passive: false });
   /* on an iPad the same gesture events come with the touches, which the pointer handlers already zoom */
@@ -729,6 +758,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     if (mode === "plan" && at && at.clientX != null) {
       const r = el.getBoundingClientRect(), m = O.dist * 0.72 / (r.height || 400);
       O.x += (at.clientX - r.left - r.width / 2) * m * (1 - f); O.y -= (at.clientY - r.top - r.height / 2) * m * (1 - f);
+    } else if (mode === "3d" && at && at.clientX != null) {
+      /* toward the ground under the pointer: the centre moves that way by as much as the distance shrinks */
+      const g = groundUnder(at.clientX, at.clientY);
+      if (g) { O.x += (g[0] - O.x) * (1 - f); O.y += (g[1] - O.y) * (1 - f); O.h += (g[2] - O.h) * (1 - f); }
     }
     O.dist = d; place();
   }
@@ -746,6 +779,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const hit = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...addedGroups.values(), ...groundMeshes], true).find(h => h.object.isMesh); select(hit?.object.userData.id || null);
     onPick(selected, { shift: e.shiftKey, x: e.clientX, y: e.clientY, at: hit ? [hit.point.x, -hit.point.z, hit.point.y + base] : null });   // where on it, for a room or a facade
   }
+  /* a hit's thing: its id, or its parent's (pm 23:17Z: the first click on the pool took nothing), and only if it shows */
+  const idOf = o => { for (; o; o = o.parent) if (o.userData?.id) return o.userData.id; return null; };
+  const shown = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
   /* more than one building lit, for a selection of several (app.js «Valgt») */
   let marked = [];
   const groupOf = id => meshes.get(id) || addedGroups.get(id) || groundMeshes.find(m => m.userData.id === id);
@@ -760,10 +796,36 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     dirty = true;
   }
   let treePicked = [], treeHov = [];
+  /* a picked or hovered pool, lawn or path: a band round its edge over everything (pm 23:17Z: the glow alone is faint
+     at site zoom), as wide as about 3 px at the distance the view has, drawn again when the zoom changes much */
+  const groundRims = new THREE.Group(); scene.add(groundRims); let rimFor = null;
+  function rimGround(force) {
+    const picked = [...marked, selected].filter(id => /^(flate|sti)-/.test(id || "")), hov = hovered.filter(id => /^(flate|sti)-/.test(id));
+    const key = picked.join() + "|" + hov.join(), w = Math.max(0.25, O.dist * 0.0035);
+    if (!force && rimFor && rimFor.key === key && Math.abs(Math.log(rimFor.w / w)) < 0.25) return;
+    rimFor = { key, w };
+    for (const o of groundRims.children) { o.geometry.dispose(); o.material.dispose(); } groundRims.clear();
+    for (const [ids, color] of [[hov, "#fff6d6"], [picked, "#ffcf33"]]) for (const id of ids) {
+      const m = groundMeshes.find(x => x.userData.id === id); if (!m) continue;
+      const r = m.userData.ring, pos = [], step = Math.max(1, T.res);
+      for (let i = 0; i < r.length; i++) {
+        const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
+        const nx = -(b[1] - a[1]) / L * w / 2, ny = (b[0] - a[0]) / L * w / 2, k = Math.max(1, Math.ceil(L / step));
+        for (let j = 0; j < k; j++) {
+          const p = [a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k], q = [a[0] + (b[0] - a[0]) * (j + 1) / k, a[1] + (b[1] - a[1]) * (j + 1) / k];
+          const at = (u, s) => { const v = P([u[0] + nx * s, u[1] + ny * s], ground(...u) + m.userData.lift + 0.1); pos.push(v.x, v.y, v.z); };
+          at(p, -1); at(q, -1); at(q, 1); at(p, -1); at(q, 1); at(p, 1);
+        }
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      const o = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, side: THREE.DoubleSide })); o.renderOrder = 15; groundRims.add(o);
+    }
+    dirty = true;
+  }
   function mark(ids) {
     treePicked = ids.filter(id => /^tre-/.test(id)); ringTrees(treePicked, treeHov);
     for (const id of marked) if (id !== selected) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
-    marked = ids.filter(id => groupOf(id)); for (const id of marked) groupOf(id).traverse(o => o.material?.emissive?.set("#6b5200")); dirty = true;
+    marked = ids.filter(id => groupOf(id)); for (const id of marked) groupOf(id).traverse(o => o.material?.emissive?.set("#6b5200")); rimGround(); dirty = true;
   }
   /* the pick before the click (U3569, renderkit select.js): a lighter glow on what a click would take */
   let hovered = [];
@@ -771,13 +833,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const th = ids.filter(id => /^tre-/.test(id)); if (th.join() !== treeHov.join()) { treeHov = th; ringTrees(treePicked, treeHov); }
     const lit = new Set([...marked, selected].filter(Boolean));
     for (const id of hovered) if (!lit.has(id)) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
-    hovered = ids.filter(id => groupOf(id) && !lit.has(id)); for (const id of hovered) groupOf(id).traverse(o => o.material?.emissive?.set("#3d3420")); dirty = true;
+    hovered = ids.filter(id => groupOf(id) && !lit.has(id)); for (const id of hovered) groupOf(id).traverse(o => o.material?.emissive?.set("#3d3420")); rimGround(); dirty = true;
   }
   function select(id) {
     if (selected) groupOf(selected)?.traverse(o => o.material?.emissive?.set("#000"));
     selected = id && groupOf(id) ? id : null;
     if (selected) groupOf(selected).traverse(o => o.material?.emissive?.set("#6b5200"));
-    dirty = true;
+    rimGround(); dirty = true;
   }
   /* materials are shared within a building, so a building's own copies (made once) light up alone */
   for (const g of meshes.values()) g.traverse(o => { if (o.material) o.material = o.material.clone(); });
@@ -820,6 +882,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     setSun, select, setGone, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
+    /* the view as it opened, the storey left as it is */
+    reset() { hand(); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     /* to a building; cam: where to look from as well (yaw, pitch, dist), in the same move */
@@ -849,7 +913,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     /* what a pointer at cx, cy is on: a building's or a new building's id, and the point [east, north, kote] */
     hitAt(cx, cy) {
       const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
-      const h = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes], true).find(x => x.object.isMesh);
+      const h = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes], true).find(x => x.object.isMesh && shown(x.object) && idOf(x.object));
       /* a planted tree in front of that: the ray within most of its crown of its trunk's line (U3569) */
       let tree = null; const near = new THREE.Vector3();
       for (const t of treeList) if (t[6]) {
@@ -858,7 +922,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         if (d2 < (t[3] * 0.8) ** 2 && (!h || along < h.distance + 1) && (!tree || along < tree.along)) tree = { along, t, p: near.clone() };
       }
       if (tree) return { id: tree.t[6], at: [tree.p.x, -tree.p.z, tree.p.y + base] };
-      return h ? { id: h.object.userData.id || null, at: [h.point.x, -h.point.z, h.point.y + base] } : null;
+      return h ? { id: idOf(h.object), at: [h.point.x, -h.point.z, h.point.y + base] } : null;
     },
     hover,
     /* for renderkit build.js: the scene, the camera in use, the canvas, the site's frame, a thing's shapes, a redraw */

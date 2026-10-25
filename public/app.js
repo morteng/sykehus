@@ -208,14 +208,15 @@ let names = false; try { names = localStorage.getItem("sykehus-navn-valgt") === 
 function setNames(on, keep = true) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); if (keep) try { localStorage.setItem("sykehus-navn-valgt", on ? "på" : "av"); } catch { } }
 setNames(names, false); $("names").onclick = () => setNames(!names);
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
-$("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
-/* the keys: + and − zoom, ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
+$("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5); $("zhome").onclick = () => viewer.reset();
+/* the keys: + and − zoom, 0 the view as it opened (⌂), ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
    card and the picks away */
 addEventListener("keydown", e => {
   if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.target.closest?.(".g-levels")) return;
   if (e.key === "n" || e.key === "N") setNames(!names);
   else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
+  else if (e.key === "0") viewer.reset();
   else if (e.key === "Escape") { if (!pickActs?.escape()) { shut(); valg.clear(); } }   // the card beside the pick folds first, the pick kept
   else if (e.key === "Home") pickStorey(null);
   else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {
