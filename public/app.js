@@ -226,7 +226,7 @@ if (draft) {
   const el = document.createElement("div"); el.id = "draft"; el.className = "card";
   const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
   el.innerHTML = draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
-    : draft.version ? `<b>${esc(draft.title)}</b> · ${draft.public ? "" : "privat "}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
+    : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
     : `<b>Utkast, ikke lagret</b> · ${ch} prøvd via Claude. <a href="./">Se modellen uten</a>`
       + (draft.edits.length ? `<ul>${draft.edits.map(e => `<li>${esc(describe(e))}</li>`).join("")}</ul>` : "");
   document.body.appendChild(el);
@@ -243,6 +243,18 @@ function describe(e) {
   if (e.kind === "volume") return `${e.name}: ${{ box: "kasse", gable: "saltak", triangle: "trekant (A-form)", lean_to: "pulttak" }[e.shape]}, ${String(e.width).replace(".", ",")} × ${String(Math.round(Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) * 10) / 10).replace(".", ",")} m, ${String(e.height).replace(".", ",")} m høy, ${{ glass: "glass", concrete: "betong", steel: "stål", wood: "tre", brick: "tegl" }[e.material]}${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
+
+/* the public versions of the after («Vis offentlig»): a line on the title card, and the list in the card */
+fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
+  if (!versions.length) return;
+  $("ideasLink").textContent = `Forslag til «etter» (${versions.length})`; $("ideas").hidden = false;
+  $("ideasLink").onclick = e => {
+    e.preventDefault(); const el = $("info");
+    el.innerHTML = `${CLOSE}<h2>Forslag til «etter»</h2><p class="src" style="margin-top:0">Tegnet med Claude over modellen av bygningene i dag. Hver åpner i 3D.</p><ul class="ideas">${versions.map(v =>
+      `<li><a href="?versjon=${encodeURIComponent(v.version)}">${esc(v.title)}<small>${esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></a></li>`).join("")}</ul>`;
+    el.style.display = "block"; closable(el);
+  };
+}).catch(() => {});
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));

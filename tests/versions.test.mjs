@@ -40,19 +40,29 @@ test("a version from a draft, changed by its owner only, kept on disk", async ()
   const r = await call("try_change", { version: v.version, edits: [{ kind: "volume", name: "Drivhus", shape: "triangle", from: [-46, -62], to: [27, -62], width: 24, height: 18 }] }, morten);
   assert.equal(r.out.saved, true); assert.equal(r.out.changes, 3);
   await call("undo_change", { draft: v.version, n: 3 }, morten);
-  // private until shown: the owner and the private link see it, no one else
-  assert.equal(v.public, false); assert.match(v.link, /&nokkel=/);
+  // privat: the owner only, on the web through their own link; no one else, not even its title
+  const key = l => new URL(l).searchParams.get("nokkel"), list = async () => (await (await fetch(`${O}/api/versjoner`)).json()).versions.map(x => x.version);
+  assert.equal(v.sharing, "privat"); const own = key(v.link); assert.ok(own);
   assert.equal((await fetch(`${O}/api/versjon/${v.version}`)).status, 404);
   assert.match((await call("show_draft", { draft: v.version }, lars)).error, /No version/);
   assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /No version/, "nor its title");
-  const page = await (await fetch(`${O}/api/versjon/${v.version}?nokkel=${new URL(v.link).searchParams.get("nokkel")}`)).json();
+  const page = await (await fetch(`${O}/api/versjon/${v.version}?nokkel=${own}`)).json();
   assert.equal(page.edits.length, 2); assert.equal(page.owner, "morten");
-  assert.equal((await (await fetch(`${O}/api/versjoner`)).json()).versions.length, 0);
-  assert.match((await call("set_public", { version: v.version, public: true }, lars)).error, /No version/, "only the owner shows it");
-  const shown = await call("set_public", { version: v.version, public: true }, morten); assert.equal(shown.out.public, true); assert.doesNotMatch(shown.out.link, /nokkel/);
+  assert.match((await call("set_sharing", { version: v.version, sharing: "offentlig" }, lars)).error, /No version/, "only the owner chooses");
+  // lenke: anyone with the share link, never listed; the owner's own link is not the share link
+  const linked = (await call("set_sharing", { version: v.version, sharing: "lenke" }, morten)).out, share = key(linked.link);
+  assert.notEqual(share, own);
+  assert.equal((await fetch(`${O}/api/versjon/${v.version}?nokkel=${share}`)).status, 200);
+  assert.equal((await fetch(`${O}/api/versjon/${v.version}`)).status, 404);
+  assert.deepEqual(await list(), [], "a link-only version is not listed");
+  // offentlig: open to all and on the front page's list; seen, not changed, by others
+  const shown = (await call("set_sharing", { version: v.version, sharing: "offentlig" }, morten)).out; assert.equal(key(shown.link), null);
   assert.equal((await fetch(`${O}/api/versjon/${v.version}`)).status, 200);
-  assert.deepEqual((await (await fetch(`${O}/api/versjoner`)).json()).versions.map(x => x.version), [v.version]);
-  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /morten sin/, "public: seen, not changed");
+  assert.deepEqual(await list(), [v.version]);
+  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /morten sin/);
+  // back to privat: the share link stops working
+  await call("set_sharing", { version: v.version, sharing: "privat" }, morten);
+  assert.equal((await fetch(`${O}/api/versjon/${v.version}?nokkel=${share}`)).status, 404); assert.deepEqual(await list(), []);
   assert.equal((await call("new_version", { title: "Lars sin" }, lars)).out.owner, "lars");
 });
 

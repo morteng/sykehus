@@ -8,7 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
-import { MAX_EDITS as MAX_VERSION_EDITS } from "./versions.mjs";
+import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
    and the older revisions' initialize for clients that still send it. MCP Apps 2026-01-26 (io.modelcontextprotocol/ui). */
@@ -93,10 +93,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten. Utkast (try_change uten version) virker uten.");
     const v = versionOf(id, req); if (v.owner !== who) throw toolErr(`Versjonen «${v.title}» er ${v.owner} sin; lag din egen med new_version (from: "${v.id}").`); return v;
   };
-  /* its link: the public one, or for its owner the private one with the key (to show someone before it is public) */
-  const versionOut = (v, o, req) => { const mine = req && userOf(req) === v.owner;
-    return { version: v.id, title: v.title, owner: v.owner, public: v.public, changes: v.edits.length, updated: v.updated,
-      link: `${o}/?versjon=${v.id}${!v.public && mine ? `&nokkel=${v.key}` : ""}`, ...(mine && !v.public ? { note: "Privat: bare du ser den (og den du gir lenken). Gjør den offentlig med set_public." } : {}) }; };
+  /* its link as the asker may give it: plain when public; the share link when link-only; the owner's own when private */
+  const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Offentlig: står i lista på forsiden og åpner for alle." };
+  const versionOut = (v, o, req) => { const mine = !!req && userOf(req) === v.owner, k = v.sharing === "offentlig" ? null : v.sharing === "lenke" ? v.key : mine ? v.own : null;
+    return { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, changes: v.edits.length, updated: v.updated,
+      link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all); a version only for who may see it */
   const editsOf = (id, req) => /^v.{8}$/.test(String(id)) ? versionOf(id, req).edits : draftOf(id).edits;
@@ -125,7 +126,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (a.from_direction != null) v.yaw = Math.PI - dirDeg(a.from_direction) * Math.PI / 180;
     if (a.tilt_deg != null) v.pitch = clamp(+a.tilt_deg, 5, 85) * Math.PI / 180;
     if (a.distance_m != null) v.dist = clamp(+a.distance_m, 30, 1200);
-    if (a.draft) { editsOf(a.draft, req); v.draft = String(a.draft); const ver = versions?.get(a.draft); if (ver && !ver.public) v.key = ver.key; }   // a private version: the asker may see it, and the app in their chat opens it with its key
+    if (a.draft) { editsOf(a.draft, req); v.draft = String(a.draft); const ver = versions?.get(a.draft); if (ver && ver.sharing !== "offentlig") v.key = ver.sharing === "lenke" ? ver.key : ver.own; }   // the asker may see it: the app in their chat opens it with its key
     return v;
   };
   const appCsp = origin => ({ connectDomains: [origin], resourceDomains: [origin], baseUriDomains: [origin] });
@@ -214,7 +215,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v);
         return { ...(v ? versionOut(v, originOf(req), req) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
     { name: "new_version", title: "Ny versjon", write: true, schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
-      description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts private (only they see it, and whoever they give its private link); set_public shows it to everyone. from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
+      description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts privat (only they see it); set_sharing makes it lenke (anyone with the link) or offentlig (on the front page). from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten.");
         if (!versions) throw toolErr("Versions are not kept on this server.");
@@ -222,13 +223,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         bump(`new:${who}`, 20, 3600e3);
         try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from, req)) : []); return { ...versionOut(v, originOf(req), req), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
     { name: "list_versions", title: "Versjonene", ro: true, schema: S({ owner: { type: "string", description: "Only this person's (a login name), or \"me\" for the asker's own; leave out for everyone's" } }),
-      description: "The saved versions of the after one may see, newest first: everyone's public ones and the asker's own private ones; title, owner, public or not, how many changes, when, and the link to show it.",
+      description: "The saved versions of the after one may see, newest first: everyone's public ones and all the asker's own; title, owner, who sees it (sharing), how many changes, when, and the link to show it.",
       run: async (a, req) => { if (!versions) return { versions: [], note: "Versions are not kept on this server." };
         const me = userOf(req), owner = a.owner === "me" ? me : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
         return { versions: versions.list({ owner, viewer: me }).slice(0, 100).map(v => versionOut(v, originOf(req), req)), you: me }; } },
-    { name: "set_public", title: "Vis offentlig", write: true, schema: S({ version: { type: "string" }, public: { type: "boolean", description: "true: anyone can see it, without a login, at its link and in the list. false: back to private" } }, ["version", "public"]),
-      description: "Shows one of the person's own versions to everyone («Vis offentlig»), or makes it private again. A new version is private: only its owner sees it, and whoever they give its private link.",
-      run: async (a, req) => { const v = ownVersion(a.version, req); v.public = !!a.public; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
+    { name: "set_sharing", title: "Hvem ser versjonen", write: true, schema: S({ version: { type: "string" }, sharing: { type: "string", enum: SHARING, description: "privat: only you. lenke («Bare de med lenken»): anyone you give its link, not listed. offentlig («Vis offentlig»): listed on the front page, open to all without a login" } }, ["version", "sharing"]),
+      description: "Chooses who sees one of the person's own versions: privat (only them; a new version is privat), lenke (anyone with its link, never listed) or offentlig (on the front page's list and open to everyone). Give the person the link from the answer.",
+      run: async (a, req) => { const v = ownVersion(a.version, req); if (!SHARING.includes(a.sharing)) throw toolErr(`sharing er ${SHARING.join(", ")}`); v.sharing = a.sharing; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
     { name: "rename_version", title: "Gi versjonen nytt navn", write: true, schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
       description: "Renames one of the person's own versions.",
       run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
@@ -353,7 +354,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const open = { "access-control-allow-origin": "*" }, v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
     const v = v0 && versions.visible(v0, userOf(req), key) ? v0 : null;
-    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, public: v.public, updated: v.updated, edits: v.edits, saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
+    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, updated: v.updated, edits: v.edits, saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
   }
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
