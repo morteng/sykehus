@@ -110,7 +110,7 @@ export function snapBody(s, others, { grid = 1, step = 15, tol = 1.2, reach = 40
 /* the three.js part. The app gives:
    THREE, el (the canvas), host (for the numbers), scene, camera() (the one in use), P([e, n], kote) → Vector3 (the
    app's world), ground(e, n) → kote, others(id) → [{ id, name, ring }], lot (a ring or null), storey (m, a storey's
-   height), redraw(), onCommit(id, body, how) → false when refused (or a promise of it), onBusy(on) (the picker stands
+   height), redraw(), onCommit(id, body, how, by) → false when refused (or a promise of it); by is drag, click («Flytt»), keys or wheel, onBusy(on) (the picker stands
    aside), baseFor(body) → the kote its foot will stand at there (optional; else where it stands now)
    attach(item) shows the handles for item { id, from, to, width, height, base, group (its Object3D) }; move(item)
    starts a move with no button held («Flytt»): the ghost follows, a click places. */
@@ -265,17 +265,17 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
     const o = op; op = null; onBusy(false); clearGuides(); num.hidden = true;
     const changed = Math.hypot(target.c[0] - o.from.c[0], target.c[1] - o.from.c[1]) > 0.01 || Math.abs(wrap(target.a - o.from.a)) > 0.05 || Math.abs(target.L - o.from.L) + Math.abs(target.W - o.from.W) + Math.abs(target.H - o.from.H) > 0.01;
     if (!changed || !fit?.fits) { if (changed && fit && !fit.fits) tipOut(`${fit.why}: satt tilbake`); restore(o.from); return; }
-    finish(o.kind, o.from);
+    finish(o.kind, o.from, o.keys ? o.by : o.free ? "click" : "drag");
   }
   /* let go: the thing itself takes the ghost's place, size and angle in this frame and stays there (pm 23:58Z, Morten
      «it snapped to previous position then to the new one»); the app's answer either draws it anew there, or refuses
      and it eases back with why */
-  function finish(how, from) {
+  function finish(how, from, by) {
     const body = toBody(target), was = from; s0 = { ...target, c: target.c.slice() };
     if (ghost) { scene.remove(ghost); ghost = null; } shadow.visible = false;
     real = true; back = false; poseOn(item.group, cur); item.group.visible = true; go();
     const id = item.id;
-    Promise.resolve(onCommit(id, body, how)).then(ok => { if (ok === false && item?.id === id) unpreview(was); }, () => { if (item?.id === id) unpreview(was); });
+    Promise.resolve(onCommit(id, body, how, by)).then(ok => { if (ok === false && item?.id === id) unpreview(was); }, () => { if (item?.id === id) unpreview(was); });
   }
   /* the Endre fields: the thing goes to body at once, eased; unpreview puts it back when the change is refused */
   function preview(body) {
@@ -319,8 +319,12 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
   function moveFree(it) { if (it && it !== item) attach(it); if (!item) return; begin("move", null, { free: true, grab: [0, 0] }); }
 
   /* keys: R a quarter, Q and E 15° (Alt 1°), arrows 1 m (Shift 5) along the screen; Esc puts it back */
+  /* the keys are the view's only while the pointer is over it: an arrow in a list beside it (a storey strip) is the list's
+     (pm 23:30Z: two moves came that no one meant) */
+  let over = false; const enter = () => { over = true; }, leave = () => { over = false; };
   function key(e) {
     if (!item || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable || e.metaKey || e.ctrlKey) return;
+    if (!over && !op) return;
     if (e.key === "Escape" && op) { cancel(); e.preventDefault(); e.stopImmediatePropagation(); return; }
     const k = e.key.toLowerCase(), turn = k === "r" ? -90 : k === "q" ? (e.altKey ? 1 : 15) : k === "e" ? -(e.altKey ? 1 : 15) : 0;
     const arrows = { arrowup: [0, 1], arrowdown: [0, -1], arrowleft: [-1, 0], arrowright: [1, 0] }[k];
@@ -332,12 +336,12 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
       const cam = camera(), f = new THREE.Vector3(); cam.getWorldDirection(f); let fw = [f.x, -f.z]; const n = Math.hypot(...fw); fw = n > 0.2 ? [fw[0] / n, fw[1] / n] : [0, 1];   // straight down (the plan): north
       const rt = [fw[1], -fw[0]], d = e.shiftKey ? 5 : 1; s.c = [s.c[0] + (rt[0] * arrows[0] + fw[0] * arrows[1]) * d, s.c[1] + (rt[1] * arrows[0] + fw[1] * arrows[1]) * d];
     }
-    run(s, turn ? "ring" : "move");
+    run(s, turn ? "ring" : "move", "keys");
   }
   /* a run of keys or wheel turns is one change, taken when they stop */
-  function run(s, kind = "move") {
+  function run(s, kind = "move", by = "keys") {
     if (op && !op.keys) { commitTarget(s, null); return; }
-    if (!keyRun) { keyRun = { from: { ...target, c: target.c.slice() } }; makeGhost(); onBusy(true); op = { kind, from: keyRun.from, keys: true }; }
+    if (!keyRun) { keyRun = { from: { ...target, c: target.c.slice() } }; makeGhost(); onBusy(true); op = { kind, from: keyRun.from, keys: true, by }; }
     else if (op.kind !== kind) op.kind = "move";   // turned and moved: one change, a move
     commitTarget(s, null); clearTimeout(keyRun.t);
     keyRun.t = setTimeout(() => { keyRun = null; end(); }, 700);
@@ -345,15 +349,16 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
   function wheel(e) {
     if (!item || !e.shiftKey || (op && !op.keys && op.kind !== "move")) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    const s = { ...target, c: target.c.slice(), a: wrap(target.a - (e.deltaY || e.deltaX) * 0.15) }; run(s, "ring");
+    const s = { ...target, c: target.c.slice(), a: wrap(target.a - (e.deltaY || e.deltaX) * 0.15) }; run(s, "ring", "wheel");
   }
   const menu = e => { if (op) { e.preventDefault(); cancel(); } };
 
   el.addEventListener("pointerdown", down, true); addEventListener("pointermove", move); addEventListener("pointerup", up, true);
   addEventListener("keydown", key, true); el.addEventListener("wheel", wheel, { capture: true, passive: false }); el.addEventListener("contextmenu", menu, true);
+  el.addEventListener("pointerenter", enter); el.addEventListener("pointerleave", leave);
   return {
     attach, detach, move: moveFree, cancel, preview, get busy() { return !!op; }, get item() { return item; },
     frame() { if (item) place(cur); },
-    destroy() { detach(); scene.remove(G, shadow, guides); num.remove(); el.removeEventListener("pointerdown", down, true); removeEventListener("pointermove", move); removeEventListener("pointerup", up, true); removeEventListener("keydown", key, true); el.removeEventListener("wheel", wheel, true); el.removeEventListener("contextmenu", menu, true); },
+    destroy() { detach(); scene.remove(G, shadow, guides); num.remove(); el.removeEventListener("pointerdown", down, true); removeEventListener("pointermove", move); removeEventListener("pointerup", up, true); removeEventListener("keydown", key, true); el.removeEventListener("wheel", wheel, true); el.removeEventListener("contextmenu", menu, true); el.removeEventListener("pointerenter", enter); el.removeEventListener("pointerleave", leave); },
   };
 }

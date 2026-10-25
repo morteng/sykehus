@@ -548,8 +548,10 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
   valg.clear(); valg.add({ kind: "new", id, label: "Nytt bygg" }); const a = site.added.find(x => x.id === id); if (a) showNew(a);
   toast("Nytt bygg satt opp. Trykk «Endre» for navn, etasjer og mål.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }, "ny");
-async function reshape(id, set, what = "Endret") {
-  const r = await edit([{ kind: "reshape", id, ...set, why: "endret på siden" }], "Fikk ikke endret"); if (!r) return false;
+/* by: how the build tools made it (renderkit build.js), in its why, so a change no one meant says where it came from */
+const BY = { drag: "dratt", click: "med «Flytt»", keys: "med tastene", wheel: "med Shift og hjulet" };
+async function reshape(id, set, what = "Endret", by = null) {
+  const r = await edit([{ kind: "reshape", id, ...set, why: `endret på siden${BY[by] ? ` (${BY[by]})` : ""}` }], "Fikk ikke endret"); if (!r) return false;
   toast(`${what}.`, { label: "Angre", run: () => undoLast(r.n, r.k) }); return true;
 }
 function moveNew(a) {
@@ -736,12 +738,12 @@ const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K
   onBusy: on => picker.pause(on),
   /* where its foot will stand there: design.js's rule, with the base_kote its own edit gave, if any */
   baseFor: body => { const a = (site.added || []).find(x => x.id === build.item?.id); if (!a) return build.item?.base ?? 0; const e0 = draft?.edits?.find(x => x.kind === "volume" && x.id === a.id); return baseOf(site, { ...a, ...body, base_kote: e0?.base_kote }); },
-  onCommit: (id, body, how) => {
+  onCommit: (id, body, how, by) => {
     const a = (site.added || []).find(x => x.id === id); if (!a) return;
     const set = { from: body.from, to: body.to };
     if (Math.abs(body.width - a.width) > 0.01) set.width = body.width;
     if (how === "top") { if (a.storeys) set.storeys = Math.max(1, Math.round(body.height / 3.2)); else set.height = body.height; }
-    return reshape(id, set, `${a.name} er ${{ move: "flyttet", ring: "snudd", end: "gjort lengre eller kortere", side: "gjort bredere eller smalere", top: "gjort høyere eller lavere" }[how] || "endret"}`);
+    return reshape(id, set, `${a.name} er ${{ move: "flyttet", ring: "snudd", end: "gjort lengre eller kortere", side: "gjort bredere eller smalere", top: "gjort høyere eller lavere" }[how] || "endret"}`, by);
   } });
 function syncBuild() {
   if (build.busy) return;
