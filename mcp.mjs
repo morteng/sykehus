@@ -31,7 +31,7 @@ const dirDeg = d => typeof d === "number" ? d : DIRS[String(d || "").toLowerCase
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const counts = new Map();
@@ -238,6 +238,14 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "set_sharing", title: "Hvem ser versjonen", write: true, schema: S({ version: { type: "string" }, sharing: { type: "string", enum: SHARING, description: "privat: only you. lenke («Bare de med lenken»): anyone you give its link, not listed. offentlig («Vis offentlig»): listed on the front page, open to all without a login" } }, ["version", "sharing"]),
       description: "Chooses who sees one of the person's own versions: privat (only them; a new version is privat), lenke (anyone with its link, never listed) or offentlig (on the front page's list and open to everyone). Give the person the link from the answer.",
       run: async (a, req) => { const v = ownVersion(a.version, req); if (!SHARING.includes(a.sharing)) throw toolErr(`sharing er ${SHARING.join(", ")}`); v.sharing = a.sharing; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
+    { name: "send_wish", title: "Send et ønske", write: true, schema: S({ text: { type: "string", description: "What they want, in their own words (Norwegian is fine)" }, tried: { type: "string", description: "What was tried and why the tools could not do it" }, version_id: { type: "string", description: "The version it is about, if any" } }, ["text"]),
+      description: "Sends Morten a wish: something the person wants Sykehustomta to do that its tools cannot do yet (a kind of change, a drawing, an export, a view). Use it only after asking them «Skal jeg sende dette som et ønske?» and getting a yes, and only for what the tools truly cannot do; never for a fault you can fix yourself (a wrong position, a bad argument: try again instead). Needs the login. The person sees their wishes and Morten's answers under «Ønsker» on the website.",
+      run: async (a, req) => {
+        const who = userOf(req); if (!who) throw toolErr("Å sende et ønske krever innlogging.");
+        if (!wishes) throw toolErr("Ønsker tas ikke imot på denne serveren.");
+        const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
+        try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link }); return { sent: true, wish: w.id, status: w.status, receipt: "Sendt. Morten ser det.", see_them: `${originOf(req)}/ (Ønsker)` }; }
+        catch (e) { throw toolErr(e.message); } } },
     { name: "rename_version", title: "Gi versjonen nytt navn", write: true, schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
       description: "Renames one of the person's own versions.",
       run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },

@@ -70,10 +70,12 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
     if (!h || now - h.t > 3600e3) hour.set(key, { t: now, n: 1 });
     else if (++h.n > (who ? 1000 : 600)) throw Object.assign(new Error("For mange forespørsler akkurat nå. Prøv igjen om litt."), { tool: true });
   }
-  /* GET /api/bruk: for pm's daily report, from the box (the proxy secret) or this machine only */
+  /* GET /api/bruk: for pm's daily report, with SYKEHUS_ADMIN_TOKEN or from this machine only. Not the proxy secret:
+     the edge adds that to every page request (/api/* behind laser_authz). */
   function usage(req, res) {
     const local = /^(127\.|::1$|::ffff:127\.)/.test(req.socket?.remoteAddress || "") && !req.headers["x-forwarded-for"];
-    if (!local && !(process.env.SYKEHUS_PROXY_SECRET && same(req.headers["x-sykehus-proxy-auth"] || "", process.env.SYKEHUS_PROXY_SECRET))) return send(res, 403, { error: "Not here" });
+    const t = process.env.SYKEHUS_ADMIN_TOKEN, m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || "");
+    if (!local && !(t && t.length >= 24 && m && same(m[1], t))) return send(res, 403, { error: "Not here" });
     return send(res, 200, { days: Object.fromEntries([...days].map(([k, d]) => [k, { calls: d.calls, logins: d.logins, anonymous_calls: Object.values(d.addresses).reduce((a, n) => a + n, 0), anonymous_addresses: Object.keys(d.addresses).length }])),
       grants: store.grants.map(g => ({ owner: g.owner, app: g.client_name, created: g.created, last_used: g.last_used ?? null })) });
   }

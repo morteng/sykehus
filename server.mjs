@@ -11,6 +11,7 @@
 
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
+  /api/onsker             wishes for what it cannot do yet (wishes.mjs)
 
   GET  /api/bruk          calls a day per login and per (hashed) address, for pm's report (the box only)
   /.well-known/oauth-*, /oauth/*   the sign-in for chat apps (auth.mjs)
@@ -27,6 +28,7 @@ import { createVersions } from "./versions.mjs";
 import { createAuth } from "./auth.mjs";
 import { createLogin } from "./login.mjs";
 import { createAssistant } from "./assistant.mjs";
+import { createWishes } from "./wishes.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
@@ -54,7 +56,8 @@ function readJson(req, max) {
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
 const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth });
+const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes });
 const anton = createAssistant({ SECURITY, readJson, login, versions });
 
 createServer(async (req, res) => {
@@ -62,7 +65,7 @@ createServer(async (req, res) => {
     const url = new URL(req.url, "http://x"), path = decodeURIComponent(url.pathname);
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (await auth.route(req, res, url)) return;
-    if (await login.route(req, res, path) || await anton.route(req, res, path)) return;
+    if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path)) return;
     if (path.startsWith("/api/versjon")) req.webUser = login.personOf(req)?.person ?? null;   // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));

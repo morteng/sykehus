@@ -21,3 +21,9 @@ Morten's decisions on how Sykehustomta is built, newest last. Each names when an
 - **2026-10-25 17:00Z (via pm):** «and the floating lables have to be optional, make the ui/ux nice and polished and
   simple and intuitive»: the names over the 3D view and plan (the wings', the rooms' stamps) have an on/off button,
   «Navn» in the bar (key N), remembered in that browser; a section's kote stay. And a polish pass on the page.
+- **2026-10-25 17:15Z (via pm):** «just give sykehus a functional feedback tool so that lars can report his wants and
+  wishes that the system cannot fulfill yet»: wishes.mjs and the connector's send_wish (after asking «Skal jeg sende
+  dette som et ønske?»), «Ønsker» on the page for the signed in, kept under SYKEHUS_VERSIONS_DIR/_wishes/, Morten
+  (SYKEHUS_ADMINS) sees all and answers, a webhook for his notices (SYKEHUS_WISH_WEBHOOK).
+- **2026-10-25 17:14Z (Morten, in the sykehus session):** «always deply, no need to ask»: what passes its tests is
+  pushed and sent to pm for deploy without asking first.

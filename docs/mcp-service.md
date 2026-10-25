@@ -42,7 +42,12 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
   base URL), `SYKEHUS_ASSISTANT_TOKEN` (the bearer for it); optional `SYKEHUS_CODE_PATH` (default
   `/internal/sykehus/code`) and `SYKEHUS_ASSISTANT_PREFIX` (default `/internal/sykehus`, + `/chat`, `/approve`,
   `/cancel`, `/history`). The cookie counts on the page's `/api/*` only, never on `/mcp`. `/api/anton/strom` is
-  server-sent events: no response buffering at the edge (`flush_interval -1`).
+  server-sent events: no response buffering at the edge (`flush_interval -1`). Someone signed in on gulden.no needs no
+  code: `/api/*` behind laser_authz (anonymous passes) with `header_up X-Sykehus-Proxy-Auth`, and Remote-User counts.
+- Wishes (wishes.mjs): kept in `SYKEHUS_VERSIONS_DIR/_wishes/`. `SYKEHUS_ADMINS` (default `morten`) see all on the
+  page and answer; `SYKEHUS_ADMIN_TOKEN` (24+ characters, Bearer) reads `GET /api/onsker` and `GET /api/bruk` from
+  outside the box; `SYKEHUS_WISH_WEBHOOK`, when set, gets each new wish as JSON. The proxy secret is no admin: the
+  edge adds it to every page request.
 
 ## Caddy
 

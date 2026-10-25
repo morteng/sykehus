@@ -29,6 +29,34 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
   if (me.via === "gulden.no") { link.textContent = `Logget inn som ${me.person}`; link.removeAttribute("href"); link.onclick = null; }   // signed out on gulden.no, not here
   else { link.textContent = `Logget inn som ${me.person} · Logg ut`; link.onclick = async e => { e.preventDefault(); await fetch("api/logg-ut", { method: "POST" }); location.reload(); }; }
   if (me.anton) pill(me.person);
+  wishBox();
+
+  /* «Ønsker»: what Sykehustomta cannot do yet, to Morten (wishes.mjs); your own, and for Morten all of them */
+  function wishBox() {
+    const btn = $("wishBtn"); btn.hidden = false;
+    const ST = { ny: "ny", sett: "sett", laget: "laget", nei: "ikke nå" };
+    btn.onclick = async () => {
+      info.innerHTML = `${CLOSE}<h2>Ønsker</h2><p style="margin:2px 0 8px">Noe du vil at Sykehustomta skal kunne, men som ikke går ennå? Skriv det her, så ser Morten det.</p>
+        <form id="wishForm"><textarea id="wishText" maxlength="4000" placeholder="For eksempel: Jeg vil kunne tegne et snitt gjennom drivhuset."></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><button type="submit" class="pri">Send</button><span id="wishOk" class="ok" role="status"></span></div></form>
+        <p id="wishErr" class="err" role="alert"></p><ul class="wishes" id="wishList"></ul>`;
+      info.style.display = "block"; closable(info); $("wishText").focus();
+      $("wishForm").onsubmit = async e => {
+        e.preventDefault(); $("wishErr").textContent = ""; $("wishOk").textContent = "";
+        const r = await fetch("api/onsker", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: $("wishText").value, version: versionId }) }).catch(() => null);
+        const j = r ? await r.json().catch(() => ({})) : {};
+        if (r?.ok) { $("wishText").value = ""; $("wishOk").textContent = "Sendt. Morten ser det."; list(); } else $("wishErr").textContent = j.error || "Fikk ikke sendt. Prøv igjen.";
+      };
+      list();
+    };
+    async function list() {
+      const j = await fetch("api/onsker").then(r => r.ok ? r.json() : { wishes: [] }).catch(() => ({ wishes: [] })), ul = $("wishList"); if (!ul) return;
+      ul.innerHTML = j.wishes.length ? j.wishes.map(w => `<li>${esc(w.text)}<br><small>${j.admin ? esc(w.person) + " · " : ""}${new Date(w.at).toLocaleDateString("nb-NO")}</small>
+        ${j.admin ? `<select data-id="${esc(w.id)}" aria-label="Status">${Object.entries(ST).map(([k, t]) => `<option value="${k}"${k === w.status ? " selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="st ${esc(w.status)}">${ST[w.status] || esc(w.status)}</span>`}
+        ${w.note ? `<br><small>Morten: ${esc(w.note)}</small>` : ""}</li>`).join("") : "";
+      for (const s of ul.querySelectorAll("select")) s.onchange = () => fetch(`api/onsker/${encodeURIComponent(s.dataset.id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: s.value }) });
+    }
+  }
 
   /* the four digits, big, in the card */
   function askCode() {
@@ -110,7 +138,7 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
       show(false);
     }).catch(() => {});
     const es = new EventSource("api/anton/strom");
-    const on = (ev, f) => es.addEventListener(ev, e => { try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });
+    const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
     on("message", m => line("from-me", m.text));
     on("text", t => { let b = replies.get(t.reply_to); if (!b) { b = line("from-anton", "", "Anton"); replies.set(t.reply_to, b); } b.textContent += t.delta || ""; show(); });

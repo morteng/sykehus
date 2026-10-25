@@ -84,6 +84,15 @@
   #talkLog .ask { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fff; }
   #talkLog .acts { display: flex; gap: 8px; margin-top: 8px; }
   @media (max-width: 640px) { #anton { bottom: 150px; } body.anton #info, body.anton #scale { bottom: 230px; } }
+  /* «Ønsker»: the box, the receipt, your list with Morten's answers */
+  #wishText { width: 100%; min-height: 96px; font: inherit; font-size: 17px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; color: var(--ink); background: #fff; }
+  #info .ok { color: #2f6b3a; margin: 6px 0 0; min-height: 1.2em; }
+  #info .wishes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; font-size: 15px; }
+  #info .wishes li { border-top: 1px solid var(--line); padding-top: 8px; }
+  #info .wishes small { color: var(--soft); font-size: 13px; }
+  #info .st { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 10px; background: #ecebe6; margin-left: 4px; }
+  #info .st.laget { background: #dcebd9; } #info .st.nei { background: #f1dcdc; } #info .st.sett { background: #e3e8f1; }
+  #info .wishes select { font: inherit; font-size: 13px; margin-left: 6px; }
   @media print { #anton { display: none !important; } }
   #sheet { display: none; }
   @page { size: A4 landscape; margin: 10mm; }
@@ -120,6 +129,7 @@
   <div class="sep"></div>
   <div class="group">
     <button id="names" aria-pressed="true" title="Vis eller skjul navnene på fløyene og rommene (N)">Navn</button>
+    <button id="wishBtn" hidden title="Send Morten et ønske om noe Sykehustomta ikke kan ennå">Ønsker</button>
     <button id="print" hidden title="Skriv ut det du ser som et ark, med målestokk og kilder">Skriv ut</button>
   </div>
 </div>
