@@ -11,6 +11,9 @@
    SYKEHUS_COOKIE_SECRET; HttpOnly, Secure (but on localhost), SameSite=Lax. It counts on the page's own /api routes
    only, never on /mcp, so another site cannot make a browser change versions through it.
 
+   Someone signed in on gulden.no needs no code: the edge's forward_auth passes their login on as Remote-User with the
+   proxy secret (auth.mjs proxyUser), and that counts here too, as the device "gulden.no" (the cookie wins when both).
+
    Env: SYKEHUS_COOKIE_SECRET (32+ characters), SYKEHUS_ASSISTANT_URL (gulden-ai's internal base URL),
    SYKEHUS_ASSISTANT_TOKEN (the bearer for it), SYKEHUS_CODE_PATH (default /internal/sykehus/code; the exact route comes
    from gulden-ai's builder). */
@@ -19,11 +22,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const NAME = "sykehus", TTL = 90 * 86400;
 const LOGIN = /^[A-Za-z0-9._@-]{1,64}$/;
 
-export function createLogin({ SECURITY, readJson, fetchImpl = fetch }) {
+export function createLogin({ SECURITY, readJson, proxyUser = () => null, fetchImpl = fetch }) {
   const secret = process.env.SYKEHUS_COOKIE_SECRET || "";
   const base = (process.env.SYKEHUS_ASSISTANT_URL || "").replace(/\/+$/, ""), bearer = process.env.SYKEHUS_ASSISTANT_TOKEN || "";
   const codePath = process.env.SYKEHUS_CODE_PATH || "/internal/sykehus/code";
-  const ready = secret.length >= 32 && !!base && !!bearer;
+  const anton = !!base && !!bearer, ready = secret.length >= 32 && anton;   // ready: codes can be typed here; anton: the pill
   const send = (res, code, body, headers = {}) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store", ...headers }); res.end(JSON.stringify(body)); };
   const mac = s => createHmac("sha256", secret).update(s).digest("base64url");
   const local = req => /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "");
@@ -31,6 +34,9 @@ export function createLogin({ SECURITY, readJson, fetchImpl = fetch }) {
 
   /* who this browser is: {person, device} from a good, unexpired cookie, else null */
   function personOf(req) {
+    return cookieOf(req) ?? (p => p ? { person: p, device: "gulden.no", via: "gulden.no" } : null)(proxyUser(req));
+  }
+  function cookieOf(req) {
     if (!secret) return null;
     const m = new RegExp(`(?:^|;\\s*)${NAME}=([A-Za-z0-9_-]+)\\.([A-Za-z0-9_-]+)`).exec(req.headers.cookie || "");
     if (!m) return null;
@@ -70,9 +76,9 @@ export function createLogin({ SECURITY, readJson, fetchImpl = fetch }) {
   /* true when the request was ours */
   async function route(req, res, path) {
     if (path === "/api/logg-inn" && req.method === "POST") { await signIn(req, res); return true; }
-    if (path === "/api/meg" && req.method === "GET") { const p = personOf(req); send(res, 200, { person: p?.person ?? null, login: ready }); return true; }
+    if (path === "/api/meg" && req.method === "GET") { const p = personOf(req); send(res, 200, { person: p?.person ?? null, via: p?.via ?? (p ? "kode" : null), login: ready, anton }); return true; }
     if (path === "/api/logg-ut" && req.method === "POST") { forget(req, res); send(res, 200, { person: null }); return true; }
     return false;
   }
-  return { personOf, forget, route, ready, base, bearer };
+  return { personOf, forget, route, ready, anton, base, bearer };
 }

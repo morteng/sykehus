@@ -23,12 +23,12 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
   const link = $("loginLink");
-  if (!me.login) return;
+  if (!me.person && !me.login) return;
   $("me").hidden = false;
   if (!me.person) { link.onclick = e => { e.preventDefault(); askCode(); }; return; }
-  link.textContent = `Logget inn som ${me.person} · Logg ut`;
-  link.onclick = async e => { e.preventDefault(); await fetch("api/logg-ut", { method: "POST" }); location.reload(); };
-  pill(me.person);
+  if (me.via === "gulden.no") { link.textContent = `Logget inn som ${me.person}`; link.removeAttribute("href"); link.onclick = null; }   // signed out on gulden.no, not here
+  else { link.textContent = `Logget inn som ${me.person} · Logg ut`; link.onclick = async e => { e.preventDefault(); await fetch("api/logg-ut", { method: "POST" }); location.reload(); }; }
+  if (me.anton) pill(me.person);
 
   /* the four digits, big, in the card */
   function askCode() {
@@ -83,7 +83,8 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return; }
       input.value = ""; input.oninput();
     }
-    function signedOut() { fetch("api/logg-ut", { method: "POST" }).finally(() => location.reload()); }
+    let gone = false;
+    function signedOut() { if (gone) return; gone = true; if (me.via === "gulden.no") { line("err", "Anton kan ikke jobbe for denne innloggingen akkurat nå."); return; } fetch("api/logg-ut", { method: "POST" }).finally(() => location.reload()); }
     function card(a) {
       const li = document.createElement("li"); li.className = "ask";
       li.innerHTML = `<div>${esc(a.summary || "Anton vil gjøre noe som trenger ditt ja.")}</div><div class="acts"><button class="pri">Ja, gjør det</button><button>Nei</button></div>`;

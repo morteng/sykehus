@@ -24,7 +24,7 @@ const WAITING = 5, LONGEST = 4000, PER_10_MIN = 20, SILENCE = 180e3, PING = 15e3
 
 export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl = fetch }) {
   const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
-  const door = login.base + prefix, ready = login.ready;
+  const door = login.base + prefix, ready = login.anton;
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   const threads = new Map();   // person → { queue: [turn], running, subs: Set<res>, approvals: Map, sent: [times], stop }
   const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), sent: [], stop: null }; threads.set(p, t); } return t; };

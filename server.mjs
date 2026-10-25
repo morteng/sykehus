@@ -53,7 +53,7 @@ function readJson(req, max) {
 }
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
 const auth = createAuth({ SECURITY, readJson });
-const versions = createVersions(), login = createLogin({ SECURITY, readJson });
+const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
 const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth });
 const anton = createAssistant({ SECURITY, readJson, login, versions });
 

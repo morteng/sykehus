@@ -66,6 +66,17 @@ test("a wrong code is refused; the right one sets a signed cookie for that perso
   assert.equal((await post("/api/logg-inn", { code: "4711" }, { origin: "https://evil.example" })).status, 403);
 });
 
+test("signed in on gulden.no (Remote-User with the proxy secret) needs no code; without the secret it is no one", async () => {
+  const me = await (await fetch(O + "/api/meg", { headers: { "remote-user": "morten", "x-sykehus-proxy-auth": secret } })).json();
+  assert.equal(me.person, "morten"); assert.equal(me.via, "gulden.no"); assert.equal(me.anton, true);
+  assert.equal((await (await fetch(O + "/api/meg", { headers: { "remote-user": "morten" } })).json()).person, null);
+  const r = await post("/api/anton", { text: "Hei" }, { "remote-user": "morten", "x-sykehus-proxy-auth": secret });
+  assert.equal(r.status, 202);
+  await new Promise(ok => setTimeout(ok, 300));
+  const body = seen.filter(s => s.path === "/internal/sykehus/chat").at(-1).body;
+  assert.equal(body.person, "morten"); assert.equal(body.device_id, "gulden.no"); assert.equal(body.session, "sykehus:morten");
+});
+
 test("the cookie is not a login on /mcp", async () => {
   const r = await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "new_version", arguments: { title: "x" } } }) });
   assert.equal(r.status, 401);
@@ -81,7 +92,7 @@ test("a message is relayed as the person's turn and streamed back to their pages
   const ev = await got, { id } = await r.json();
   assert.deepEqual(ev.filter(e => e.event === "text").map(e => e.delta), ["Jeg river ", "Vestfløy."]);
   assert.ok(ev.filter(e => ["text", "tool", "done"].includes(e.event)).every(e => e.reply_to === id));
-  const body = seen.find(s => s.path === "/internal/sykehus/chat").body;
+  const body = seen.find(s => s.path === "/internal/sykehus/chat" && s.body.person === "lars").body;
   assert.equal(body.person, "lars"); assert.equal(body.session, "sykehus:lars"); assert.equal(body.device_id, "dev-1"); assert.equal(body.version.id, v.version);
   // the page's own list now has Lars's private version, with the key that opens it
   const mine = (await (await fetch(O + "/api/versjoner", { headers: { cookie } })).json()).versions;

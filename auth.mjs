@@ -194,5 +194,5 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
     } catch (e) { if (!res.headersSent) send(res, e.code === 429 ? 429 : e.code === 413 ? 413 : 400, { error: e.message }); return true; }
     return false;
   }
-  return { userOf, challenge, count, route };
+  return { userOf, proxyUser, challenge, count, route };
 }
