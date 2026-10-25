@@ -219,6 +219,8 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .fl-form label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
 .fl-form input, .fl-form select { min-height: 40px; font-size: var(--fs-md); padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
 .fl-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.fl-three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-2); }
+.fl-three input, .fl-two input { min-width: 0; width: 100%; box-sizing: border-box; }
 body.placing #view { cursor: crosshair; }
 
 /* the person's own last message over Anton's reply on the pill (Morten 20:37Z): the chat's from-me bubble (laser.css

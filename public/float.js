@@ -61,11 +61,12 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     host.innerHTML = `<form class="fl-form" autocomplete="off"><div class="fl-h"><b>Endre ${esc(a ? a.name : w.name)}</b></div>
       ${f("name", "Navn", a ? a.name : w.name, 'maxlength="80" required')}${f("use", "Bruk", a ? a.use : w.use, 'maxlength="80" placeholder="f.eks. boliger"')}
       <div class="fl-two">${a ? f("storeys", "Etasjer", a.storeys, 'inputmode="numeric" pattern="[0-9]*" maxlength="2"') : f("storeys", "Etasjer", w.storeys, 'maxlength="80"')}${f("built", "Bygget", a ? a.built : w.built, 'maxlength="40"')}</div>
-      ${a ? `<div class="fl-two">${f("length", "Lengde, m", m1(L), 'inputmode="decimal"')}${f("width", "Bredde, m", m1(a.width), 'inputmode="decimal"')}</div>` : ""}
+      ${a ? `<div class="fl-two">${f("length", "Lengde, m", m1(L), 'inputmode="decimal"')}${f("width", "Bredde, m", m1(a.width), 'inputmode="decimal"')}</div>
+      <div class="fl-three">${f("angle", "Retning, °", String(Math.round(((90 - Math.atan2(a.to[1] - a.from[1], a.to[0] - a.from[0]) * 180 / Math.PI) % 360 + 360) % 360)), 'inputmode="numeric" title="Lengderetningen, som på et kompass: 0 nord, 90 øst"')}${f("east", "Øst, m", m1((a.from[0] + a.to[0]) / 2), 'inputmode="decimal" title="Midten, meter øst for tomtas origo"')}${f("north", "Nord, m", m1((a.from[1] + a.to[1]) / 2), 'inputmode="decimal" title="Midten, meter nord for tomtas origo"')}</div>` : ""}
       ${f("note", "Merknad", a ? a.note : w.note, 'maxlength="600"')}
       <div class="fl-acts"><button type="submit" class="riv">Ferdig</button><button type="button" data-x>Avbryt</button></div></form>`;
     const fm = host.querySelector("form");
-    fm.onsubmit = e => { e.preventDefault(); const v = Object.fromEntries(new FormData(fm)); for (const k of ["length", "width"]) if (v[k]) v[k] = v[k].replace(",", "."); editing = null; render(); onSave(i, v); };
+    fm.onsubmit = e => { e.preventDefault(); const v = Object.fromEntries(new FormData(fm)); for (const k of ["length", "width", "angle", "east", "north"]) if (v[k]) v[k] = v[k].replace(",", "."); editing = null; render(); onSave(i, v); };
     host.querySelector("[data-x]").onclick = () => { editing = null; render(); };
     fm.querySelector("input").focus();
   }

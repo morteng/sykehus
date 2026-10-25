@@ -6,6 +6,8 @@ import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
 import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025e";
+import { createPicker, windowTest } from "./renderkit/select.js";
+import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
@@ -74,9 +76,7 @@ const toCard = () => panel.show("selected", { quiet: true });   // a tap on the 
 const viewer = createViewer({
   container: $("view"), site: shown.site, floors: shown.floors,
   onPick: (id, how) => {
-    if (placing) { const at = viewer.hit(how.x, how.y); if (at) placing(at); return; }   // «Nytt bygg» or «Flytt»: where on the ground
-    valg.pick(id, how); const a = (site.added || []).find(x => x.id === id), g = (site.landscape || []).find(x => x.id === id);
-    if (a) showNew(a); else if (g) showGround(g); else showInfo(site.buildings.find(b => b.id === id));
+    if (placing) { const at = viewer.hit(how.x, how.y); if (at) placing(at); }   // «Nytt bygg»: where on the ground; a pick is the picker's (renderkit select.js, below)
   },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
@@ -92,6 +92,7 @@ const viewer = createViewer({
 function paint() {
   viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []); viewer.setLevels(site.wings || []); viewer.setRooms(floors);
   viewer.relabel(new Map(site.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
+  dispatchEvent(new CustomEvent("sykehus:painted"));   // the build tools take the new building's new shapes
 }
 let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)
 paint();
@@ -572,8 +573,11 @@ async function saveFacts(item, v) {
     const a = site.added.find(x => x.id === item.id), set = {};
     for (const k of ["name", "use", "built", "note"]) if (v[k] != null && v[k] !== (a[k] ?? "")) set[k] = v[k];
     if (v.storeys && +v.storeys !== a.storeys) set.storeys = +v.storeys;
-    const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]);
-    if (v.length && Math.abs(+v.length - L) > 0.05) { const c = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2], u = [(a.to[0] - a.from[0]) / L, (a.to[1] - a.from[1]) / L], h = +v.length / 2; set.from = [c[0] - u[0] * h, c[1] - u[1] * h]; set.to = [c[0] + u[0] * h, c[1] + u[1] * h]; }
+    /* length, direction (a compass's degrees) and middle: the same numbers the build tools show (U3569) */
+    const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), c0 = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2], ang0 = ((90 - Math.atan2(a.to[1] - a.from[1], a.to[0] - a.from[0]) * 180 / Math.PI) % 360 + 360) % 360;
+    const nL = v.length && Math.abs(+v.length - L) > 0.05 ? +v.length : L, nA = v.angle !== "" && v.angle != null && Number.isFinite(+v.angle) && Math.abs(+v.angle - Math.round(ang0)) >= 1 ? +v.angle : ang0;
+    const nC = [v.east !== "" && Number.isFinite(+v.east) && Math.abs(+v.east - c0[0]) > 0.05 ? +v.east : c0[0], v.north !== "" && Number.isFinite(+v.north) && Math.abs(+v.north - c0[1]) > 0.05 ? +v.north : c0[1]];
+    if (nL !== L || nA !== ang0 || nC[0] !== c0[0] || nC[1] !== c0[1]) { const r = (90 - nA) * Math.PI / 180, u = [Math.cos(r), Math.sin(r)], h = nL / 2; set.from = [nC[0] - u[0] * h, nC[1] - u[1] * h]; set.to = [nC[0] + u[0] * h, nC[1] + u[1] * h]; }
     if (v.width && Math.abs(+v.width - a.width) > 0.05) set.width = +v.width;
     if (!Object.keys(set).length) return;
     for (const k of ["from", "to"]) if (set[k]) set[k] = set[k].map(q => Math.round(q * 100) / 100);
@@ -641,8 +645,8 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261025f").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
-  onRiv: riv, onSave: saveFacts, onMove: moveNew, onTurn: turnNew,
+import("./float.js?v=20261025g").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+  onRiv: riv, onSave: saveFacts, onMove: a => { syncBuild(); build.move(); }, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
 
@@ -678,3 +682,56 @@ import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => vers
 requestAnimationFrame(() => import("./streets.js?v=20261025b").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
 
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));
+
+/* the selection as in Fab, Fusion 360's (renderkit select.js, U3569, Morten 22:30Z «we should consider the selection
+   systems we have in fab»): a hover lights what a click takes, a click takes it, Shift or Ctrl adds it or takes it
+   away, a click on nothing clears, Shift and a drag is a window (left to right: what is inside; right to left: what
+   it crosses). The picks are valg.js's items, by their keys. */
+const K = viewer.kit();
+let lastHit = null;
+const idsOf = k => {
+  const i = valg.items.find(x => valg.key(x) === k) || { kind: k.split(":")[0], id: k.split(":").slice(2).join(":") };
+  if (i.kind === "wing") return site.buildings.filter(b => b.wing === i.id).map(b => b.id);
+  if (i.kind === "facade") { const f = (site.facades || []).find(x => x.id === i.id); return f ? site.buildings.filter(b => b.wing === f.building).map(b => b.id) : []; }
+  return i.kind === "building" || i.kind === "new" || i.kind === "ground" ? [i.id] : [];
+};
+/* the card for what was picked: the thing clicked, if it is still picked, else the last one */
+function cardFor(keys) {
+  if (!keys.length) { shut(); return; }
+  const hitKeys = lastHit ? valg.keysAt(lastHit) : [], i = valg.items.find(x => hitKeys.includes(valg.key(x))) || valg.items.at(-1);
+  if (!i) return;
+  const id = i.kind === "wing" ? site.buildings.find(b => b.wing === i.id)?.id : i.kind === "facade" ? lastHit?.id : i.id;
+  const a = (site.added || []).find(x => x.id === id), g = (site.landscape || []).find(x => x.id === id), b = site.buildings.find(x => x.id === id);
+  if (a) showNew(a); else if (g) showGround(g); else if (b) showInfo(b);
+}
+const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
+  under: e => { if (placing || build?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
+  windowKeys: (r, inside) => { lastHit = null; return valg.windowKeys(r, inside, viewer.project, windowTest); },
+  onChange: (keys, l, how) => { if (how === "sync") return; valg.setKeys(keys); cardFor(keys); },
+  onHover: keys => viewer.hover(keys.flatMap(idsOf)) });
+addEventListener("sykehus:valg", () => picker.set(valg.items.map(valg.key), undefined, "sync"));
+
+/* a new building picked gets the build tools (renderkit build.js, U3569, Morten 22:29Z «make it like in a good
+   game»): drag it, its ring, an end, a side or its top; R, Q, E turn it, the arrows nudge it; each drag one change */
+const buildingName = b => nameOf(b.id);
+const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K.scene, camera: K.camera, P: K.P, ground: K.ground, lot: site.lot?.ring || null, storey: 3.2, redraw: K.redraw,
+  others: id => { const gone = new Set((site.demolished || []).map(d => d.id));
+    return [...site.buildings.filter(b => !gone.has(b.id) && b.ring?.length > 2).map(b => ({ id: b.id, name: buildingName(b), ring: b.ring })),
+      ...(site.added || []).filter(a => a.kind === "volume" && a.id !== id && !gone.has(a.id)).map(a => ({ id: a.id, name: a.name, ring: cornersOf(bodyOf(a)) }))]; },
+  onBusy: on => picker.pause(on),
+  onCommit: (id, body, how) => {
+    const a = (site.added || []).find(x => x.id === id); if (!a) return;
+    const set = { from: body.from, to: body.to };
+    if (Math.abs(body.width - a.width) > 0.01) set.width = body.width;
+    if (how === "top") { if (a.storeys) set.storeys = Math.max(1, Math.round(body.height / 3.2)); else set.height = body.height; }
+    reshape(id, set, `${a.name} er ${{ move: "flyttet", ring: "snudd", end: "gjort lengre eller kortere", side: "gjort bredere eller smalere", top: "gjort høyere eller lavere" }[how] || "endret"}`);
+  } });
+function syncBuild() {
+  if (build.busy) return;
+  const i = valg.items.length === 1 && valg.items[0].kind === "new" ? valg.items[0] : null, a = i && (site.added || []).find(x => x.id === i.id && x.kind === "volume");
+  const g = a && K.groupOf(a.id);
+  if (!a || !g || viewer.view().mode === "section") { if (build.item) build.detach(); return; }
+  build.attach({ id: a.id, from: a.from, to: a.to, width: a.width, height: a.top_kote - a.base_kote, base: a.base_kote, group: g });
+}
+addEventListener("sykehus:valg", syncBuild); addEventListener("sykehus:painted", syncBuild);
+viewer.follow(() => build.frame());
