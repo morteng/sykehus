@@ -29,10 +29,13 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   its frame, only the facades show it). Run after massing.py. Needs PyMuPDF.
 - `python -I tools/roompoly.py public/data/floors.json public/data/site.json [--check]`: each room stamp's outline,
   the space between the drawn walls around it, and its area measured (`area_calc`, shown as "ca." where the drawing
-  gives none; --check compares with the stamped areas, median about 14 % off). Run after trace-import.mjs.
+  gives none; --check compares with the stamped areas, median about 14 % off). Where the traced walls leave a gap,
+  the free space is shared out between the stamps nearby (`poly_how: "delt"`), kept only where the stamps bear it out.
+  Run after trace-import.mjs.
 - `python -I tools/ifc.py public/data/site.json public/data/floors.json public/data/sykehus.ifc [wing id ...]`: the
   buildings as IFC4 (BIM) for "Last ned som BIM-modell": a building per wing, its storeys, outer walls with the
-  facades' windows and doors as real openings, slabs, roofs, the drawn plans' walls and rooms, sources on each element.
+  facades' windows and doors as real openings, slabs, roofs, the drawn plans' walls and rooms, sources on each element; quantities (Qto_*), NS 3451 parts,
+  Status EXISTING and the wings' assumed materials (site.json `materials`) for schedules and takeoffs.
   Run last. Needs IfcOpenShell (0.8 or newer); FreeCAD 1.1 opens the file.
 - `python3 -I tools/massing.py public/data/site.json <dom.tif> <x0,y0,x1,y1>`: clean massing for the buildings on the
   lot (flat-roofed blocks on each building's grid, at the roof levels the laser finds), written into site.json.

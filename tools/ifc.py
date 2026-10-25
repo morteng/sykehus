@@ -13,14 +13,30 @@ volumes where tools/roompoly.py found the room's outline. Every
 element says where it came from and how sure it is (Pset Sykehustomta_Kilde). The ids (GlobalId) are the same each
 time the same data is exported, so a new export can be compared with the last one element by element.
 
+For schedules and takeoffs, in the standard places: each element's quantities (Qto_*BaseQuantities: a wall's length,
+thickness, side area and volume less its openings; a slab's area and volume; a room's net floor area, the stamp's
+figure where there is one), its Pset_*Common (outside or in, Status EXISTING), its NS 3451 part (bygningsdelstabellen:
+23 yttervegger, 24 innervegger, 25 dekker, 26 yttertak, 222 søyler, 234 vinduer og dører) and its material where the
+wing's construction gives one (site.json wings[].materials, assumed, and said so in Pset Sykehustomta_Materiale).
+
 The worker on the server can import build() and run it on the agent's edits; it needs IfcOpenShell only."""
 import sys, json, math, uuid
 from collections import Counter
 import ifcopenshell, ifcopenshell.guid
 import ifcopenshell.api.root, ifcopenshell.api.unit, ifcopenshell.api.context, ifcopenshell.api.aggregate
-import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature
+import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature, ifcopenshell.api.classification, ifcopenshell.api.material
 
 T_WALL, T_SLAB = 0.35, 0.30
+# the building parts as NS 3451:2022 names them (two digits where the drawings cannot say bearing or not)
+NS3451 = {"222": "Søyler", "23": "Yttervegger", "234": "Vinduer, dører, porter", "24": "Innervegger", "25": "Dekker", "26": "Yttertak"}
+MATERIAL_CATEGORY = {"Betong": "concrete", "Murverk": "masonry"}   # IFC4's own words for them
+REGULATED = "Områderegulering for Bragernes sentrum vest, vedtatt 17.02.2026: sykehusbygningene er satt av til riving; interiør og rivemasser bes gjenbrukt"
+
+def area(p):   # a plan polygon's area (m2)
+    return abs(sum(p[i - 1][0] * p[i][1] - p[i][0] * p[i - 1][1] for i in range(len(p)))) / 2
+
+def perimeter(p):
+    return sum(math.dist(p[i - 1], p[i]) for i in range(len(p)))
 
 def inside(p, ring):
     o = False
@@ -54,8 +70,24 @@ def build(site, floors, only=None):
                                RepresentationIdentifier="Body", RepresentationType="SweptSolid", Items=[solid])])
     def element(cls, name, pts, z0, h, src, how, **kw):
         e = new(cls, name=name, **kw); e.ObjectPlacement = place(); e.Representation = prism(pts, z0, h)
-        ifcopenshell.api.pset.edit_pset(m, pset=ifcopenshell.api.pset.add_pset(m, product=e, name="Sykehustomta_Kilde"), properties={"Kilde": src, "Hvordan": how})
+        pset(e, "Sykehustomta_Kilde", {"Kilde": src, "Hvordan": how})
         return e
+    # property sets with the same values are one set shared by all their elements (thousands of walls say the same),
+    # gathered here and written at the end
+    shared = {}
+    def pset(e, name, props):
+        shared.setdefault((name, json.dumps(props, ensure_ascii=False, sort_keys=True)), (name, props, []))[2].append(e)
+    def write_psets():
+        for name, props, es in shared.values():
+            ps = ifcopenshell.api.pset.add_pset(m, product=es[0], name=name); ifcopenshell.api.pset.edit_pset(m, pset=ps, properties=props)
+            if len(es) > 1: ifcopenshell.api.pset.assign_pset(m, products=es[1:], pset=ps)
+    def qto(e, name, props):   # the standard quantities (Qto_*), so a BIM tool's schedules and takeoffs find them
+        ifcopenshell.api.pset.edit_qto(m, qto=ifcopenshell.api.pset.add_qto(m, product=e, name=name), properties={k: round(float(v), 3) for k, v in props.items()})
+    # what the element is, in NS 3451 (bygningsdelstabellen) and of what, gathered and tied on at the end
+    classed, made = {}, {}
+    def ns(e, code): classed.setdefault(code, []).append(e)
+    def of(e, mat, how):
+        if mat: made.setdefault(mat, []).append(e); pset(e, "Sykehustomta_Materiale", {"Materiale": mat, "Hvordan": how})
 
     ifc_site = new("IfcSite", name=site.get("address", "Tomta")); ifc_site.ObjectPlacement = place()
     ifcopenshell.api.aggregate.assign_object(m, products=[ifc_site], relating_object=project)
@@ -72,12 +104,14 @@ def build(site, floors, only=None):
         ifcopenshell.api.aggregate.assign_object(m, products=[bld], relating_object=ifc_site)
         ifcopenshell.api.pset.edit_pset(m, pset=ifcopenshell.api.pset.add_pset(m, product=bld, name="Sykehustomta_Fløy"), properties={
             k: str(v) for k, v in {"Id": w["id"], "Byggeår": w.get("built"), "Etasjer": w.get("storeys"), "Konstruksjon": w.get("construction"),
-                                   "Fasade": w.get("facade"), "Sikker": w.get("sure")}.items() if v is not None})
+                                   "Fasade": w.get("facade"), "Sikker": w.get("sure"), "Regulering": REGULATED}.items() if v is not None})
+        if w.get("built"): pset(bld, "Pset_BuildingCommon", {"YearOfConstruction": str(w["built"])})
+        mats = w.get("materials") or {}; mhow = mats.get("how", "antatt")
         levels = sorted(w.get("levels") or [{"name": "Hele bygget", "kote": base, "how": "antatt", "src": "ingen etasjer kjent; ett nivå ved foten"}], key=lambda l: l["kote"])
         storeys = []
         for l in levels:
             s = new("IfcBuildingStorey", name=l["name"]); s.Elevation = float(l["kote"]); s.ObjectPlacement = place(l["kote"])
-            ifcopenshell.api.pset.edit_pset(m, pset=ifcopenshell.api.pset.add_pset(m, product=s, name="Sykehustomta_Kilde"), properties={"Kilde": l.get("src", ""), "Hvordan": l.get("how", "")})
+            pset(s, "Sykehustomta_Kilde", {"Kilde": l.get("src", ""), "Hvordan": l.get("how", "")})
             storeys.append((l, s))
         ifcopenshell.api.aggregate.assign_object(m, products=[s for _, s in storeys], relating_object=bld)
         storeys_of[w["id"]] = storeys; rings_of[w["id"]] = [b["ring"] for b in bs]
@@ -90,7 +124,7 @@ def build(site, floors, only=None):
         put = lambda z, e: contained.setdefault(storey_at(z), []).append(e)
         cuts = [l["kote"] for l in levels]
 
-        walls = []   # (wall element, a, d, n, length, lo, hi) for the openings
+        walls, cut = [], {}   # (wall element, a, d, n, length, lo, hi) for the openings; the side area they cut from each
         for b in bs:
             blocks = [k["p"] for k in b.get("blocks", [])] or [b["ring"]]
             src = b.get("source", "")
@@ -106,15 +140,25 @@ def build(site, floors, only=None):
                 for z0, z1 in zip(edges, edges[1:]):
                     e = element("IfcWall", "Yttervegg", quad, z0, z1 - z0, src, "omriss og tak fra laser; tykkelse antatt", predefined_type="SOLIDWALL")
                     put(z0, e); walls.append((e, (x0, y0), d, n, L, z0, z1)); counts["wall"] += 1
+                    pset(e, "Pset_WallCommon", {"IsExternal": True, "Status": "EXISTING"}); ns(e, "23"); of(e, mats.get("walls"), mhow)
             for p in blocks:
                 top = next((k["top"] for k in b.get("blocks", []) if k["p"] is p), b["top"])
+                A, per = area(p), perimeter(p)
+                def slab(name, z, src_, how_, kind, storey=None):
+                    e = element("IfcSlab", name, p, z, T_SLAB, src_, how_, predefined_type=kind)
+                    contained.setdefault(storey, []).append(e) if storey is not None else put(z, e); counts["slab"] += 1
+                    pset(e, "Pset_SlabCommon", {"IsExternal": kind == "ROOF", "Status": "EXISTING"})
+                    qto(e, "Qto_SlabBaseQuantities", {"Depth": T_SLAB, "Perimeter": per, "GrossArea": A, "GrossVolume": A * T_SLAB})
+                    ns(e, "26" if kind == "ROOF" else "25"); of(e, mats.get("slabs"), mhow)
                 for l, s in storeys:
-                    if b["base"] + 0.3 < l["kote"] < top - 0.3:
-                        contained.setdefault(s, []).append(element("IfcSlab", f'Dekke {l["name"]}', p, l["kote"] - T_SLAB, T_SLAB, l.get("src", ""), l.get("how", ""), predefined_type="FLOOR")); counts["slab"] += 1
-                put(top - T_SLAB, element("IfcSlab", "Tak", p, top - T_SLAB, T_SLAB, "laser (tak)", "målt", predefined_type="ROOF")); counts["slab"] += 1
+                    if b["base"] + 0.3 < l["kote"] < top - 0.3: slab(f'Dekke {l["name"]}', l["kote"] - T_SLAB, l.get("src", ""), l.get("how", ""), "FLOOR", s)
+                slab("Tak", top - T_SLAB, "laser (tak)", "målt", "ROOF")
             for x, y, size in b.get("posts", []):
-                h2 = size / 2
-                put(b["base"], element("IfcColumn", "Søyle", [(x - h2, y - h2), (x + h2, y - h2), (x + h2, y + h2), (x - h2, y + h2)], b["base"] - 0.2, b["lift"] - b["base"] + 0.2, src, "fra fasadetegning"))
+                h2, hc = size / 2, b["lift"] - b["base"] + 0.2
+                e = element("IfcColumn", "Søyle", [(x - h2, y - h2), (x + h2, y - h2), (x + h2, y + h2), (x - h2, y + h2)], b["base"] - 0.2, hc, src, "fra fasadetegning")
+                put(b["base"], e); pset(e, "Pset_ColumnCommon", {"IsExternal": True, "LoadBearing": True, "Status": "EXISTING"})
+                qto(e, "Qto_ColumnBaseQuantities", {"Length": hc, "CrossSectionArea": size * size, "GrossVolume": size * size * hc})
+                ns(e, "222"); of(e, mats.get("columns"), mhow)
 
         # openings: each window or door of a drawn facade, cut into the outer walls it stands in
         for f in site.get("facades", []):
@@ -134,13 +178,21 @@ def build(site, floors, only=None):
                     hole = element("IfcOpeningElement", "Åpning", [q(t0, -0.1), q(t1, -0.1), q(t1, T_WALL + 0.1), q(t0, T_WALL + 0.1)], zz0, zz1 - zz0,
                                    "; ".join(f["src"]), "fra fasadetegning")
                     ifcopenshell.api.feature.add_feature(m, feature=hole, element=e); counts["opening"] += 1
+                    cut[e] = cut.get(e, 0.0) + (t1 - t0) * (zz1 - zz0)
                     if not filled:   # the window itself once, in its full height, in the wall's middle
                         cls, name = {"door": ("IfcDoor", "Dør"), "glazing": ("IfcWindow", "Glassfelt")}.get(o["kind"], ("IfcWindow", "Vindu"))
                         c = T_WALL / 2
                         fill = element(cls, name, [q(t0, c - 0.04), q(t1, c - 0.04), q(t1, c + 0.04), q(t0, c + 0.04)], z0, z1 - z0, "; ".join(f["src"]), "fra fasadetegning")
                         fill.OverallWidth, fill.OverallHeight = float(u1 - u0), float(z1 - z0)
                         ifcopenshell.api.feature.add_filling(m, opening=hole, element=fill); put(z0, fill); filled = True
+                        pset(fill, f"Pset_{cls[3:]}Common", {"IsExternal": True, "Status": "EXISTING"}); ns(fill, "234")
+                        qto(fill, f"Qto_{cls[3:]}BaseQuantities", {"Width": u1 - u0, "Height": z1 - z0, "Area": (u1 - u0) * (z1 - z0)})
                 if not filled: counts.setdefault("unplaced", []).append(f'{f["id"]} u {u0:.1f}-{u1:.1f} z {z0:.1f}-{z1:.1f}')
+        # the outer walls' quantities, less what the openings take
+        for e, a, d, n, L, lo, hi in walls:
+            side = L * (hi - lo); net = side - cut.get(e, 0.0)
+            qto(e, "Qto_WallBaseQuantities", {"Length": L, "Width": T_WALL, "Height": hi - lo, "GrossSideArea": side, "NetSideArea": net,
+                                              "GrossVolume": side * T_WALL, "NetVolume": net * T_WALL})
         for s, es in contained.items(): ifcopenshell.api.spatial.assign_container(m, products=es, relating_structure=s)
 
     # the drawn floor plans: their walls and rooms on the storey of the wing they stand in
@@ -157,23 +209,41 @@ def build(site, floors, only=None):
             c = (sum(p[0] for p in r) / len(r), sum(p[1] for p in r) / len(r)); wid = wing_at(c)
             if not wid: continue
             pts = r[:-1] if r[0] == r[-1] else r
-            inner.setdefault(storey(wid), []).append(element("IfcWall", "Innervegg", pts, fl["kote"], fl["height"], src, "fra plantegning")); counts["inner"] += 1
+            e = element("IfcWall", "Innervegg", pts, fl["kote"], fl["height"], src, "fra plantegning"); counts["inner"] += 1
+            inner.setdefault(storey(wid), []).append(e)
+            pset(e, "Pset_WallCommon", {"IsExternal": False, "Status": "EXISTING"}); ns(e, "24")
+            A = area(pts); q = {"Height": fl["height"], "GrossFootprintArea": A, "GrossVolume": A * fl["height"]}
+            if len(pts) == 4:   # a rectangle, as the traced walls are: its long side and its thickness
+                s1, s2 = math.dist(pts[0], pts[1]), math.dist(pts[1], pts[2]); q.update(Length=max(s1, s2), Width=min(s1, s2))
+            qto(e, "Qto_WallBaseQuantities", q)
         for rm in fl["rooms"]:
             wid = wing_at(rm["at"])
             if not wid: continue
+            # the room number is its name, as the stamp gives it ("SB 12.315"); the room's name is its long name
             sp = new("IfcSpace", name=rm.get("code") or rm["name"]); sp.LongName = rm["name"]
+            # its floor area: the architect's figure on the stamp where there is one, else the one measured between the walls
+            net = rm.get("area_m2") or rm.get("area_calc")
+            if net: qto(sp, "Qto_SpaceBaseQuantities", {"NetFloorArea": net, "Height": fl["height"], "NetVolume": net * fl["height"]})
+            pset(sp, "Pset_SpaceCommon", {"IsExternal": False, **({"Reference": rm["code"]} if rm.get("code") else {})})
             if rm.get("poly"):   # its outline between the walls (tools/roompoly.py): the space as a volume
                 sp.ObjectPlacement = place(); sp.Representation = prism(rm["poly"][:-1], fl["kote"], fl["height"])
-                props = {"Kilde": src, "Hvordan": "romstempel på plantegningen; omriss målt mellom veggene"}
+                props = {"Kilde": src, "Hvordan": "romstempel på plantegningen; omriss " + ("delt ut mellom stemplene der veggene ikke lukker rommet, omtrentlig" if rm.get("poly_how") == "delt" else "målt mellom veggene")}
                 props["Areal (målt)"] = f'{rm["area_calc"]} m²'
             else:
                 sp.ObjectPlacement = m.create_entity("IfcLocalPlacement", RelativePlacement=m.create_entity("IfcAxis2Placement3D", Location=P3(*rm["at"], fl["kote"])))
                 props = {"Kilde": src, "Hvordan": "romstempel på plantegningen (plassert ved stempelet, uten omriss)"}
             if rm.get("area_m2"): props["Areal (tegning)"] = f'{rm["area_m2"]} m²'
-            ifcopenshell.api.pset.edit_pset(m, pset=ifcopenshell.api.pset.add_pset(m, product=sp, name="Sykehustomta_Kilde"), properties=props)
+            pset(sp, "Sykehustomta_Kilde", props)
             spaces.setdefault(storey(wid), []).append(sp); counts["space"] += 1
     for s, es in inner.items(): ifcopenshell.api.spatial.assign_container(m, products=es, relating_structure=s)
     for s, es in spaces.items(): ifcopenshell.api.aggregate.assign_object(m, products=es, relating_object=s)
+    write_psets()
+    cls = ifcopenshell.api.classification.add_classification(m, classification="NS 3451")
+    cls.Source, cls.Edition, cls.Name, cls.Description = "Standard Norge", "2022", "NS 3451", "Bygningsdelstabell"
+    for code in sorted(classed):
+        ifcopenshell.api.classification.add_reference(m, products=classed[code], identification=code, name=NS3451[code], classification=cls)
+    for name in sorted(made):
+        ifcopenshell.api.material.assign_material(m, products=made[name], material=ifcopenshell.api.material.add_material(m, name=name, category=MATERIAL_CATEGORY[name]))
     stable_ids(m)
     return m, counts
 

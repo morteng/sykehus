@@ -114,7 +114,12 @@
      "how": "beregnet",
      "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
     }
-   ]
+   ],
+   "materials": {
+    "walls": "Betong",
+    "slabs": "Betong",
+    "how": "antatt ut fra «bærende fasadevegger, ribbedekker» og fasaden i naturbetong"
+   }
   },
   {
    "id": "sentralblokka-sidebygg",
@@ -204,7 +209,11 @@
      "how": "tegning",
      "src": "57dc6d477c88#p1 snitt B-B"
     }
-   ]
+   ],
+   "materials": {
+    "walls": "Murverk",
+    "how": "antatt ut fra «murverk (1887, 1911)»; dekkene er ikke gitt (betong fra 1937–40, de eldre ukjent)"
+   }
   },
   {
    "id": "vestfloy",
@@ -365,7 +374,12 @@
      "how": "tegning",
      "src": "5c27a428f032#p1 (teknisk rom)"
     }
-   ]
+   ],
+   "materials": {
+    "slabs": "Betong",
+    "columns": "Betong",
+    "how": "antatt ut fra «betong søyler og dekker»; veggene er ikke gitt"
+   }
   },
   {
    "id": "bygg-sv",
