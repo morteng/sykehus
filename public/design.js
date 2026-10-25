@@ -28,8 +28,8 @@
 
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
 import { checkLandscape, applyLandscape } from "./landscape.js";
-import { fitOf, groundAt, inRing } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
-export { fitOf, groundAt };
+import { fitOf, surfaceFit, groundAt, inRing } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
+export { fitOf, surfaceFit, groundAt };
 
 export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];

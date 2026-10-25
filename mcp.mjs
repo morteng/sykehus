@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlink
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
-import { fitOf } from "./public/design.js";
+import { fitOf, surfaceFit } from "./public/design.js";
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
@@ -44,7 +44,7 @@ const dirDeg = d => { if (typeof d === "number") return d; const k = dirKey(d); 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const counts = new Map();
@@ -308,7 +308,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       include_screenshot: { type: "boolean", description: "A picture of the model after the change comes back (default true). false for the middle steps of a sequence; look at the last one" },
       view_name: VIEW_NAME }, ["edits"]),
       description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground (a pool or pond is kind surface with surface water): surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
-        "The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
+        "The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap; and for each new surface (a pool, a lawn, paving) what it covers, by m²: buildings, and the footpaths, pavements and roads there are today (from OSM and NVDB). A pool or a lawn over a path cuts the path: say so, and move it or lay a new path round it, unless that is what was asked. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
       run: async (a, req) => {
         let d, v = null;
         if (!a.version && !a.draft && versions && userOf(req)) a = { ...a, version: openOf(userOf(req)).id };
@@ -319,7 +319,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
             const same = d.edits.findIndex(x => JSON.stringify(x) === JSON.stringify(c)); if (same >= 0) throw new Error(`Finnes allerede som endring nr. ${same + 1}; den står, send bare det nye`);
             d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
-        const m = applyEdits(site, floors, d.edits), after = afterOf(m), fit = fitOf(m.site);
+        const m = applyEdits(site, floors, d.edits), after = afterOf(m);
+        /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
+        const fit = [...fitOf(m.site), ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit(m.site, ways ? await ways() : []) : [])];
         let out;
         if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
         else { d.t = Date.now(); keepDraft(d);
