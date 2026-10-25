@@ -9,6 +9,7 @@
      POST /api/anton             {text, version?}  a message; it waits its turn (5 waiting at most)
      POST /api/anton/godkjenn    {approval_id, decision: "accept"|"reject"}
      POST /api/anton/stopp       ends the running turn
+     POST /api/anton/ny          «Ny samtale»: gulden-ai starts the thread afresh (/new-chat); every page empties
 
    To gulden-ai (SYKEHUS_ASSISTANT_URL + SYKEHUS_ASSISTANT_PREFIX, default /internal/sykehus; Bearer
    SYKEHUS_ASSISTANT_TOKEN): POST /chat {person, session, device_id, message, request_id, ui_lang: "nb", version?}
@@ -125,6 +126,13 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       const [st] = await call("/cancel", { person: me.person, session: session(me.person), device_id: me.device });
       if (st !== 200 && t.stop) { t.stop.stopped = true; t.stop.abort(); }
       return send(res, 200, { ok: true });
+    }
+    if (path === "/api/anton/ny") {
+      if (t.running || t.queue.length) return send(res, 409, { error: "Vent til Anton har svart." });
+      const [st, j] = await call("/new-chat", { person: me.person, session: session(me.person), device_id: me.device });
+      if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
+      if (st !== 200) return send(res, 502, { error: codeOf(j, "unavailable") });
+      publish(me.person, "cleared", { type: "cleared" }); return send(res, 200, { ok: true });
     }
     return send(res, 404, { error: "Ikke funnet" });
   }

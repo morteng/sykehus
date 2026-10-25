@@ -23,6 +23,7 @@ const door = createServer((req, res) => {
       return;
     }
     if (req.url.startsWith("/internal/sykehus/history")) return res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ items: [{ type: "message", from: "lars", text: "hei" }] }));
+    if (req.url === "/internal/sykehus/new-chat") return res.writeHead(200, { "content-type": "application/json" }).end("{}");
     res.writeHead(404).end("{}");
   });
 });
@@ -106,6 +107,14 @@ test("a message is relayed as the person's turn and streamed back to their pages
   const s = (await steps).find(e => e.event === "steps"); assert.equal(s.version, v.version); assert.equal(s.changes, 1);
   const h = await (await fetch(O + "/api/anton/historikk", { headers: { cookie } })).json();
   assert.equal(h.items[0].text, "hei");
+});
+
+test("«Ny samtale» asks gulden-ai for a new thread and empties every page", async () => {
+  const got = events(cookie, o => o.some(e => e.event === "cleared"));
+  await new Promise(ok => setTimeout(ok, 200));
+  assert.equal((await post("/api/anton/ny", {}, { cookie })).status, 200);
+  assert.ok((await got).some(e => e.event === "cleared"));
+  const b = seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).body; assert.equal(b.session, "sykehus:lars"); assert.equal(b.device_id, "dev-1");
 });
 
 test("signing out clears the cookie", async () => {

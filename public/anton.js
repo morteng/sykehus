@@ -80,7 +80,7 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
   function pill(person) {
     document.body.classList.add("anton");
     const box = document.createElement("div"); box.id = "anton";
-    box.innerHTML = `<div id="talk" class="card" hidden><ol id="talkLog"></ol></div>
+    box.innerHTML = `<div id="talk" class="card" hidden><div class="talkhead"><button id="talkNew" class="link" title="Glem samtalen og begynn på nytt">Ny samtale</button></div><ol id="talkLog"></ol></div>
       <div class="pill card"><button class="hist" id="talkHist" title="Samtalen" aria-label="Vis samtalen">${HIST}</button>
         <div class="pillmid"><div class="busy" id="talkBusy"></div><textarea id="talkIn" rows="1" placeholder="Spør Anton, eller be ham tegne …" aria-label="Melding til Anton"></textarea></div>
         <button class="round send" id="talkSend" title="Send" aria-label="Send">${SEND}</button></div>`;
@@ -100,6 +100,10 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
       busy.textContent = running ? (waiting ? `Anton tenker … (${waiting} venter)` : "Anton tenker …") : "";
     }
     $("talkHist").onclick = () => show(talk.hidden);
+    $("talkNew").onclick = async () => {
+      const r = await fetch("api/anton/ny", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => null);
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Logg inn på nytt." : j.error || CODES.unavailable); }
+    };
     $("view").addEventListener("pointerdown", () => show(false));   // the model first: touching it folds the talk away
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
     input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
@@ -148,5 +152,6 @@ export async function start({ viewer, versionId, info, closable, CLOSE }) {
     on("done", () => { if (redraw) redrawNow(); });
     on("steps", s => { if (s.version === versionId) { if (running) redraw = true; else redrawNow(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
     on("signed_out", signedOut);
+    on("cleared", () => { log.textContent = ""; replies.clear(); line("from-anton", "Ny samtale. Hva vil du gjøre med tomta?", "Anton"); });
   }
 }

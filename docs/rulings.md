@@ -33,3 +33,9 @@ Morten's decisions on how Sykehustomta is built, newest last. Each names when an
   2–3 colours, «Angre», «Tøm», «Avbryt»; words by iPadOS Scribble in the message box; «Send til Anton» sends the
   picture, each stroke as site metres (raycast) and the camera, so Anton can put a try_change where he drew. Design
   first: frames at iPad size for Morten to see before it is built, and built after the pill is live.
+- **2026-10-25 17:31Z (via pm):** on the «Tegn» frames (docs/design/tegn): «the general idea is ok, yes». Built once the
+  pill is live; before that only behind a hidden switch, tested with a stand-in Anton.
+- **2026-10-25 17:31Z (Morten, in the sykehus session):** «we need to rethink the ui to be more anton-default, move the
+  floors (do we need them as separate buttons? folow anton/gulden conventions more» and «the sidebar system fab uses is
+  pretty nie. erhaos pm can task a designer to hep?»: a redesign, Anton first, with fab's sidebar; a designer's frames
+  first (asked of pm), then built from them.
