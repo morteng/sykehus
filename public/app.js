@@ -272,5 +272,7 @@ fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ ver
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 /* signing in, and Anton for the signed in (anton.js) */
 import("./anton.js").then(m => m.start({ viewer, versionId, info: $("info"), closable, CLOSE, valg })).catch(e => console.error("anton:", e));
+/* the streets around, as hagekart draws them, after the model shows (streets.js) */
+requestAnimationFrame(() => import("./streets.js").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
 
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));

@@ -1,5 +1,5 @@
 {
-  "renderkit": "31c411048eddacd87aa4ff522cc15b0925734ce5",
+  "renderkit": "e1e05d5d46978d8a1de2025aa58c29d96bb44eef",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -14,6 +14,10 @@
     "ez-leaf-oak.png": "144cc2cbebc45a9f3f63ff24b77c9c998380b879",
     "ez-leaf-aspen.png": "bb5681a2501dc2e2c44d6c7763cbfa4c967259cf",
     "ez-leaf-pine.png": "f552d709ba62ba95b2ad070083939f99232194ab",
-    "camera.js": "4fb5b1f9aa3b99356147eceecca50b84fba73b6c"
+    "camera.js": "4fb5b1f9aa3b99356147eceecca50b84fba73b6c",
+    "streets.js": "95b1ce48b4b497e06f2b20c8151dd85d864e74b0",
+    "streets3d.js": "c0c1d0d45521d8165faa03a151bec2e018faac44",
+    "streetnorms.js": "4a0b1d3854c558731496e71362a7b9b55f3e31d7",
+    "paths2d.js": "96bab6411ce3d7ee94455e75a020e5ef62b9fbb0"
   }
 }
