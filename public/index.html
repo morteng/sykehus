@@ -32,7 +32,16 @@
       <button type="button" class="tgl" id="names" aria-pressed="false" title="Vis eller skjul navnene på fløyene og rommene (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10l4 5-4 5H4z"/></svg>Navn</button>
       <button type="button" class="tgl" id="mnew" aria-pressed="false" title="Sett et nytt bygg på tomta: trykk der det skal stå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>Nytt bygg</button>
     </div>
-    <button type="button" class="where" id="where" hidden></button>
+    <div class="wherebar">
+      <button type="button" class="where" id="where" hidden></button>
+      <div class="views" id="views" hidden>
+        <button type="button" class="views-btn" id="viewsBtn" aria-expanded="false" aria-controls="viewsPop" title="Lagrede visninger: gå til en, eller lagre den du ser nå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Visninger</span></button>
+        <div class="views-pop" id="viewsPop" hidden>
+          <ul id="viewsList"></ul>
+          <form id="viewSave" class="views-save"><input id="viewName" maxlength="60" aria-label="Navn på visningen du ser nå" autocomplete="off"><button type="submit">Lagre denne</button></form>
+        </div>
+      </div>
+    </div>
     <div class="nz">
       <div class="north" id="north" title="Nord"><svg viewBox="-20 -20 40 40" aria-label="Nordpil"><path d="M0 -8 L7 17 L0 12 L-7 17 Z" fill="currentColor"/><text x="0" y="-10" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">N</text></svg></div>
       <div class="zoom2"><button type="button" id="zin" title="Zoom inn (+)" aria-label="Zoom inn">+</button><button type="button" id="zout" title="Zoom ut (−)" aria-label="Zoom ut">−</button></div>
@@ -96,6 +105,7 @@
 </main>
 <div id="sheet"></div>
 <!-- ?v: once, past what browsers held from before the edge sent no-cache (2026-10-25) -->
+<script src="early.js" defer></script>
 <script type="module" src="app.js?v=20261025e"></script>
 </body>
 </html>

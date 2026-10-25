@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { fitOf } from "./public/design.js";
+import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
    and the older revisions' initialize for clients that still send it. MCP Apps 2026-01-26 (io.modelcontextprotocol/ui). */
@@ -24,6 +25,7 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "The hospital is described as its wings (about_site, about_wing): each with years, storeys and their kote per wing (storeys), drawn floor plans with rooms and areas (floor_plan), and windows from the drawn facades (openings). "
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
   + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
+  + "The person keeps camera views by name on a version (U3562): show_building with save_as keeps the view it shows under that name (when they say «husk denne», «lagre visningen»), saved_view goes to one; show_draft lists them. "
   + "Tell the person only what a tool result shows: a change is made only when it is in the result's added and the result names the version it went into; when it is rejected or refused, say so and what you do next. "
   + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless he writes otherwise, and cite drawings and documents by title with their link. "
   + "Say how each fact is known: read off a drawing, worked out (beregnet), assumed (antatt) or measured from the laser; areas measured between drawn walls are rough (about 15 %).";
@@ -32,8 +34,13 @@ const err = (code, message) => Object.assign(new Error(message), { code });
 const toolErr = message => Object.assign(new Error(message), { tool: true });
 /* the store's search text is folded so "rontgen" finds "røntgen" (tools/ingest.py fold) */
 const fold = s => String(s).toLowerCase().replace(/æ/g, "ae").replace(/[øö]/g, "o").replace(/[åä]/g, "a").replace(/é/g, "e").replace(/ü/g, "u");
-const DIRS = { n: 0, nord: 0, no: 45, nordøst: 45, ne: 45, ø: 90, øst: 90, e: 90, sø: 135, sørøst: 135, se: 135, s: 180, sør: 180, sv: 225, sørvest: 225, sw: 225, v: 270, vest: 270, w: 270, nv: 315, nordvest: 315, nw: 315 };
-const dirDeg = d => typeof d === "number" ? d : DIRS[String(d || "").toLowerCase().replace(/[\s-]/g, "")] ?? (() => { throw toolErr(`Unknown direction "${d}". Use N, NØ, Ø, SØ, S, SV, V, NV or degrees.`); })();
+/* a direction as a model writes it, folded (pm 21:41Z: «NØ» was refused, the map had «no» and no «nø»): any case, NFC
+   or NFD, Norwegian or English, short or whole */
+const DIRS = { n: 0, nord: 0, north: 0, no: 45, ne: 45, nordost: 45, northeast: 45, o: 90, e: 90, ost: 90, east: 90, so: 135, se: 135, sorost: 135, southeast: 135,
+  s: 180, sor: 180, south: 180, sv: 225, sw: 225, sorvest: 225, southwest: 225, v: 270, w: 270, vest: 270, west: 270, nv: 315, nw: 315, nordvest: 315, northwest: 315 };
+const dirKey = d => fold(String(d ?? "").normalize("NFC")).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9.-]/g, "");
+const dirDeg = d => { if (typeof d === "number") return d; const k = dirKey(d); if (/^-?\d+(\.\d+)?$/.test(k)) return +k;
+  return DIRS[k.replace(/-/g, "")] ?? (() => { throw toolErr(`Unknown direction "${d}". Use N, NØ, Ø, SØ, S, SV, V, NV or degrees.`); })(); };
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
@@ -121,6 +128,16 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all); a version only for who may see it */
   const editsOf = (id, req) => /^v.{8}$/.test(String(id)) ? versionOf(id, req).edits : draftOf(id).edits;
+  /* the saved camera views (U3562) of a version or a draft: read by who may see it, changed by its owner (a draft by
+     anyone with its id, as its changes are); renderkit's views.js checks them, its errors are the tool's */
+  const viewsOf = (id, req) => checkViews((/^v.{8}$/.test(String(id)) ? versionOf(id, req) : draftOf(id)).views, VIEW_SPEC);
+  const changeViews = (id, req, f) => {
+    const v = /^v.{8}$/.test(String(id)) ? ownVersion(id, req) : null, o = v || draftOf(id);
+    try { o.views = f(checkViews(o.views, VIEW_SPEC)); } catch (e) { throw toolErr(e.message); }
+    if (v) versions.save(v); else { o.t = Date.now(); keepDraft(o); }
+    return o.views;
+  };
+  const viewsOut = l => l.map(w => ({ id: w.id, name: w.name, by: w.by }));
   const model = (id, req) => id ? applyEdits(site, floors, editsOf(id, req)) : { site, floors, notes: [], changed: [] };
 
   // ---------- the picture ----------
@@ -317,7 +334,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "show_draft", tgt: "read", title: "Se et utkast eller en versjon", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
-        return { ...(isV ? versionOut(versionOf(a.draft, req), o, req) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV }; } },
+        return { ...(isV ? versionOut(versionOf(a.draft, req), o, req) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV, saved_views: viewsOut(viewsOf(a.draft, req)) }; } },
     { name: "undo_change", tgt: "draft", title: "Angre en endring", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["n"]),
       description: "Takes one change out of a draft, or out of the person's own version, by its number from show_draft.",
       run: async (a, req) => {
@@ -390,17 +407,30 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees (3d)" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d): about 60-75 for fugleperspektiv (a bird's-eye view), 10-20 for a view from the street" },
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
-        drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, target: TARGET, draft: OLD }),
+        drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" },
+        save_as: { type: "string", maxLength: 60, description: "Keep this view under this name on the version (the person's own, or a draft), e.g. «Fra Bragernes»; the same name again moves it. For «husk denne visningen» / «lagre visningen»" },
+        saved_view: { type: "string", description: "Go to a saved view, by its name or id (show_draft lists saved_views); the other view fields are not needed" }, target: TARGET, draft: OLD }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With target: that version or draft; without, the version the person has open. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it. To see the model yourself, use look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link.",
-      run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing), who = userOf(req);
+      run: async (a, req) => { const who = userOf(req), on = a.draft || (who && pages?.open.get(who)) || (who && versions && openFor(req)?.id) || null;
+        /* a saved view (U3562) is a view as this tool makes one: its camera, mode, storey and wing */
+        let view, kept = null;
+        if (a.saved_view) { if (!on) throw toolErr("Ingen lagrede visninger: ingen versjon eller utkast er åpen."); try { kept = findView(viewsOf(on, req), a.saved_view); } catch (e) { throw toolErr(e.message); } view = { ...viewOf({ draft: a.draft }, req), ...kept.state }; }
+        else view = viewOf(a, req);
+        if (a.save_as != null && !a.saved_view) {
+          if (!on) throw toolErr("Å lagre en visning trenger et forslag: gjør en endring først (try_change), eller åpne en versjon.");
+          const { draft: _d, key: _k, guessed: _g, ...state } = view; if (!state.mode) state.mode = "3d";
+          const l = changeViews(on, req, l => addView(l, { name: a.save_as, state, by: "anton" }, VIEW_SPEC)); kept = l.find(x => x.name.toLowerCase() === String(a.save_as).replace(/\s+/g, " ").trim().toLowerCase()) || l.at(-1);
+        }
+        const w = view.wing && wingOf(site, view.wing);
         /* through the pill: the person's open pages go to this view (assistant.mjs pages.show), else say they did not */
         /* a version's id names a version, not a draft (21:05Z: the page went to ?utkast=v…, a draft that is not there) */
         const { draft: dv, guessed, ...rest } = view, isV = /^v.{8}$/.test(String(dv ?? ""));
         const moved = who && pages ? pages.show(who, { ...rest, ...(dv && !isV ? { draft: dv } : { version: isV ? dv : pages.open.get(who) || null }) }) : null;
         const SIDE_ = { N: "nord", Ø: "øst", S: "sør", V: "vest" }, deg = a.from_direction != null ? dirDeg(a.from_direction) : null;
         const cam = view.mode === "section" || view.mode === "plan" ? "" : [deg != null ? `sett fra ${["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8]}` : "", a.tilt_deg != null ? `${Math.round(clamp(+a.tilt_deg, 5, 85))}° over bakken${a.tilt_deg >= 50 ? " (fugleperspektiv)" : ""}` : "", a.distance_m != null ? `${Math.round(clamp(+a.distance_m, 30, 1200))} m unna` : ""].filter(Boolean).join(", ");
-        const text = `${guessed ? `Viser ${guessed}; si fra om du mente en annen fløy (wing). ` : ""}Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
-        return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
+        const said = kept ? (a.saved_view ? `Den lagrede visningen «${kept.name}». ` : `Lagret som «${kept.name}» i ${/^v.{8}$/.test(on) ? `versjonen ${on}` : `utkastet ${on}`}; personen finner den under Visninger. `) : "";
+        const text = `${said}${guessed ? `Viser ${guessed}; si fra om du mente en annen fløy (wing). ` : ""}Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
+        return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view, ...(kept ? { saved_view: { id: kept.id, name: kept.name } } : {}) } } }; } },
   ];
   const short = x => typeof x === "string" ? JSON.stringify(x.length > 24 ? x.slice(0, 24) + "…" : x) : typeof x === "number" || typeof x === "boolean" || x == null ? String(x)
     : Array.isArray(x) ? `[${x.length}]` : `{${Object.keys(x).slice(0, 12).join(",")}}`;
@@ -491,7 +521,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   function handleDraft(req, res, id) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const open = { "access-control-allow-origin": "*" };   // the chat app reads it from the host's frame
-    try { const d = draftOf(id); return send(res, 200, { draft: d.id, edits: d.edits, saved: false }, open); }
+    try { const d = draftOf(id); return send(res, 200, { draft: d.id, edits: d.edits, views: checkViews(d.views, VIEW_SPEC), saved: false }, open); }
     catch { return send(res, 404, { error: "Utkastet finnes ikke (de varer et døgn)." }, open); }
   }
   /* GET /api/versjon/<id>: a saved version for the page's ?versjon=<id>; GET /api/versjoner: all of them, newest first */
@@ -499,7 +529,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const open = { "access-control-allow-origin": "*" }, v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
     const v = v0 && versions.visible(v0, userOf(req), key) ? v0 : null;
-    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, updated: v.updated, edits: v.edits, saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
+    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, updated: v.updated, edits: v.edits, views: checkViews(v.views, VIEW_SPEC), saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
   }
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
@@ -518,6 +548,14 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const me = req.webUser ?? null, o = originOf(req);
       /* signed in, the person's work is one private version, saved on every change (U3555): the one marked work */
       const work = () => workOf(me);
+      /* the saved views (U3562): {view: "add", name, state} | {view: "rename", id, name} | {view: "remove", id}, on the
+         version or draft named, or the person's work */
+      if (a.view) {
+        const id = String(a.version || a.draft || (me && versions ? work().id : "")); if (!id) throw toolErr("Hvilket forslag?");
+        const l = changeViews(id, req, l => a.view === "add" ? addView(l, { name: a.name, state: a.state, by: "person" }, VIEW_SPEC) : a.view === "rename" ? renameView(l, a.id, a.name)
+          : a.view === "remove" ? removeView(l, a.id) : (() => { throw new Error("view er add, rename eller remove"); })());
+        return send(res, 200, { views: l, ...(a.view === "add" ? { saved: l.find(w => w.name.toLowerCase() === String(a.name || "").replace(/\s+/g, " ").trim().toLowerCase())?.id ?? l.at(-1).id } : {}) });
+      }
       if (a.adopt || a.copy || a.fresh || a.rename || a.share) {
         if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
         if (a.rename) {   // the title on the «Forslag» card, edited in place

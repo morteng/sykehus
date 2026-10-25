@@ -87,3 +87,32 @@ test("try_change: reshape of a building that is not there says what reshape is f
   const r = (await call("try_change", { target: D, edits: [{ kind: "reshape", id: "basseng", from: [0, 0] }], include_screenshot: false }, {})).structuredContent;
   assert.match(r.rejected[0].error, /reshape endrer et nytt bygg.*kind surface \(surface: "water"/);
 });
+
+test("saved views (U3562): the page saves, renames and removes; Anton saves with save_as and goes back with saved_view; show_draft lists them", async () => {
+  const post = (b, h = lars) => fetch(O + "/api/endring", { method: "POST", headers: { "content-type": "application/json", ...h }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, j: await r.json() }));
+  const st = { x: 10, y: -20, h: 15, yaw: 0.4, pitch: 0.6, dist: 300, mode: "3d", junk: "x" };
+  const a = await post({ view: "add", name: " Fra  sør ", state: st }); assert.equal(a.status, 200, JSON.stringify(a.j));
+  const w = a.j.views.find(v => v.id === a.j.saved); assert.equal(w.name, "Fra sør"); assert.equal(w.by, "person"); assert.equal(w.state.junk, undefined);
+  assert.equal((await post({ view: "add", name: "Fra sør", state: { ...st, yaw: 1 } })).j.views.length, 1, "the same name moves it");
+  assert.equal((await post({ view: "add", name: "x", state: { ...st, pitch: 9 } })).status, 400);
+  assert.equal((await post({ view: "add", version: V, name: "y", state: st }, {})).status, 400, "not the owner");
+  const s = (await call("show_building", { mode: "fasade", wing: "Sentralblokka", from_direction: "S", save_as: "Sørfasaden" })); assert.ok(!s.isError, text(s));
+  assert.match(text(s), /^Lagret som «Sørfasaden» i versjonen v/);
+  const list = (await call("show_draft", {})).structuredContent.saved_views; assert.deepEqual(list.map(v => [v.name, v.by]), [["Fra sør", "person"], ["Sørfasaden", "anton"]]);
+  const g = await call("show_building", { saved_view: "sørfasaden" }); assert.ok(!g.isError); assert.match(text(g), /^Den lagrede visningen «Sørfasaden»/);
+  assert.deepEqual([g.structuredContent.view.section, g.structuredContent.view.side], ["fasade", "S"]);
+  const bad = await call("show_building", { saved_view: "Fra nord" }); assert.equal(bad.isError, true); assert.match(text(bad), /Ingen lagret visning «Fra nord»; de lagrede: «Fra sør», «Sørfasaden»/);
+  const r = await post({ view: "rename", id: w.id, name: "Fra Strømsø" }); assert.equal(r.j.views[0].name, "Fra Strømsø");
+  assert.equal((await post({ view: "remove", id: w.id })).j.views.length, 1);
+  const v = await (await fetch(`${O}/api/versjon/${(await call("show_draft", {})).structuredContent.version}`, { headers: lars })).json(); assert.deepEqual(v.views.map(x => x.name), ["Sørfasaden"]);
+  const d = await call("show_building", { target: D, save_as: "Utkastets" }, {}); assert.ok(!d.isError, text(d)); assert.equal((await (await fetch(`${O}/api/utkast/${D}`)).json()).views[0].name, "Utkastets");
+});
+
+test("show_building: «NØ» as the log had it (pm 21:41Z ×3), and every other way to write north-east", async () => {
+  for (const d of ["NØ", "nø", "NO̸", "nordøst", "Nordøst", "NE", "north-east", "45", "45°", 45]) {
+    const r = await call("show_building", { from_direction: d, distance_m: 260, tilt_deg: 65 }, {}); assert.ok(!r.isError, `${JSON.stringify(d)}: ${text(r)}`);
+    assert.match(text(r), /sett fra nordøst, 65° over bakken \(fugleperspektiv\), 260 m unna/, JSON.stringify(d));
+  }
+  for (const [d, w] of [["SØ", "sørøst"], ["sørvest", "sørvest"], ["W", "vest"], ["Ø", "øst"]]) assert.match(text(await call("show_building", { from_direction: d }, {})), new RegExp(`sett fra ${w}`));
+  assert.equal((await call("show_building", { from_direction: "opp" }, {})).isError, true);
+});

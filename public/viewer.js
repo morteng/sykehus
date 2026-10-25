@@ -26,6 +26,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const P = ([x, y], h) => new THREE.Vector3(x, h - base, -y);
 
   const renderer = new THREE.WebGLRenderer({ antialias: Q.aa, preserveDrawingBuffer: true });
+  /* no shader error check outside ?debug: reading each program's log makes the first frame wait on every compile */
+  renderer.debug.checkShaderErrors = new URLSearchParams(location.search).has("debug");
   renderer.setPixelRatio(Math.min(Q.dpr, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.localClippingEnabled = true;
   renderer.domElement.addEventListener("webglcontextlost", () => lowerNow(Q));
   container.appendChild(renderer.domElement); renderer.domElement.style.cssText = "display:block;width:100%;height:100%;touch-action:none";
@@ -68,7 +70,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   /* ---------- buildings ---------- */
   const ringArea2 = r => r.reduce((a, q, i) => { const s = r[(i + 1) % r.length]; return a + q[0] * s[1] - s[0] * q[1]; }, 0);   // twice the signed area, > 0 anticlockwise
-  const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
+  /* a ring's box first, kept per ring: most points asked are far outside (pm 21:41Z: the page's main thread stood
+     still seconds after a load; the floors asked every wall corner against every building) */
+  const boxes = new WeakMap(), boxOf = r => { let b = boxes.get(r); if (!b) { b = [Infinity, Infinity, -Infinity, -Infinity]; for (const [x, y] of r) { if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y; } boxes.set(r, b); } return b; };
+  const inRing = ([x, y], r) => { const bx = boxOf(r); if (x < bx[0] || x > bx[2] || y < bx[1] || y > bx[3]) return false; let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
   const meshes = new Map(); let goneIds = new Set();   // goneIds: setGone
   function wallsTo(ring, b0, topAt, m) {
     const pos = [];

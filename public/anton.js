@@ -32,7 +32,9 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
   const chip = $("me");
+  const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
   if (!me.person) {
+    unmark();
     /* not signed in: the Anton tab says how, and the chip in the app bar opens it */
     loginCard(me.login);
     if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; $("meBtn").onclick = () => { panel.reveal("chat"); $("code")?.focus(); }; }
@@ -49,7 +51,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     menu.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; $("meBtn").focus(); } });
   }
   wishTab();
-  if (me.anton) talk(); else { $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten et ønske i «Ønsker».</p>`; }
+  if (me.anton) talk(); else { unmark(); $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten et ønske i «Ønsker».</p>`; }
 
   /* «Ønsker»: what Sykehustomta cannot do yet, to Morten (wishes.mjs); your own, and for Morten all of them */
   function wishTab() {
@@ -99,7 +101,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
   function talk() {
     document.body.classList.add("talk-on");
     const form = $("talk-form"), log = $("talkLog"), input = $("talkIn"), btn = $("talkSend"), busy = $("talkBusy");
-    form.hidden = false;
+    form.hidden = false; try { localStorage.setItem("sykehus-anton", "1"); } catch { }
     const replies = new Map(), told = new Set();
     let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
     const seen = new Set();   // the turns the stream has shown taken
@@ -252,5 +254,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     on("signed_out", signedOut);
     on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); empty(); });
     placePill(); state(); empty();
+    /* ready: what was typed while the page loaded (early.js) goes now */
+    form.classList.remove("wait"); btn.disabled = false; if (form.dataset.queued) { delete form.dataset.queued; const go = () => { busy.textContent = ""; sendIt(); }; if (es.readyState === EventSource.OPEN) go(); else es.addEventListener("open", go, { once: true }); }   // once the stream listens, so the page sees its own turn
   }
 }
