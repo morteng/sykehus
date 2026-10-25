@@ -12,7 +12,7 @@ import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
-import { picture, aimAt, VIEWS } from "./render.mjs";
+import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { fitOf } from "./public/design.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),

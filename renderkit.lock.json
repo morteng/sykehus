@@ -1,5 +1,5 @@
 {
-  "renderkit": "e1e05d5d46978d8a1de2025aa58c29d96bb44eef",
+  "renderkit": "47d064a418080aaad8aa449150cb6e609ac08832",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -18,6 +18,8 @@
     "streets.js": "95b1ce48b4b497e06f2b20c8151dd85d864e74b0",
     "streets3d.js": "c0c1d0d45521d8165faa03a151bec2e018faac44",
     "streetnorms.js": "4a0b1d3854c558731496e71362a7b9b55f3e31d7",
-    "paths2d.js": "96bab6411ce3d7ee94455e75a020e5ef62b9fbb0"
+    "paths2d.js": "96bab6411ce3d7ee94455e75a020e5ef62b9fbb0",
+    "look.js": "f65683a4cfc2cf0f491ae4a481949688129d2752",
+    "fit.js": "6816405642d2ff404f022e026845b7283f2cd9b5"
   }
 }

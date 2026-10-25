@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { applyEdits, checkEdit } from "../public/edits.js";
 import { fitOf } from "../public/design.js";
-import { aimAt } from "../render.mjs";
+import { aimAt } from "../public/renderkit/look.js";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-look-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9100 + Math.floor(Math.random() * 800);
 const O = `http://localhost:${PORT}`, lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };

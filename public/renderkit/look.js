@@ -1,10 +1,23 @@
-/* A picture of the model for Anton to look at (U3557, Morten 20:50Z «does anton on sykehus have camera tools to get
-   views it wants of its own work … like fab has?»): the site as the after leaves it, drawn on the server without a
-   browser or a GPU, so a tool can hand it back as an image. Massing only: the terrain, the lot line, the buildings
-   as their blocks (tools/massing.py) or rings, the new volumes in their material's colour, the trees as cones; one
-   building may be picked out in orange. A z-buffer over flat-shaded triangles, drawn twice the size and halved for
-   smooth edges, then dark edges on the buildings, a north arrow, a scale bar in plan; the PNG is written with
-   node:zlib. The page's viewer (viewer.js) is the real picture; this one is for checking shapes and places. */
+/* A picture of a site for an agent to look at (sykehus U3557, Morten 2026-10-25 20:50Z «does anton on sykehus have
+   camera tools to get views it wants of its own work … like fab has?»; one copy for every app, U3559): drawn in Node
+   without a browser or a GPU, so a tool can hand it back as MCP image content. Massing only: the terrain, the lot
+   line, the buildings as their blocks or rings, the new volumes in their material's colour, the trees as cones; some
+   picked out in orange. A z-buffer over flat-shaded triangles, drawn twice the size and halved for smooth edges, then
+   dark edges on the buildings, a north arrow top right, a 50 m scale bar in plan; the PNG written with node:zlib.
+   Node only (node:zlib, node:worker_threads); no three.js. An app's own viewer is the real picture; this one is for
+   checking shapes and places.
+
+   The site is fit.js's (terrain, buildings, wings, added, lot) and also:
+     added[].parts  [{ axis: [[east, north], [east, north]], profile: [[across, kote], …], mat }]   a profile extruded
+                    along the axis (across: metres to the left walking along it), or { tris: [[[e, n, kote] × 3], …], mat }
+     trees          [[east, north, height?, crown radius?], …]
+   mat: glass, concrete, steel, wood or brick.
+
+   render(site, { target: [east, north, kote], from (degrees, 0 = the camera north of the target), tilt (degrees
+     above the ground), dist (m), plan (straight down, north up), focus: [ids picked out], width, height }) → PNG Buffer
+   picture(site, opts): the same in a worker thread, one at a time → Promise<Buffer>
+   aimAt(site, what): a wing (id or name), a building id, or an added one (id or name) → { name, ids, target, size } | null
+   VIEWS: the named views (as FreeCAD's get_view): isometrisk, plan, N, Ø, S, V, NØ, SØ, SV, NV → { from, tilt } | { plan } */
 import { deflateSync } from "node:zlib";
 
 const hex = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
