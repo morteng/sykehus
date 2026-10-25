@@ -90,7 +90,9 @@ function scene(site, focusIds) {
         edges.push([A[k], A[m], foc ? C.focus : C.edge, foc ? 2.5 : 1], [B[k], B[m], foc ? C.focus : C.edge, foc ? 2.5 : 1], [A[k], B[k], foc ? C.focus : C.edge, foc ? 2.5 : 1]); }
     }
   }
-  const feet = (site.added || []).flatMap(a => (a.parts || []).filter(p => p.profile || p.tris).slice(0, 1).map(() => { const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L, d[0] / L];
+  /* the ground under a new building is not drawn over it; only what has a footprint (from, to, width): balconies hang
+     on a wall and have none (sykehus 2026-10-25 22:09Z: «Cannot read properties of undefined (reading '0')») */
+  const feet = (site.added || []).filter(a => a.from && a.to).flatMap(a => (a.parts || []).filter(p => p.profile || p.tris).slice(0, 1).map(() => { const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L, d[0] / L];
     return p => { const v = [p[0] - a.from[0], p[1] - a.from[1]], along = (v[0] * d[0] + v[1] * d[1]) / L, across = v[0] * n[0] + v[1] * n[1]; return along > -1 && along < L + 1 && Math.abs(across) < (a.width || 0) / 2 + 1; }; }));
   for (const [x, y, h = 8, r = 3] of site.trees || []) {
     if (feet.some(f => f([x, y]))) continue;   // a new building takes the trees where it stands

@@ -298,7 +298,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "openings", title: "Vinduer og dører i en fasade", ro: true, schema: S({ wing: WING }, ["wing"]),
       description: "The windows, doors and glazing read from a wing's drawn facades: per facade, how many of each kind per storey band, and each opening's position along the wall (metres from the left end as one stands outside) and kote of sill and head, with the sheet.",
       run: async (a, req) => { const w = wingOrErr(a.wing), fs = (site.facades || []).filter(f => f.building === w.id);
-        if (!fs.length) throw toolErr(`No drawn facade for ${w.name} yet. Drawn: ${[...new Set((site.facades || []).map(f => f.building))].join(", ")}.`);
+        if (!fs.length) throw toolErr(`Ingen fasadetegning av ${w.name} med vinduer ennå; tegnet er ${[...new Set((site.facades || []).map(f => f.building))].map(id => wingsAll().find(x => x.id === id)?.name || id).join(", ")}. For å se fasaden: look (from_direction mot siden) gir deg et bilde, show_building {mode: "fasade", wing: "${w.name}"} viser den for personen, med vinduene etter foto.`);
         const lv = (w.levels || []).slice().sort((x, y) => x.kote - y.kote), band = z => [...lv].reverse().find(l => l.kote <= z + 0.3)?.name || "under laveste etasje";
         return { wing: w.name, facades: fs.map(f => { const per = {}; for (const o of f.openings) { const k = band(o.z[0]); per[k] ||= {}; per[k][o.kind] = (per[k][o.kind] || 0) + 1; }
           return { id: f.id, name: f.name, wall_length_m: round1(Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1])), per_storey: per,
@@ -332,7 +332,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const last = ok.findLast(e => e.kind === "volume" || e.kind === "reshape"), id = last && (last.id ?? m.site.added?.findLast(x => x.kind === "volume" && x.name === last.name)?.id);
         try { const { png, text } = await look(m.site, { view_name: a.view_name, focus: id && m.site.added?.some(x => x.id === id) ? id : null });
           return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text }], structuredContent: out } };
-        } catch (e) { console.error("look:", e.message); return out; } } },
+        } catch (e) { console.error("look (try_change's picture):", e.message, "| edits:", argsLine({ edits: a.edits }), "| added:", (m.site.added || []).map(x => x.kind).join(",")); return out; } } },
     { name: "show_draft", tgt: "read", title: "Se et utkast eller en versjon", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
@@ -400,7 +400,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With target: that version or draft; without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
       run: async (a, req) => {
         const who = userOf(req), open = who && versions ? versions.get(pages?.open.get(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
-        const { png, text } = await look(m.site, a);
+        let png, text; try { ({ png, text } = await look(m.site, a)); }
+        catch (e) { if (e.tool) throw e; console.error("look:", e.message, "|", argsLine(a), "| added:", (m.site.added || []).map(x => x.kind).join(",")); throw toolErr(`Fikk ikke tegnet bildet (${e.message}). Prøv en annen visning, eller si fra til Morten.`); }
         return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: text + (id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.") }] } }; } },
     { name: "show_building", tgt: "read", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },

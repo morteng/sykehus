@@ -116,3 +116,9 @@ test("show_building: «NØ» as the log had it (pm 21:41Z ×3), and every other 
   for (const [d, w] of [["SØ", "sørøst"], ["sørvest", "sørvest"], ["W", "vest"], ["Ø", "øst"]]) assert.match(text(await call("show_building", { from_direction: d }, {})), new RegExp(`sett fra ${w}`));
   assert.equal((await call("show_building", { from_direction: "opp" }, {})).isError, true);
 });
+
+test("try_change and look draw a picture with balconies in the after (22:09Z: «look: Cannot read properties of undefined (reading '0')»)", async () => {
+  const r = await call("try_change", { target: D, edits: [{ kind: "balconies", wing: "Sentralblokka", side: "S", why: "test" }, { kind: "volume", name: "Paviljong", shape: "box", from: [-60, -80], to: [-45, -80], width: 8, height: 4, why: "test" }] }, {});
+  assert.ok(!r.isError, text(r)); assert.ok(r.content.some(c => c.type === "image"), "the picture is there");
+  const l = await call("look", { target: D, focus: "Sentralblokka", from_direction: "S" }, {}); assert.ok(!l.isError, text(l)); assert.equal(l.content[0].type, "image");
+});

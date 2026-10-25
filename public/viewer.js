@@ -181,6 +181,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     es.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
     const pm = new THREE.PMREMGenerator(renderer), t = pm.fromScene(es, 0.02).texture; pm.dispose(); return t;
   })();
+  /* the drawn facades painted after the first frame, one at a time when the page is idle (pm 21:41Z: painting every
+     facade's windows, grain and relief held the load about a second at full speed); each wall shows plain plaster
+     until its picture is ready */
+  const later = []; let compiled = false;   // compiled: the first frame's shaders (below)
+  const idle = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 500 }) : setTimeout(f, 30));
+  const paintNext = () => { const job = later.shift(); if (!job) return; try { job(); } catch (e) { console.warn("fasade:", e); } dirty = true; if (later.length) idle(paintNext); };
+  const paintLater = job => { later.push(job); if (later.length === 1 && compiled) idle(paintNext); };
   const BAY = 2.5, STOREY = 3.5;
   const wallTex = { low: facade("low"), tower: facade("tower") };
   /* a building on the lot as blocks (tools/massing.py): flat roofs, and walls only where the roof steps down or the
@@ -215,7 +222,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const r = new THREE.Mesh(rg, mat(C.flatRoof)); r.castShadow = r.receiveShadow = true; grp.add(r);
     for (const F of faces) if (F.pos.length) {
       const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(F.pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(F.uv, 2)); g.computeVertexNormals();
-      const m = new THREE.Mesh(g, mat("#ffffff", drawnFacade(F.f, b0, z1))); m.castShadow = m.receiveShadow = true; grp.add(m);
+      const fm = mat(FACADE.drawn.concrete), m = new THREE.Mesh(g, fm); m.castShadow = m.receiveShadow = true; grp.add(m);
+      paintLater(() => { const mm = m.material; Object.assign(mm, drawnFacade(F.f, b0, z1)); mm.color.set("#ffffff"); mm.needsUpdate = true; });   // m.material: the buildings' materials are cloned once made (below)
     }
     /* a volume held up on a frame (the operating module): its underside, the posts down to the ground, the braces */
     if (b.lift != null) {
@@ -778,7 +786,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     dirty = true;
   }
   const followers = new Set();   // what the page keeps over a point of the model (app.js float.js: the card over a wing), placed with the names
-  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); placeTags(); for (const f of followers) f(); dirty = false; markDone(Q); } });
+  /* the shaders compiled before the first frame, off the main thread where the browser can (KHR_parallel_shader_compile;
+     pm 21:41Z: the first frame held the page ~0,7 s at full speed, many times that on a slow machine); the frame waits */
+  (renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve()).catch(e => console.warn("shaders:", e)).finally(() => { compiled = true; dirty = true; if (later.length) requestAnimationFrame(() => idle(paintNext)); });
+  renderer.setAnimationLoop(() => { if (dirty && compiled) { renderer.render(scene, camera); placeTags(); for (const f of followers) f(); dirty = false; markDone(Q); } });
 
   const home = { ...O };
   return {
