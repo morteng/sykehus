@@ -67,7 +67,8 @@ export function checkEdit(site, floors, e) {
 
 /* the edits laid over copies of the model: { site, floors, notes, changed } (the inputs are left as they were) */
 export function applyEdits(site0, floors0, edits = []) {
-  const site = structuredClone(site0), floors = structuredClone(floors0), notes = [], changed = new Set();
+  const { terrain, ...rest } = site0;   // the terrain grid is only read (design.js groundAt), so it is shared, not copied: a change on the page stays within a frame
+  const site = { ...structuredClone(rest), ...(terrain ? { terrain } : {}) }, floors = structuredClone(floors0), notes = [], changed = new Set();
   for (const e of edits) {
     if (e.kind === "level") {
       const w = site.wings.find(x => x.id === e.wing); if (!w) continue;

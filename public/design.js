@@ -36,12 +36,12 @@ const pt = (v, what) => {
 const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
 
 /* the buildings a demolish names: a wing's pieces, one building, or all the hospital's */
-export function targets(site, key) {
-  const k = String(key ?? "").toLowerCase().trim();
-  if (k === "alle" || k === "all") return site.buildings.filter(b => b.own).map(b => b.id);
-  const w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k || (x.aliases || []).some(a => a.toLowerCase() === k));
-  if (w) return site.buildings.filter(b => b.wing === w.id).map(b => b.id);
-  const b = site.buildings.find(x => String(x.id).toLowerCase() === k);
+export function targets(site, key) {   // on a model where some are torn down already, those count too (a restore names them)
+  const k = String(key ?? "").toLowerCase().trim(), was = site.demolished || [];
+  if (k === "alle" || k === "all") return [...site.buildings.filter(b => b.own), ...was.filter(d => d.own)].map(b => b.id);
+  const w = [...(site.wings || []), ...(site.wings_gone || [])].find(x => x.id === k || x.name.toLowerCase() === k || (x.aliases || []).some(a => a.toLowerCase() === k));
+  if (w) return [...site.buildings, ...was].filter(b => b.wing === w.id).map(b => b.id);
+  const b = [...site.buildings, ...was].find(x => String(x.id).toLowerCase() === k);
   if (b) return [b.id];
   throw new Error(`Fant ikke «${key}». Bruk en fløy (${(site.wings || []).map(x => x.name).join(", ")}), en bygnings id eller «alle»`);
 }
@@ -162,13 +162,20 @@ export function applyDesign(site, floors, edits) {
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));
-  site.demolished = site.buildings.filter(b => gone.has(b.id)).map(b => ({ id: b.id, name: b.name || `Bygning ${b.id} på tomta`, wing: b.wing ?? null, footprint_m2: b.area_m2, gross_volume_m3: grossVolume(b) }));
+  site.demolished = site.buildings.filter(b => gone.has(b.id)).map(b => ({ id: b.id, name: b.name || `Bygning ${b.id} på tomta`, wing: b.wing ?? null, own: !!b.own, footprint_m2: b.area_m2, gross_volume_m3: grossVolume(b) }));
   site.buildings = site.buildings.filter(b => !gone.has(b.id));
-  site.facades = (site.facades || []).filter(f => !wings.has(f.building) || site.buildings.some(b => b.wing === f.building));
+  /* a wing with nothing left of it is gone from the after altogether (Morten 2026-10-25 20:12Z: «we want deleted
+     buildings removed»): its entry (so its storeys, kotes and name), its facades and its own plans go too; what it
+     was stays in site.demolished, and the edit in the list, to undo */
+  const whole = new Set([...wings].filter(w => !site.buildings.some(b => b.wing === w)));
+  site.wings_gone = (site.wings || []).filter(w => whole.has(w.id));
+  site.wings = (site.wings || []).filter(w => !whole.has(w.id));
+  site.facades = (site.facades || []).filter(f => !whole.has(f.building));
   for (const f of floors) {   // the drawn plans' walls and rooms inside what is gone go with it
     f.walls = f.walls.filter(r => !rings.some(g => inRing(r[0], g)));
     f.rooms = (f.rooms || []).filter(r => !rings.some(g => inRing(r.at, g)));
   }
+  for (let i = floors.length - 1; i >= 0; i--) if (whole.has(floors[i].wing) || gone.size && !floors[i].walls.length && !floors[i].rooms.length) floors.splice(i, 1);
   site.added = added;
 }
 

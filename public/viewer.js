@@ -69,7 +69,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* ---------- buildings ---------- */
   const ringArea2 = r => r.reduce((a, q, i) => { const s = r[(i + 1) % r.length]; return a + q[0] * s[1] - s[0] * q[1]; }, 0);   // twice the signed area, > 0 anticlockwise
   const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
-  const meshes = new Map();
+  const meshes = new Map(); let goneIds = new Set();   // goneIds: setGone
   function wallsTo(ring, b0, topAt, m) {
     const pos = [];
     for (let i = 0; i < ring.length - 1; i++) {
@@ -376,7 +376,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const grp = new THREE.Group(), wm = mat(C.cutWall, { clippingPlanes: [cut] });
     for (const r of f.walls) {
       const g = new THREE.ExtrudeGeometry(new THREE.Shape(r.map(([x, y]) => new THREE.Vector2(x, y))), { depth: f.height, bevelEnabled: false });
-      const w = new THREE.Mesh(g, wm); w.rotation.x = -Math.PI / 2; w.position.y = f.kote - base; w.castShadow = w.receiveShadow = true; grp.add(w);
+      const w = new THREE.Mesh(g, wm); w.rotation.x = -Math.PI / 2; w.position.y = f.kote - base; w.castShadow = w.receiveShadow = true; w.userData.at = r[0]; grp.add(w);
     }
     /* the buildings it covers: those a tenth or more of its wall corners fall in */
     const pts = f.walls.flat(), covers = new Set(own.filter(b => pts.filter(p => inRing(p, b.ring)).length >= pts.length * 0.1).map(b => b.id));
@@ -388,7 +388,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function cutAt(b, kote) {
     const on = kote != null && kote > b.base && kote < (b.top ?? 0) && (b.lift == null || kote >= b.lift - 0.1);
     cuts.get(b.id).constant = on ? kote + 1.2 - base : 1e6;
-    const p = plates.get(b.id); p.visible = on; if (on) p.position.y = kote - base - 0.02;
+    const p = plates.get(b.id); p.visible = on && !goneIds.has(b.id); if (on) p.position.y = kote - base - 0.02;
   }
   /* where a storey stands in a building: its wing's own kote, else where the wings that have it have it */
   const koteIn = (b, name) => levelsOf(b).find(l => l.name === name)?.kote ?? refKote(name);
@@ -401,22 +401,23 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;padding:1px 3px;border-radius:3px;background:#fbf9f4c4;text-shadow:0 0 2px #fffbf0";
     el.innerHTML = `<b style="font-weight:600">${r.name.replace(/</g, "&lt;")}</b>` + (r.area_m2 ? `<br>${r.area_m2.toLocaleString("nb-NO", { minimumFractionDigits: 1 })} m²`
       : r.area_calc ? `<br><span title="Målt mellom veggene på tegningen, ikke skrevet på den">ca. ${Math.round(r.area_calc)} m²</span>` : "");
-    tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), area: r.area_m2 || r.area_calc || 0 };
+    tags.appendChild(el); return { el, at: P(r.at, f.kote + 0.05), xy: r.at, area: r.area_m2 || r.area_calc || 0 };
   }).sort((a, b) => b.area - a.area)]));
   /* the wings' names over their roofs (site.json wings, tools/wings.py), while the whole site is shown */
   const wingTags = site.buildings.filter(b => b.own && b.name).map(b => {
     const el = document.createElement("div"); el.style.cssText = "position:absolute;left:0;top:0;white-space:nowrap;font-size:14px;font-weight:600;padding:2px 7px;border-radius:6px;background:#fbf9f4e6;border:1px solid #d8d2c6";
     el.textContent = b.name.replace(/ \(.*\)$/, ""); tags.appendChild(el);
     const c = b.ring.slice(0, -1).reduce((a, p, _, r) => [a[0] + p[0] / r.length, a[1] + p[1] / r.length], [0, 0]);
-    return { el, at: P(c, (b.top ?? b.base + 10) + 2), area: b.area_m2 || 0 };
+    return { el, id: b.id, at: P(c, (b.top ?? b.base + 10) + 2), area: b.area_m2 || 0 };
   }).sort((a, b) => b.area - a.area);
   const v3 = new THREE.Vector3();
   let names = true;   // the wings' and rooms' names over the picture; the page can take them away (a section's kote stay)
   function placeTags() {
     if (!names) { for (const t of [...wingTags, ...[...roomTags.values()].flat()]) t.el.style.display = "none"; }
     const w = container.clientWidth, h = container.clientHeight, close = mode === "plan" ? view().mPerPx < 0.09 : O.dist < 150, placed = [];
+    for (const t of wingTags) if (goneIds.has(t.id)) t.el.style.display = "none";
     for (const t of names ? wingTags : []) {
-      if ((storey && !only) || mode === "section") { t.el.style.display = "none"; continue; }
+      if ((storey && !only) || mode === "section" || goneIds.has(t.id)) { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
       if (v3.z > 1 || x < -100 || y < -30 || x > w + 100 || y > h + 30) { t.el.style.display = "none"; continue; }
@@ -431,7 +432,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       t.el.style.display = y < 0 || y > h ? "none" : "block"; t.el.style.transform = `translate(${Math.min(x, w - t.el.offsetWidth - 4).toFixed(0)}px, ${(y - 16).toFixed(0)}px)`;
     }
     for (const [id, list] of names ? roomTags : []) for (const t of list) {
-      if (!shownFloors.has(id) || !close) { t.el.style.display = "none"; continue; }
+      if (!shownFloors.has(id) || !close || t.gone) { t.el.style.display = "none"; continue; }
       v3.copy(t.at).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
       if (v3.z > 1 || x < -100 || y < -30 || x > w + 10 || y > h + 30) { t.el.style.display = "none"; continue; }
@@ -443,8 +444,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   /* the storey shown: in every building (setStorey) or in one (cutBuilding); floor: the drawing whose rooms are named */
   let floor = null, storey = null, only = null; const shownFloors = new Set();   // every sheet of the storey shown names its rooms
+  let shownIds = new Set();
   function show(name, ids) {
-    storey = name; floor = null;
+    storey = name; floor = null; shownIds = ids;
     let drawn = null; const covered = new Map(); shownFloors.clear();   // covered: building id, the kote its sheet stands at
     for (const f of floors) {
       const g = floorGroups.get(f.id), on = !!name && f.name === name && [...g.userData.covers].some(id => ids.has(id));
@@ -660,7 +662,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const ray = new THREE.Raycaster(); let selected = null;
   function pick(e) {
     const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-    const hit = ray.intersectObjects([...meshes.values()], true)[0]; select(hit?.object.userData.id || null);
+    const hit = ray.intersectObjects([...meshes.values()].filter(g => g.visible), true)[0]; select(hit?.object.userData.id || null);
     onPick(selected, { shift: e.shiftKey, x: e.clientX, y: e.clientY, at: hit ? [hit.point.x, -hit.point.z, hit.point.y + base] : null });   // where on it, for a room or a facade
   }
   /* more than one building lit, for a selection of several (app.js «Valgt») */
@@ -689,11 +691,26 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* ---------- drawing ---------- */
   function size() { const w = container.clientWidth || 600, h = container.clientHeight || 400; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); place(); }
   new ResizeObserver(size).observe(container); size(); place();
-  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); placeTags(); dirty = false; markDone(Q); } });
+  /* what the after has torn down (U3542, Morten 21:15: in place, no reload): hidden, with the plans' walls and the
+     rooms' names inside it, and not picked; the camera, the terrain, the streets and the rest stay as they are */
+  function setGone(ids) {
+    goneIds = new Set(ids); const rings = [...goneIds].map(id => site.buildings.find(b => b.id === id)?.ring).filter(Boolean);
+    const inside = p => rings.some(r => inRing(p, r));
+    for (const [id, g] of meshes) g.visible = !goneIds.has(id);
+    for (const [id, p] of plates) if (goneIds.has(id)) p.visible = false;
+    for (const g of floorGroups.values()) for (const w of g.children) w.visible = !inside(w.userData.at);
+    for (const list of roomTags.values()) for (const t of list) t.gone = inside(t.xy);
+    if (selected && goneIds.has(selected)) select(null);
+    if (section && goneIds.has(site.buildings.find(b => b.wing === section.wing)?.id)) setMode("3d");
+    if (storey) show(storey, shownIds);
+    dirty = true;
+  }
+  const followers = new Set();   // what the page keeps over a point of the model (app.js float.js: the card over a wing), placed with the names
+  renderer.setAnimationLoop(() => { if (dirty) { renderer.render(scene, camera); placeTags(); for (const f of followers) f(); dirty = false; markDone(Q); } });
 
   const home = { ...O };
   return {
-    setSun, select, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    setSun, select, setGone, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
@@ -718,7 +735,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const h = ray.intersectObjects(scene.children, true).find(i => i.object.isMesh && i.object.visible && !i.object.material?.transparent);
       return h ? [Math.round(h.point.x * 10) / 10, Math.round(-h.point.z * 10) / 10, Math.round((h.point.y + base) * 100) / 100] : null;
     },
-    project(p, kote) { const v = P(p, kote).project(camera); return [(v.x + 1) / 2 * container.clientWidth, (1 - v.y) / 2 * container.clientHeight]; },
+    follow(f) { followers.add(f); dirty = true; return () => followers.delete(f); },
+    /* where a site point at a kote is on the screen, and whether it is in front of the camera */
+    project(p, kote) { const v = P(p, kote).project(camera); return [(v.x + 1) / 2 * container.clientWidth, (1 - v.y) / 2 * container.clientHeight, v.z <= 1]; },
     snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
   };
 }

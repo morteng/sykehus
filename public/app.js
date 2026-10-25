@@ -13,14 +13,28 @@ import { levels } from "./kit/levels.js";
 const [site0, { floors: floors0 }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
 /* ?utkast=<id>: changes tried through the connector (mcp.mjs try_change), laid over the data and shown as not saved */
 /* ?versjon=<id>: a saved version of the after (versions.mjs), someone's own, public to look at */
-const qs = new URLSearchParams(location.search), draftId = qs.get("utkast"), versionId = qs.get("versjon");
-let draft = null;
-if (versionId || draftId) { try { const r = await fetch(versionId ? `api/versjon/${encodeURIComponent(versionId)}${qs.get("nokkel") ? `?nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `api/utkast/${encodeURIComponent(draftId)}`); draft = r.ok ? await r.json() : { missing: true }; } catch { draft = { missing: true }; } }
+const qs = new URLSearchParams(location.search), versionId = qs.get("versjon");
+let draftId = qs.get("utkast"), draft = null;   // a «Riv» on the model itself starts a draft in place (U3542)
+const fetchDraft = async () => { try { const r = await fetch(versionId ? `api/versjon/${encodeURIComponent(versionId)}${qs.get("nokkel") ? `?nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `api/utkast/${encodeURIComponent(draftId)}`); return r.ok ? await r.json() : { missing: true }; } catch { return { missing: true }; } };
+if (versionId || draftId) draft = await fetchDraft();
 /* the drawn sections, by hand from the sheets (data/sections.json) */
 const thumbs = await fetch("data/ark/index.json").then(r => r.ok ? r.json() : {}).catch(() => ({}));   // small pictures of the sheets (tools/thumbs.py)
-const drawnSections = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
-const { site, floors } = draft?.edits ? applyEdits(site0, floors0, draft.edits) : { site: site0, floors: floors0 };
+const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
+/* the page's model is the after (site, floors); the viewer's is the after without its demolitions, which it hides
+   (viewer.setGone), so a «Riv» or an «Angre» changes the scene in place: the camera, the terrain, the streets and the
+   other wings stay as they are (Morten 2026-10-25 21:15). The page's objects are refilled, never replaced, so what
+   holds them (the selection, the card over the pick) sees the change. */
+const TEARS = e => e.kind === "demolish" || e.kind === "restore";
+const modelOf = edits => applyEdits(site0, floors0, edits || []);
+const { site, floors } = modelOf(draft?.edits);
+const shown = modelOf(draft?.edits?.filter(e => !TEARS(e)));   // its own copy: the page's is refilled under it
+function refill(to, from) {
+  if (Array.isArray(to)) { to.splice(0, to.length, ...from); return; }
+  for (const k of Object.keys(to)) if (!(k in from)) delete to[k];
+  for (const [k, v] of Object.entries(from)) if (Array.isArray(to[k]) && Array.isArray(v)) to[k].splice(0, to[k].length, ...v); else to[k] = v;
+}
 const wings = site.wings || [];
+const drawnSections = drawnSections0.filter(d => !d.wing || wings.some(w => w.id === d.wing));   // a torn-down wing's drawn sections go with it
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
@@ -31,7 +45,7 @@ const panel = createPanel({ start: draft ? "changes" : null, onChange: t => disp
 const toCard = () => panel.show("selected", { quiet: true });   // a tap on the model or the strip shows its card, the sheet stays where it is
 
 const viewer = createViewer({
-  container: $("view"), site, floors,
+  container: $("view"), site: shown.site, floors: shown.floors,
   onPick: (id, how) => { valg.pick(id, how); showInfo(site.buildings.find(b => b.id === id)); },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
@@ -43,6 +57,8 @@ const viewer = createViewer({
     }
   },
 });
+viewer.setGone((site.demolished || []).map(d => d.id));
+try { const p = JSON.parse(sessionStorage.getItem("sykehus-pose") || "null"); sessionStorage.removeItem("sykehus-pose"); if (p) viewer.pose(p); } catch { }   // Anton's redraw comes back to where it was
 /* what is picked in the model, to talk to Anton about (valg.js); the chips are in the pill (anton.js) */
 const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
 /* a high summer sun reads the forms best; choosing the date and hour comes later */
@@ -51,7 +67,7 @@ viewer.setSun(new Date(new Date().getFullYear(), 5, 21, 14));
 /* the storey strip (the kit's g-levels): the whole site, then every storey some wing has, top first as on a
    section; a dot where a storey is drawn, dimmed (still a tap) where the wing picked has none */
 const order = n => parseInt(n) || 0;
-const storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
+let storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
 const koteOf = n => { const ks = wings.map(w => (w.levels || []).find(l => l.name === n)?.kote).filter(k => k != null); return ks.length ? Math.min(...ks) : null; };
 const stripItems = (wing = null) => storeys.slice().reverse().map(n => ({ id: n, label: String(order(n) || n), title: koteOf(n) != null ? `${n} · ${kote(koteOf(n))}` : n,
   drawn: floors.some(f => f.name === n), dim: !!wing && !(wing.levels || []).some(l => l.name === n) }));
@@ -185,7 +201,6 @@ function showInfo(b) {
   const h = b.top != null ? b.top - b.base : null, w = (site.wings || []).find(x => x.id === b.wing);
   const about = w ? [["Bygget", w.built], ["Etasjer", w.storeys], ["Konstruksjon", w.construction], ["Fasade", w.facade]].filter(r => r[1]).map(([k, v]) => [k, esc(v)]) : [];
   const body = rows([...about, ["Fotavtrykk", `${num(b.area_m2)} m²`], ...(h != null ? [["Høyde", `ca. ${h.toFixed(0)} m`], ["Topp", `kote ${kote(b.top)}`]] : []), ["Terreng", `kote ${kote(b.base)}`]]) +
-    rivRow(b, w) +
     (w?.levels?.length ? storeyList(b, w) : "") +
     (w ? sectionRow(w) : "") +
     (w ? `${sheetStrip(w)}<p class="src">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
@@ -195,7 +210,6 @@ function showInfo(b) {
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
   for (const btn of el.querySelectorAll("[data-fasade]")) btn.onclick = () => facade(b, btn.dataset.fasade);
-  el.querySelector("[data-riv]")?.addEventListener("click", () => riv(w ? w.id : b.id, w ? w.name : b.own ? "bygningen" : "nabobygningen"));
   for (const btn of el.querySelectorAll("[data-tegnet]")) btn.onclick = () => { const d = drawnSections.find(x => x.id === btn.dataset.tegnet); section(b, d.kind, d); };
 }
 /* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
@@ -241,7 +255,8 @@ function sheetStrip(w) {
 }
 
 /* «Forslag»: the version or draft shown, as the tab's top row, then the versions to see */
-if (draft) {
+function drawDraft() {
+  if (!draft) return;
   const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
   $("draftRow").innerHTML = `<div class="draftrow">${draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
     : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
@@ -249,8 +264,9 @@ if (draft) {
       + ""}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span><button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button></li>`).join("")}</ol>` : ""}</div>`;
   for (const b of $("draftRow").querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
 }
-function describe(e) {
-  const w = (site.wings || []).find(x => x.id === e.wing)?.name || e.wing;
+drawDraft();
+function describe(e) {   // by the wings as they were, since a wing torn down is gone from site.wings
+  const wings = site0.wings || [], w = wings.find(x => x.id === e.wing)?.name || e.wing;
   const why = e.why ? ` (${e.why})` : "";
   if (e.kind === "level") return `${w}, ${e.storey}: kote ${kote(e.kote)}${why}`;
   if (e.kind === "wing") return `${w}, ${{ name: "navn", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
@@ -266,34 +282,48 @@ function describe(e) {
   if (e.kind === "fell") return `Feller trærne i et område${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
-/* «Riv» (U3542): tear a building or a wing down as a change in the after, never in the data: into the draft shown,
-   or the signed-in person's own version shown, else a new draft (a day, no login). The page then shows the draft
-   from the same place, with «Angre» over the view; «Forslag» lists every change with its own «Angre». */
-const POSE = "sykehus-pose", RIVD = "sykehus-revet";
+/* «Riv» (U3542, on the card over the pick since U3554, float.js): tear wings or buildings down as a change in the
+   after, never in the data: into the draft shown, or the signed-in person's own version shown, else a new draft (a
+   day, no login). The page then shows the draft from the same place, with «Angre» over the view; «Forslag» lists
+   every change with its own «Angre». What is torn down leaves nothing on the model. */
 const where = () => versionId ? { version: versionId } : draftId && draft && !draft.missing ? { draft: draftId } : {};
-function rivRow(b, w) {
-  return `<div class="oc-row"><b>Etter</b><button type="button" data-riv title="Tas bort i 3D, plan, snitt og IFC-fila. Bare i utkastet: modellen slik den står er urørt, og du kan angre.">Riv ${w ? "fløyen" : "bygningen"}</button></div>`;
-}
+let busy = false;   // one change at a time
 async function change(body) {
   const r = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
   return r?.ok ? j : { error: j.error || "Det gikk ikke." };
 }
-function show(j, note) {   // the draft or version again, from the same place
-  try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); if (note) sessionStorage.setItem(RIVD, JSON.stringify(note)); } catch { }
-  const u = new URL(location.href);
-  if (j.version) { u.searchParams.set("versjon", j.version); u.searchParams.delete("utkast"); } else if (j.draft) { u.searchParams.set("utkast", j.draft); u.searchParams.delete("versjon"); u.searchParams.delete("nokkel"); }
-  location.assign(u.href);
+/* the draft or version after a change, in place: its edits fetched, the model laid anew over the same objects, the
+   viewer told what is gone, the strip, «Forslag» and the IFC link redrawn, the address changed without a reload */
+async function show(j) {
+  if (j.draft && !versionId) draftId = j.draft;
+  const d = await fetchDraft(); if (d.missing) return toast("Fikk ikke hentet utkastet.");
+  draft = d; const m = modelOf(draft.edits);
+  const goneNow = new Set((m.site.demolished || []).map(x => x.id));
+  if (valg.items.some(i => i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : goneNow.has(i.id))) { valg.clear(); shut(); }
+  refill(site, m.site); refill(floors, m.floors);
+  refill(drawnSections, drawnSections0.filter(x => !x.wing || wings.some(w => w.id === x.wing)));
+  viewer.setGone([...goneNow]);
+  storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
+  if (storeyOn && !storeys.includes(storeyOn)) pickStorey(null); else if (storeyOn) showStorey(storeyOn);
+  dimStrip(); drawDraft(); ifcLink();
+  const u = new URL(location.href); if (!versionId) u.searchParams.set("utkast", draftId);
+  history.replaceState(null, "", u.href);
 }
-async function riv(target, name) {
-  const j = await change({ ...where(), edits: [{ kind: "demolish", building: target, why: "revet på siden" }] });
-  if (j.error) return toast(`Fikk ikke revet: ${j.error}`);
-  show(j, { name, n: j.changes_in_draft ?? j.changes, at: where() });
+async function riv(targets, name) {
+  if (busy) return; busy = true;
+  try {
+    const j = await change({ ...where(), edits: targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" })) });
+    if (j.error) return toast(`Fikk ikke revet: ${j.error}`);
+    await show(j);
+    const n = draft.edits.length, k = targets.length;
+    toast(`${name[0].toUpperCase() + name.slice(1)} er revet i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(n, k) });
+  } finally { busy = false; }
 }
 async function undo(n) {
-  const j = await change({ ...where(), undo: n });
-  if (j.error) return toast(`Fikk ikke angret: ${j.error}`);
-  show(j);
+  if (busy) return; busy = true;
+  try { const j = await change({ ...where(), undo: n }); if (j.error) return toast(`Fikk ikke angret: ${j.error}`); $("toast")?.remove(); await show(j); }
+  finally { busy = false; }
 }
 function toast(text, act) {
   $("toast")?.remove();
@@ -302,13 +332,16 @@ function toast(text, act) {
   const x = Object.assign(document.createElement("button"), { type: "button", className: "x", textContent: "×", title: "Lukk" }); x.setAttribute("aria-label", "Lukk"); x.onclick = () => t.remove(); t.append(x);
   $("stage").append(t); setTimeout(() => t.isConnected && t.classList.add("gone"), 15000); setTimeout(() => t.remove(), 15800);
 }
-try { const n = JSON.parse(sessionStorage.getItem(RIVD) || "null"); sessionStorage.removeItem(RIVD); if (n && draft && !draft.missing) toast(`${n.name[0].toUpperCase() + n.name.slice(1)} er revet i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undo(n.n) }); } catch { }
+/* «Angre» on the toast takes back every edit the one «Riv» made, the last first */
+async function undoLast(n, k) { for (let i = 0; i < k - 1; i++) { const j = await change({ ...where(), undo: n - i }); if (j.error) return toast(`Fikk ikke angret: ${j.error}`); } undo(n - k + 1); }
 /* the IFC with the after's demolitions taken out (the server's ifcfilter.mjs) */
-if (draft && !draft.missing) {
-  const a = document.querySelector('a[download]'), q = versionId ? `versjon=${encodeURIComponent(versionId)}${qs.get("nokkel") ? `&nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `utkast=${encodeURIComponent(draftId)}`;
+function ifcLink() {
+  if (!draft || draft.missing) return;
+  const a = document.querySelector("header a.ab-ic[href*='ifc']"), q = versionId ? `versjon=${encodeURIComponent(versionId)}${qs.get("nokkel") ? `&nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `utkast=${encodeURIComponent(draftId)}`;
   a.href = `api/ifc?${q}`; a.removeAttribute("download");
   a.title = "Last ned modellen med endringene (IFC): det som er revet er tatt ut. Det som er bygget nytt er ikke med i fila ennå."; a.setAttribute("aria-label", "Last ned modellen med endringene");
 }
+ifcLink();
 
 /* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
 const VIS = { privat: "privat", lenke: "bare de med lenken", offentlig: "offentlig" };
@@ -319,6 +352,12 @@ function listVersions() {
   }).catch(() => {});
 }
 listVersions(); addEventListener("sykehus:versjoner", listVersions);
+
+/* the card over the pick (float.js) */
+import("./float.js?v=20261025c").then(m => m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+  onRiv: riv,
+  onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
+})).catch(e => console.error("float:", e));
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 /* signing in, and Anton for the signed in (anton.js) */
