@@ -62,6 +62,11 @@ body.m.sheet-full #levels { display: none; }
 .pill .tegn[hidden] { display: none; }
 .pill textarea { font-size: var(--fs-base); }
 .pill.wait .round { opacity: .45; cursor: progress; }   /* early.js: up, not yet listening */
+/* U3564: the stop button breathes while Anton works, a ring going out from it; reduced motion: the ring stands still */
+.pill .round.stop.working { position: relative; overflow: visible; }
+.pill .round.stop.working::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 2px solid var(--danger); opacity: 0; animation: anton-works 1.8s ease-out infinite; pointer-events: none; }
+@keyframes anton-works { 0% { transform: scale(.92); opacity: .7; } 70% { transform: scale(1.28); opacity: 0; } 100% { transform: scale(1.28); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pill .round.stop.working::after { animation: none; opacity: .55; transform: none; } }
 body.ed.talk-on:not(.m) .bstack { width: min(620px, calc(100% - 220px)); max-width: none; bottom: 20px; }
 body.plan.ed.talk-on:not(.m) .bstack { bottom: 20px; }
 

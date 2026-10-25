@@ -425,14 +425,21 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6), floorGroups = new Map();
   for (const f of floors) {
     const grp = new THREE.Group(), wm = mat(C.cutWall, { clippingPlanes: [cut] });
-    for (const r of f.walls) {
-      const g = new THREE.ExtrudeGeometry(new THREE.Shape(r.map(([x, y]) => new THREE.Vector2(x, y))), { depth: f.height, bevelEnabled: false });
-      const w = new THREE.Mesh(g, wm); w.rotation.x = -Math.PI / 2; w.position.y = f.kote - base; w.castShadow = w.receiveShadow = true; w.userData.at = r[0]; grp.add(w);
-    }
+    /* the walls made the first time the floor shows, not at load (pm 21:41Z: the load held the page still; every
+       floor's walls were extruded though none shows until a storey is picked); what is torn down stays hidden */
+    const fill = () => {
+      if (grp.children.length || !f.walls.length) return;
+      const rings = [...goneIds].map(id => site.buildings.find(b => b.id === id)?.ring).filter(Boolean);
+      for (const r of f.walls) {
+        const g = new THREE.ExtrudeGeometry(new THREE.Shape(r.map(([x, y]) => new THREE.Vector2(x, y))), { depth: f.height, bevelEnabled: false });
+        const w = new THREE.Mesh(g, wm); w.rotation.x = -Math.PI / 2; w.position.y = f.kote - base; w.castShadow = w.receiveShadow = true; w.userData.at = r[0];
+        w.visible = !rings.some(q => inRing(r[0], q)); grp.add(w);
+      }
+    };
     /* the buildings it covers: those a tenth or more of its wall corners fall in */
     const pts = f.walls.flat(), covers = new Set(own.filter(b => pts.filter(p => inRing(p, b.ring)).length >= pts.length * 0.1).map(b => b.id));
     const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-    grp.userData = { covers, centre: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) };
+    grp.userData = { fill, covers, centre: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) };
     grp.visible = false; scene.add(grp); floorGroups.set(f.id, grp);
   }
   /* cut one building at a kote (null: whole again) */
@@ -509,7 +516,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     let drawn = null; const covered = new Map(); shownFloors.clear();   // covered: building id, the kote its sheet stands at
     for (const f of floors) {
       const g = floorGroups.get(f.id), on = !!name && f.name === name && [...g.userData.covers].some(id => ids.has(id));
-      g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; shownFloors.add(f.id); for (const id of g.userData.covers) if (!covered.has(id)) covered.set(id, f.kote); }
+      if (on) g.userData.fill(); g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; shownFloors.add(f.id); for (const id of g.userData.covers) if (!covered.has(id)) covered.set(id, f.kote); }
     }
     /* a building is cut where its sheet stands, else at its wing's kote for the storey */
     for (const b of own) cutAt(b, name && ids.has(b.id) ? covered.get(b.id) ?? koteIn(b, name) : null);
@@ -657,7 +664,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     renderer.clippingPlanes = [secPlane, backPlane];
     if (poche) { scene.remove(poche); poche.geometry.dispose(); }
     poche = pocheOf(c, n, u, lo, hi, kind === "fasade"); scene.add(poche);   // an elevation has the ground line only
-    cut.constant = 1e6; for (const g of floorGroups.values()) g.visible = kind !== "fasade";
+    cut.constant = 1e6; for (const g of floorGroups.values()) { if (kind !== "fasade") g.userData.fill(); g.visible = kind !== "fasade"; }
 
     /* the frame holds the wing's width and height with room round it (the ortho frame is 0,72 × dist high) */
     const W = container.clientWidth || 600, H = container.clientHeight || 400, card = left ?? (W > 900 ? 440 : 0), labels = 190;   // the wing card on the left, the kote labels on the right

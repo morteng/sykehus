@@ -146,10 +146,24 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       if (cls === "err") { $("reply-card").classList.add("err"); $("reply-who").textContent = "Feil"; showReply(text); }
       return t;
     }
+    /* while a turn runs (U3564, Morten 22:01Z «the red stop button … should animate to indicate anton is working.
+       waits can get a bit worryingly long for an unexperienced user»): the stop button breathes (sykehus.css), and the
+       line under the text says the step in plain words, from the tool events, and after 10 s how long it has been */
+    const STEP = { look: "Ser på bygget", try_change: "Prøver endringen", undo_change: "Angrer en endring", show_building: "Viser deg bygget", show_draft: "Ser på forslaget",
+      about_site: "Leser om tomta", about_wing: "Leser om fløyen", storeys: "Leser etasjene", floor_plan: "Leser plantegningen", openings: "Ser på fasadetegningen",
+      search_documents: "Leter i dokumentene", read_document: "Leser et dokument", list_documents: "Leter i dokumentene", list_versions: "Ser på forslagene",
+      new_version: "Lagrer forslaget", rename_version: "Lagrer navnet", set_sharing: "Endrer delingen", search_plants: "Leter etter planter" };
+    let step = "", since = 0, ticking = null, turnOf = null;
+    const stepOf = key => STEP[String(key || "").split(/[.:/]/).pop()] || "Arbeider";
     function state() {
-      btn.innerHTML = running ? STOP : SEND; btn.className = "round " + (running ? "stop" : "send");
-      btn.title = running ? "Stopp" : "Send"; btn.setAttribute("aria-label", btn.title);
-      busy.textContent = running ? (waiting ? `Anton tenker … (${waiting} venter)` : "Anton tenker …") : "";
+      btn.innerHTML = running ? STOP : SEND; btn.className = "round " + (running ? "stop working" : "send");
+      btn.title = running ? "Stopp (Anton arbeider)" : "Send"; btn.setAttribute("aria-label", running ? "Stopp, Anton arbeider" : "Send");
+      if (running && turnOf !== running) { turnOf = running; step = ""; since = Date.now(); }
+      if (!running) { turnOf = null; step = ""; }
+      if (running && !ticking) ticking = setInterval(state, 1000); else if (!running && ticking) { clearInterval(ticking); ticking = null; }
+      const s = Math.round((Date.now() - since) / 1000), time = s >= 10 ? ` · ${s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`}` : "";
+      const text = running ? `${step || "Anton tenker"} …${time}${waiting ? ` (${waiting} venter)` : ""}` : "";
+      if (busy.textContent !== text) busy.textContent = text;
     }
     /* the chips: what is picked goes with the message (Fab's pill-about, as the kit's g-pick) */
     const chips = pick($("talkPick"), { lead: "Valgt:", items: [], removeLabel: l => `Ta bort ${l}`, removeTitle: "Ta bort fra spørsmålet", more: n => `+${n} til`, onRemove: k => valg.remove(k), onClear: () => valg.clear() });
@@ -231,9 +245,9 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); said(m.text); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
-      b.textContent += t.delta || ""; toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
+      b.textContent += t.delta || ""; if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
     });
-    on("tool", t => { if (t.label) line("tool", t.label); });
+    on("tool", t => { if (t.label) line("tool", t.label); step = stepOf(t.key); state(); });
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
