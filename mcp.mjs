@@ -419,7 +419,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       }
       if (me && versions && !a.version && !a.draft && !a.undo) a.version = work().id;
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
-      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 10) : [], ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
+      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
       if (!a.undo && args.edits.some(e => !["demolish", "restore"].includes(e?.kind))) throw toolErr("Fra siden: bare riv og sett opp igjen.");   // the rest goes through Anton
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);

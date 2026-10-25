@@ -38,6 +38,7 @@ if (draft && !draft.missing && !qs.has(versionId ? "versjon" : "utkast")) {   //
   const u = new URL(location.href); u.searchParams.delete("nokkel"); u.searchParams.set(versionId ? "versjon" : "utkast", versionId || draftId); history.replaceState(null, "", u.href);
 }
 const mine = () => !!versionId && !!draft?.version && !!me.person && draft.owner === me.person;
+const ownDraft = () => !versionId && !!draftId && draftId === kept;   // a draft this browser made; another's came by its link
 /* the drawn sections, by hand from the sheets (data/sections.json) */
 const thumbs = await fetch("data/ark/index.json").then(r => r.ok ? r.json() : {}).catch(() => ({}));   // small pictures of the sheets (tools/thumbs.py)
 const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
@@ -282,7 +283,8 @@ function drawDraft() {
   $("draftRow").innerHTML = `<div class="draftrow">${draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
     : mine() ? `<b>${esc(draft.title)}</b> · lagret · ${ch} · ${{ privat: "bare du ser den", lenke: "delt med lenke", offentlig: "offentlig" }[draft.sharing] || ""}. <a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button><button type="button" class="sm" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button></span>`
     : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./?for">Se før</a>`
-    : `<b>Utkast</b> · lagret på denne maskinen et døgn · ${ch}. ${me.person ? "" : "Logg inn for å beholde det. "}<a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button></span>`}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span>${draft.version && !mine() ? "" : `<button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button>`}</li>`).join("")}</ol>` : ""}</div>`;
+    : ownDraft() ? `<b>Utkast</b> · lagret på denne maskinen et døgn · ${ch}. ${me.person ? "" : "Logg inn for å beholde det. "}<a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button></span>`
+    : `<b>Utkast</b> delt med lenke · ${ch}. Det du endrer her, blir ditt eget. <a href="./?for">Se før</a>`}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span>${(draft.version ? !mine() : !ownDraft()) ? "" : `<button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button>`}</li>`).join("")}</ol>` : ""}</div>`;
   for (const b of $("draftRow").querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
   $("draftRow").querySelector("[data-del]")?.addEventListener("click", share);
   $("draftRow").querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); toast("Ny kopi. Endringene her går inn i den."); });
@@ -319,7 +321,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
    every change with its own «Angre». What is torn down leaves nothing on the model. */
 /* where a change goes: one's own version shown, the draft shown, else one's own work (signed in, the server's; signed
    out, the draft this browser keeps, if it is still there), else a new draft */
-const where = () => mine() ? { version: versionId } : !versionId && draftId && draft && !draft.missing ? { draft: draftId } : !me.person && kept ? { draft: kept } : {};
+const where = () => mine() ? { version: versionId } : ownDraft() && draft && !draft.missing ? { draft: draftId } : !me.person && kept ? { draft: kept } : {};
 let busy = false;   // one change at a time
 async function change(body) {
   const r = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
@@ -348,7 +350,10 @@ async function show(j) {
 async function riv(targets, name) {
   if (busy) return; busy = true;
   try {
-    const edits = targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" }));
+    /* on someone else's draft or version, one's own starts from what is shown: its demolitions first (the rest of it,
+       if any, is Anton's, and goes with «Ny kopi» or through him) */
+    const from = draft && !draft.missing && !mine() && !ownDraft() ? draft.edits.filter(TEARS) : [];
+    const edits = [...from, ...targets.map(t => ({ kind: "demolish", building: t, why: "revet på siden" }))];
     let j = await change({ ...where(), edits });
     if (j.error && !draftId && kept) { kept = null; j = await change({ edits }); }   // the kept draft is past its day
     if (j.error) return toast(`Fikk ikke revet: ${j.error}`);
