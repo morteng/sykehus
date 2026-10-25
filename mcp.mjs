@@ -34,7 +34,7 @@ const dirDeg = d => typeof d === "number" ? d : DIRS[String(d || "").toLowerCase
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const counts = new Map();
@@ -95,6 +95,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const keepDraft = d => { if (!ddir) return; const p = join(ddir, d.id + ".json"); try { writeFileSync(p + ".tmp", JSON.stringify(d)); renameSync(p + ".tmp", p); } catch (e) { console.error("drafts: write", e.message); } };
   const dropDraft = id => { drafts.delete(String(id)); if (ddir && DID.test(String(id))) try { unlinkSync(join(ddir, id + ".json")); } catch { } };
   const newId = () => randomBytes(6).toString("base64url");
+  /* signed in, the person's work is one private version (U3555), marked work; made on the first change */
+  const workOf = me => { const v = versions.list({ owner: me, viewer: me }).find(x => x.work); if (v) return v;
+    const n = versions.create(me, "Mitt etter"); n.work = true; return versions.save(n); };
+  /* where a signed-in person's change goes when none is named: the version their page has open (assistant.mjs tells
+     pages.open with each turn), if it is theirs, else their work (Morten 20:34Z: Anton's change went into a new
+     version and the open page never changed) */
+  const openOf = me => { const v = versions?.get(pages?.open.get(me)); return v && v.owner === me ? v : workOf(me); };
   const draftOf = id => { const d = drafts.get(String(id)); if (!d || Date.now() - d.t > DRAFT_MS) { dropDraft(id); throw toolErr(`No draft "${id}" (drafts last a day). Start a new one with try_change.`); } return d; };
   const draftUrl = (o, id) => `${o}/?utkast=${id}`;
   /* a version (versions.mjs) by its id, for anyone to look at; and one to change, for its owner only */
@@ -210,9 +217,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             openings: f.openings.map(o => ({ kind: o.kind, along_m: o.u.map(round1), sill_kote: round1(o.z[0]), head_kote: round1(o.z[1]), panes: o.panes.length })), sheet: f.src.map(docRef) }; }) }; } },
     /* documents: see below */
     { name: "try_change", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" } }, ["edits"]),
-      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. The before, the shared model, is never changed. Say where each change comes from in why.",
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. Signed in, leave version and draft out: the changes go into the version the person has open on the website (their «Mitt etter»), and their page redraws with them. The before, the shared model, is never changed. Say where each change comes from in why.",
       run: async (a, req) => {
         let d, v = null;
+        if (!a.version && !a.draft && versions && userOf(req)) a = { ...a, version: openOf(userOf(req)).id };
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
@@ -234,7 +242,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v); else { const d = draftOf(a.draft); d.t = Date.now(); keepDraft(d); }
         return { ...(v ? versionOut(v, originOf(req), req) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
     { name: "new_version", title: "Ny versjon", write: true, schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
-      description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts privat (only they see it); set_sharing makes it lenke (anyone with the link) or offentlig (on the front page). from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
+      description: "Only when the person asks for a new, separate alternative (their changes otherwise go into the version they have open, through try_change without version). Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts privat (only they see it); set_sharing makes it lenke (anyone with the link) or offentlig (on the front page). from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten.");
         if (!versions) throw toolErr("Versions are not kept on this server.");
@@ -291,8 +299,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
         drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, draft: DRAFT }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey; the app sends a small picture of the view back, so look at it before describing it. Needs a chat app that shows MCP Apps; otherwise give the link to the website.",
-      run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing);
-        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}`;
+      run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing), who = userOf(req);
+        /* through the pill: the person's open pages go to this view (assistant.mjs pages.show), else say they did not */
+        const moved = who && pages ? pages.show(who, { ...view, ...(view.draft ? {} : { version: pages.open.get(who) || null }) }) : null;
+        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -399,8 +409,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       bump(`web:${req.socket.remoteAddress}`, 60, 600e3);
       const me = req.webUser ?? null, o = originOf(req);
       /* signed in, the person's work is one private version, saved on every change (U3555): the one marked work */
-      const work = () => { const v = versions.list({ owner: me, viewer: me }).find(x => x.work); if (v) return v;
-        const n = versions.create(me, "Mitt etter"); n.work = true; return versions.save(n); };
+      const work = () => workOf(me);
       if (a.adopt || a.copy || a.share) {
         if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
         if (a.adopt) {   // a draft made signed out, moved into the person's version at sign-in; then the draft is gone

@@ -201,3 +201,10 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .fl-form input { min-height: 40px; font-size: var(--fs-md); padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
 .fl-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 body.placing #view { cursor: crosshair; }
+
+/* the person's own last message over Anton's reply on the pill (Morten 20:37Z): the chat's from-me bubble (laser.css
+   #p-chat .talk-item.from-me), short: two lines at most */
+#reply-card { display: flex; flex-direction: column; gap: var(--sp-1); }
+#reply-me { align-self: flex-end; max-width: 85%; background: var(--accent-panel); border: 1px solid var(--accent-panel-edge); border-radius: 14px 14px 4px 14px; padding: var(--sp-1) var(--sp-3); }
+#reply-me .talk-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: var(--fs-sm); }
+#reply-card [hidden] { display: none; }

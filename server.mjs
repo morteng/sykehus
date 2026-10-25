@@ -58,8 +58,11 @@ const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFi
 const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
 const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes });
-const anton = createAssistant({ SECURITY, readJson, login, versions });
+/* the person's open pages, as Anton's tools need them: the version the pill has open (assistant.mjs sets it with each
+   turn) and a way to move those pages to a view (show_building); one object, filled in by both */
+const pages = { open: new Map(), show: () => false };
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages });
+const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 const streets = createStreets({ site, SECURITY });
 
 createServer(async (req, res) => {

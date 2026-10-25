@@ -59,3 +59,14 @@ test("«Ny kopi» is the next one worked on; «Del» opens it to the link, signe
   const k = new URL(s.j.link).searchParams.get("nokkel");
   assert.equal((await fetch(`${O}/api/versjon/${c.j.version}?nokkel=${k}`)).status, 200);
 });
+
+test("Anton's change with no version named goes into the person's open work, not a new draft (Morten 20:34Z)", async () => {
+  const call = async (name, args) => (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...lars }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) })).json()).result.structuredContent;
+  const list = async () => (await (await fetch(O + "/api/versjoner", { headers: lars })).json()).versions.filter(v => v.mine);
+  const n0 = (await list()).length, w = (await list()).find(v => v.work);
+  const r = await call("try_change", { edits: [{ kind: "demolish", building: "alle" }, { kind: "restore", building: "Sentralblokka" }] });
+  assert.equal(r.version, w.version); assert.equal(r.saved, true); assert.equal((await list()).length, n0);
+  /* no page open in this test: show_building says nothing moved */
+  const t = await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...lars }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "show_building", arguments: { wing: "Sentralblokka" } } }) })).json();
+  assert.match(t.result.content[0].text, /no page of the website open/);
+});

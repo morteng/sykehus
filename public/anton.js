@@ -25,7 +25,9 @@ const CODES = {
 const POSE = "sykehus-pose";
 const json = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }).catch(() => null);
 
-export async function start({ viewer, versionId, panel, valg }) {
+/* version(): the version the page has open now (a «Riv» can make one after the page loaded); refresh(): that version
+   again, in place where it can be (app.js); showView(view): the page to a view Anton's show_building chose */
+export async function start({ viewer, version, refresh, showView, panel, valg }) {
   /* back from a redraw: the camera where it was */
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
@@ -59,7 +61,7 @@ export async function start({ viewer, versionId, panel, valg }) {
       <p id="wishErr" class="err" role="alert"></p><ul class="wishes" id="wishList"></ul>`;
     $("wishForm").onsubmit = async e => {
       e.preventDefault(); $("wishErr").textContent = ""; $("wishOk").textContent = "";
-      const r = await json("api/onsker", { text: $("wishText").value, version: versionId });
+      const r = await json("api/onsker", { text: $("wishText").value, version: version() });
       const j = r ? await r.json().catch(() => ({})) : {};
       if (r?.ok) { $("wishText").value = ""; $("wishOk").textContent = "Sendt. Morten ser det."; list(); } else $("wishErr").textContent = j.error || "Fikk ikke sendt. Prøv igjen.";
     };
@@ -113,14 +115,18 @@ export async function start({ viewer, versionId, panel, valg }) {
       panel.badge("chat", asking ? "!" : unread || 0);
     }
     addEventListener("sykehus:panel", placePill);
-    /* the newest reply over the pill while the chat is shut; a waiting question with it */
+    /* the newest reply over the pill while the chat is shut, under the person's own last message (Morten 20:37Z: «i
+       dont see my chats … just antons replies»), which shows as soon as it is sent; a waiting question with them */
+    const ownMsg = $("reply-me").firstChild;
+    function said(text) { ownMsg.textContent = text; $("reply-body").textContent = ""; showReply(); }
     function showReply(text) {
       const open = chatOpen();
       if (text != null) $("reply-body").textContent = text;
-      $("reply-card").hidden = open || !$("reply-body").textContent;
+      $("reply-me").hidden = !ownMsg.textContent; $("reply-who").hidden = $("reply-body").hidden = !$("reply-body").textContent;
+      $("reply-card").hidden = open || (!$("reply-body").textContent && !ownMsg.textContent);
       $("reply").hidden = open || ($("reply-card").hidden && !$("reply-cards").children.length);
     }
-    $("view").addEventListener("pointerdown", () => { $("reply-body").textContent = ""; showReply(); });   // the model first: touching it puts the reply away
+    $("view").addEventListener("pointerdown", () => { $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); });   // the model first: touching it puts the reply away
     $("reply-card").onclick = () => panel.reveal("chat");
     function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = !has; }
     function line(cls, text, who, image, about) {
@@ -156,11 +162,11 @@ export async function start({ viewer, versionId, panel, valg }) {
     async function sendIt(drawn) {
       const text = drawn ? drawn.text : input.value.trim(); if (!text) return false;
       const sel = valg.forMessage();
-      const r = await json("api/anton", { text, version: versionId, ...(drawn ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
+      const r = await json("api/anton", { text, version: version(), ...(drawn ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return false; }
       if (!drawn) { input.value = ""; input.oninput(); }
-      return true;
+      said(text); return true;
     }
     $("talkTegn").onclick = () => import("./tegn.js?v=20261025b").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
@@ -194,7 +200,6 @@ export async function start({ viewer, versionId, panel, valg }) {
       log.append(li); empty(); panel.reveal("chat"); toEnd();
       setTimeout(() => { li.querySelector(".qr-box").replaceChildren(); li.querySelector(".cnote").textContent = "Koden er gått ut. Be Anton om en ny."; }, q.minutes * 60e3);
     }
-    function redrawNow() { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.reload(); }
     function goTo(id, title) {
       const li = document.createElement("li"); li.className = "talk-item tool";
       li.innerHTML = `<div class="talk-body">Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a></div>`; log.append(li); empty(); toEnd();
@@ -212,7 +217,7 @@ export async function start({ viewer, versionId, panel, valg }) {
     const es = new EventSource("api/anton/strom");
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
-    on("message", m => line("from-me", m.text, null, m.image, m.about));
+    on("message", m => { line("from-me", m.text, null, m.image, m.about); said(m.text); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
       b.textContent += t.delta || ""; toEnd(); showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
@@ -221,10 +226,13 @@ export async function start({ viewer, versionId, panel, valg }) {
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
-    on("done", () => { if (redraw) redrawNow(); });
-    on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === versionId) { if (running) redraw = true; else redrawNow(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
+    on("done", () => { if (redraw) { redraw = false; refresh(); } });
+    /* Anton saved a version: the one open is shown again (in place when it can be), another gets a link */
+    on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === version()) { if (running) redraw = true; else refresh(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
+    /* «vis meg»: show_building through the pill moves this page (mcp.mjs, assistant.mjs pages.show) */
+    on("show", v => { if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}`); } else showView(v); });
     on("signed_out", signedOut);
-    on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; showReply(); empty(); });
+    on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); empty(); });
     placePill(); state(); empty();
   }
 }

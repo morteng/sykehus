@@ -482,7 +482,24 @@ import("./float.js?v=20261025d").then(m => m.createFloat({ viewer, site, valg, p
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 /* signing in, and Anton for the signed in (anton.js) */
-import("./anton.js?v=20261025b").then(m => m.start({ viewer, versionId, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
+/* Anton saved the open version: its changes again, in place when the part the viewer was built with is the same
+   (what Anton builds besides, balconies and the ground, needs the page again, from where it was) */
+const fixed = edits => JSON.stringify((edits || []).filter(e => !LIVE(e)));
+let base = fixed(draft?.edits);
+async function refresh() {
+  const d = await fetchDraft(); if (d.missing) return;
+  if (fixed(d.edits) !== base) { try { sessionStorage.setItem("sykehus-pose", JSON.stringify(viewer.pose())); } catch { } return location.reload(); }
+  await show(versionId ? { version: versionId } : { draft: draftId });
+}
+/* the view Anton's show_building chose (mcp.mjs viewOf): a storey, a wing, the plan or a section */
+function showView(v) {
+  const b = v.building && site.buildings.find(x => x.id === v.building);
+  if (v.mode === "section" && b) { const d = v.drawn && drawnSections.find(x => x.id === v.drawn); return d ? section(b, d.kind, d) : section(b, v.section === "lengde" ? "lengde" : "tverr"); }
+  if (v.mode === "plan" || v.mode === "3d") setMode(v.mode);
+  if (v.storey) pickStorey(v.storey); else if (storeyOn) pickStorey(null);
+  if (b) { valg.clear(); valg.pick(b.id, {}); showInfo(b); viewer.focus(b.id); }
+}
+import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
 requestAnimationFrame(() => import("./streets.js?v=20261025b").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
 

@@ -48,7 +48,7 @@ function selectionOf(s) {
   return items.length ? { items, ids: items.map(i => i.id), summary: String(s.summary ?? items.map(i => i.label).join(" · ")).slice(0, 300) } : null;
 }
 
-export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl = fetch }) {
+export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch }) {
   const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
   const door = login.base + prefix, ready = login.anton;
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
@@ -58,6 +58,8 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
   const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   function publish(person, event, data) { const t = threads.get(person); if (!t) return; for (const r of t.subs) r.write(sse(event, data)); }
   const queueView = t => ({ type: "queue", running: t.running ? { id: t.running.id, text: t.running.text } : null, waiting: t.queue.map(q => ({ id: q.id, text: q.text })) });
+  /* show_building through the pill moves the person's open pages (mcp.mjs); false when none is open */
+  if (pages) pages.show = (person, view) => { const t = threads.get(person); if (!t?.subs.size) return false; publish(person, "show", { type: "show", ...view }); return true; };
   versions?.watch?.(v => publish(v.owner, "steps", { type: "steps", version: v.id, title: v.title, changes: v.edits.length, updated: v.updated }));
 
   const call = async (path, body, query, device) => {
@@ -141,6 +143,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, fetchImpl
       if (b?.drawing != null) { try { drawing = drawingOf(b.drawing); } catch (e) { return send(res, 400, { error: e.message }); } }
       const selection = selectionOf(b?.selection);
       const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection };
+      if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
       t.queue.push(turn); publish(me.person, "queue", queueView(t)); run(me.person);
       return send(res, 202, { id: turn.id });
     }
