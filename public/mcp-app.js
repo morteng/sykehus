@@ -63,7 +63,8 @@ async function load(draft) {
   if (loaded?.key === key) return loaded;
   const [site, { floors }, { sections }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }),
     fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).catch(() => ({ sections: [] }))]);
-  let d = null; if (draft) { try { const r = await fetch(`api/utkast/${encodeURIComponent(draft)}`); if (r.ok) d = await r.json(); } catch { /* shown without */ } }
+  /* a draft, or a saved version (v and 8 more; a private one with its key) */
+  let d = null; if (draft) { try { const r = await fetch(/^v.{8}$/.test(draft) ? `api/versjon/${encodeURIComponent(draft)}${view.key ? `?nokkel=${encodeURIComponent(view.key)}` : ""}` : `api/utkast/${encodeURIComponent(draft)}`); if (r.ok) d = await r.json(); } catch { /* shown without */ } }
   const m = d?.edits ? applyEdits(site, floors, d.edits) : { site, floors };
   return loaded = { key, ...m, sections, draft: d };
 }
@@ -88,7 +89,7 @@ async function show(payload) {
   }
   const p = {}; if (view.yaw != null) p.yaw = view.yaw; if (view.pitch != null) p.pitch = view.pitch; if (view.dist != null) p.dist = view.dist;
   if (Object.keys(p).length && view.mode !== "section") viewer.pose(p);
-  $("note").innerHTML = [data.draft ? `Utkast, ikke lagret: ${data.draft.edits.length} endringer` : "",
+  $("note").innerHTML = [data.draft ? (data.draft.version ? `Versjon «${data.draft.title.replace(/[&<>"]/g, "")}»: ${data.draft.edits.length} endringer` : `Utkast, ikke lagret: ${data.draft.edits.length} endringer`) : "",
     drawn ? `Tegnet snitt: <a href="${drawn.image}" target="_blank" rel="noopener">${drawn.title} (${drawn.year})</a>, plassert omtrentlig` : ""].filter(Boolean).join(" · ");
   $("note").hidden = !data.draft && !drawn;
   sync(); caption(view.building); height();

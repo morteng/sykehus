@@ -39,10 +39,20 @@ test("a version from a draft, changed by its owner only, kept on disk", async ()
   assert.equal(v.owner, "morten"); assert.equal(v.changes, 2);
   const r = await call("try_change", { version: v.version, edits: [{ kind: "volume", name: "Drivhus", shape: "triangle", from: [-46, -62], to: [27, -62], width: 24, height: 18 }] }, morten);
   assert.equal(r.out.saved, true); assert.equal(r.out.changes, 3);
-  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /morten sin/);
   await call("undo_change", { draft: v.version, n: 3 }, morten);
-  const page = await (await fetch(`${O}/api/versjon/${v.version}`)).json();
+  // private until shown: the owner and the private link see it, no one else
+  assert.equal(v.public, false); assert.match(v.link, /&nokkel=/);
+  assert.equal((await fetch(`${O}/api/versjon/${v.version}`)).status, 404);
+  assert.match((await call("show_draft", { draft: v.version }, lars)).error, /No version/);
+  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /No version/, "nor its title");
+  const page = await (await fetch(`${O}/api/versjon/${v.version}?nokkel=${new URL(v.link).searchParams.get("nokkel")}`)).json();
   assert.equal(page.edits.length, 2); assert.equal(page.owner, "morten");
+  assert.equal((await (await fetch(`${O}/api/versjoner`)).json()).versions.length, 0);
+  assert.match((await call("set_public", { version: v.version, public: true }, lars)).error, /No version/, "only the owner shows it");
+  const shown = await call("set_public", { version: v.version, public: true }, morten); assert.equal(shown.out.public, true); assert.doesNotMatch(shown.out.link, /nokkel/);
+  assert.equal((await fetch(`${O}/api/versjon/${v.version}`)).status, 200);
+  assert.deepEqual((await (await fetch(`${O}/api/versjoner`)).json()).versions.map(x => x.version), [v.version]);
+  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /morten sin/, "public: seen, not changed");
   assert.equal((await call("new_version", { title: "Lars sin" }, lars)).out.owner, "lars");
 });
 

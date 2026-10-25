@@ -88,20 +88,23 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const draftOf = id => { const d = drafts.get(String(id)); if (!d || Date.now() - d.t > DRAFT_MS) { drafts.delete(String(id)); throw toolErr(`No draft "${id}" (drafts last a day). Start a new one with try_change.`); } return d; };
   const draftUrl = (o, id) => `${o}/?utkast=${id}`;
   /* a version (versions.mjs) by its id, for anyone to look at; and one to change, for its owner only */
-  const versionOf = id => { const v = versions?.get(id); if (!v) throw toolErr(versions ? `No version "${id}". list_versions shows them.` : "Versions are not kept on this server."); return v; };
+  const versionOf = (id, req) => { const v = versions?.get(id); if (!v || (req && !versions.visible(v, userOf(req)))) throw toolErr(versions ? `No version "${id}" that you can see (a private version opens for its owner only). list_versions shows them.` : "Versions are not kept on this server."); return v; };
   const ownVersion = (id, req) => {
     const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten. Utkast (try_change uten version) virker uten.");
-    const v = versionOf(id); if (v.owner !== who) throw toolErr(`Versjonen «${v.title}» er ${v.owner} sin; lag din egen med new_version (from: "${v.id}").`); return v;
+    const v = versionOf(id, req); if (v.owner !== who) throw toolErr(`Versjonen «${v.title}» er ${v.owner} sin; lag din egen med new_version (from: "${v.id}").`); return v;
   };
-  const versionUrl = (o, id) => `${o}/?versjon=${id}`;
-  const versionOut = (v, o) => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated, link: versionUrl(o, v.id) });
+  /* its link: the public one, or for its owner the private one with the key (to show someone before it is public) */
+  const versionOut = (v, o, req) => { const mine = req && userOf(req) === v.owner;
+    return { version: v.id, title: v.title, owner: v.owner, public: v.public, changes: v.edits.length, updated: v.updated,
+      link: `${o}/?versjon=${v.id}${!v.public && mine ? `&nokkel=${v.key}` : ""}`, ...(mine && !v.public ? { note: "Privat: bare du ser den (og den du gir lenken). Gjør den offentlig med set_public." } : {}) }; };
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
-  const editsOf = id => /^v.{8}$/.test(String(id)) ? versionOf(id).edits : draftOf(id).edits;
-  const model = id => id ? applyEdits(site, floors, editsOf(id)) : { site, floors, notes: [], changed: [] };
+  /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all); a version only for who may see it */
+  const editsOf = (id, req) => /^v.{8}$/.test(String(id)) ? versionOf(id, req).edits : draftOf(id).edits;
+  const model = (id, req) => id ? applyEdits(site, floors, editsOf(id, req)) : { site, floors, notes: [], changed: [] };
 
   // ---------- the picture ----------
   const APP_URI = "ui://sykehus/bygget";
-  const viewOf = a => {
+  const viewOf = (a, req) => {
     const v = {};
     if (a.storey) { const n = storeyName(a.storey); if (!floors.some(f => f.name === n) && !wingsAll().some(w => (w.levels || []).some(l => l.name === n))) throw toolErr(`No storey "${a.storey}".`); v.storey = n; }
     if (a.wing) { const w = wingOrErr(a.wing); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; }
@@ -122,7 +125,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (a.from_direction != null) v.yaw = Math.PI - dirDeg(a.from_direction) * Math.PI / 180;
     if (a.tilt_deg != null) v.pitch = clamp(+a.tilt_deg, 5, 85) * Math.PI / 180;
     if (a.distance_m != null) v.dist = clamp(+a.distance_m, 30, 1200);
-    if (a.draft) { editsOf(a.draft); v.draft = String(a.draft); }
+    if (a.draft) { editsOf(a.draft, req); v.draft = String(a.draft); const ver = versions?.get(a.draft); if (ver && !ver.public) v.key = ver.key; }   // a private version: the asker may see it, and the app in their chat opens it with its key
     return v;
   };
   const appCsp = origin => ({ connectDomains: [origin], resourceDomains: [origin], baseUriDomains: [origin] });
@@ -153,7 +156,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const TOOLS = [
     { name: "about_site", title: "Tomta og fløyene", ro: true, schema: S({ draft: DRAFT }),
       description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
-      run: async a => { const m = model(a.draft), names = [...new Set(m.floors.map(f => f.name))];
+      run: async (a, req) => { const m = model(a.draft, req), names = [...new Set(m.floors.map(f => f.name))];
         return { name: site.name, address: "Dronninggata 28, 3019 Drammen", gnr_bnr: "114/272", lot_area_m2: site.lot.area_m2, heights: "NN2000", origin_utm33: site.origin,
           wings: (m.site.wings || []).map(w => { const o = wingOut(w, false); return { id: o.id, name: o.name, sure: o.sure, built: o.built, storeys: o.storeys, footprint_m2: o.footprint_m2, ground_kote: o.ground_kote, top_kote: o.top_kote, levels_known: o.levels.length }; }),
           drawn_storeys: names.map(n => ({ storey: n, sheets: m.floors.filter(f => f.name === n).map(f => f.source) })),
@@ -161,16 +164,16 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           ...(a.draft ? { draft: a.draft, notes: m.notes } : {}) }; } },
     { name: "about_wing", title: "Én fløy", ro: true, schema: S({ wing: WING, draft: DRAFT }, ["wing"]),
       description: "One wing as on its card: names and aliases, years built, storeys, construction, facade, footprint, ground and roof kote, each storey's kote with how it is known (tegning = read off a drawing, beregnet = worked out, antatt = assumed) and its source, the storeys with a drawn plan, its drawn facades, and the documents it is identified from, with download links.",
-      run: async a => { const m = model(a.draft), w = wingOf(m.site, a.wing) || wingOrErr(a.wing); return { ...wingOut(w, true), ...(a.draft ? { draft: a.draft, notes: m.notes.filter(n => n.wing === w.id) } : {}) }; } },
+      run: async (a, req) => { const m = model(a.draft, req), w = wingOf(m.site, a.wing) || wingOrErr(a.wing); return { ...wingOut(w, true), ...(a.draft ? { draft: a.draft, notes: m.notes.filter(n => n.wing === w.id) } : {}) }; } },
     { name: "storeys", title: "Etasjene", ro: true, schema: S({ wing: { ...WING, description: WING.description + ". Leave out for all wings" }, draft: DRAFT }),
       description: "The storey ladder: for each storey (1 … 14) the kote in every wing that has it, how each is known and from where, and which sheets draw that storey. The wings' floors do not line up exactly (Sentralblokka 5. etasje +31,77, Østfløy +32,02).",
-      run: async a => { const m = model(a.draft), ws = a.wing ? [wingOf(m.site, a.wing) || wingOrErr(a.wing)] : m.site.wings || [];
+      run: async (a, req) => { const m = model(a.draft, req), ws = a.wing ? [wingOf(m.site, a.wing) || wingOrErr(a.wing)] : m.site.wings || [];
         const names = [...new Set([...ws.flatMap(w => (w.levels || []).map(l => l.name)), ...m.floors.map(f => f.name)])].sort((x, y) => parseInt(x) - parseInt(y));
         return { storeys: names.map(n => ({ storey: n, wings: ws.map(w => [w, (w.levels || []).find(l => l.name === n)]).filter(r => r[1]).map(([w, l]) => ({ wing: w.name, kote: l.kote, how: l.how, source: l.src })),
           sheets: m.floors.filter(f => f.name === n).map(f => ({ sheet: f.source, drawn_kote: f.kote, storey_height_m: f.height })) })).filter(s => s.wings.length || s.sheets.length) }; } },
     { name: "floor_plan", title: "Én etasje: rom og arealer", ro: true, schema: S({ storey: STOREY, wing: { ...WING, description: "Only this wing" }, name_contains: { type: "string", description: "Only rooms whose name has this, e.g. operasjon, lager, wc" }, draft: DRAFT }, ["storey"]),
       description: "The rooms of one storey from its drawn plans, across the wings: name, room code, the wing it stands in, the area the architect wrote on the drawing (area_m2, net) and the area measured between the drawn walls (area_measured_m2, about 15 % rough; given where an outline closes), position (metres east/north of the site origin) and the sheet. Sums per wing. Many sheets name rooms without areas.",
-      run: async a => { const m = model(a.draft), n = storeyName(a.storey), fs = m.floors.filter(f => f.name === n);
+      run: async (a, req) => { const m = model(a.draft, req), n = storeyName(a.storey), fs = m.floors.filter(f => f.name === n);
         if (!fs.length) throw toolErr(`No drawn plan of "${n}". Drawn: ${[...new Set(floors.map(f => f.name))].join(", ")}.`);
         const w = a.wing ? wingOrErr(a.wing).id : null, q = a.name_contains ? fold(a.name_contains) : null;
         const rooms = fs.flatMap(f => (f.rooms || []).map(r => roomOut(f, r))).filter(r => (!w || r.wing === w) && (!q || fold(r.name).includes(q)));
@@ -179,7 +182,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         return { storey: n, sheets: fs.map(f => ({ sheet: f.source, kote: f.kote, storey_height_m: f.height, walls: f.walls.length })), per_wing: per, rooms }; } },
     { name: "openings", title: "Vinduer og dører i en fasade", ro: true, schema: S({ wing: WING }, ["wing"]),
       description: "The windows, doors and glazing read from a wing's drawn facades: per facade, how many of each kind per storey band, and each opening's position along the wall (metres from the left end as one stands outside) and kote of sill and head, with the sheet.",
-      run: async a => { const w = wingOrErr(a.wing), fs = (site.facades || []).filter(f => f.building === w.id);
+      run: async (a, req) => { const w = wingOrErr(a.wing), fs = (site.facades || []).filter(f => f.building === w.id);
         if (!fs.length) throw toolErr(`No drawn facade for ${w.name} yet. Drawn: ${[...new Set((site.facades || []).map(f => f.building))].join(", ")}.`);
         const lv = (w.levels || []).slice().sort((x, y) => x.kote - y.kote), band = z => [...lv].reverse().find(l => l.kote <= z + 0.3)?.name || "under laveste etasje";
         return { wing: w.name, facades: fs.map(f => { const per = {}; for (const o of f.openings) { const k = band(o.z[0]); per[k] ||= {}; per[k][o.kind] = (per[k][o.kind] || 0) + 1; }
@@ -195,40 +198,43 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         for (const [i, e] of a.edits.entries()) { try { const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
         const after = afterOf(applyEdits(site, floors, d.edits));
-        if (v) { if (ok.length) versions.save(v); return { ...versionOut(v, originOf(req)), added: ok, rejected: bad, ...(after ? { after } : {}), saved: true }; }
+        if (v) { if (ok.length) versions.save(v); return { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), saved: true }; }
         d.t = Date.now();
         return { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), saved: false,
           note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; } },
     { name: "show_draft", title: "Se et utkast eller en versjon", ro: true, schema: S({ draft: { type: "string", description: "A draft id or a version id (v…)" } }, ["draft"]),
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
-      run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
-        return { ...(isV ? versionOut(versionOf(a.draft), o) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV }; } },
+      run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
+        return { ...(isV ? versionOut(versionOf(a.draft, req), o, req) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV }; } },
     { name: "undo_change", title: "Angre en endring", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ draft: { type: "string", description: "A draft id, or a version id of yours (v…)" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
       description: "Takes one change out of a draft, or out of the person's own version, by its number from show_draft.",
       run: async (a, req) => {
         const v = /^v.{8}$/.test(String(a.draft)) ? ownVersion(a.draft, req) : null, edits = v ? v.edits : draftOf(a.draft).edits;
         if (a.n > edits.length) throw toolErr(`It has ${edits.length} changes.`);
         const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v);
-        return { ...(v ? versionOut(v, originOf(req)) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
+        return { ...(v ? versionOut(v, originOf(req), req) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
     { name: "new_version", title: "Ny versjon", write: true, schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
-      description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it, public to look at by its link. from: copies a draft's or another version's changes into it. Then add to it with try_change (version:).",
+      description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts private (only they see it, and whoever they give its private link); set_public shows it to everyone. from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten.");
         if (!versions) throw toolErr("Versions are not kept on this server.");
         const title = String(a.title || "").trim(); if (!title || title.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn).");
         bump(`new:${who}`, 20, 3600e3);
-        try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from)) : []); return { ...versionOut(v, originOf(req)), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
+        try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from, req)) : []); return { ...versionOut(v, originOf(req), req), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
     { name: "list_versions", title: "Versjonene", ro: true, schema: S({ owner: { type: "string", description: "Only this person's (a login name), or \"me\" for the asker's own; leave out for everyone's" } }),
-      description: "The saved versions of the after, newest first: title, owner, how many changes, when, and the link to show it.",
+      description: "The saved versions of the after one may see, newest first: everyone's public ones and the asker's own private ones; title, owner, public or not, how many changes, when, and the link to show it.",
       run: async (a, req) => { if (!versions) return { versions: [], note: "Versions are not kept on this server." };
-        const owner = a.owner === "me" ? userOf(req) : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
-        return { versions: versions.list(owner).slice(0, 100).map(v => versionOut(v, originOf(req))), you: userOf(req) }; } },
+        const me = userOf(req), owner = a.owner === "me" ? me : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
+        return { versions: versions.list({ owner, viewer: me }).slice(0, 100).map(v => versionOut(v, originOf(req), req)), you: me }; } },
+    { name: "set_public", title: "Vis offentlig", write: true, schema: S({ version: { type: "string" }, public: { type: "boolean", description: "true: anyone can see it, without a login, at its link and in the list. false: back to private" } }, ["version", "public"]),
+      description: "Shows one of the person's own versions to everyone («Vis offentlig»), or makes it private again. A new version is private: only its owner sees it, and whoever they give its private link.",
+      run: async (a, req) => { const v = ownVersion(a.version, req); v.public = !!a.public; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
     { name: "rename_version", title: "Gi versjonen nytt navn", write: true, schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
       description: "Renames one of the person's own versions.",
-      run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req)), saved: true }; } },
+      run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
     { name: "search_documents", title: "Søk i dokumentene", ro: true, schema: S({ query: { type: "string", description: "Words to find, in Norwegian (all must occur; æøå optional)" }, kind: { type: "string", enum: ["tegning", "rapport", "plan", "saksdokument", "kulturminne", "figur", "notat"] }, limit: { type: "integer", minimum: 1, maximum: 20 } }, ["query"]),
       description: "Full-text search in the document store: building-case drawings 2008–2026 (plans, sections, facades), the 2026 area plan for Bragernes sentrum vest and its reports (DIVE analysis, heritage, geotechnics, the high-rise report), heritage records and a research report. Returns documents with the pages that match and a snippet; read more with read_document. Scanned drawings have no text and are found by title only.",
-      run: async a => { needDocs();
+      run: async (a, req) => { needDocs();
         const q = ftsQuery(a.query), lim = a.limit || 8;
         const hits = docs.prepare(`SELECT f.doc, f.n, bm25(fts, 4.0, 1.0) AS score FROM fts f JOIN docs d ON d.id = f.doc WHERE fts MATCH ? ${a.kind ? "AND d.kind = ?" : ""} ORDER BY score LIMIT 200`).all(...[q, a.kind].filter(Boolean));
         const by = new Map(); for (const h of hits) { if (!by.has(h.doc)) by.set(h.doc, []); by.get(h.doc).push(h.n); }
@@ -236,7 +242,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         return { query: a.query, documents: out, more: by.size > lim ? by.size - lim : 0 }; } },
     { name: "read_document", title: "Les et dokument", ro: true, schema: S({ doc_id: { type: "string", description: "Document id from search_documents or list_documents" }, from_page: { type: "integer", minimum: 1 }, pages: { type: "integer", minimum: 1, maximum: 10, description: "How many pages (default 3)" } }, ["doc_id"]),
       description: "The text of a document, a few pages at a time, with its download link. Drawings carry little text (title block, room names); scanned ones none: then give the person the link to open it.",
-      run: async a => { needDocs();
+      run: async (a, req) => { needDocs();
         const d = docRow(a.doc_id); if (!d) throw toolErr(`No document "${a.doc_id}".`);
         const from = a.from_page || 1, n = a.pages || 3, rows = docs.prepare("SELECT n, text FROM pages WHERE doc=? AND n>=? AND n<? ORDER BY n").all(d.id, from, from + n);
         let budget = 24000; const pages = [];
@@ -244,7 +250,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         return { ...docOut(d), pages, next_page: from + pages.length <= d.pages ? from + pages.length : null }; } },
     { name: "list_documents", title: "Dokumentliste", ro: true, schema: S({ kind: { type: "string", enum: ["tegning", "rapport", "plan", "saksdokument", "kulturminne", "figur", "notat"] }, title_contains: { type: "string" } }),
       description: "The documents in the store by kind (drawings, reports, plan documents, case documents, heritage records, figures, notes), with year, page count and download link.",
-      run: async a => { needDocs();
+      run: async (a, req) => { needDocs();
         const t = a.title_contains ? `%${String(a.title_contains).slice(0, 60)}%` : null;
         const rows = docs.prepare(`SELECT id, title, kind, year, file, pages, has_text, urls FROM docs WHERE 1=1 ${a.kind ? "AND kind=?" : ""} ${t ? "AND title LIKE ?" : ""} ORDER BY kind, year, title LIMIT 250`).all(...[a.kind, t].filter(Boolean));
         return { documents: rows.map(docOut) }; } },
@@ -257,7 +263,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
         drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, draft: DRAFT }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey; the app sends a small picture of the view back, so look at it before describing it. Needs a chat app that shows MCP Apps; otherwise give the link to the website.",
-      run: async (a, req) => { const view = viewOf(a), w = view.wing && wingOf(site, view.wing);
+      run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing);
         const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. The picture is in the app; it sends back an image of the view. On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
@@ -345,12 +351,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* GET /api/versjon/<id>: a saved version for the page's ?versjon=<id>; GET /api/versjoner: all of them, newest first */
   function handleVersion(req, res, id) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
-    const open = { "access-control-allow-origin": "*" }, v = versions?.get(id);
-    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, updated: v.updated, edits: v.edits, saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
+    const open = { "access-control-allow-origin": "*" }, v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
+    const v = v0 && versions.visible(v0, userOf(req), key) ? v0 : null;
+    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, public: v.public, updated: v.updated, edits: v.edits, saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
   }
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
-    return send(res, 200, { versions: (versions?.list() || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated })) }, { "access-control-allow-origin": "*" });
+    return send(res, 200, { versions: (versions?.list({}) || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated })) }, { "access-control-allow-origin": "*" });
   }
   return { handleMcp, handleDraft, handleVersion, handleVersions, TOOLS };
 }
