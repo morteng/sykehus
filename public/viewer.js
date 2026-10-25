@@ -401,12 +401,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   let floor = null, storey = null, only = null; const shownFloors = new Set();   // every sheet of the storey shown names its rooms
   function show(name, ids) {
     storey = name; floor = null;
-    for (const b of own) cutAt(b, name && ids.has(b.id) ? koteIn(b, name) : null);
-    let drawn = null; const covered = new Set(); shownFloors.clear();
+    let drawn = null; const covered = new Map(); shownFloors.clear();   // covered: building id, the kote its sheet stands at
     for (const f of floors) {
       const g = floorGroups.get(f.id), on = !!name && f.name === name && [...g.userData.covers].some(id => ids.has(id));
-      g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; shownFloors.add(f.id); for (const id of g.userData.covers) covered.add(id); }
+      g.visible = on; if (on) { drawn ??= f; cut.constant = f.kote + 1.2 - base; shownFloors.add(f.id); for (const id of g.userData.covers) if (!covered.has(id)) covered.set(id, f.kote); }
     }
+    /* a building is cut where its sheet stands, else at its wing's kote for the storey */
+    for (const b of own) cutAt(b, name && ids.has(b.id) ? covered.get(b.id) ?? koteIn(b, name) : null);
     for (const b of own) plates.get(b.id).material = covered.has(b.id) ? pm : pmNone;
     floor = drawn?.id ?? null; dirty = true;
     return drawn;
@@ -648,6 +649,16 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
     get labels() { return tags; },   // the names and kote over the picture, for a printed sheet
+    /* for tools drawn over the model (trace.js): add and take away things, a site point under the pointer at a
+       kote, and where a site point at a kote is on the screen */
+    add(o) { scene.add(o); dirty = true; }, remove(o) { scene.remove(o); dirty = true; }, redraw() { dirty = true; },
+    world: P,
+    groundAt(cx, cy, kote) {
+      const r = el.getBoundingClientRect(), ray = new THREE.Raycaster(), hit = new THREE.Vector3();
+      ray.setFromCamera(new THREE.Vector2((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+      return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(kote - base)), hit) ? [hit.x, -hit.z] : null;
+    },
+    project(p, kote) { const v = P(p, kote).project(camera); return [(v.x + 1) / 2 * container.clientWidth, (1 - v.y) / 2 * container.clientHeight]; },
     snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
   };
 }

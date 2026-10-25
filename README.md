@@ -29,7 +29,7 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   its frame, only the facades show it). Run after massing.py. Needs PyMuPDF.
 - `python -I tools/roompoly.py public/data/floors.json public/data/site.json [--check]`: each room stamp's outline,
   the space between the drawn walls around it, and its area measured (`area_calc`, shown as "ca." where the drawing
-  gives none; --check compares with the stamped areas, median about 14 % off). Run after floors.mjs.
+  gives none; --check compares with the stamped areas, median about 14 % off). Run after trace-import.mjs.
 - `python -I tools/ifc.py public/data/site.json public/data/floors.json public/data/sykehus.ifc [wing id ...]`: the
   buildings as IFC4 (BIM) for "Last ned som BIM-modell": a building per wing, its storeys, outer walls with the
   facades' windows and doors as real openings, slabs, roofs, the drawn plans' walls and rooms, sources on each element.
@@ -42,6 +42,13 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   documents (the page draws the facades from them).
 - `node tools/floors.mjs <drawings folder> <work folder>`: `public/data/floors.json`, the walls of each drawing in
   `tools/plans.json`, placed on the site from its control points and stood at its kote.
+- Scanned plans (`public/data/skann/index.json` names them): `python -I tools/scanwalls.py <pdf> <page>
+  public/data/skann/index.json <id> <trace.json>` finds the walls in the scan (or `- - ... --lines <linewalls.json>
+  [--rooms <rooms.json>]` for a vector sheet), `python -I tools/tracefit.py <trace.json> public/data/site.json [--block]
+  [--turn deg]` places it on its building's outline (two control points), and the page with `?spor` opens the trace
+  mode: the sheet under the map, place it by point pairs, draw, move and delete walls and room stamps, download the
+  trace. Traces are kept in `tools/traces/`; `node tools/trace-import.mjs` puts them in floors.json as floors
+  `spor-<id>`. Run order: floors.mjs, trace-import.mjs, roompoly.py, ifc.py.
 - `python3 -I tools/thumbs.py public/data/site.json twin-pack/sheets public/data/ark`: small pictures of the drawings
   the wing cards name (a click opens the PDF at the page). Needs Pillow.
 - `python3 -I tools/ingest.py <sources> <data dir> [report.md]`: the document store (`docs.sqlite`, full text).

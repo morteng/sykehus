@@ -1,0 +1,139 @@
+{
+ "about": "Scanned floor plans to trace (public/trace.js), from the document store; size is the PDF page in points, scale the sheet's own (1:scale). Kote from the wing's storey ladder; where no drawing gives it, how says so. dark, tmin: how tools/scanwalls.py reads the sheet (grey below dark is ink; walls at least tmin metres). north: the sheet's north arrow, degrees clockwise from the sheet's up (picks the quarter turn in tools/tracefit.py). placed: where tools/tracefit.py put the sheet (two control points, sheet x, y, site x, y), the trace mode's first guess.",
+ "sheets": [
+  {
+   "id": "vest-6",
+   "doc": "a4c9a90c45e4",
+   "page": 2,
+   "title": "Vestfløy 6. etasje (Ottar A-2060, 2013, skann 1:200)",
+   "storey": "6. etasje",
+   "kote": 35.44,
+   "height": 3.4,
+   "how": "antatt: samme stige som de gamle fløyene",
+   "wing": "vestfloy",
+   "scale": 200,
+   "size": [
+    1132,
+    762
+   ],
+   "image": "data/skann/a4c9a90c45e4-p2.jpg",
+   "dark": 215,
+   "placed": [
+    [
+     53.93,
+     12.08,
+     -23.493,
+     127.284
+    ],
+    [
+     788.4,
+     633.62,
+     -2.672,
+     60.533
+    ]
+   ]
+  },
+  {
+   "id": "sb-12",
+   "doc": "937d39a427f8",
+   "page": 2,
+   "title": "Sentralblokka 12. etasje (Ottar A-2012, 2012, skann 1:200)",
+   "storey": "12. etasje",
+   "kote": 58.11,
+   "height": 3.76,
+   "how": "beregnet",
+   "wing": "sentralblokka",
+   "scale": 200,
+   "size": [
+    1190,
+    841
+   ],
+   "image": "data/skann/937d39a427f8-p2.jpg",
+   "placed": [
+    [
+     26.41,
+     249.03,
+     -29.941,
+     0.48
+    ],
+    [
+     997.26,
+     636.5,
+     30.984,
+     44.609
+    ]
+   ]
+  },
+  {
+   "id": "fs-2",
+   "doc": "e3b4d4dd7334",
+   "page": 1,
+   "title": "Forsyningssentralen 2. etasje (AgD 102 F, 2008, skann 1:100)",
+   "storey": "2. etasje",
+   "kote": 18.9,
+   "height": 4.0,
+   "how": "antatt: midt mellom terreng og tak",
+   "building": "495955067",
+   "scale": 100,
+   "size": [
+    2382,
+    1674
+   ],
+   "image": "data/skann/e3b4d4dd7334-p1.jpg",
+   "pair": [
+    0.08,
+    0.4
+   ],
+   "north": -27,
+   "placed": [
+    [
+     158.08,
+     107.16,
+     -131.121,
+     89.562
+    ],
+    [
+     1480.49,
+     1521.14,
+     -118.295,
+     21.784
+    ]
+   ]
+  },
+  {
+   "id": "sb-11",
+   "doc": "d2b545c4d05c",
+   "page": 1,
+   "title": "Sentralblokka 11. etasje (Ottar A-2110, 2011, vektor 1:50)",
+   "storey": "11. etasje",
+   "kote": 54.35,
+   "height": 3.76,
+   "how": "beregnet",
+   "wing": "sentralblokka",
+   "scale": 50,
+   "size": [
+    3685,
+    2384
+   ],
+   "image": "data/skann/d2b545c4d05c-p1.jpg",
+   "pair": [
+    0.06,
+    0.3
+   ],
+   "placed": [
+    [
+     117.79,
+     451.8,
+     28.62,
+     40.899
+    ],
+    [
+     3412.07,
+     2029.27,
+     -27.057,
+     5.993
+    ]
+   ]
+  }
+ ]
+}
