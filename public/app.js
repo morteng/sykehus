@@ -288,19 +288,103 @@ function sheetStrip(w) {
     `<a href="${esc(d.url)}#page=${d.page || 1}" target="_blank" rel="noopener" title="${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}"><img src="${esc(thumbs[key])}" alt="" loading="lazy">${esc(d.title)}${d.year ? ", " + esc(d.year) : ""}</a>`).join("")}</div>`;
 }
 
-/* «Forslag»: the version or draft shown, as the tab's top row, then the versions to see */
+/* «Forslag»: the version or draft shown, as the tab's top card (Morten 20:46Z «polish needed»): its title, edited in
+   place when it is one's own, one status line, «Del» first, «Nytt forslag» from the before, «Ny kopi» of this one;
+   then the changes, one line each by the building's plain name, grouped by kind with a count and folded past five,
+   each with a small ↺ to take it out; one «Angre siste» over them */
+const SHARED = { privat: "bare du ser den", lenke: "delt med lenke", offentlig: "offentlig" };
+const IC = {
+  undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
+  back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>',
+  riv: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M6 20v-8l4-3v11"/><path d="M14 20v-5"/><path d="M13 5l6 6M19 5l-6 6"/></svg>',
+  keep: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M9 14l2 2 4-4"/></svg>',
+  ny: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>',
+  ed: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  ute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-6"/><path d="M12 3l5 8H7z"/><path d="M12 8l6 8H6z"/></svg>',
+  note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v12l-4 4H5z"/><path d="M8 9h8M8 13h5"/></svg>',
+};
+const GROUPS = [
+  { k: "riv", name: "Revet", of: e => e.kind === "demolish", tip: "Sett opp igjen" },
+  { k: "keep", name: "Beholdt", of: e => e.kind === "restore", tip: "Ta ut igjen" },
+  { k: "ny", name: "Nye bygg", of: e => e.kind === "volume", tip: "Ta bort igjen" },
+  { k: "ed", name: "Endret", of: e => ["reshape", "wing", "level", "room", "balconies"].includes(e.kind), tip: "Ta endringen ut igjen" },
+  { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell"].includes(e.kind), tip: "Ta det ut igjen" },
+  { k: "note", name: "Notater", of: () => true, tip: "Ta notatet ut igjen" },
+];
+const PAGE_WHY = /^(revet|endret|satt opp) på siden$/;
+const clock = t => t ? new Date(t).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }) : "";
 function drawDraft() {
-  if (!draft) return;
-  const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
-  $("draftRow").innerHTML = `<div class="draftrow">${draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
-    : mine() ? `<b>${esc(draft.title)}</b> · lagret · ${ch} · ${{ privat: "bare du ser den", lenke: "delt med lenke", offentlig: "offentlig" }[draft.sharing] || ""}. <a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button><button type="button" class="sm" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button></span>`
-    : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./?for">Se før</a>`
-    : ownDraft() ? `<b>Utkast</b> · lagret på denne maskinen et døgn · ${ch}. ${me.person ? "" : "Logg inn for å beholde det. "}<a href="./?for">Se før</a><span class="acts"><button type="button" class="sm" data-del>Del</button></span>`
-    : `<b>Utkast</b> delt med lenke · ${ch}. Det du endrer her, blir ditt eget. <a href="./?for">Se før</a>`}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span>${(draft.version ? !mine() : !ownDraft()) ? "" : `<button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button>`}</li>`).join("")}</ol>` : ""}</div>`;
-  for (const b of $("draftRow").querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
-  $("draftRow").querySelector("[data-del]")?.addEventListener("click", share);
-  $("draftRow").querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); toast("Ny kopi. Endringene her går inn i den."); });
+  drawWhere();
+  if (!draft) { $("draftRow").innerHTML = ""; return; }
+  const n = draft.edits?.length || 0, ch = `${n} ${n === 1 ? "endring" : "endringer"}`, may = draft.version ? mine() : ownDraft();
+  if (draft.missing) { $("draftRow").innerHTML = `<div class="draftrow dr"><b>${versionId ? "Versjonen finnes ikke, eller er privat." : "Utkastet finnes ikke lenger"}</b><span class="dr-s">${versionId ? "" : "Utkast varer et døgn. "}Du ser modellen slik den er.</span></div>`; return; }
+  const title = mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på forslaget" title="Trykk for å gi det et annet navn">`
+    : `<b class="dr-t">${esc(draft.version ? draft.title : "Utkast")}</b>`;
+  const status = mine() ? `lagret ${clock(draft.updated)} · ${SHARED[draft.sharing] || ""}`
+    : draft.version ? `${esc(draft.owner)} sitt · ${SHARED[draft.sharing] || ""} · sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}`
+    : ownDraft() ? `lagret på denne maskinen et døgn${me.person ? "" : " · logg inn for å beholde det"}` : "delt med lenke · det du endrer her, blir ditt eget";
+  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button>${me.person ? `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>${mine() ? `<button type="button" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button>` : ""}` : `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>`}` : "";
+  /* the groups, each row its edit's number (1-based, as undo takes it), the newest last */
+  const rowsOf = GROUPS.map(g => ({ g, rows: [] }));
+  (draft.edits || []).forEach((e, i) => rowsOf.find(x => x.g.of(e)).rows.push([e, i + 1]));
+  const list = rowsOf.filter(x => x.rows.length).map(({ g, rows: rs }) => `<details class="dr-g"${rs.length > 5 ? "" : " open"}><summary><span class="dr-ic">${IC[g.k]}</span>${g.name} · ${rs.length}</summary><ul>${rs.map(([e, k]) =>
+    `<li title="${esc(describe(e))}"><span>${esc(short(e))}</span>${may ? `<button type="button" class="dr-x" data-undo="${k}" title="${g.tip}" aria-label="${g.tip}: ${esc(short(e))}">${IC.back}</button>` : ""}</li>`).join("")}</ul></details>`).join("");
+  $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h">${title}<span class="dr-s">${status}</span></div>
+    <div class="dr-acts">${acts}<a href="./?for">Se før</a></div>
+    ${n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Ta ut den siste endringen">${IC.undo}Angre siste</button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`}</div>`;
+  const R = $("draftRow");
+  for (const b of R.querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
+  R.querySelector("[data-last]")?.addEventListener("click", () => undo(n));
+  R.querySelector("[data-del]")?.addEventListener("click", share);
+  R.querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); toast("Ny kopi. Endringene her går inn i den."); });
+  R.querySelector("[data-ny]")?.addEventListener("click", fresh);
+  const t = $("drTitle");
+  if (t) {
+    t.onkeydown = e => { if (e.key === "Enter") t.blur(); if (e.key === "Escape") { t.value = draft.title; t.blur(); } };
+    t.onchange = async () => {
+      const v = t.value.trim(); if (!v || v === draft.title) { t.value = draft.title; return; }
+      const j = await change({ rename: versionId, title: v }); if (j.error) { t.value = draft.title; return toast(`Fikk ikke gitt det nytt navn: ${j.error}`); }
+      draft.title = j.title; draft.updated = j.updated; drawWhere(); listVersions();
+    };
+  }
 }
+/* «Nytt forslag»: signed in, a new empty version from the before, worked on from now; signed out, the draft kept here
+   is let go, and the next change starts a new one */
+async function fresh() {
+  if (me.person) { const j = await change({ fresh: true }); if (j.error) return toast(`Fikk ikke laget et nytt forslag: ${j.error}`); await show(j); return toast("Nytt forslag fra før. Endringene går inn i det."); }
+  try { localStorage.removeItem(KEPT); } catch { }
+  location.href = "./?for";
+}
+/* the name of a building in a change, plainly: a wing's name, a new building's, else what it is; never its id */
+const KIND = { hospital: "sykehusbygg", apartments: "boligblokk", house: "bolig", semidetached_house: "tomannsbolig", garage: "garasje", garages: "garasjer", civic: "offentlig bygg", kindergarten: "barnehage", university: "skolebygg", office: "kontorbygg", warehouse: "lager", shed: "bod", service: "teknisk bygg", roof: "tak" };
+function nameOf(id) {
+  if (id === "alle") return "Alle sykehusbyggene";
+  const low = String(id).toLowerCase(), w = (site0.wings || []).find(x => x.id === id || x.name.toLowerCase() === low); if (w) return w.name;   // Anton names wings too
+  const a = draft?.edits?.findLast(x => x.id === id && (x.kind === "volume" || x.kind === "reshape") && x.name); if (a) return a.name;
+  const b = site0.buildings.find(x => x.id === id); if (!b) return String(id);
+  if (b.wing) return (site0.wings || []).find(x => x.id === b.wing)?.name || "Bygning på tomta";
+  return b.own ? "Bygning på tomta" : `Nabobygg${KIND[b.type] ? ` (${KIND[b.type]})` : ""}`;
+}
+/* one line in the list: what the group heading does not already say */
+function short(e) {
+  const why = e.why && !PAGE_WHY.test(e.why) ? ` (${e.why})` : "";
+  if (e.kind === "demolish" || e.kind === "restore") return nameOf(e.building) + why;
+  if (e.kind === "volume") return e.name + why;
+  return describe({ ...e, why: null }) + why;
+}
+/* the label over the view, top left (Morten 20:47Z «current version, metadata top left when viewing one?»): the open
+   version's title and one line; a tap opens «Forslag» */
+function drawWhere() {
+  const el = $("where"); if (!el) return;
+  const before = !draft || draft.missing, n = draft?.edits?.length || 0, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
+  el.innerHTML = before ? `<b>Før</b><span>slik det står i dag</span>`
+    : `<b>${esc(draft.version ? draft.title : "Utkast")}</b><span>${mine() ? `din · ${ch} · lagret ${clock(draft.updated)}`
+      : draft.version ? `${esc(draft.owner)} · ${draft.sharing === "lenke" ? "delt med lenke" : SHARED[draft.sharing] || ""} · ${ch}`
+      : ownDraft() ? `utkast · ${ch} · på denne maskinen` : `delt med lenke · ${ch}`}</span>`;
+  el.title = before ? "Modellen slik den er. Trykk for forslagene." : "Trykk for å se endringene";
+  el.hidden = false;
+}
+$("where").onclick = () => panel.reveal("changes");
 drawDraft();
 /* «Del», the one thing done by hand: a version is opened to those with its link, a draft's own link is given */
 async function share() {
@@ -314,10 +398,10 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   const wings = site0.wings || [], w = wings.find(x => x.id === e.wing)?.name || e.wing;
   const why = e.why ? ` (${e.why})` : "";
   if (e.kind === "level") return `${w}, ${e.storey}: kote ${kote(e.kote)}${why}`;
-  if (e.kind === "wing") return `${w}, ${{ name: "navn", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
+  if (e.kind === "wing") return `${w}, ${{ name: "navn", use: "bruk", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
   if (e.kind === "room") return `${e.storey}, ${e.room}: ${Object.entries(e.set).map(([k, v]) => `${{ name: "navn", use: "bruk", area_m2: "areal" }[k] || k} ${k === "area_m2" ? v + " m²" : v}`).join(", ")}${why}`;
-  if (e.kind === "demolish") return `Rives: ${e.building === "alle" ? "alle sykehusbyggene" : (wings.find(x => x.id === e.building)?.name || draft?.edits?.findLast(x => x.id === e.building && (x.kind === "volume" || x.kind === "reshape") && x.name)?.name || e.building)}${why}`;
-  if (e.kind === "restore") return `Beholdes: ${wings.find(x => x.id === e.building)?.name || e.building}${why}`;
+  if (e.kind === "demolish") return `Rives: ${nameOf(e.building)}${why}`;
+  if (e.kind === "restore") return `Beholdes: ${nameOf(e.building)}${why}`;
   if (e.kind === "balconies") return `Balkonger på ${w} mot ${{ N: "nord", Ø: "øst", S: "sør", V: "vest" }[e.side]}, ${String(e.depth).replace(".", ",")} m dype${e.bay ? `, ${String(e.bay).replace(".", ",")} m brede` : ""}${why}`;
   if (e.kind === "reshape") {
     const was = draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
@@ -468,7 +552,8 @@ ifcLink();
 const VIS = { privat: "privat", lenke: "bare de med lenken", offentlig: "offentlig" };
 function listVersions() {
   fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
-    if (!versions.length) return;
+    versions = versions.filter(v => v.version !== versionId);   // the open one is the card above
+    if (!versions.length) { $("verList").innerHTML = `<li class="sel-empty">Ingen andre forslag ennå.</li>`; return; }
     $("verList").innerHTML = versions.map(v => `<li><a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${v.version === versionId ? ' aria-current="page"' : ""}><span><span class="t">${esc(v.title)}</span><small>${v.mine ? "din" : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></span>${v.mine ? `<span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span>` : ""}</a></li>`).join("");
   }).catch(() => {});
 }

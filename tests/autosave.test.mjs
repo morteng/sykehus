@@ -60,6 +60,14 @@ test("«Ny kopi» is the next one worked on; «Del» opens it to the link, signe
   assert.equal((await fetch(`${O}/api/versjon/${c.j.version}?nokkel=${k}`)).status, 200);
 });
 
+test("«Nytt forslag» starts empty from the before and is the one worked on; its title is set in place", async () => {
+  const f = await post({ fresh: true }, lars); assert.equal(f.status, 200); assert.equal(f.j.changes, 0);
+  const d = await post(riv("Østfløy"), lars); assert.equal(d.j.version, f.j.version);
+  assert.equal((await post({ rename: f.j.version, title: "Drivhus mot sør" })).status, 400);   // only its owner
+  const r = await post({ rename: f.j.version, title: "  Drivhus mot sør " }, lars); assert.equal(r.j.title, "Drivhus mot sør");
+  assert.equal((await post({ rename: f.j.version, title: "" }, lars)).status, 400);
+});
+
 test("Anton's change with no version named goes into the person's open work, not a new draft (Morten 20:34Z)", async () => {
   const call = async (name, args) => (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...lars }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) })).json()).result.structuredContent;
   const list = async () => (await (await fetch(O + "/api/versjoner", { headers: lars })).json()).versions.filter(v => v.mine);

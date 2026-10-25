@@ -410,15 +410,19 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const me = req.webUser ?? null, o = originOf(req);
       /* signed in, the person's work is one private version, saved on every change (U3555): the one marked work */
       const work = () => workOf(me);
-      if (a.adopt || a.copy || a.share) {
+      if (a.adopt || a.copy || a.fresh || a.rename || a.share) {
         if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
+        if (a.rename) {   // the title on the «Forslag» card, edited in place
+          const v = ownVersion(String(a.rename), req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi forslaget et navn (høyst 120 tegn).");
+          v.title = t; versions.save(v); return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
+        }
         if (a.adopt) {   // a draft made signed out, moved into the person's version at sign-in; then the draft is gone
           const d = draftOf(a.adopt), v = work(); v.edits.push(...structuredClone(d.edits).slice(0, MAX_VERSION_EDITS - v.edits.length)); versions.save(v); dropDraft(d.id);
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own, adopted: d.edits.length });
         }
-        if (a.copy) {   // «Ny kopi»: a second alternative, which becomes the one worked on
-          const from = ownVersion(String(a.copy), req), n = versions.list({ owner: me, viewer: me }).length + 1;
-          const v = versions.create(me, `Mitt etter ${n}`, structuredClone(from.edits));
+        if (a.copy || a.fresh) {   // «Ny kopi»: a second alternative from this one; «Nytt forslag»: one from the before. It becomes the one worked on
+          const from = a.copy ? ownVersion(String(a.copy), req) : null, n = versions.list({ owner: me, viewer: me }).length + 1;
+          const v = versions.create(me, `Mitt etter ${n}`, from ? structuredClone(from.edits) : []);
           for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
           v.work = true; versions.save(v);
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
