@@ -193,6 +193,24 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .fl-acts button { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); white-space: nowrap; }
 .fl-acts button.riv { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .fl.docked { position: static; max-width: none; transform: none; }
+/* U3568: beside the pick, small (Morten 22:27Z «very large, cover the selected building»): the acts wrap in a narrow
+   card; its «–» folds it to a chip, the pick kept */
+.fl:not(.docked) { max-width: min(300px, calc(100% - 16px)); padding: var(--sp-2); }
+.fl:not(.docked) .fl-acts { flex-wrap: wrap; gap: var(--sp-1); }
+.fl:not(.docked) .fl-acts button { min-height: 36px; padding: 0 var(--sp-2); font-size: var(--fs-sm); }
+.fl-t { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.fl-fold, .fl-chip svg { flex: none; }
+.fl-fold { width: 28px; height: 28px; min-height: 0; padding: 0; display: grid; place-items: center; border: 0; background: transparent; border-radius: var(--radius); color: var(--muted); }
+.fl-fold:hover { background: var(--hover, rgba(0,0,0,.06)); color: var(--text); }
+.fl-fold svg, .fl-chip svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; }
+.fl.folded { padding: 0; border-radius: 999px; }
+.fl-chip { display: flex; align-items: center; gap: var(--sp-2); min-height: 36px; padding: 0 var(--sp-2) 0 var(--sp-3); border: 0; border-radius: 999px; background: transparent; font-size: var(--fs-sm); font-weight: 600; max-width: 240px; }
+.fl-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the panel open: the same acts in «Bygget»'s card, under its heading */
+.sel-acts:empty { display: none; }
+.sel-acts { margin: 0 0 var(--sp-3); }
+.sel-acts .fl-acts button { min-height: 40px; }
+.sel-acts .fl-form { min-width: 0; }
 
 /* the draft bar's own acts (U3555): «Del», «Ny kopi» */
 

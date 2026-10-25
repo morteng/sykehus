@@ -125,13 +125,13 @@ const rows = rs => `<div class="oc-info">${rs.map(([k, v]) => `<div class="oc-in
 let cardOf = null;   // what the card is about, as a selection item («Spør Anton om dette»)
 function card(title, sub, body, about) {
   const el = $("info"); cardOf = about;
-  el.innerHTML = `<div class="oc-h"><div><h2>${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ""}</div><span class="oc-acts"><button type="button" class="ask-anton" data-ask title="Spør Anton om dette" aria-label="Spør Anton om dette">${ASK}</button><button type="button" data-shut title="Lukk (Esc)" aria-label="Lukk">${SHUT}</button></span></div>${body}`;
+  el.innerHTML = `<div class="oc-h"><div><h2>${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ""}</div><span class="oc-acts"><button type="button" class="ask-anton" data-ask title="Spør Anton om dette" aria-label="Spør Anton om dette">${ASK}</button><button type="button" data-shut title="Lukk (Esc)" aria-label="Lukk">${SHUT}</button></span></div><div class="sel-acts" id="selActs"></div>${body}`;
   el.hidden = false; document.querySelector("#p-selected .sel-empty").hidden = true;
   el.querySelector("[data-shut]").onclick = shut;
   el.querySelector("[data-ask]").onclick = () => { if (cardOf) valg.add(cardOf); dispatchEvent(new CustomEvent("sykehus:ask")); };
   panel.peek(`<span class="pk"><b>${title}</b>${sub ? " · " + sub : ""}</span><button type="button" class="sm" id="peekMore">Mer</button>`);
   $("peekMore").onclick = () => panel.reveal("selected");
-  toCard();
+  toCard(); dispatchEvent(new CustomEvent("sykehus:card"));   // the pick's acts go into #selActs (float.js)
 }
 function shut() { $("info").hidden = true; $("info").innerHTML = ""; cardOf = null; document.querySelector("#p-selected .sel-empty").hidden = false; panel.peek(""); }
 /* the chosen storey: its kote in each wing that has it, and the drawings of it with their rooms */
@@ -213,7 +213,7 @@ addEventListener("keydown", e => {
   if (e.key === "n" || e.key === "N") setNames(!names);
   else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
-  else if (e.key === "Escape") { shut(); valg.clear(); }
+  else if (e.key === "Escape") { if (!pickActs?.escape()) { shut(); valg.clear(); } }   // the card beside the pick folds first, the pick kept
   else if (e.key === "Home") pickStorey(null);
   else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {
     const ladder = [null, ...storeys], i = ladder.indexOf(storeyOn), j = Math.max(0, Math.min(ladder.length - 1, i + (/Up$/.test(e.key) ? 1 : -1)));
@@ -615,7 +615,8 @@ function listVersions() {
 listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
-import("./float.js?v=20261025d").then(m => m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+let pickActs = null;
+import("./float.js?v=20261025e").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: moveNew, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
