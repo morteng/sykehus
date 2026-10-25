@@ -9,6 +9,11 @@
   f.addEventListener("submit", e => { if (f.classList.contains("wait")) { e.preventDefault(); keep(); } });
   let had = false; try { had = localStorage.getItem("sykehus-anton") === "1"; } catch { }
   if (!had) return;
-  f.hidden = false; f.classList.add("wait"); if (b) b.disabled = true; busy.textContent = "Anton lastes …";
+  /* not ready, where it is looked at (pm 21:53Z: the placeholder still said «Spør Anton»): the field, the line under it
+     (a status, read out) and the button's name */
+  f.hidden = false; f.classList.add("wait"); document.body.classList.add("talk-on");   // talk-on: its width, as anton.js gives it
+  t.placeholder = "Anton lastes … skriv gjerne, det sendes når han er klar";
+  if (b) { b.disabled = true; b.title = "Anton lastes …"; b.setAttribute("aria-label", "Anton lastes"); }
+  busy.setAttribute("aria-live", "polite"); busy.textContent = "Anton lastes …";
   t.addEventListener("keydown", e => { if (f.classList.contains("wait") && e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); keep(); } });
 })();

@@ -32,7 +32,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
   const chip = $("me");
-  const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
+  const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
   if (!me.person) {
     unmark();
     /* not signed in: the Anton tab says how, and the chip in the app bar opens it */
@@ -255,6 +255,6 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); empty(); });
     placePill(); state(); empty();
     /* ready: what was typed while the page loaded (early.js) goes now */
-    form.classList.remove("wait"); btn.disabled = false; if (form.dataset.queued) { delete form.dataset.queued; const go = () => { busy.textContent = ""; sendIt(); }; if (es.readyState === EventSource.OPEN) go(); else es.addEventListener("open", go, { once: true }); }   // once the stream listens, so the page sees its own turn
+    form.classList.remove("wait"); btn.disabled = false; words(); state(); if (form.dataset.queued) { delete form.dataset.queued; const go = () => { busy.textContent = ""; sendIt(); }; if (es.readyState === EventSource.OPEN) go(); else es.addEventListener("open", go, { once: true }); }   // once the stream listens, so the page sees its own turn
   }
 }

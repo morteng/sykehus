@@ -5,7 +5,7 @@
 // token, or OAuth for claude.ai), and a tool that keeps one answers 401 with the sign-in challenge without it.
 //
 //   POST /mcp     JSON-RPC: initialize, tools/list, tools/call, resources/read ...
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
@@ -447,7 +447,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     ...(t.ui ? { _meta: { ui: { resourceUri: APP_URI, visibility: ["model", "app"] } } } : {}) }));
 
   // ---------- JSON-RPC ----------
-  const CACHE = { ttlMs: 3600e3, cacheScope: "public" };   // 2026-07-28 CacheableResult: lists and the app change only with a deploy
+  /* 2026-07-28 CacheableResult: lists and the app change only with a deploy, but deploys come often, so a minute (pm
+     21:55Z: gulden-ai kept show_building without save_as after a deploy); the version names the tool list, so a client
+     that compares serverInfo sees a new one at once */
+  const CACHE = { ttlMs: 60e3, cacheScope: "public" };
+  SERVER_INFO.version = `0.2.0+${createHash("sha256").update(JSON.stringify(toolList())).digest("hex").slice(0, 10)}`;
   async function rpc(req, msg) {
     const { method, params = {} } = msg;
     const caps = { tools: { listChanged: false }, resources: {}, extensions: { [M("ui")]: { mimeTypes: ["text/html;profile=mcp-app"] } } };
