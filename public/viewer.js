@@ -777,7 +777,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     home() { setStorey(null); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
-    focus(id) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2) }); },
+    /* to a building; cam: where to look from as well (yaw, pitch, dist), in the same move */
+    focus(id, cam = {}) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); hand(); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2), ...cam }); },
+    /* the camera moved, from where it is (Anton's «vis meg det fra fugleperspektiv»): yaw, pitch, dist, x, y, h */
+    look(cam, ms) { hand(); glide(cam, ms); },
     get labels() { return tags; },
     setNames(on) { names = !!on; dirty = true; }, mark,   // the names and kote over the picture, for a printed sheet
     /* for tools drawn over the model (trace.js): add and take away things, a site point under the pointer at a

@@ -52,3 +52,14 @@ test("a new building from the page (U3556): storeys, facts, reshaped, and torn d
   const w = checkEdit(site, floors, { kind: "wing", wing: "Østfløy", field: "use", value: "Kontorer", why: "endret på siden" });
   assert.equal(applyEdits(site, floors, [w]).site.wings.find(x => x.id === "ostfloy").use, "Kontorer");
 });
+
+test("a room by its place (at): one of several with the same name, or one with no code (pm 21:22Z)", () => {
+  const six = floors.filter(f => f.name === "6. etasje").flatMap(f => f.rooms || []), same = six.filter(r => r.name.toLowerCase() === "behandling" && r.at);
+  assert.ok(same.length > 1);
+  assert.throws(() => checkEdit(site, floors, { kind: "room", storey: "6", room: "BEHANDLING", set: { name: "Atelier" } }), /bruk romkoden, eller at: \[øst, nord\]/);
+  const one = same[1], e = checkEdit(site, floors, { kind: "room", storey: "6", room: "BEHANDLING", at: [one.at[0] + 1, one.at[1] - 1], set: { name: "Atelier" } });
+  assert.deepEqual(e.at, one.at);
+  const m = applyEdits(site, floors, [e]), after = m.floors.filter(f => f.name === "6. etasje").flatMap(f => f.rooms || []);
+  assert.equal(after.filter(r => r.name === "Atelier").length, 1); assert.equal(after.filter(r => r.name.toLowerCase() === "behandling" && r.at).length, same.length - 1);
+  assert.throws(() => checkEdit(site, floors, { kind: "room", storey: "6", at: [400, 400], set: { name: "x" } }), /innen 6 m/);
+});

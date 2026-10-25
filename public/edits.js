@@ -40,15 +40,27 @@ export function checkEdit(site, floors, e) {
     }
     case "room": {
       const storey = str(e.storey, 30, "Etasjen"), name = /^\d+$/.test(storey) ? `${storey}. etasje` : storey;
-      const rooms = floors.filter(f => f.name === name).flatMap(f => f.rooms || []), hit = rooms.filter(r => roomMatch(r, e.room));
-      if (!hit.length) throw new Error(`Fant ikke rommet «${e.room}» i ${name}`);
-      if (hit.length > 1 && !hit.every(r => r.code && roomMatch({ code: r.code, name: "" }, e.room))) throw new Error(`«${e.room}» passer ${hit.length} rom i ${name}; bruk romkoden`);
+      const rooms = floors.filter(f => f.name === name).flatMap(f => f.rooms || []);
+      /* by its place (at: [east, north], the stamp's from floor_plan): the nearest stamp within 6 m, of those with
+         the name if one is given too; a room with no code, or one of several with the same name, is reached so */
+      let at = null;
+      if (e.at != null) {
+        const [x, y] = Array.isArray(e.at) ? e.at.map(Number) : []; if (![x, y].every(Number.isFinite)) throw new Error("at er [øst, nord] i meter: stempelets plass fra floor_plan");
+        const near = rooms.filter(r => r.at && (e.room == null || roomMatch(r, e.room))).map(r => [r, Math.hypot(r.at[0] - x, r.at[1] - y)]).sort((a, b) => a[1] - b[1])[0];
+        if (!near || near[1] > 6) throw new Error(`Ingen rom${e.room != null ? ` «${e.room}»` : ""} i ${name} innen 6 m fra [${x}, ${y}]; floor_plan gir stemplenes plass (east_m, north_m)`);
+        at = near[0].at;
+      } else {
+        if (e.room == null) throw new Error("Si hvilket rom: room (koden eller navnet) eller at ([øst, nord] fra floor_plan)");
+        const hit = rooms.filter(r => roomMatch(r, e.room));
+        if (!hit.length) throw new Error(`Fant ikke rommet «${e.room}» i ${name}`);
+        if (hit.length > 1 && !hit.every(r => r.code && roomMatch({ code: r.code, name: "" }, e.room))) throw new Error(`«${e.room}» passer ${hit.length} rom i ${name}; bruk romkoden, eller at: [øst, nord] fra floor_plan (${hit.filter(r => r.at).slice(0, 4).map(r => `[${r.at.map(v => Math.round(v * 10) / 10).join(", ")}]`).join(", ")})`);
+      }
       const set = {}, s = e.set || {};
       if (s.name != null) set.name = str(s.name, MAX.name, "Navnet");
       if (s.use != null) set.use = str(s.use, MAX.name, "Bruken");
       if (s.area_m2 != null) { const a = +s.area_m2; if (!Number.isFinite(a) || a <= 0 || a > 5000) throw new Error("Arealet må være et positivt tall i m²"); set.area_m2 = Math.round(a * 10) / 10; }
       if (!Object.keys(set).length) throw new Error("Si hva som skal endres: name, use eller area_m2");
-      return { kind: "room", storey: name, room: String(e.room).trim(), set, ...(why ? { why } : {}) };
+      return { kind: "room", storey: name, ...(e.room != null ? { room: String(e.room).trim() } : {}), ...(at ? { at } : {}), set, ...(why ? { why } : {}) };
     }
     case "note": {
       const out = { kind: "note", text: str(e.text, MAX.text, "Notatet") };
@@ -81,7 +93,7 @@ export function applyEdits(site0, floors0, edits = []) {
       if (e.field === "name") for (const b of site.buildings) if (b.wing === w.id) b.name = e.value;
       changed.add(`wing:${w.id}`);
     } else if (e.kind === "room") {
-      for (const f of floors) if (f.name === e.storey) for (const r of f.rooms || []) if (roomMatch(r, e.room)) { Object.assign(r, e.set); r.draft = e.why || true; changed.add(`floor:${f.id}`); }
+      for (const f of floors) if (f.name === e.storey) for (const r of f.rooms || []) if (e.at ? r.at && r.at[0] === e.at[0] && r.at[1] === e.at[1] : roomMatch(r, e.room)) { Object.assign(r, e.set); r.draft = e.why || true; changed.add(`floor:${f.id}`); }
     } else if (e.kind === "note") notes.push(e);
   }
   applyDesign(site, floors, edits);

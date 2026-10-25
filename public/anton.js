@@ -118,7 +118,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     /* the newest reply over the pill while the chat is shut, under the person's own last message (Morten 20:37Z: «i
        dont see my chats … just antons replies»), which shows as soon as it is sent; a waiting question with them */
     const ownMsg = $("reply-me").firstChild;
-    function said(text) { ownMsg.textContent = text; $("reply-body").textContent = ""; showReply(); }
+    function said(text) { ownMsg.textContent = text; $("reply-body").textContent = ""; $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(); }
     function showReply(text) {
       const open = chatOpen();
       if (text != null) $("reply-body").textContent = text;
@@ -128,7 +128,9 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     }
     $("view").addEventListener("pointerdown", () => { $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); });   // the model first: touching it puts the reply away
     $("reply-card").onclick = () => panel.reveal("chat");
-    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = !has; }
+    /* «Ny samtale» stays for the signed-in person even when this page has drawn nothing: gulden-ai may hold a thread
+       the history did not give back (21:23Z: not there on testperson's page) */
+    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = false; }
     function line(cls, text, who, image, about) {
       const li = document.createElement("li"); li.className = "talk-item " + cls;
       if (who) li.append(Object.assign(document.createElement("span"), { className: "talk-who", textContent: who }));
@@ -136,7 +138,10 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       if (about) b.append(Object.assign(document.createElement("span"), { textContent: `Om ${about}`, className: "about" }));
       if (image) b.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "snap" }));
       const t = document.createElement("span"); t.textContent = text; b.append(t); li.append(b);
-      log.append(li); empty(); toEnd(); return t;
+      log.append(li); empty(); toEnd();
+      /* a failed turn shows in the pill's card too, not only in the tab (pm 21:20Z: the pill showed nothing) */
+      if (cls === "err") { $("reply-card").classList.add("err"); $("reply-who").textContent = "Feil"; showReply(text); }
+      return t;
     }
     function state() {
       btn.innerHTML = running ? STOP : SEND; btn.className = "round " + (running ? "stop" : "send");
@@ -220,13 +225,21 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     on("message", m => { line("from-me", m.text, null, m.image, m.about); said(m.text); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
-      b.textContent += t.delta || ""; toEnd(); showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
+      b.textContent += t.delta || ""; toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
     });
     on("tool", t => { if (t.label) line("tool", t.label); });
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
-    on("done", () => { if (redraw) { redraw = false; refresh(); } });
+    on("done", () => {
+      if (redraw) { redraw = false; refresh(); }
+      /* the reply came while this page was not listening (a reload mid-turn): the card takes it from the history
+         (21:23Z: the section turn's answer was in the thread, the card empty) */
+      if (!$("reply-body").textContent && !chatOpen()) fetch("api/anton/historikk").then(r => r.ok ? r.json() : null).then(h => {
+        const last = (h?.items || []).filter(it => it.type === "message").at(-1);
+        if (last?.from === "assistant" && !$("reply-body").textContent) showReply(last.text);
+      }).catch(() => {});
+    });
     /* Anton saved a version: the one open is shown again (in place when it can be), another gets a link */
     on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === version()) { if (running) redraw = true; else refresh(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
     /* «vis meg»: show_building through the pill moves this page (mcp.mjs, assistant.mjs pages.show) */

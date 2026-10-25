@@ -68,3 +68,10 @@ test("set_sharing and rename_version: a version id, none (the open version), a d
   assert.equal((await call("rename_version", { version: V, title: "Tårnet" })).structuredContent.title, "Tårnet", "the old name");
   const r = await call("set_sharing", { target: D, sharing: "lenke" }); assert.equal(r.isError, true); assert.match(text(r), new RegExp(`er et utkast.*new_version \\(from: "${D}"\\)`));
 });
+
+test("try_change: a change already there is not added again, and says so (21:23Z: 56 changes and no pool)", async () => {
+  const before = (await call("show_draft", {})).structuredContent.changes.length;
+  const r = (await call("try_change", { edits: [riv("Østfløy"), riv("Østfløy"), { kind: "surface", ring: [[-70, -75], [-55, -75], [-55, -68], [-70, -68]], surface: "water", name: "Basseng" }], include_screenshot: false })).structuredContent;
+  assert.equal(r.added.length, 2, "the first Østfløy if it was not there, and the pool"); assert.match(r.rejected[0].error, /Finnes allerede som endring nr\. \d+/);
+  assert.equal(r.changes, before + 2);
+});

@@ -51,8 +51,11 @@ test("signing in moves the draft into it; the draft is gone", async () => {
 });
 
 test("«Ny kopi» is the next one worked on; «Del» opens it to the link, signed out too", async () => {
-  const c = await post({ copy: work }, lars); assert.equal(c.status, 200); assert.notEqual(c.j.version, work);
-  const d = await post(riv("Sentralblokka"), lars); assert.equal(d.j.version, c.j.version);
+  const c = await post({ copy: work }, lars); assert.equal(c.status, 200); assert.notEqual(c.j.version, work); assert.equal(c.j.title, "Mitt etter (kopi)");
+  const c2 = await post({ copy: work }, lars); assert.equal(c2.j.title, "Mitt etter (kopi 2)");
+  const c3 = await post({ copy: c2.j.version }, lars); assert.equal(c3.j.title, "Mitt etter (kopi 3)", "a copy of a copy is not «(kopi 2) (kopi)»");
+  const c4 = await post({ copy: work }, lars); assert.equal(c4.j.title, "Mitt etter (kopi 4)");
+  assert.equal((await post(riv("Sentralblokka"), lars)).j.version, c4.j.version, "the newest copy is the one worked on");
   assert.equal((await (await fetch(`${O}/api/versjon/${work}`, { headers: lars })).json()).edits.length, 3);
   assert.equal((await post({ share: work })).status, 400);
   const s = await post({ share: c.j.version }, lars); assert.equal(s.j.sharing, "lenke");

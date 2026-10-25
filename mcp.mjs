@@ -135,12 +135,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const w = wingOrErr(d.wing); Object.assign(v, { wing: w.id, building: piecesOf(w.id)[0]?.id, mode: "section", section: d.kind, drawn: d.id }); delete v.storey; return v;
     }
     if (a.mode === "fasade") {
-      if (!v.wing) throw toolErr("A facade needs wing: the wing to look at.");
+      if (!v.wing) throw toolErr(`Fasaden trenger wing: hvilken fløys fasade. Fløyene: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}. For eksempel {mode: "fasade", wing: "Sentralblokka", from_direction: "S"} for fasaden mot sør på Sentralblokka.`);
       const deg = a.from_direction != null ? dirDeg(a.from_direction) : 0, side = ["N", "Ø", "S", "V"][Math.round(((deg % 360) + 360) % 360 / 90) % 4];
       Object.assign(v, { mode: "section", section: "fasade", side }); delete v.storey; delete v.yaw; return v;
     }
     if (a.mode === "tverrsnitt" || a.mode === "lengdesnitt") {
-      if (!v.wing) throw toolErr("A section needs wing: the wing to cut through.");
+      if (!v.wing) throw toolErr(`Snittet trenger wing: hvilken fløy det går gjennom. Fløyene: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}. For eksempel {mode: "${a.mode}", wing: "Sentralblokka"}.`);
       v.mode = "section"; v.section = a.mode === "lengdesnitt" ? "lengde" : "tverr"; delete v.storey;
     }
     if (a.from_direction != null) v.yaw = Math.PI - dirDeg(a.from_direction) * Math.PI / 180;
@@ -173,7 +173,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const EDIT = { description: "One change; its kind picks its fields. Site positions are metres east and north of the site origin; about_wing gives a wing's footprint and kote.", anyOf: [
     K("level", "A storey's floor kote in a wing", { wing: WING, storey: STOREY, kote: { type: "number" } }, ["wing", "storey", "kote"]),
     K("wing", "A fact on a wing's card", { wing: WING, field: { type: "string", enum: ["name", "built", "storeys", "use", "construction", "facade", "note"] }, value: { type: "string" } }, ["wing", "field", "value"]),
-    K("room", "A room's name, use or area", { storey: STOREY, room: { type: "string", description: "Its code or name" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false } }, ["storey", "room", "set"]),
+    K("room", "A room's name, use or area", { storey: STOREY, room: { type: "string", description: "Its code or name" }, at: { ...PT, description: "Its stamp's place [east_m, north_m] from floor_plan: for a room with no code, or one of several with the same name" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false } }, ["storey", "set"]),
     K("note", "A note on the model", { text: { type: "string" }, wing: WING, storey: STOREY, at: PT }, ["text"]),
     K("demolish", "Tear down: a wing, a building id, a new building's id, or \"alle\" for every hospital building (then restore the ones to keep)", { building: { type: "string" } }, ["building"]),
     K("restore", "Put back what a demolish took", { building: { type: "string" } }, ["building"]),
@@ -185,7 +185,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       base_kote: { type: "number", description: "Its foot's kote; default the lowest ground under it (leave out with on)" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "glass = a greenhouse" },
       id: { type: "string", description: "n and 4-12 letters/digits, to name it later" }, ...FACTS }, ["from", "to", "width"]),
     K("reshape", "Change a new building: rename, re-fact, move or resize it", { id: { type: "string", description: "Its id, from show_draft's after.built or fit" }, name: { type: "string" }, from: PT, to: PT, width: { type: "number" }, height: { type: "number" }, ...FACTS }, ["id"]),
-    K("surface", "A surface on the ground", { ring: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"] }, name: { type: "string" }, plants: { type: "array", items: { type: "string" }, maxItems: 30, description: "hagekart ids or Latin names, for a bed" } }, ["ring", "surface"]),
+    K("surface", "A surface on the ground: a lawn, a bed, a square, and water = a pool, a pond or a basin", { ring: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"] }, name: { type: "string" }, plants: { type: "array", items: { type: "string" }, maxItems: 30, description: "hagekart ids or Latin names, for a bed" } }, ["ring", "surface"]),
     K("path", "A path", { line: POINTS, width: { type: "number", description: "m, default 2" }, surface: { type: "string", enum: ["gravel", "paving", "asphalt", "wood"] }, name: { type: "string" } }, ["line"]),
     K("trees", "Trees planted (hagekart's species; check_species first: banned species are refused)", { species: { type: "string" }, points: POINTS, line: POINTS, spacing: { type: "number", description: "m along line, default 8" }, height: { type: "number" }, crown: { type: "number", description: "m wide" } }, ["species"]),
     K("fell", "Take down today's trees inside a ring", { ring: POINTS }, ["ring"]),
@@ -279,7 +279,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "try_change", tgt: "write", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, target: { ...TARGET, description: TARGET.description + ". Signed out with none open: a new draft (a day, no login)" }, draft: OLD, version: OLD,
       include_screenshot: { type: "boolean", description: "A picture of the model after the change comes back (default true). false for the middle steps of a sequence; look at the last one" },
       view_name: VIEW_NAME }, ["edits"]),
-      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground (a pool or pond is kind surface with surface water): surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
         "The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
       run: async (a, req) => {
         let d, v = null;
@@ -287,7 +287,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
-        for (const [i, e] of a.edits.entries()) { try { const f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
+        for (const [i, e] of a.edits.entries()) { try { const f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
+            /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
+            const same = d.edits.findIndex(x => JSON.stringify(x) === JSON.stringify(c)); if (same >= 0) throw new Error(`Finnes allerede som endring nr. ${same + 1}; den står, send bare det nye`);
+            d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m), fit = fitOf(m.site);
         let out;
         if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
@@ -371,10 +374,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: text + (id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.") }] } }; } },
     { name: "show_building", tgt: "read", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },
-        wing: { ...WING, description: "Look at this wing and ring it in yellow" },
+        wing: { ...WING, description: "Look at this wing and ring it in yellow. Needed for fasade, tverrsnitt and lengdesnitt: the wing named, e.g. «fasaden mot sør på Sentralblokka» is {mode: \"fasade\", wing: \"Sentralblokka\", from_direction: \"S\"}" },
         mode: { type: "string", enum: ["3d", "plan", "tverrsnitt", "lengdesnitt", "fasade"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar. fasade: the wing's facade seen square on from from_direction (N, Ø, S or V; needs wing), what stands in front taken away; windows from the drawings where a facade sheet exists (openings), else from photos. tverrsnitt / lengdesnitt: a section across or along the wing (needs wing) through its middle, looked at square on, with what the cut goes through filled black and the wing's storeys and kote on the right" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees (3d)" },
-        tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d)" },
+        tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d): about 60-75 for fugleperspektiv (a bird's-eye view), 10-20 for a view from the street" },
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
         drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, target: TARGET, draft: OLD }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With target: that version or draft; without, the version the person has open. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it. To see the model yourself, use look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link.",
@@ -383,7 +386,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         /* a version's id names a version, not a draft (21:05Z: the page went to ?utkast=v…, a draft that is not there) */
         const { draft: dv, ...rest } = view, isV = /^v.{8}$/.test(String(dv ?? ""));
         const moved = who && pages ? pages.show(who, { ...rest, ...(dv && !isV ? { draft: dv } : { version: isV ? dv : pages.open.get(who) || null }) }) : null;
-        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
+        const SIDE_ = { N: "nord", Ø: "øst", S: "sør", V: "vest" }, deg = a.from_direction != null ? dirDeg(a.from_direction) : null;
+        const cam = view.mode === "section" || view.mode === "plan" ? "" : [deg != null ? `sett fra ${["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8]}` : "", a.tilt_deg != null ? `${Math.round(clamp(+a.tilt_deg, 5, 85))}° over bakken${a.tilt_deg >= 50 ? " (fugleperspektiv)" : ""}` : "", a.distance_m != null ? `${Math.round(clamp(+a.distance_m, 30, 1200))} m unna` : ""].filter(Boolean).join(", ");
+        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -503,8 +508,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own, adopted: d.edits.length });
         }
         if (a.copy || a.fresh) {   // «Ny kopi»: a second alternative from this one; «Nytt forslag»: one from the before. It becomes the one worked on
-          const from = a.copy ? ownVersion(String(a.copy), req) : null, n = versions.list({ owner: me, viewer: me }).length + 1;
-          const v = versions.create(me, `Mitt etter ${n}`, from ? structuredClone(from.edits) : []);
+          /* named after its source, «Ny fasade (kopi)», or «Nytt forslag» (Morten 21:19Z: «Min etter 3 is not a good title»); renamed in the card */
+          const from = a.copy ? ownVersion(String(a.copy), req) : null, taken = new Set(versions.list({ owner: me, viewer: me }).map(x => x.title));
+          const stem = from ? `${from.title.replace(/ \(kopi( \d+)?\)$/, "")} (kopi` : "Nytt forslag", name = k => from ? `${stem}${k > 1 ? ` ${k}` : ""})` : `${stem}${k > 1 ? ` ${k}` : ""}`;
+          let k = 1; while (taken.has(name(k))) k++;
+          const v = versions.create(me, name(k).slice(0, 120), from ? structuredClone(from.edits) : []);
           for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
           v.work = true; versions.save(v);
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });

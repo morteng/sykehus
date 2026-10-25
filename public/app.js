@@ -93,6 +93,8 @@ function paint() {
 }
 let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)
 paint();
+/* the model is up: the first load's «Laster» goes (pm 21:20Z: a grey map and an empty panel for some seconds, no sign) */
+requestAnimationFrame(() => { $("loading")?.remove(); $("sideWait")?.remove(); });
 try { const p = JSON.parse(sessionStorage.getItem("sykehus-pose") || "null"); sessionStorage.removeItem("sykehus-pose"); if (p) viewer.pose(p); } catch { }   // Anton's redraw comes back to where it was
 /* what is picked in the model, to talk to Anton about (valg.js); the chips are in the pill (anton.js) */
 const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
@@ -337,7 +339,7 @@ function drawDraft() {
   for (const b of R.querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
   R.querySelector("[data-last]")?.addEventListener("click", () => undo(n));
   R.querySelector("[data-del]")?.addEventListener("click", share);
-  R.querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); toast("Ny kopi. Endringene her går inn i den."); });
+  R.querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); nameIt(); toast(`Ny kopi: «${j.title}». Gi den et navn, eller jobb videre: endringene går inn i den.`); });
   R.querySelector("[data-ny]")?.addEventListener("click", fresh);
   const t = $("drTitle");
   if (t) {
@@ -349,10 +351,12 @@ function drawDraft() {
     };
   }
 }
+/* a new copy or proposal: its title ready to be typed over, in the card */
+const nameIt = () => { const t = $("drTitle"); if (t && t.offsetParent) { t.focus(); t.select(); } };
 /* «Nytt forslag»: signed in, a new empty version from the before, worked on from now; signed out, the draft kept here
    is let go, and the next change starts a new one */
 async function fresh() {
-  if (me.person) { const j = await change({ fresh: true }); if (j.error) return toast(`Fikk ikke laget et nytt forslag: ${j.error}`); await show(j); return toast("Nytt forslag fra før. Endringene går inn i det."); }
+  if (me.person) { const j = await change({ fresh: true }); if (j.error) return toast(`Fikk ikke laget et nytt forslag: ${j.error}`); await show(j); nameIt(); return toast(`Nytt forslag fra før: «${j.title}». Gi det et navn, eller begynn: endringene går inn i det.`); }
   try { localStorage.removeItem(KEPT); } catch { }
   location.href = "./?for";
 }
@@ -578,12 +582,19 @@ async function refresh() {
   await show(versionId ? { version: versionId } : { draft: draftId });
 }
 /* the view Anton's show_building chose (mcp.mjs viewOf): a storey, a wing, the plan or a section */
+/* Anton's show_building through the pill, on this page in place (pm 21:20Z: «vis meg det fra fugleperspektiv» did
+   not move the camera): a facade, a section, plan or 3D, a storey, a wing, and where the camera stands */
 function showView(v) {
   const b = v.building && site.buildings.find(x => x.id === v.building);
-  if (v.mode === "section" && b) { const d = v.drawn && drawnSections.find(x => x.id === v.drawn); return d ? section(b, d.kind, d) : section(b, v.section === "lengde" ? "lengde" : "tverr"); }
-  if (v.mode === "plan" || v.mode === "3d") setMode(v.mode);
+  if (v.mode === "section" && b) {
+    if (v.section === "fasade") return facade(b, v.side || "S");
+    const d = v.drawn && drawnSections.find(x => x.id === v.drawn); return d ? section(b, d.kind, d) : section(b, v.section === "lengde" ? "lengde" : "tverr");
+  }
+  if (v.mode === "plan" || v.mode === "3d") setMode(v.mode); else if (viewer.view().mode === "section") setMode("3d");
   if (v.storey) pickStorey(v.storey); else if (storeyOn) pickStorey(null);
-  if (b) { valg.clear(); valg.pick(b.id, {}); showInfo(b); viewer.focus(b.id); }
+  const cam = {}; for (const k of ["yaw", "pitch", "dist"]) if (v[k] != null) cam[k] = v[k];
+  if (b) { valg.clear(); valg.pick(b.id, {}); showInfo(b); viewer.focus(b.id, cam); }
+  else if (Object.keys(cam).length) viewer.look(cam);
 }
 import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */

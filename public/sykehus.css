@@ -238,3 +238,14 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .where b { font-size: var(--fs-md); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where span { font-size: var(--fs-sm); color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where:hover { border-color: var(--accent-panel-edge); }
+
+/* a failed turn in the pill's card (pm 21:20Z) */
+#reply-card.err #reply-who { color: var(--danger, #b3261e); }
+#reply-card.err #reply-body { color: var(--danger, #b3261e); }
+
+/* the first load (pm 21:20Z) */
+.loading { position: absolute; inset: 0; z-index: calc(var(--z-canvas) + 2); display: flex; align-items: center; justify-content: center; gap: var(--sp-3); background: var(--bg, #f4f3ef); color: var(--muted); font-size: var(--fs-md); }
+.loading .spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading .spin { animation: none; } }
+.side-wait { padding: var(--sp-3); }

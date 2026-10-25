@@ -95,3 +95,14 @@ test("2026-07-28: stateless requests, routing headers, version errors, cacheable
   const mism = await post({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "storeys", arguments: {} } }, { "mcp-name": "about_site" });
   assert.equal(mism.status, 400); assert.equal(mism.j.error.code, -32020);
 });
+
+test("«fasaden mot sør på Sentralblokka» and «fra fugleperspektiv» through the call (pm 21:22Z: three refusals, no view)", async () => {
+  const f = await call("show_building", { mode: "fasade", wing: "Sentralblokka", from_direction: "S" });
+  assert.ok(!f.isError); assert.deepEqual([f.data.view.mode, f.data.view.section, f.data.view.side, f.data.view.wing], ["section", "fasade", "S", "sentralblokka"]);
+  assert.match(f.content[0].text, /Sentralblokka, fasaden mot sør, sett rett på/);
+  const none = await call("show_building", { mode: "fasade", from_direction: "S" });
+  assert.equal(none.isError, true); assert.match(none.content[0].text, /Fasaden trenger wing.*Sentralblokka \(sentralblokka\).*wing: "Sentralblokka", from_direction: "S"/);
+  assert.match((await call("show_building", { mode: "lengdesnitt" })).content[0].text, /Snittet trenger wing.*Østfløy/);
+  const bird = await call("show_building", { from_direction: "SV", tilt_deg: 65 });
+  assert.ok(Math.abs(bird.data.view.pitch - 65 * Math.PI / 180) < 1e-9); assert.match(bird.content[0].text, /3D sett fra sørvest, 65° over bakken \(fugleperspektiv\)/);
+});
