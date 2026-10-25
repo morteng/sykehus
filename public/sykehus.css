@@ -1,0 +1,165 @@
+/* Sykehus's own rules, after the kit's tokens.css and kit.css (uikit.lock.json) and Fab's laser.css and cardshell.css
+   (fab/ORIGIN.txt). Everything else is theirs, as-is. The Anton-first layout: the designer's redlines (2026-10-25,
+   rulings.md «the Anton-first redesign»), rules S1–S12 of the mock, here with the live page's ids. */
+
+/* the pick mark: the 3D highlight's yellow (viewer.js C.pick), as the kit's default */
+.g-pick { --g-pick-mark: #ffcf33; --g-pick-mark-edge: #6b5200; }
+
+/* the one sykehus accent: ink, as the approved Tegn frames and the old pressed buttons (open point 1) */
+:root[data-theme=light] { --accent: #23211e; --accent-rgb: 35, 33, 30; --on-accent: #fff; --accent-panel: #ecebe6; --accent-panel-edge: #c9c4b8; }
+
+/* S1 panel width: Fab's --side-w, one step wider for Lars's text; 340 px and four equal tabs on an iPad lying down */
+.ed aside.side { --side-w: 360px; }
+@media (min-width: 1600px) { .ed aside.side { --side-w: 400px; } }
+@media (max-width: 1199px) and (min-width: 900px) { .ed aside.side { width: 340px; } .ed .dock { grid-template-columns: repeat(var(--tabs, 4), 1fr); grid-auto-flow: row; overflow: visible; -webkit-mask-image: none; mask-image: none; } }
+
+/* S2 the 3D view fills the stage */
+.stage { overflow: hidden; background: #dfe8ee; }
+#view { position: absolute; inset: 0; }
+
+/* S3 the app bar: name and address, print, download, the person */
+.appbar .brand { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; text-decoration: none; color: var(--text); }
+.appbar .brand small { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
+.appbar .sp { flex: 1; }
+.ab-ic { display: inline-grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; background: transparent; color: var(--muted); border-radius: var(--radius); }
+.ab-ic:hover { background: var(--hover-wash); color: var(--text); }
+.ab-ic[hidden] { display: none; }
+.ab-ic svg, .vt svg, .pill .tegn svg, .oc-acts svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.me { position: relative; display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--tap); padding: 0 var(--sp-3); border: 0; border-radius: var(--radius-pill); background: var(--panel-2); color: var(--text); font-size: var(--fs-md); }
+.me i { width: 10px; height: 10px; border-radius: 50%; background: var(--person-1, #2f6db0); }
+.me-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; min-width: 12rem; }
+
+/* S4 the view tools, top left (right of the storey strip): 3D | Plan and Navn */
+.vt { position: absolute; z-index: var(--z-canvas); top: 12px; left: 100px; display: flex; gap: var(--sp-2); align-items: center; }
+.vt .seg2 { box-shadow: var(--shadow-sm); }
+.vt .seg2 button { min-height: var(--tap); padding: 0 var(--sp-4); font-size: var(--fs-md); }
+.vt .tgl { min-height: var(--tap); display: inline-flex; align-items: center; gap: var(--sp-2); box-shadow: var(--shadow-sm); font-size: var(--fs-md); }
+.vt .tgl[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
+
+/* S5 north and zoom, top right, clear of the fold tab */
+.nz { position: absolute; z-index: var(--z-canvas); top: 12px; right: 40px; display: flex; flex-direction: column; gap: var(--sp-2); align-items: center; }
+.nz .north { width: 56px; height: 56px; border-radius: 50%; background: var(--panel); border: 1px solid var(--border); display: grid; place-items: center; box-shadow: var(--shadow-sm); color: var(--text); }
+.nz .north svg { width: 40px; height: 40px; transition: transform .1s; }
+.nz .zoom2 { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-sm); }
+.nz .zoom2 button { width: 48px; height: 48px; min-height: 0; border: 0; border-radius: 0; font-size: 24px; line-height: 1; padding: 0; background: var(--panel); color: var(--text); }
+.nz .zoom2 button + button { border-top: 1px solid var(--border); }
+
+/* S6 the storey strip (the kit's g-levels): its place at the left edge, centred */
+#levels { position: absolute; z-index: var(--z-canvas); left: 12px; top: 12px; bottom: 12px; display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
+#levels > * { pointer-events: auto; }
+body.m.sheet-full #levels { display: none; }
+
+/* the scale bar (Plan), bottom right, and the first visit's tip, top centre */
+#scale { position: absolute; z-index: var(--z-canvas); right: 40px; bottom: 20px; padding: 8px 12px 6px; font-size: var(--fs-sm); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: none; }
+#scale .ticks { display: flex; height: 8px; border: 1.5px solid var(--text); border-top: 0; margin-bottom: 2px; }
+#scale .ticks i { flex: 1; } #scale .ticks i:nth-child(odd) { background: var(--text); }
+#scale .nums { display: flex; justify-content: space-between; }
+#tip { position: absolute; z-index: var(--z-canvas); top: 70px; left: 50%; transform: translateX(-50%); padding: 8px 16px; font-size: var(--fs-md); color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); pointer-events: none; transition: opacity .6s; max-width: calc(100% - 220px); text-align: center; }
+#tip.gone { opacity: 0; }
+
+/* S8 the pill: Fab's .pill, «Tegn» first; the chips (the kit's g-pick) above the text */
+.pill .tegn { flex: none; display: inline-flex; align-items: center; gap: var(--sp-1); min-height: calc(var(--tap) - .25rem); padding: 0 var(--sp-3); border-radius: var(--radius-lg); font-size: var(--fs-md); }
+.pill .tegn[hidden] { display: none; }
+.pill textarea { font-size: var(--fs-base); }
+body.ed.talk-on:not(.m) .bstack { width: min(620px, calc(100% - 220px)); max-width: none; bottom: 20px; }
+body.plan.ed.talk-on:not(.m) .bstack { bottom: 20px; }
+
+/* S9 the cards in the panel: Fab's tab panel and card shell */
+.tabp h2 { font-size: var(--fs-lg); margin: 0; }
+.tabp h3 { font-size: var(--fs-md); margin: var(--sp-3) 0 var(--sp-1); }
+.tabp .sub { margin: 2px 0 var(--sp-2); color: var(--muted); font-size: var(--fs-sm); }
+.tabp .src, .tabp .note { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--muted); }
+.tabp .src ul { margin: 2px 0 0; padding-left: 16px; }
+.objcard .oc-info-r { grid-template-columns: minmax(0, 1fr) auto; }
+.objcard .oc-info-k { font-size: var(--fs-md); color: var(--text); }
+.objcard .oc-info-v { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+.objcard button.oc-info-r { width: 100%; min-height: var(--tap); border: 0; background: transparent; text-align: left; padding: 0 var(--sp-1); border-radius: var(--radius); }
+.objcard button.oc-info-r:hover { background: var(--hover-wash); }
+.objcard button.oc-info-r[aria-pressed=true] { background: var(--accent-panel); }
+.oc-h { display: flex; align-items: flex-start; gap: var(--sp-2); } .oc-h > div { flex: 1; min-width: 0; }
+.oc-acts { display: flex; gap: 2px; } .oc-acts button { display: inline-grid; place-items: center; width: var(--tap); height: var(--tap); min-height: 0; padding: 0; border: 0; background: transparent; color: var(--muted); }
+.oc-acts button:hover { background: var(--hover-wash); color: var(--text); }
+.oc-row { display: flex; gap: var(--sp-1); flex-wrap: wrap; align-items: center; margin-top: var(--sp-1); }
+.oc-row b { margin-right: auto; font-size: var(--fs-md); }
+.oc-row button { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); }
+.thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-top: var(--sp-1); }
+.thumbs a { display: block; color: var(--text); text-decoration: none; font-size: var(--fs-sm); line-height: 1.3; }
+.thumbs img { display: block; width: 100%; aspect-ratio: 48/34; object-fit: contain; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 4px; }
+.tabp figure { margin: var(--sp-2) 0 0; } .tabp figure img { width: 100%; border: 1px solid var(--border); background: #fff; }
+.tabp figcaption { font-size: var(--fs-sm); color: var(--muted); }
+.side-body { font-size: var(--fs-md); }
+.sel-empty { color: var(--muted); }
+.ver-list { list-style: none; margin: 0; padding: 0; }
+.ver-list li { border-bottom: 1px solid var(--border); }
+.ver-list a { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; color: var(--text); text-decoration: none; min-height: var(--tap); }
+.ver-list a:hover .t { text-decoration: underline; }
+.ver-list a > span { flex: 1; min-width: 0; } .ver-list small { display: block; color: var(--muted); font-size: var(--fs-sm); }
+.vis { flex: none; font-size: var(--fs-xs); padding: 2px 8px; border-radius: var(--radius-pill); background: var(--panel-2); color: var(--muted); }
+.draftrow { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-lg); background: #fff6d6; border: 1px solid #ecd98f; font-size: var(--fs-md); }
+.draftrow ul { margin: 6px 0 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--muted); }
+
+/* signing in: the four digits, big; and «Ønsker» */
+#code { font: 600 34px/1 ui-monospace, Menlo, monospace; letter-spacing: .35em; width: 5.2em; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); text-align: center; margin-right: 8px; background: var(--panel); color: var(--text); }
+.tabp .err { color: var(--danger, #b0122b); min-height: 1.2em; margin: 6px 0 0; }
+.tabp .ok { color: var(--ok, #2f6b3a); margin: 6px 0 0; min-height: 1.2em; }
+#wishText { width: 100%; min-height: 96px; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); resize: vertical; color: var(--text); background: var(--panel); }
+.wishes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; font-size: var(--fs-md); }
+.wishes li { border-top: 1px solid var(--border); padding-top: 8px; }
+.wishes small { color: var(--muted); font-size: var(--fs-sm); }
+.wishes .st { display: inline-block; font-size: var(--fs-xs); padding: 1px 7px; border-radius: 10px; background: var(--panel-2); margin-left: 4px; }
+.wishes .st.laget { background: #dcebd9; } .wishes .st.nei { background: #f1dcdc; } .wishes .st.sett { background: #e3e8f1; }
+.wishes select { font: inherit; font-size: var(--fs-sm); margin-left: 6px; }
+
+/* S10 the chat tab: the pill comes into its bottom row (Fab redline 29); signing in reads from the top */
+#p-chat:has(#talkLogin:not([hidden])) .talk-log { display: none; }   /* the empty log fills the tab otherwise */
+#p-chat .chatpill { flex: none; padding-top: var(--sp-2); }
+#p-chat .chatpill .pill { box-shadow: none; }
+#p-chat .talk-item { font-size: var(--fs-md); }
+.talk-item .snap { display: block; width: 100%; max-width: 220px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: var(--sp-1); }
+.talk-item .about { display: block; font-size: var(--fs-sm); color: var(--muted); margin-bottom: 2px; }
+.talk-item.card .asst-row button { font-size: var(--fs-md); min-height: var(--tap); padding: 0 var(--sp-4); }
+.talk-item.card .asst-row button.go { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.talk-item.err .talk-body { color: var(--danger, #b0122b); }
+.talk-body { white-space: pre-wrap; }
+
+/* S12 iPad standing (Fab's body.m): the strip and the tools stay */
+body.m .vt { left: 100px; }
+body.m.ed.talk-on .stage .bstack { left: 100px; right: 16px; width: auto; }
+
+/* «Tegn» (tegn.js): the view stands still under the pen, framed in blue; the view's tools step aside, the panel stays */
+body.tegner .vt, body.tegner #bstack, body.tegner #tip { visibility: hidden; }
+body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-events: none; z-index: calc(var(--z-canvas) + 6); }   /* over the still picture, greyed */
+#tegn { position: absolute; inset: 0; z-index: calc(var(--z-canvas) + 5); }
+#tegnInk { position: absolute; inset: 0; touch-action: none; cursor: crosshair; box-shadow: inset 0 0 0 5px #2f6db0; }
+#tegn .card { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+#tegnTools { top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: row; width: max-content; gap: 8px; padding: 8px; align-items: center; }
+#tegnTools .lbl { font-size: var(--fs-md); color: var(--muted); padding: 0 6px 0 8px; max-width: 6.5em; line-height: 1.2; }
+#tegnTools button { min-height: 48px; display: inline-flex; align-items: center; gap: 6px; }
+#tegn .dot { width: 48px; padding: 0; justify-content: center; border-radius: 50%; }
+#tegn .dot i { width: 26px; height: 26px; border-radius: 50%; display: block; }
+#tegn .dot[aria-pressed="true"] { background: #fff; border: 3px solid var(--text); }
+#tegn .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 4px; }
+#tegn svg.i { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#tegnSend { left: 50%; bottom: 20px; transform: translateX(-50%); width: min(760px, calc(100% - 28px)); display: flex; flex-direction: row; gap: 10px; padding: 10px; align-items: stretch; }
+#tegnText { flex: 1; font: inherit; font-size: var(--fs-base); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); resize: none; color: var(--text); background: var(--panel); }
+#tegnSend button { flex: none; width: auto; min-height: 56px; display: inline-flex; align-items: center; gap: 8px; }
+#tegnSend button.pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* the printed sheet: only it, on A4 lying down */
+#sheet { display: none; }
+@page { size: A4 landscape; margin: 10mm; }
+@media print {
+  html, body { background: #fff; height: auto; }
+  body > *:not(#sheet) { display: none !important; }
+  #sheet { display: block; width: 277mm; font-size: 10pt; color: #000; }
+  #sheet .pic { position: relative; overflow: hidden; border: 0.3mm solid #000; }
+  #sheet .pic img { display: block; width: 100%; height: 100%; }
+  #sheet .pic > div { position: absolute; inset: 0; }
+  #sheet .block { display: flex; gap: 8mm; align-items: flex-end; margin-top: 3mm; }
+  #sheet .block h1 { font-size: 13pt; margin: 0; }
+  #sheet .block p { margin: 0.5mm 0 0; }
+  #sheet .bar { display: flex; height: 2mm; border: 0.3mm solid #000; border-top: 0; }
+  #sheet .bar i { flex: 1; } #sheet .bar i:nth-child(odd) { background: #000; }
+  #sheet .nums { display: flex; justify-content: space-between; font-size: 8pt; }
+  #sheet .src { font-size: 8pt; color: #333; margin-top: 2mm; }
+}

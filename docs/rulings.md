@@ -44,3 +44,9 @@ Morten's decisions on how Sykehustomta is built, newest last. Each names when an
   building, a storey's room or a facade (shift adds, Esc or ✕ clears); a chip «Valgt: …» in the pill as Fab's
   pill-about; each message carries selection {items: [{kind, id, label, storey?}], ids, summary} with the connector's
   ids. The chip moves to the kit when the designer specs it. Behind ?valg until the pill is live.
+- **2026-10-25 19:04Z (Morten, in the sykehus session):** «yes», to building the redesign from the designer's redlines
+  (frames 1–7) and to pushing renderkit and hagekart. Built with the designer's defaults for the open points: the kit's
+  light theme with an ink accent, «Ønsker» kept as a tab, «Anton» the first tab, the chip's × at 32 px, storeys a wing
+  lacks dimmed but tappable. The storey strip (g-levels) and the chips (g-pick) are kit pieces (kits 23c6d17), Fab's
+  laser.css and cardshell.css are taken as-is (public/fab/ORIGIN.txt). «Tegn» and «Valgt» come out from behind ?tegn
+  and ?valg: they are in the pill, and the pill shows only when Anton is there for the person.

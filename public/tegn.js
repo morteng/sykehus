@@ -1,5 +1,5 @@
 /* «Tegn»: draw on a picture of the model and send it to Anton (rulings 2026-10-25 17:24Z and 17:31Z; the frames in
-   docs/design/tegn). The view the person chose stands still as a picture; the pen draws on it (a finger does not, so
+   docs/design/tegn; in the Anton-first layout over the view only, the panel as it is). The view the person chose stands still as a picture; the pen draws on it (a finger does not, so
    the palm can rest; a mouse does, for the desk); words go in the box under it (iPadOS Scribble writes there).
 
    What goes to Anton: the picture with the drawing (JPEG, at most 1280 px wide), and each stroke as points on the
@@ -11,8 +11,8 @@ const UNDO = `<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path 
 const SEND = `<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
 
 /* opens the drawing over the page; send(text, drawing) hands it on, and resolves true when it went */
-export function startDrawing({ viewer, labels, send }) {
-  const W = innerWidth, H = innerHeight, picture = viewer.snapshot(), camera = viewer.pose(), mode = viewer.view().mode;
+export function startDrawing({ viewer, labels, send, host = document.body }) {
+  const R = host.getBoundingClientRect(), W = host.clientWidth || innerWidth, H = host.clientHeight || innerHeight, picture = viewer.snapshot(), camera = viewer.pose(), mode = viewer.view().mode;
   const names = [...labels.children].filter(e => e.style.display !== "none").map(e => { const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(e.style.transform); return m && { x: +m[1], y: +m[2], w: e.offsetWidth, h: e.offsetHeight, text: e.innerText, big: e.style.fontWeight === "600" }; }).filter(Boolean);
   document.body.classList.add("tegner");
   const box = document.createElement("div"); box.id = "tegn";
@@ -22,7 +22,7 @@ export function startDrawing({ viewer, labels, send }) {
       <span class="sep"></span><button id="tegnUndo">${UNDO}Angre</button><button id="tegnClear">Tøm</button><button id="tegnCancel">Avbryt</button></div>
     <form id="tegnSend" class="card"><textarea id="tegnText" rows="2" placeholder="Skriv hva du vil, med pennen eller tastaturet"></textarea>
       <button type="submit" class="pri">${SEND}Send til Anton</button></form>`;
-  document.body.append(box);
+  host.append(box);   // over the view only: the panel stays as it is
   const cv = $("tegnInk"), dpr = Math.min(2, devicePixelRatio || 1);
   cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + "px"; cv.style.height = H + "px";
   const g = cv.getContext("2d"), bg = new Image();
@@ -44,10 +44,10 @@ export function startDrawing({ viewer, labels, send }) {
   }
   bg.onload = draw; bg.src = picture;
   const drawsWith = e => e.pointerType === "pen" || e.pointerType === "mouse";
-  cv.addEventListener("pointerdown", e => { if (!drawsWith(e)) return; e.preventDefault(); cv.setPointerCapture(e.pointerId); cur = { colour, points: [[e.clientX, e.clientY]] }; draw(); });
+  cv.addEventListener("pointerdown", e => { if (!drawsWith(e)) return; e.preventDefault(); cv.setPointerCapture(e.pointerId); cur = { colour, points: [[e.clientX - R.left, e.clientY - R.top]] }; draw(); });
   cv.addEventListener("pointermove", e => {
     if (!cur || !drawsWith(e)) return;
-    for (const p of e.getCoalescedEvents?.() || [e]) { const [x0, y0] = cur.points.at(-1); if (Math.hypot(p.clientX - x0, p.clientY - y0) >= 2) cur.points.push([p.clientX, p.clientY]); }
+    for (const p of e.getCoalescedEvents?.() || [e]) { const [x0, y0] = cur.points.at(-1), x = p.clientX - R.left, y = p.clientY - R.top; if (Math.hypot(x - x0, y - y0) >= 2) cur.points.push([x, y]); }
     draw();
   });
   const end = () => { if (cur) { strokes.push(cur); cur = null; draw(); } };
@@ -65,7 +65,7 @@ export function startDrawing({ viewer, labels, send }) {
     if (!strokes.length && !text) return;
     const btn = e.submitter || $("tegnSend").querySelector("button"); btn.disabled = true;
     /* each stroke on the site: at most 40 points along it, each cast into the model; the sky gives nothing */
-    const site = strokes.map(s => { const step = Math.max(1, Math.ceil(s.points.length / 40)); return { colour: COLOURS.find(c => c[1] === s.colour)?.[0].toLowerCase() || s.colour, points: s.points.filter((_, i) => i % step === 0 || i === s.points.length - 1).map(([x, y]) => viewer.hit(x, y)).filter(Boolean) }; });
+    const site = strokes.map(s => { const step = Math.max(1, Math.ceil(s.points.length / 40)); return { colour: COLOURS.find(c => c[1] === s.colour)?.[0].toLowerCase() || s.colour, points: s.points.filter((_, i) => i % step === 0 || i === s.points.length - 1).map(([x, y]) => viewer.hit(x + R.left, y + R.top)).filter(Boolean) }; });
     const out = document.createElement("canvas"), k = Math.min(1, 1280 / W); out.width = Math.round(W * k); out.height = Math.round(H * k);
     out.getContext("2d").drawImage(cv, 0, 0, out.width, out.height);
     const image = out.toDataURL("image/jpeg", 0.82);

@@ -1,7 +1,8 @@
 /* «Valgt»: what the person has picked in the model, to talk to Anton about (ruling 2026-10-25 17:42Z), as Fab lets one
    select shapes and then ask about them (atomstack hurricane/server/web/editor.js aboutSel/aboutChip, 2026-10-25).
    A click picks a wing (or a building on the site), or with a storey shown the room under it, or on a wall in 3D the
-   facade it is on; shift-click adds, a click on nothing or Esc or the chip's ✕ clears.
+   facade it is on; shift-click adds, a click on nothing or Esc clears, a chip's × (the kit's g-pick, in the pill) takes one away,
+   and a card's «Spør Anton om dette» adds its wing or storey.
 
    Each item is { kind: "wing" | "building" | "storey" | "room" | "facade", id, label, storey? }, with the ids the
    connector's tools take (a wing's id, a storey's name, a room's code or name with its storey, a facade's id), so
@@ -45,6 +46,10 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
       items = items.slice(-12); changed();
     },
     clear() { if (items.length) { items = []; changed(); } },
+    /* the card's «Spør Anton om dette»: its wing or storey, added; a chip's ×: one taken away (by key) */
+    add(i) { if (!items.some(x => key(x) === key(i))) { items = [...items, i].slice(-12); changed(); } },
+    remove(k) { const n = items.length; items = items.filter(x => key(x) !== k); if (items.length !== n) changed(); },
+    key,
     /* «Østfløy · 5. etasje · Operasjonsstue 2»: a storey is named once, before its rooms */
     summary() { return items.filter((i, n) => i.kind !== "storey" || !items.slice(0, n).some(x => x.kind === "storey" && x.id === i.id)).map(i => i.label).join(" · "); },
     forMessage() { return items.length ? { items: items.map(({ kind, id, label, storey }) => ({ kind, id, label, ...(storey ? { storey } : {}) })), ids: items.map(i => i.id), summary: this.summary() } : null; },

@@ -1,0 +1,1355 @@
+/* laser-app tokens (redline 30 §2): the only custom properties laser defines at :root; the rest is gulden-ai's tokens.css. Dark by default; light by the OS or data-theme=light (redline 31 §1) */
+:root,:root[data-theme=dark]{--accent:#f08a5d;--accent-rgb:240, 138, 93;--on-accent:#1a0c05;--accent-panel:#2e1d14;--accent-panel-edge:#6b3a22;--bed:#1c1a17;--grid:#2a2622;--sel:#74c0fc;--engrave:#7aa2ff}
+@media (prefers-color-scheme:light){:root:not([data-theme]){--accent:#b4441c;--accent-rgb:180, 68, 28;--on-accent:#fff;--accent-panel:#fbe9e0;--accent-panel-edge:#eab79e;--bed:#fbfaf7;--grid:#ebe6dc;--sel:#1971c2;--engrave:#0040ff}}
+:root[data-theme=light]{--accent:#b4441c;--accent-rgb:180, 68, 28;--on-accent:#fff;--accent-panel:#fbe9e0;--accent-panel-edge:#eab79e}
+:root[data-theme=light],:root[data-theme=solarpunk]{--bed:#fbfaf7;--grid:#ebe6dc;--sel:#1971c2;--engrave:#0040ff}
+/* the Anton pane's column on the lobby pages (redline 40 §1): one width in every theme */
+:root{--pane-w:clamp(340px, 28vw, 440px)}
+/* end laser-app tokens */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+html{font-family:system-ui,-apple-system,sans-serif}      /* gulden-ai base.css, the same line (U1862 step 5) */
+h1,h2,h3{font-family:var(--font-display)}      /* the display face of the theme, as gulden-ai's heads and section titles (U1862 step 5) */
+body{font-size:var(--fs-base);line-height:1.5}
+a{color:var(--accent)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:default}
+#undo-why{margin:0;padding:var(--sp-1) var(--sp-3);font-size:var(--fs-sm);color:var(--warn-text);background:var(--panel-2);border-bottom:1px solid var(--border)}   /* U2358: the reason the header Undo is off, in words, for as long as it holds */
+#undo-wrap{display:inline-flex}#undo-wrap #undo:disabled{pointer-events:none}      /* a tap on the greyed Undo reaches the wrapper, which says why (U2358) */
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.danger{color:var(--danger-text)}
+button.icon{padding:var(--sp-1) var(--sp-2)}
+input,select,textarea{padding:var(--sp-2) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel)}
+.mut{color:var(--muted)}
+.err{color:var(--danger-text)}
+/* ===== the app bar (U1862 step 2, redline 31 §2): one recipe, `.appbar`, on the tokens only, for every page with a bar */
+.appbar{position:sticky;top:0;z-index:var(--z-sticky);display:flex;align-items:center;flex-wrap:nowrap;gap:var(--sp-2);
+  min-height:calc(var(--tap) + 2 * var(--sp-2));padding:var(--sp-2) var(--edge-x);background:var(--bg);border-bottom:1px solid var(--border);box-shadow:none}
+.appbar .brand{flex:none;font-size:var(--fs-base);font-weight:600;color:var(--text);text-decoration:none;white-space:nowrap}
+.appbar .nav{display:flex;flex:none;gap:var(--sp-1)}
+.appbar .nav a{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--radius-pill);color:var(--muted);
+  font-size:var(--fs-md);text-decoration:none;white-space:nowrap}
+.appbar .nav a:hover{color:var(--text);background:var(--hover-wash)}
+.appbar .nav a[aria-current=page]{color:var(--text);font-weight:600;background:var(--accent-panel)}
+.appbar .hd-me{margin-left:auto;flex:none}
+.ab-menu{display:none}
+/* the editor's bar is the same recipe with its own content (§2.2); on a phone it keeps the two rows of r37, so it wraps */
+.ed .appbar{flex-wrap:wrap}
+/* a phone (§2.3): the lobby bar is one row: ≡ (the page links, «Feedback» and «Connect Claude», in a bottom sheet), the
+   app's name, the others' circles and the person circle. The name gives way first, cut with an ellipsis. */
+@media (max-width:899px){
+  .appbar .ab-menu{display:inline-grid;place-items:center;flex:none;width:var(--tap);height:var(--tap);margin-left:calc(-1 * var(--sp-2));padding:0;border:0;
+    border-radius:var(--radius);background:transparent;color:var(--text)}
+  .appbar .ab-menu:hover{background:var(--hover-wash)}
+  .ab-menu svg{width:1.25rem;height:1.25rem;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+  .appbar .nav,.appbar .hd-me>.fb-btn,.appbar .hd-me>.cx-link{display:none}
+  body:not(.ed) .appbar .brand{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .appbar .me-menu>summary.chip{justify-content:center;width:max(var(--tap),44px);height:max(var(--tap),44px);padding:0;border:0;background:transparent}
+  .appbar .me-menu #me{display:none}
+  .appbar .me-menu #me-dot{width:2rem;height:2rem;font-size:var(--fs-sm)}
+}
+/* the ≡ sheet (appbar.js): a bottom sheet with the grab handle; the current page's name is its first line */
+dialog.ab-sheet{width:100%;max-width:100%;margin:auto 0 0;padding:0;border-bottom:0;border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;box-shadow:var(--shadow-up)}
+.ab-grab{display:grid;place-items:center;height:1.375rem}
+.ab-grab i{display:block;width:2.5rem;height:var(--sp-1);border-radius:3px;background:var(--border)}
+.ab-list{display:flex;flex-direction:column;padding:0 var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+.ab-list a,.ab-list .ab-fb,.ab-here{display:flex;align-items:center;min-height:var(--tap);margin:0;padding:0 var(--sp-2);border-radius:var(--radius);
+  color:var(--text);font-size:var(--fs-base);text-decoration:none}
+.ab-here{font-weight:600}
+.ab-list .ab-fb{width:100%;border:0;background:none;text-align:left}
+.ab-list a:hover,.ab-list .ab-fb:hover{background:var(--hover-wash)}
+.ab-list a:focus-visible,.ab-list .ab-fb:focus-visible{outline-offset:-3px}
+.ab-sep{width:100%;margin:var(--sp-2) 0;border:0;border-top:1px solid var(--border)}
+.chip{display:inline-flex;align-items:center;gap:var(--sp-1);padding:2px var(--sp-2) 2px var(--sp-1);border-radius:var(--radius-pill);border:1px solid var(--border);font-size:var(--fs-xs);background:var(--panel)}
+i.acc{background:var(--accent)}
+.chip i{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;color:var(--on-person);font-style:normal;font-size:var(--fs-xs);font-weight:700}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:var(--sp-2) var(--sp-4);border-radius:var(--radius);font-size:var(--fs-md);z-index:var(--z-alert);max-width:calc(100vw - 32px);box-shadow:var(--shadow-sm)}
+.toast.err{background:var(--danger);color:var(--on-danger)}
+dialog{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--panel);color:var(--text);padding:var(--sp-4);max-width:min(440px,calc(100vw - 32px));box-shadow:var(--shadow-sm)}
+dialog::backdrop{background:var(--scrim)}
+dialog h2{margin:0 0 var(--sp-2);font-size:var(--fs-lg)}
+dialog label{display:block;font-weight:600;margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}
+dialog input,dialog select{width:100%}
+dialog .acts{display:flex;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-4)}
+
+/* library */
+.lib{max-width:1100px;margin:0 auto;padding:var(--sp-4) var(--sp-4) calc(2 * var(--sp-8))}
+.lib h1{font-size:var(--fs-xl);margin:0}
+.lib .bar{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap;margin:var(--sp-4) 0}
+.lib .bar input[type=search]{flex:1;min-width:180px}
+.lib .bar .grp{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}.lib .bar .grp.find{flex:1 1 360px}
+.search{position:relative;display:flex;flex:1;min-width:16rem}.search input{width:100%;padding-right:2rem}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.search .clear{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;padding:2px var(--sp-1);font-size:1rem;line-height:1;color:var(--muted)}
+.search .clear:hover{color:var(--text)}
+button.linkish{border:0;background:none;padding:0;color:var(--accent);text-decoration:underline;font:inherit;cursor:pointer}
+/* the headers wrap, the numbers keep their width; a wide list gives every group's table the same columns */
+#groups{container-type:inline-size}
+@media (min-width:621px){table.mats th{white-space:normal}table.mats .num{width:1%}table.mats td.num{white-space:nowrap}
+  table.mats td.name a{overflow-wrap:anywhere}}
+@container (min-width:50rem){table.mats{--cpad:calc(2 * var(--sp-2));table-layout:fixed}table.mats .num{width:auto}
+  table.mats col.c-st{width:9rem}table.mats col.c-n{width:calc(7ch + var(--cpad))}table.mats col.c-z{width:calc(10ch + var(--cpad))}
+  table.mats col.c-act{width:9rem}}
+.sortby{display:inline-flex;align-items:center;gap:var(--sp-1)}.sortby select{min-width:9.5em}
+.lib .never{margin-top:var(--sp-6)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--sp-3)}
+/* the designs list under the «Material state» sort: /materials' group heading, each group its own grid row */
+.grid>.group{grid-column:1/-1;margin:0}.grid>.group+.group{margin-top:var(--sp-1)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
+.card a.th{display:block;aspect-ratio:5/3;background:var(--bed);border-bottom:1px solid var(--border)}
+.card a.th img{width:100%;height:100%;object-fit:contain;display:block}
+.card .meta{padding:var(--sp-2) var(--sp-3) var(--sp-3);font-size:var(--fs-sm)}
+.card .meta b{display:block;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .row{display:flex;gap:var(--sp-1);padding:0 var(--sp-2) var(--sp-2)}
+.card .row button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
+.empty{padding:calc(var(--sp-8) + var(--sp-2)) var(--sp-4);text-align:center;border:1px dashed var(--border);border-radius:var(--radius-lg)}
+.drop{outline:2px dashed var(--accent);outline-offset:-8px}
+
+/* editor */
+body.ed{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.ed .top input.name{font-weight:600;min-width:120px;max-width:280px;border-color:transparent;background:transparent;text-overflow:ellipsis}
+.ed .top input.name:hover,.ed .top input.name:focus{border-color:var(--border)}
+/* the editor's header has no .sp: an auto margin keeps the tools right on any row (U1862 c, r37) */
+.ed .top #fb-open{margin-left:auto}
+.ed main{flex:1;display:flex;min-height:0}
+.ed aside{width:260px;flex:none;border-right:1px solid var(--border);background:var(--panel);overflow:auto;padding:var(--sp-3)}
+.ed aside.right{border-right:0;border-left:1px solid var(--border)}
+.ed aside h3{font-size:var(--fs-xs);text-transform:var(--label-case);letter-spacing:var(--label-tracking);color:var(--muted);margin:var(--sp-3) 0 var(--sp-1)}
+.ed aside h3:first-child{margin-top:0}
+.stage{flex:1;position:relative;min-width:0;background:var(--bg)}
+.stage>svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage .hud{position:absolute;left:10px;bottom:10px;font-size:var(--fs-xs);color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:3px var(--sp-2);pointer-events:none}
+.stage .zoom{position:absolute;right:10px;bottom:10px;z-index:var(--z-canvas);display:flex;gap:var(--sp-1)}     /* U3185: above the 3D canvas, whose floor is opaque */
+.layer{border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2) var(--sp-2);margin-bottom:var(--sp-1);background:var(--bg)}
+.layer.hit{border-color:var(--accent)}
+.layer .lh{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1)}
+.layer .sw{width:14px;height:14px;border-radius:3px;flex:none}
+.layer .ln{flex:1 1 calc(100% - 14px - var(--sp-1));width:0;min-width:4ch;border:0;background:transparent;padding:2px 2px;font-weight:600;text-overflow:ellipsis}
+.layer .cnt{color:var(--muted);font-size:var(--fs-xs);flex:none;margin-right:auto;padding-left:calc(14px + var(--sp-1) + 2px)}
+.layer .lh button{padding:2px var(--sp-2);font-size:var(--fs-xs)}
+.layer .ls{display:flex;gap:var(--sp-1);margin-top:var(--sp-1);flex-wrap:wrap;font-size:var(--fs-sm);align-items:center}
+.layer .ls select,.layer .ls input{padding:3px var(--sp-1);font-size:var(--fs-sm)}
+.layer .ls input{width:68px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:var(--sp-1) var(--sp-2);align-items:center;font-size:var(--fs-sm)}
+.kv input{width:100%;padding:var(--sp-1) var(--sp-2)}
+.tools{display:flex;flex-wrap:wrap;gap:var(--sp-1)}
+.tools button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
+textarea.notes{width:100%;min-height:110px;resize:vertical;font-size:var(--fs-sm)}
+.warn{font-size:var(--fs-sm);margin:var(--sp-1) 0;padding:var(--sp-1) var(--sp-2);border-radius:var(--radius);background:var(--bg);border:1px solid var(--border)}
+.status{font-size:var(--fs-xs)}
+.status.off{color:var(--danger-text)}
+
+@media (max-width:620px){.ed aside{display:none}.ed aside.open{display:block;position:absolute;z-index:var(--z-sheet);top:0;bottom:0;left:0;width:min(300px,85vw);box-shadow:var(--shadow-sm)}.ed main{position:relative}.only-wide{display:none}}
+@media (min-width:900px){.only-narrow{display:none}}
+#people{display:inline-flex;gap:var(--sp-1);flex-wrap:wrap}
+.updot{flex:none;width:6px;height:6px;margin:0 var(--sp-1);border-radius:50%;background:var(--accent);opacity:.6}
+#import svg{display:none;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:1199px){#import{min-width:var(--tap);min-height:var(--tap);padding:0 var(--sp-2)}#import svg{display:block;margin:auto}#import .imp-lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ed .top input.name{max-width:180px}}      /* U3118: one row at 1024 (designer 01:33Z) */
+#people .chip.me i{outline:2px solid var(--accent);outline-offset:1px}
+.ed .top select#material{max-width:230px}
+.layer .ls label{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.layer .ls label input{width:auto}
+#people .chip span{display:none}#people .chip{padding:2px}      /* U3118: the bar shows circles at every desktop width; the name is the tooltip and aria-label (designer 17:00Z) */
+/* the editor's own circle (18 px + its 2 px padding and 1 px border) has its place before presence draws it, so the
+   tools beside it do not move after load (designer, U1862 c review) */
+.ed .top #people{min-width:24px}
+
+/* materials (U1800/U1801) */
+.headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-3)}
+.headrow h1{margin:0}
+.small{font-size:var(--fs-sm)}.tnum{font-variant-numeric:tabular-nums}.mono{font-family:var(--mono)}.ok{color:var(--ok-text)}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+a.btn{display:inline-block;padding:var(--sp-1) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);color:var(--text);text-decoration:none;font-size:var(--fs-sm);white-space:nowrap}
+a.btn:hover{border-color:var(--muted)}
+.progress{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-1) 0 var(--sp-4)}.progress .bar{flex:1;max-width:360px;height:8px;border-radius:var(--radius-pill);background:var(--border);overflow:hidden}
+.progress .bar i{display:block;height:100%;background:var(--accent)}
+.never{border:1px solid var(--border);border-left:4px solid var(--warn-text);border-radius:var(--radius);background:var(--panel);padding:var(--sp-2) var(--sp-3);margin:0 0 var(--sp-4)}
+.never h2{font-size:var(--fs-md);margin:0 0 var(--sp-1)}.never ul{margin:0;padding-left:var(--sp-4);font-size:var(--fs-md)}
+.group{margin:0 0 var(--sp-4)}.group h2,.group summary{font-size:var(--fs-base);margin:0 0 var(--sp-2);font-weight:600;cursor:default}.group summary{cursor:pointer}
+table.mats,table.settings{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;font-size:var(--fs-md)}
+table.mats th,table.mats td,table.settings th,table.settings td{padding:var(--sp-2) var(--sp-2);border-top:1px solid var(--border);text-align:left}
+table.mats thead th,table.settings thead th{border-top:0;font-size:var(--fs-sm);color:var(--muted);font-weight:600}
+table.mats td.next{text-align:right}table.mats td.next .btn{white-space:normal;max-width:100%;text-align:center}table.settings th{font-weight:600}
+th.num,td.num{text-align:right}
+th.num{font-family:inherit}
+table.mats td.sum{display:none}
+.state{display:inline-block;font-size:var(--fs-xs);padding:1px var(--sp-2);border-radius:var(--radius-pill);border:1px solid var(--border);white-space:nowrap}
+.st-calibrated{border-color:var(--ok-text);color:var(--ok-text)}.st-reviewed{border-color:var(--accent-panel-edge);color:var(--accent);background:var(--accent-panel)}.st-testing{border-color:var(--warn-text);color:var(--warn-text)}
+.res{display:inline-block;font-size:var(--fs-xs);padding:1px var(--sp-2);border-radius:var(--radius-pill);border:1px solid var(--border)}
+.res-pass{border-color:var(--ok-text);color:var(--ok-text)}.res-adjust{border-color:var(--warn-text);color:var(--warn-text)}.res-fail{border-color:var(--danger-text);color:var(--danger-text)}
+.mat section{margin:0 0 var(--sp-6)}.mat h2{font-size:var(--fs-lg);margin:0 0 var(--sp-2)}
+.card.step{padding:var(--sp-3) var(--sp-3);display:flex;flex-direction:column;gap:var(--sp-2)}.steprow{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}
+.tests{display:grid;gap:var(--sp-2)}.test{display:flex;gap:var(--sp-3);align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2) var(--sp-3)}
+.test p{margin:2px 0 0}.tacts{display:flex;gap:var(--sp-2);flex-wrap:wrap;flex:none}
+.runs{list-style:none;margin:0;padding:0;display:grid;gap:var(--sp-2)}.run{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2) var(--sp-3)}
+.run p{margin:var(--sp-1) 0}.runhead{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}
+/* what others report (U1865, redline 33): rows, not cards; the words carry the kind and the count, no badges */
+.mat section.others .others-sub{font-size:var(--fs-sm);color:var(--muted);margin:calc(-1 * var(--sp-1)) 0 var(--sp-1)}
+.others-list{list-style:none;margin:0;padding:0}
+.oth{padding:var(--sp-3) 0}.oth+.oth{border-top:1px solid var(--border)}
+.oth-claim{display:flex;gap:var(--sp-1);align-items:flex-start;margin:0;font-size:var(--fs-md);color:var(--text);font-variant-numeric:tabular-nums}
+.oth-claim svg{flex:none;width:16px;height:16px;margin-top:2px;fill:none;stroke:var(--ok);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.oth-steps{margin:var(--sp-1) 0 0;padding-left:var(--sp-4);font-size:var(--fs-sm);color:var(--text);font-variant-numeric:tabular-nums}
+.oth-why{margin:var(--sp-1) 0 0;font-size:var(--fs-sm);color:var(--muted)}
+.oth-src{margin:var(--sp-1) 0 0;font-size:var(--fs-xs);color:var(--muted);overflow-wrap:anywhere}
+.oth-seg{white-space:nowrap}.oth-src a{color:inherit;text-decoration:underline;text-underline-offset:2px}.oth-src a:hover{color:var(--text)}
+.oth-src .oth-tested{color:var(--ok-text)}
+.oth-pair{display:flex;gap:var(--sp-1);align-items:center;padding:0 0 var(--sp-2);font-size:var(--fs-xs);color:var(--warn-text)}
+.oth-pair svg{flex:none;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.oth-pair+.oth{border-top:0;padding-top:0}
+.others-more{margin-top:var(--sp-2)}
+/* phone: each link is a --tap target in height; the padding is cancelled by the same negative margin, so wrapped lines keep
+   their normal spacing and the touch areas overlap (designer, U1865 approval) */
+@media (max-width:620px){.oth-src a{display:inline-block;line-height:1.5;padding-block:calc((var(--tap) - 1.5em) / 2);margin-block:calc((1.5em - var(--tap)) / 2)}}
+/* new findings (U1990, redline 47): work for the reader, marked only by the 3 px accent line on the left; each row is
+   the shown row (.oth) with a disagreement line, «Show» and «Hide» (both secondary), and one receipt line with «Undo» */
+.mat section.newf{border-left:3px solid var(--accent);padding-left:var(--sp-3)}
+.oth-dis{display:flex;gap:var(--sp-1);align-items:flex-start;margin:var(--sp-1) 0 0;font-size:var(--fs-xs);color:var(--warn-text)}
+.oth-dis svg{flex:none;width:14px;height:14px;margin-top:1px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+button.oth-dis-q,button.oth-hide{border:0;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:2px;white-space:normal;text-align:left;cursor:pointer}
+button.oth-hide{display:inline-flex;align-items:center;gap:var(--sp-1);white-space:nowrap}button.oth-hide:hover{color:var(--text)}
+.newf-acts{display:flex;gap:var(--sp-2);margin-top:var(--sp-2)}
+.newf-acts button{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);min-height:var(--tap)}
+.newf-err{margin:var(--sp-1) 0 0;font-size:var(--fs-sm);color:var(--warn-text)}
+.newf-receipt{margin:0;font-size:var(--fs-sm);color:var(--muted)}.newf-receipt:not(:empty){margin-top:var(--sp-3)}
+.newf-receipt .newf-err{display:block}
+.oth.going{overflow:hidden;transition:height 150ms ease-out,padding 150ms ease-out;padding-top:0;padding-bottom:0;border-top-color:transparent}
+.oth.oth-fresh{animation:oth-fresh 2s ease-out forwards}
+@keyframes oth-fresh{from{background:var(--accent-panel)}to{background:transparent}}
+.oth.oth-flash{animation:oth-flash 600ms ease-out}
+@keyframes oth-flash{from{background:rgba(var(--warn-rgb),.15)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.oth.going{transition:none}.oth.oth-fresh,.oth.oth-flash{animation-timing-function:steps(1,end)}}
+@media (max-width:620px){.newf-acts button{flex:1}
+  .oth-src button.oth-hide{line-height:1.5;padding-block:calc((var(--tap) - 1.5em) / 2);margin-block:calc((1.5em - var(--tap)) / 2)}}
+.photos{display:flex;gap:var(--sp-1);flex-wrap:wrap;margin:var(--sp-1) 0}.photos img{width:96px;height:72px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-1) var(--sp-3)}.grid2 label{display:flex;flex-direction:column;font-weight:600;font-size:var(--fs-md);margin:var(--sp-2) 0 0;gap:var(--sp-1)}
+dialog textarea{width:100%}
+.seg{border:0;padding:0;margin:var(--sp-3) 0 0;display:flex;gap:var(--sp-3)}.seg legend{font-weight:600;font-size:var(--fs-md);margin-bottom:var(--sp-1);padding:0}
+.seg label{display:inline-flex;gap:var(--sp-1);align-items:center;font-weight:400;margin:0}
+dialog .acts.spread{justify-content:space-between;align-items:center}
+.danger-bg{background:var(--danger)!important;border-color:var(--danger)!important;color:var(--on-danger)!important}
+.toast-btn{margin-left:var(--sp-3);padding:3px var(--sp-2);font-size:var(--fs-sm);background:transparent;color:inherit;border-color:currentColor}
+@media (max-width:620px){
+  table.mats thead{display:none}table.mats,table.mats tbody,table.mats tr{display:block}
+  table.mats tr{display:grid;grid-template-columns:1fr auto;gap:2px var(--sp-2);padding:var(--sp-2) var(--sp-3);border-top:1px solid var(--border)}
+  table.mats td{border:0;padding:0}table.mats td.name{grid-column:1}table.mats td.st{grid-column:2;text-align:right}
+  table.mats td.num{display:none}table.mats td.sum{display:block;grid-column:1 / -1}
+  table.mats td.next{grid-column:1 / -1;text-align:left;margin-top:var(--sp-1)}
+  .grid2{grid-template-columns:1fr}.test{flex-direction:column;align-items:stretch}.tacts{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2)}.test button{width:100%;min-height:var(--tap)}
+  table.mats td.next .btn,table.mats td.next button,#next-actions button,#next-actions .btn{min-height:max(var(--tap),44px);display:inline-flex;align-items:center}
+  /* --tap grows with the root size and is 41-43 px on a phone: qa wants 44 px on the materials pages (U1800) */
+  body[data-page^=material] button:not(.clear):not(.toast-btn),body[data-page^=material] a.btn{min-height:max(var(--tap),44px)}
+  body[data-page^=material] .appbar .ab-menu{width:max(var(--tap),44px);height:max(var(--tap),44px)}
+  dialog .acts.spread{flex-wrap:wrap}dialog .acts.spread button{flex:1 1 30%;min-height:var(--tap)}
+  #add-dlg .grid2{grid-template-columns:1fr 1fr}
+}
+.settings-lines{display:none}.settings-lines p{margin:var(--sp-1) 0}
+.panel-err{display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-1);padding:var(--sp-3) var(--sp-4);border:1px solid var(--border);border-left:4px solid var(--danger-text);border-radius:var(--radius);background:var(--panel);margin:var(--sp-2) 0}
+.filerow{display:flex;align-items:center;gap:var(--sp-2);margin:var(--sp-3) 0 0}
+@media (max-width:620px){table.settings{display:none}.settings-lines{display:block;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2) var(--sp-3)}}
+button.sm{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2);margin-right:var(--sp-1)}
+
+/* sign-in, join and connect pages: one centred card */
+body.auth{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:var(--sp-4)}
+.auth main{width:100%;max-width:420px}
+.auth .brand{margin:0 0 var(--sp-3);display:flex;align-items:center;justify-content:center;gap:var(--sp-2);font-weight:600;color:var(--muted)}
+.auth .card{padding:var(--sp-6);gap:0;overflow:visible}
+.auth h1{font-size:var(--fs-xl);margin:0 0 var(--sp-2)}.auth p{margin:var(--sp-2) 0}
+.auth label{display:block;font-weight:600;font-size:var(--fs-md);margin:var(--sp-4) 0 var(--sp-2)}
+.auth input[type=password],.auth input[type=text],.auth input:not([type]){width:100%;min-height:var(--tap);padding:var(--sp-2) var(--sp-3);border-radius:var(--radius)}
+.auth input:focus-visible{border-color:var(--accent)}
+.auth .acts{display:flex;gap:var(--sp-2);margin-top:var(--sp-4)}
+.auth button,.auth a.btn{min-height:var(--tap);padding:var(--sp-2) var(--sp-4);font-size:var(--fs-base);border-radius:var(--radius)}
+.auth a.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.auth .acts button.pri{flex:1}
+.auth .acts.grant{justify-content:flex-end;gap:var(--sp-2)}.auth .acts.grant button{flex:0 0 auto}
+.auth .other{margin-top:var(--sp-4);text-align:right}
+
+/* home page */
+.home h2{font-size:var(--fs-lg);margin:var(--sp-8) 0 var(--sp-2)}
+.tablewrap{overflow-x:auto}
+table.home-mats td.set{font-variant-numeric:tabular-nums;color:var(--muted)}
+.never-line{border-left:4px solid var(--warn);padding:var(--sp-2) var(--sp-3);background:var(--panel);border-radius:var(--radius-sm)}
+.foot{max-width:1100px;margin:0 auto;padding:0 var(--sp-4) calc(var(--sp-8) + var(--sp-4))}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px var(--sp-1);overflow-wrap:anywhere}
+@media (max-width:620px){table.home-mats thead{display:none}table.home-mats tr{grid-template-columns:1fr auto}table.home-mats td.set{display:block;grid-column:1 / -1}}
+
+/* release number: end of the page, right; in the corner on full-screen pages (editor, sign-in) */
+.ver{margin:0;padding:var(--sp-4) var(--sp-4) var(--sp-3);text-align:right;font-size:var(--fs-xs);line-height:1.2;color:var(--muted);opacity:.75;user-select:none}
+body.ed .ver,body.auth .ver{position:fixed;right:10px;bottom:6px;padding:0;pointer-events:none;z-index:1}
+body.ed .ver{right:auto;left:50%;transform:translateX(-50%);bottom:8px}
+
+.home .tg{margin:0 0 var(--sp-6)}.home .tg h3{font-size:var(--fs-md);color:var(--muted);margin:0 0 var(--sp-2);font-weight:600}
+.home .tests{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}.home .test b{display:block}
+.home details.group{margin-top:var(--sp-3)}.home details.group summary{font-weight:600;cursor:pointer;margin:0 0 var(--sp-2)}
+
+@media (min-width:621px){table.home-mats td.name{width:40%}table.home-mats td.st{width:18%}}
+.auth a.btn.pri{display:block;text-align:center}.auth .or{display:flex;align-items:center;gap:var(--sp-3);color:var(--muted);font-size:var(--fs-sm);margin:var(--sp-4) 0 0}.auth .or::before,.auth .or::after{content:"";flex:1;border-top:1px solid var(--border)}
+body:not(.ed):not(.auth){min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}body:not(.ed):not(.auth)>main{flex:1 0 auto;width:100%}
+
+/* assistant panel in the editor */
+#asst{margin:var(--sp-3) 0 var(--sp-1)}#asst h3{margin-top:0}
+.asst-row{display:flex;gap:var(--sp-1);flex-wrap:wrap;align-items:center}
+.asst-row a.btn,.asst-row button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}.asst-row a.btn{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+#asst-pause[aria-pressed=true]{border-color:var(--warn);color:var(--warn-text)}
+@keyframes glow{0%{stroke:var(--glow);stroke-width:4px;filter:drop-shadow(0 0 3px var(--glow))}100%{filter:none}}
+.stage path.glow{animation:glow 3s ease-out}     /* the assistant-panel glow: 3 s, with editor.js's 3000 ms (redline 30 §5 keeps it) */
+@media (min-width:900px){.asst-narrow{display:none}}
+.asst-row a.btn.quiet{background:none;border-color:var(--border);color:var(--text)}
+#talk{margin:0 0 var(--sp-2)}
+.talk-log{list-style:none;margin:0;padding:.5rem 0 0;border-top:1px solid var(--border);display:grid;gap:var(--sp-1);max-height:min(46vh,420px);overflow-y:auto;overscroll-behavior:contain}
+.talk-item{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);overflow-wrap:anywhere}
+.talk-who{display:block;font-size:var(--fs-xs);color:var(--muted);margin-bottom:2px}.talk-body{white-space:pre-wrap}
+.talk-body strong,#reply-body strong{font-weight:600}.talk-body code,#reply-body code{font-family:var(--mono);font-size:.92em}     /* Anton's markdown (U2134) */
+.talk-item.from-me{background:var(--panel)}.talk-item.from-asst.typing .talk-body::after{content:"…";color:var(--muted)}
+.talk-item.tool{border-style:dashed;color:var(--muted);padding:var(--sp-1) var(--sp-2)}.talk-item.tool.write{color:var(--text)}
+.talk-item.card{border-color:var(--accent)}.talk-item.card .asst-row{margin-top:var(--sp-1)}
+.talk-item.err{border-color:var(--danger-text);color:var(--danger-text)}
+.talk-queue{list-style:none;margin:var(--sp-1) 0 0;padding:0;display:grid;gap:var(--sp-1)}
+.talk-item.waiting{border-style:dashed;background:none}.talk-acts{display:flex;justify-content:flex-end;margin-top:var(--sp-1)}
+.talk-acts button.sm{margin:0;font-size:var(--fs-xs);padding:3px var(--sp-2)}button.quiet{background:none;border-color:var(--border);color:var(--text)}
+.talk-form{margin-top:var(--sp-2);display:grid;gap:var(--sp-1)}.talk-form textarea{width:100%;resize:vertical;min-height:2.6em;font:inherit}
+
+
+/* ---- editor panel with tabs (redline 18): a column beside the bed, never over it */
+.ed aside.side{position:relative;width:var(--side-w,360px);padding:0;display:flex;flex-direction:column;overflow:visible;border-right:0;border-left:1px solid var(--border)}
+.ed aside#left{width:240px}
+@media (max-width:1199px){.ed aside.side{width:var(--side-w,290px)}.ed aside#left{width:210px}}      /* U3118: one band, 900–1199 (designer 17:00Z) */
+body.side-off.ed aside.side{width:0;border-left:0}body.side-off.ed aside.side>:not(.sidetoggle){display:none}
+.sidetoggle{position:absolute;z-index:var(--z-sticky);top:12px;left:-26px;width:26px;height:40px;display:grid;place-items:center;border:1px solid var(--border);border-right:0;border-radius:var(--radius) 0 0 var(--radius);background:var(--panel);color:var(--muted);font-size:var(--fs-base);padding:0}
+.sidetoggle .dbadge{top:-6px;left:-6px}
+.dock{display:grid;grid-template-columns:repeat(var(--tabs,4),1fr);gap:2px;padding:var(--sp-1);border-bottom:1px solid var(--border);background:var(--panel);flex:none}
+@media (max-width:1199px) and (min-width:900px){.ed .dock{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 1.5 * var(--sp-4)),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 1.5 * var(--sp-4)),transparent)}.ed .dock::-webkit-scrollbar{display:none}.ed .dock.at-end{-webkit-mask-image:none;mask-image:none}}   /* U3118 (designer 17:40Z): in 290 px the tabs scroll, with a fade at the right edge until the end */      /* redline 30 exception (colour): a mask's alpha, not a colour on the screen */
+.dock[data-tabs="4"]{--tabs:4}.dock[data-tabs="5"]{--tabs:5}      /* the server renders how many tabs show, so the first paint has the final columns (U1862 c); «Selected» is one (U3115) */
+.dock button{border:0;background:transparent;display:grid;justify-items:center;gap:2px;padding:var(--sp-1);font-size:var(--fs-xs);font-weight:600;color:var(--muted);position:relative;border-radius:var(--radius);min-height:var(--tap)}
+@media (hover:hover){.dock button:hover{background:var(--panel-2)}}
+.dock button[aria-selected=true]{background:var(--accent-panel);color:var(--accent)}
+.dock svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.dbadge{position:absolute;top:2px;left:calc(50% + 6px);min-width:18px;height:18px;border-radius:var(--radius-pill);background:var(--accent);color:var(--on-accent);font-size:var(--fs-xs);line-height:18px;padding:0 var(--sp-1);font-variant-numeric:tabular-nums;font-style:normal;box-shadow:0 0 0 2px var(--panel)}
+.side-body{flex:1;min-height:0;overflow:auto;padding:var(--sp-3)}
+.ed aside.side[data-tab=chat] .side-body{overflow:hidden;display:flex;flex-direction:column}
+#p-chat:not([hidden]),#p-chat #talk{display:flex;flex-direction:column;flex:1;min-height:0}
+#p-chat .talk-log{flex:1;max-height:none}
+.tabp h3{font-size:var(--fs-xs);text-transform:var(--label-case);letter-spacing:var(--label-tracking);color:var(--muted);margin:var(--sp-4) 0 var(--sp-1)}
+.tabp .lbl{display:block;font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin-bottom:var(--sp-1)}
+.tabp select#material{width:100%}
+.mat-info{margin-top:var(--sp-2)}.mat-info .mat-head{margin:0 0 var(--sp-1)}.mat-info .btn{display:inline-block;margin-top:var(--sp-1)}
+.paused-strip{margin:0 0 var(--sp-2);padding:var(--sp-2) var(--sp-2);border:1px solid var(--warn);border-radius:var(--radius);background:var(--panel-2);font-size:var(--fs-sm)}
+.csugg{list-style:none;margin:var(--sp-1) 0 0;padding:0}
+/* the rows wrap at any pane width (redline 40 p2: 320 px): the words in a 0-min column, the chevron in its own */
+.csugg button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--sp-2);width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;padding:var(--sp-2) 2px;font-size:var(--fs-md);min-height:var(--tap);border-radius:0}
+.csugg button::after{content:"›";margin-left:auto;color:var(--muted)}
+.pdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:var(--sp-1);vertical-align:middle}
+/* the selection as a floating bar at the bottom of the canvas */
+.ed .stage{position:relative}
+.selbar{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1);max-width:calc(100% - 24px);padding:var(--sp-1) var(--sp-2);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--panel);box-shadow:var(--shadow-sm);font-size:var(--fs-sm)}
+.selbar{width:auto;max-width:min(760px,calc(100% - 24px));justify-content:center}.selbar .f{display:inline-flex;align-items:center;gap:var(--sp-1);white-space:nowrap}
+.selbar label{color:var(--muted);font-size:var(--fs-xs)}.selbar input{width:5.6em;padding:var(--sp-1) var(--sp-1)}.selbar select{max-width:10em;padding:var(--sp-1) var(--sp-1)}
+#selinfo{flex-basis:100%;text-align:center}
+.selbar-acts{display:inline-flex;gap:var(--sp-1)}.selbar-acts button{padding:var(--sp-1) var(--sp-2);min-width:32px}
+.grab,.peekhead{display:none}
+/* phone: the panel is a bottom sheet over a fixed dock (hagekart body.m) */
+body.m{--dockh:calc(62px + env(safe-area-inset-bottom))}
+body.m.ed{--peekh:96px}body.m.ed:has(#right[data-snap=peek] .peekhead:empty){--peekh:58px}      /* the grab bar is 44 px; a peek with no line is just the bar */
+body.m.ed main{padding-bottom:calc(var(--dockh) + var(--peekh))}
+body.m.ed aside.side{display:flex;position:fixed;z-index:var(--z-dock);left:0;right:0;bottom:var(--dockh);width:auto;height:var(--peekh);border:1px solid var(--border);border-bottom:0;border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;background:var(--panel);box-shadow:var(--shadow-up);transition:height var(--dur-slow) var(--ease)}
+body.m.ed aside.side[data-snap=half]{height:52dvh}body.m.ed aside.side[data-snap=full]{height:88dvh}
+body.m .sidetoggle{display:none}
+body.m .grab{display:grid;place-items:center;flex:none;width:100%;height:max(var(--tap),44px);border:0;background:none;padding:0;cursor:grab;touch-action:none}
+body.m .grab i{display:block;width:40px;height:5px;border-radius:3px;background:var(--border)}
+body.m .peekhead{display:flex;align-items:center;gap:var(--sp-2);flex:none;min-height:44px;padding:0 var(--sp-3) var(--sp-2);font-size:var(--fs-md)}
+body.m .peekhead .pk{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.m .peekhead button.sm{flex:none;padding:var(--sp-1) var(--sp-3)}
+body.m .peekhead button.rc-undo{border-color:transparent;background:none;color:var(--accent);min-height:max(var(--tap),44px)}
+body.m:has(.toast .toast-btn) .peekhead button.rc-undo{display:none}      /* the toast has the Undo while it is up: one control for one act (designer) */
+body.m .peekhead:empty{display:none}
+body.m aside.side[data-snap=peek] .side-body{display:none}body.m aside.side:not([data-snap=peek]) .peekhead{display:none}
+body.m .dock{position:fixed;z-index:var(--z-dock);left:0;right:0;bottom:0;height:var(--dockh);padding:2px var(--sp-1) env(safe-area-inset-bottom);border-top:1px solid var(--border);border-bottom:0}
+body.m .dock button{min-height:44px}
+body.kb.m .dock{display:none}body.kb.m.ed aside.side{bottom:var(--kb,0px);height:calc(var(--vvh,70dvh) - 8px)}
+body.m.ed .ver{display:none}
+@media (max-width:899px){.ed aside#left{display:none}.ed aside#left.open{display:block;position:fixed;z-index:var(--z-sheet);top:0;bottom:0;left:0;width:min(300px,85vw);box-shadow:var(--shadow-sm)}}
+.icon-btn{display:inline-grid;place-items:center;width:2rem;height:2rem;min-width:2rem;padding:0!important}
+.icon-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.layer .lh .icon-btn,.layer .lh .up,.layer .lh .dn{width:1.5rem;height:1.5rem;min-width:1.5rem;padding:0!important;flex:none}
+body.m.ed aside.side[data-snap=full]{height:calc(100dvh - var(--hdr,110px) - var(--dockh))}
+body.m.has-sel .zoom,body.m.has-sel .hud{display:none}
+/* ---- the bottom stack on the canvas (redline 18 §4): replies, waiting lines, selection bar, pill */
+.bstack{position:absolute;z-index:var(--z-composer);left:50%;bottom:16px;transform:translateX(-50%);width:min(560px,calc(100% - 48px));display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-2);pointer-events:none}
+.bstack>*{pointer-events:auto}.bstack>[hidden]{display:none}
+.bstack .selbar{align-self:center;max-width:100%}
+body:not(.talk-on) .bstack{bottom:64px;width:auto;max-width:calc(100% - 24px)}
+/* U2063: the same pill as ai.gulden.no (gulden-ai composer.css #composer); laser adds history, «New chat», the selection chip and the busy line */
+.pill{display:flex;align-items:flex-end;gap:.4rem;min-height:var(--tap);padding:.375rem;border-radius:14px;border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow-md)}     /* redline 30 exception (radius): the pill is the same box as gulden's composer, a 14 px corner laser has no token for (U2063) */
+.pill .pillmid{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;align-self:center;padding-inline:.375rem}
+.pill textarea{width:100%;border:0;background:transparent;resize:none;font:inherit;font-size:var(--fs-md);line-height:22px;padding:.375rem 2px;min-height:calc(var(--tap) - .5rem);max-height:118px;overflow-y:auto;outline:none}
+.pill .busy{margin:0 2px 2px;font-size:var(--fs-xs);color:var(--muted)}.pill .busy:empty{display:none}
+.pill .hist,.pill .round{flex:none;display:grid;place-items:center;width:calc(var(--tap) - .25rem);height:calc(var(--tap) - .25rem);padding:0;border-radius:var(--radius-lg)}
+.pill .hist{border:0;background:transparent;color:var(--muted)}.pill .hist:hover{background:var(--hover-wash);color:var(--text)}
+.pill .round{border:0;background:var(--accent);color:var(--on-accent)}.pill .round.stop{background:var(--danger);color:var(--on-danger)}
+.pill svg{width:52%;height:52%;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pill .round.stop svg{fill:currentColor}
+.pill .round.send svg .f{fill:currentColor;stroke:none}
+.pill:has(textarea:focus){border-color:var(--accent)}
+.reply{display:flex;flex-direction:column;gap:var(--sp-1);transition:opacity 1.2s ease}.reply.fading{opacity:0}     /* the 1.2 s reply fade (redline 18 §4) */
+@media (prefers-reduced-motion:reduce){.reply{transition:none}}
+.reply .ask{margin:0;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 var(--sp-1);text-shadow:0 0 6px var(--bg)}
+.rcard,.reply .talk-item.card{border-radius:var(--radius-lg);border:1px solid var(--border);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow-sm);padding:var(--sp-3) var(--sp-4)}
+.rcard{max-height:12rem;overflow-y:auto}.rcard:focus-visible{border-color:var(--accent)}
+.rcard .rbody{white-space:pre-wrap;font-size:var(--fs-md);line-height:1.5}
+.rcard .rrec{display:grid;gap:var(--sp-1);margin-top:var(--sp-1)}.rcard .rrec:empty{display:none}
+.reply .talk-item.card{border-color:var(--accent)}
+.reply .rerr{margin:0;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);border:1px solid var(--danger-text);background:var(--panel);color:var(--danger-text);font-size:var(--fs-sm)}
+.reply .rall{align-self:flex-end;font-size:var(--fs-sm);padding:0 var(--sp-1)}
+.waitlines{list-style:none;margin:0;padding:0;display:grid;gap:var(--sp-1)}.waitlines:empty{display:none}
+.wline{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-2);border:1px dashed var(--border);border-radius:var(--radius);background:color-mix(in srgb,var(--panel) 94%,transparent);font-size:var(--fs-sm)}
+.wline .wtext{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ---- the Chat tab: full history (§4.7) */
+#p-chat .talk-log{gap:var(--sp-2);display:flex;flex-direction:column}
+#p-chat .talk-item{border:0;background:none;padding:0;max-width:92%}
+#p-chat .talk-item.from-me{align-self:flex-end;background:var(--accent-panel);border:1px solid var(--accent-panel-edge);border-radius:14px 14px 4px 14px;padding:var(--sp-2) var(--sp-3)}     /* redline 30 exception (radius): the chat bubble, which goes with U1857 slice 4 */
+#p-chat .talk-item.from-person{align-self:flex-start}
+#p-chat .talk-item.from-person .talk-body{background:var(--panel-2);border-radius:14px 14px 14px 4px;padding:var(--sp-2) var(--sp-3)}     /* redline 30 exception (radius): the chat bubble, which goes with U1857 slice 4 */
+#p-chat .talk-item.from-asst{align-self:flex-start;max-width:100%}
+#p-chat .talk-item.tool{border:1px dashed var(--border);border-radius:var(--radius);padding:var(--sp-1) var(--sp-2);max-width:100%}
+#p-chat .talk-item.card{border:1px solid var(--accent);border-radius:var(--radius);padding:var(--sp-2) var(--sp-2);max-width:100%;background:var(--panel)}
+#p-chat .talk-item.waiting{border:1px dashed var(--border);border-radius:var(--radius);padding:var(--sp-1) var(--sp-2)}
+#p-chat .talk-item.err{color:var(--danger-text)}
+/* ---- phone (§4.5) */
+body.m.ed .bstack{position:fixed;left:16px;right:16px;width:auto;transform:none;bottom:calc(var(--dockh) + var(--peekh) + 8px)}
+body.m.ed.sheet-open .bstack{bottom:var(--dockh);left:0;right:0;padding:var(--sp-1) var(--sp-2);background:var(--panel);border-top:1px solid var(--border);z-index:var(--z-composer)}
+body.m.fonts-open .bstack .reply,body.m.fonts-open .bstack .pt-reply,body.m.fonts-open .bstack .waitlines{display:none}
+body.m.sheet-open .bstack .reply,body.m.sheet-open .bstack .waitlines,body.m.sheet-open .bstack .selbar{display:none}
+body.m.sheet-open.talk-on .side-body{padding-bottom:64px}
+body.m.sheet-open.talk-on .oc-acts{bottom:64px}      /* Apply stays above the pill (U3115) */
+body.m .rcard{max-height:40dvh}
+body.kb.m.talk-on:not(.pill-chat) aside.side{display:none!important}
+body.kb.m.ed .bstack{bottom:calc(var(--kb,0px) + 8px);left:8px;right:8px;background:none;border:0;padding:0}
+body.kb.m .bstack .reply{display:flex}
+.psugg{margin:0;padding:var(--sp-1) var(--sp-3);border-radius:var(--radius-lg);border:1px solid var(--border);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow-sm)}
+.psugg li:last-child button{border-bottom:0}
+/* the version stamp keys on the server's data-talk (= editor.js's TALK), not on talk-on, so it does not move after load (U1862 c) */
+body.ed.talk-on:not(.m) .bstack{bottom:22px}body.ed[data-talk="1"] .ver{bottom:3px}
+body.m.talk-on .zoom,body.m.talk-on .hud{display:none}
+/* 0.1.13 redlines */
+.stage.narrow .zoom{top:10px;bottom:auto;right:38px}.stage.narrow .hud{top:22px;bottom:auto}
+.waitlines>li{min-width:0}.wline .wtext{display:block}
+body:not(.side-off) #b-fold{display:none!important}
+.reply .ask{align-self:center;max-width:100%;padding:2px var(--sp-2);border-radius:var(--radius-pill);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);text-shadow:none}
+.rcard{padding-top:0}.rcard>.talk-who{position:sticky;top:0;z-index:1;display:block;padding:var(--sp-3) 0 var(--sp-1);background:var(--panel);box-shadow:0 6px 6px -2px var(--panel)}
+#p-chat .talk-log{padding-bottom:var(--sp-2)}
+#p-chat .talk-log>li{flex:none}
+.stage .hud{background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.talk-item.tool.failed{color:var(--danger-text);border-color:var(--danger)}
+table.mats td.next button.pri{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2);line-height:inherit;border:1px solid var(--accent);white-space:nowrap}
+#approve-dlg .a-outcome{font-size:var(--fs-sm);color:var(--muted)}
+.nowrap{white-space:nowrap}
+.stage>.banner{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:var(--z-canvas);margin:0;max-width:min(560px,calc(100% - 24px));padding:var(--sp-2) var(--sp-3);border-radius:var(--radius-pill);border:1px solid var(--border);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow-sm);font-size:var(--fs-sm);text-align:center}
+.stage>.banner[data-kind=gone]{border-color:var(--danger);color:var(--danger-text)}
+.status.warn{color:var(--warn-text)}
+body.gone .stage>svg{pointer-events:none}body.gone .selbar{display:none!important}
+.stage>.banner a+a,.stage>.banner button.linkish+a{margin-left:var(--sp-2)}
+body.gone #left :is(button,select,input,label),body.gone #material,body.gone #asst-pause,body.gone #p-export .tools button{pointer-events:none;opacity:.5}
+
+/* feedback (redline 20): the header control, the form (a bottom sheet below 600 px) */
+.fb-btn{display:inline-flex;align-items:center;gap:var(--sp-1);position:relative;background:transparent;border-color:transparent;color:var(--text);padding:var(--sp-1) var(--sp-2);font-size:var(--fs-md)}
+.fb-btn:hover{border-color:var(--border)}
+.fb-btn svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.fb-dot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--muted)}
+@media (max-width:899px){.fb-btn{width:var(--tap);height:var(--tap);min-width:var(--tap);justify-content:center;padding:0}.fb-btn .fb-lbl{display:none}}
+dialog.fb{width:32rem;max-width:calc(100vw - 32px);padding:var(--sp-4)}
+.fb h2{margin-bottom:var(--sp-1)}
+.fb .fbgrab,.nc .fbgrab{display:none}
+.fb-chat{margin:0 0 var(--sp-1);color:var(--muted);font-size:var(--fs-sm)}
+.segb{display:flex;min-width:max-content;margin:var(--sp-3) 0 var(--sp-2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+/* a label is never cut: the buttons take their words' width and share what is left; the pressed one keeps the same weight,
+   so nothing moves when a person presses (designer, hold on 56d846c) */
+.segb button{flex:1 0 auto;min-width:max-content;border:0;border-left:1px solid var(--border);border-radius:0;background:var(--panel);min-height:2.5rem;padding:var(--sp-1) var(--sp-3);font-size:var(--fs-md)}
+.segb button:first-child{border-left:0}
+.segb button[aria-pressed=true]{background:var(--accent-panel);box-shadow:inset 0 0 0 1px var(--accent-panel-edge)}
+.segb button:focus-visible{outline-offset:-3px}
+.fb textarea{display:block;line-height:1.4;min-height:calc(6 * 1.4em + 16px);max-height:calc(12 * 1.4em + 16px);resize:none}
+.fb-count{margin:var(--sp-1) 0 0;text-align:right;font-size:var(--fs-xs);color:var(--muted)}.fb-count.near{color:var(--warn-text)}
+dialog label.fb-check{display:flex;align-items:center;gap:var(--sp-2);font-weight:400;margin:var(--sp-2) 0 0;font-size:var(--fs-md);min-height:var(--tap)}
+dialog .fb-check input{margin:0;width:18px;height:18px;flex:none;accent-color:var(--accent)}
+.fb-shot{margin:2px 0 0}
+.fb-thumb{position:relative;display:inline-block}
+.fb-thumb img{display:block;height:6rem;max-width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2)}
+.fb-x{position:absolute;top:-8px;right:-8px;width:24px;height:24px;padding:0;border-radius:50%;line-height:1;font-size:var(--fs-md);display:grid;place-items:center;box-shadow:var(--shadow-sm)}
+.fb-note{margin:var(--sp-1) 0 0;color:var(--muted);font-size:var(--fs-xs)}
+.fb-ctx{margin:var(--sp-3) 0 0;color:var(--muted);font-size:var(--fs-xs);overflow-wrap:anywhere}
+.fb-err{margin:var(--sp-3) 0 0;color:var(--danger-text);font-size:var(--fs-sm)}
+.fb .acts{margin-top:var(--sp-3)}
+.fb #fb-send{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+@media (max-width:599px){
+  dialog.fb,dialog.nc{width:100%;max-width:100%;max-height:calc(100dvh - 24px);margin:auto 0 var(--fbkb,0px);border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;border-bottom:0;padding:0 var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+  .fb .fbgrab,.nc .fbgrab{display:grid;place-items:center;width:100%;height:22px;border:0;background:none;padding:0;cursor:default}
+  .fb .fbgrab i,.nc .fbgrab i{display:block;width:40px;height:5px;border-radius:3px;background:var(--border)}
+  .fb .acts button,.nc .acts button{min-height:var(--tap)}
+}
+.hd-me{display:inline-flex;align-items:center;gap:var(--sp-1)}
+body.m.ed .toast{bottom:calc(var(--dockh) + 12px)}
+body.m.ed .toast-btn{min-height:max(var(--tap),44px)}
+body.m.ed .toast:has(.toast-btn){left:16px;right:16px;transform:none;width:auto;max-width:none;display:flex;align-items:center;justify-content:space-between}
+.toast{width:max-content}
+/* pointing: Anton's target lock (point_at) and reply shape references */
+@keyframes ptpulse{50%{stroke-width:1.6px;filter:drop-shadow(0 0 7px var(--pt))}}
+.pt-lock.fresh{animation:ptlock .45s cubic-bezier(.2,1.4,.4,1)}     /* the point_at lock's own timing (ca872c1), kept by redline 30 §5 */
+@keyframes ptlock{from{transform:scale(1.8);opacity:0}to{transform:scale(1);opacity:1}}
+.pt-lock path{animation:ptbreathe 1.4s ease-in-out infinite}
+@keyframes ptbreathe{50%{opacity:.55}}
+.pt-ping{transform-box:fill-box;transform-origin:center;animation:ptping .9s ease-out 1 forwards;stroke-width:2px}     /* the point_at ping (ca872c1), kept by redline 30 §5 */
+@keyframes ptping{from{transform:scale(.6);opacity:.9}to{transform:scale(1.25);opacity:0}}
+.pt-bob{animation:ptbob 1.1s ease-in-out infinite}
+@keyframes ptbob{50%{transform:translateY(-4px)}}
+.pt-bubble{fill:var(--panel);stroke-width:1.5}
+.pt-text{fill:var(--text)}
+.pt-x{cursor:pointer;color:var(--muted)}.pt-x:hover{color:var(--text)}
+.shape-ref{all:unset;cursor:pointer;color:var(--accent);border-bottom:1px dotted currentColor;font-variant-numeric:tabular-nums}
+.shape-ref:hover,.shape-ref:focus-visible{border-bottom-style:solid}
+@media (prefers-reduced-motion:reduce){#shapes>g>*,.pt-lock path,.pt-ping,.pt-bob,.pt-lock.fresh{animation:none}}
+.pill-about{display:flex;align-items:center;gap:var(--sp-1);margin:0 0 2px;font-size:var(--fs-xs);color:var(--accent)}
+.pill-about::before{content:"";width:9px;height:9px;border:1.5px dashed currentColor;border-radius:1px;box-shadow:-2px -2px 0 -1px currentColor,2px 2px 0 -1px currentColor}
+.pill-about button{all:unset;cursor:pointer;color:var(--muted);padding:0 var(--sp-1);font-size:var(--fs-md);line-height:1}.pill-about button:hover{color:var(--text)}
+.talk-body .about{display:block;margin-top:3px;font-size:var(--fs-xs);color:var(--muted);cursor:default}
+.talk-body .about[tabindex]{cursor:pointer}.talk-body .about[tabindex]:hover{color:var(--accent)}
+.pt-gem{filter:drop-shadow(0 0 4px var(--pt,var(--sel)))}
+.ptbubble{position:absolute;z-index:var(--z-canvas);max-width:28rem;display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-2);padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border:2px solid var(--pt);border-radius:var(--radius-lg);background:var(--panel);box-shadow:var(--shadow-sm);font-size:var(--fs-sm);line-height:1.35}
+.ptbubble::after{content:"";position:absolute;left:var(--tail,50%);bottom:-7px;width:10px;height:10px;margin-left:-6px;transform:rotate(45deg);
+  background:var(--panel);border-right:2px solid var(--pt);border-bottom:2px solid var(--pt)}
+.ptbubble.below::after{bottom:auto;top:-7px;border:0;border-left:2px solid var(--pt);border-top:2px solid var(--pt)}
+.pt-q{flex:1 1 auto;min-width:0}.pt-q b{font-weight:600}
+.pt-x{all:unset;cursor:pointer;color:var(--muted);font-size:var(--fs-base);line-height:1;padding:0 2px}.pt-x:hover{color:var(--text)}
+.pt-answers{flex-basis:100%;display:flex;gap:var(--sp-1);flex-wrap:wrap}
+.pt-answers button.sm{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2);border-radius:var(--radius-pill);border:1px solid var(--pt);background:var(--panel);color:var(--text);cursor:pointer}
+.pt-reply{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-2);padding:var(--sp-2) var(--sp-3);border:2px solid var(--pt);border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--panel) 94%,transparent);font-size:var(--fs-sm)}
+.pt-icon{display:inline-block;width:11px;height:11px;margin-right:var(--sp-1);vertical-align:-1px;border-radius:50%;border:2px solid currentColor;
+  box-shadow:inset 0 0 0 2px var(--panel),inset 0 0 0 4px currentColor;color:var(--accent)}
+.talk-item.pt-ask{cursor:default}
+svg,.v3d{--dim:.45}#shapes>g{transition:opacity var(--dur-slow)}
+@media (prefers-color-scheme:light){:root:not([data-theme]) :is(svg,.v3d){--dim:.35}}
+:root:is([data-theme=light],[data-theme=solarpunk]) :is(svg,.v3d){--dim:.35}
+/* ---- named pointers (redline 24 §2): arrow with an edge, a name pill, idle fade, the long-press ping, follow once */
+svg{--cur-edge:var(--bed)}
+@media (prefers-color-scheme:light){:root:not([data-theme]) svg{--cur-edge:var(--panel)}}
+:root[data-theme=light] svg,:root[data-theme=solarpunk] svg{--cur-edge:var(--panel)}
+.cur-arrow{stroke:var(--cur-edge);stroke-width:1.5px;stroke-linejoin:round}
+.cur-lbl text{font-size:var(--fs-xs);font-weight:600}
+.cur .cur-arrow,.cur .cur-lbl,.cur{transition:none}
+.cur.idle .cur-arrow{opacity:.35;transition:opacity var(--dur-slow)}
+.cur.idle .cur-lbl{opacity:0;transition:opacity var(--dur-slow)}
+.cur.gone{opacity:0;transition:opacity var(--dur-slow)}
+.ping-ring{transform-box:fill-box;transform-origin:center;animation:curping 1.5s linear forwards}     /* the long-press ping, 1.5 s (redline 24 §2) */
+@keyframes curping{0%{transform:scale(0);opacity:1;animation-timing-function:ease-out}40%{transform:scale(1);opacity:1}100%{transform:scale(1);opacity:0}}
+#people button.chip{font-size:var(--fs-xs);color:inherit;cursor:pointer;line-height:inherit}
+#people button.chip:hover{border-color:var(--muted)}
+#people button.chip:focus:not(:focus-visible){outline:none;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.cur.idle .cur-arrow,.cur.idle .cur-lbl,.cur.gone{transition:none}.ping-ring{animation:none}}
+.stage>.banner a,.stage>.banner button.linkish{white-space:nowrap}
+/* ---- import, Analyse, Fix (redline 19 §1): a card in «Selected» (U3116) and a fold per import in Changes */
+.icard{display:flex;flex-direction:column;padding:var(--sp-3) var(--sp-4);font-size:var(--fs-sm);line-height:1.4;transition:opacity 1.2s ease}.icard[hidden]{display:none}
+.icard.fading{opacity:0}
+@media (prefers-reduced-motion:reduce){.icard{transition:none}}
+.ihead{display:flex;align-items:center;gap:var(--sp-2);flex:none;min-height:1.75rem}
+.ihead svg,.imp-entry summary svg{width:16px;height:16px;flex:none;stroke:var(--muted);fill:none;stroke-width:1.8;stroke-linejoin:round}
+.ih-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ih-t b{font-weight:600}
+.ix{all:unset;cursor:pointer;color:var(--muted);font-size:var(--fs-lg);line-height:1;padding:2px var(--sp-1);border-radius:var(--radius-sm)}.ix:hover{color:var(--text)}
+.ibody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.iline{margin:var(--sp-1) 0 0}.iline.busy{display:flex;align-items:center;gap:var(--sp-2);color:var(--muted)}.ierr{color:var(--danger-text)}
+.iacts{display:flex;flex-wrap:wrap;gap:var(--sp-1);flex:none;padding-top:var(--sp-2)}.iacts button.sm,.frow button.sm,.rrow button.sm{margin:0}
+.flist,.rlist{list-style:none;margin:var(--sp-1) 0 0;padding:0;display:grid;gap:2px}
+.frow{display:flex;align-items:flex-start;gap:var(--sp-2);padding:var(--sp-1) var(--sp-2);border-radius:var(--radius)}
+.frow label{display:flex;align-items:flex-start;gap:var(--sp-2);flex:1;min-width:0;cursor:pointer}
+.frow input[type=checkbox]{width:1.25rem;height:1.25rem;margin:0;flex:none;accent-color:var(--accent)}
+.frow .ft,.rrow .ft{flex:1;min-width:0;overflow-wrap:anywhere}
+.frow>.ft{padding-left:calc(1.25rem + var(--sp-2))}
+@media (hover:hover){.frow:hover{background:var(--panel-2)}}
+.frow:focus-within{background:var(--panel-2)}
+.frow.units{background:var(--accent-panel);box-shadow:inset 3px 0 0 var(--accent);border-radius:0 var(--radius) var(--radius) 0}
+.frow .fbad{display:block;color:var(--danger-text)}
+.rrow{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-2)}
+.rrow.undone::before{display:none}.rrow.undone{padding-left:calc(1.3rem + var(--sp-2))}
+.rrow::before{content:"";width:.7rem;height:.35rem;margin:0 .3rem;flex:none;border:solid var(--ok-text);border-width:0 0 2px 2px;transform:rotate(-45deg) translateY(-2px)}
+.icard .more{align-self:flex-start;margin:var(--sp-1) var(--sp-2) 0;font-size:var(--fs-sm)}
+.imp-top{margin:0 0 var(--sp-3)}.imp-top button.sm{margin:0}
+.imp-entry{border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);padding:var(--sp-1) var(--sp-2);margin:0 0 var(--sp-1);font-size:var(--fs-sm)}
+.imp-entry summary{display:flex;align-items:center;gap:var(--sp-1);cursor:pointer;list-style:none;min-height:1.75rem}
+.imp-entry summary::-webkit-details-marker{display:none}
+.imp-entry summary::before{content:"›";color:var(--muted);transition:transform var(--dur-med)}.imp-entry[open] summary::before{transform:rotate(90deg)}
+.imp-entry summary .ih-t{flex:0 1 auto}
+.imp-entry .iacts{padding-bottom:var(--sp-1)}
+/* ---- the selection bar (redline 19 §2): target line, X Y W ⛓ H, mm|%, anchor, warnings */
+.selbar .selname{margin:0;font-size:var(--fs-sm);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-variant-numeric:tabular-nums}
+.selbar input{width:4.9em;-moz-appearance:textfield;appearance:textfield}
+.selbar input::-webkit-inner-spin-button,.selbar input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.selbar .br{display:none}
+.bstack .selbar{flex-direction:column;flex-wrap:nowrap;align-items:center;row-gap:var(--sp-1)}
+.selrow{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:var(--sp-1);max-width:100%}
+.keep[aria-pressed=true] .off,.keep[aria-pressed=false] .on{display:none}
+.keep[aria-pressed=true]{background:var(--accent-panel);color:var(--accent);border-color:var(--accent-panel-edge)}
+.keep[aria-pressed=false]{color:var(--muted)}
+.seg2{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex:none}
+.seg2 button{border:0;border-radius:0;min-height:2rem;padding:0 var(--sp-2);font-size:var(--fs-sm);background:var(--panel);color:var(--muted)}
+.seg2 button+button{border-left:1px solid var(--border)}
+.seg2 button[aria-pressed=true]{background:var(--accent-panel);color:var(--accent);font-weight:600}
+.seg2 button:focus-visible{outline-offset:-3px}
+.anch{position:relative;display:inline-flex}
+#anchor .dots circle{fill:var(--muted);stroke:none}#anchor .dots circle.on{fill:var(--accent)}
+#anchor[aria-expanded=true]{border-color:var(--accent)}
+.anpop{position:absolute;z-index:var(--z-sheet);bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);display:grid;grid-template-columns:repeat(3,2.75rem);width:8.5rem;padding:calc((8.5rem - 8.25rem) / 2 - 1px);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md)}
+.adot{width:2.75rem;height:2.75rem;padding:0;border:0;background:none;display:grid;place-items:center;border-radius:var(--radius)}
+.adot i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.adot[aria-checked=true] i{width:14px;height:14px;background:var(--accent)}
+@media (hover:hover){.adot:hover{background:var(--panel-2)}}
+.adot:focus-visible{outline-offset:-3px}
+.selwarn{flex-basis:100%;display:grid;gap:2px}
+.selwarn .wl{margin:0;display:flex;align-items:center;justify-content:center;gap:var(--sp-1);flex-wrap:wrap;color:var(--warn-text);font-size:var(--fs-sm)}
+.selwarn svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.selwarn button.sm{margin:0;padding:2px var(--sp-2)}
+.bstack .selbar{width:max-content;max-width:min(880px,calc(var(--stagew,100vw) - 24px))}
+body.m .bstack .selbar{width:auto;max-width:100%;align-items:stretch}
+body.m .selrow,body.m .selbar-acts{justify-content:flex-start;row-gap:var(--sp-1)}
+body.m .selrow .br{display:block;flex-basis:100%;height:0}
+body.m #selinfo{text-align:left}
+body.m .selwarn .wl{justify-content:flex-start}
+/* ---- Parts | Layers in the left column (redline 19 §3) */
+#left{position:relative}
+.lview{display:flex;margin:0 0 var(--sp-3)}.lview button{flex:1}
+.plist{list-style:none;margin:0;padding:0;font-size:var(--fs-sm)}
+.lhead{display:flex;align-items:center;gap:var(--sp-1);min-height:2rem;margin-top:var(--sp-2);padding:0 var(--sp-1);border-radius:var(--radius-sm);font-weight:600}
+.lhead .sw{width:12px;height:12px;border-radius:3px;flex:none}
+.lhead .ln2{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1);min-height:2rem;padding:0 2px 0 calc(1rem + var(--sp-1));border-radius:var(--radius-sm);cursor:pointer}
+.prow.allp{padding-left:var(--sp-1);font-weight:600}
+.prow .kind{width:1rem;height:1rem;flex:none;stroke:var(--muted);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.prow .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.px{color:var(--muted);font-size:var(--fs-xs);font-weight:400;font-variant-numeric:tabular-nums;flex:none}
+.prow .pm{visibility:hidden;width:1.75rem;height:1.75rem;padding:0;border:0;background:none;color:var(--muted);border-radius:var(--radius-sm);line-height:1;flex:none}
+.prow:hover .pm,.prow:focus-within .pm,.prow .pm[aria-expanded=true]{visibility:visible}
+@media (hover:none){.prow .pm{visibility:visible}}
+.prow .pm:hover{background:var(--panel-2);color:var(--text)}
+@media (hover:hover){.prow:hover{background:var(--panel-2)}}
+.prow:focus-visible{outline-offset:-3px}
+.prow.on{background:var(--accent-panel);color:var(--text)}.prow.on .kind{stroke:var(--accent)}
+.prow.drop,.lhead.drop{box-shadow:inset 0 0 0 2px var(--accent)}
+.prow.dragging{opacity:.5}
+
+.prow .pin{flex:1;min-width:0;padding:2px var(--sp-1);font-size:var(--fs-sm)}
+.psug{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:0 var(--sp-2);padding:0 0 var(--sp-1) calc(1rem + var(--sp-1));font-size:var(--fs-xs);color:var(--muted)}
+.psug span{flex:1 1 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.psug .linkish{font-size:var(--fs-xs)}.psug .ix{font-size:var(--fs-md)}
+.pasks{display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-1);padding:0 0 var(--sp-2);font-size:var(--fs-sm)}
+.lview .n{color:var(--muted);font-weight:400}
+/* the project's header pill and phone step chip (U2843); the Make list's own rules are in steps.css (U3103) */
+.warn-text{color:var(--warn-text)}
+.ppill{margin-left:var(--sp-1);flex:none}
+.stepchip{align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:auto;color:var(--text)}.stepchip[hidden]{display:none}
+.pmenu{position:absolute;z-index:var(--z-sheet);min-width:13rem;padding:var(--sp-1);display:grid;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md)}
+.pmi{border:0;background:none;text-align:left;padding:var(--sp-1) var(--sp-2);border-radius:var(--radius-sm);font-size:var(--fs-sm)}
+.pmi:not(:disabled):hover,.pmi:focus-visible{background:var(--panel-2)}.pmi:focus-visible{outline-offset:-3px}
+body.m .prow{min-height:var(--tap)}body.m .prow .pm{width:var(--tap);height:var(--tap)}
+/* ---- New chat (redline 22): the control in the Chat tab and in the pill, the confirm, the line after */
+.chat-top{display:flex;justify-content:flex-end;flex:none;margin:0 0 var(--sp-2)}
+button.newc{display:inline-flex;align-items:center;gap:var(--sp-1)}
+#chat-new{margin:0}
+.newc svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pill .newc svg{width:52%;height:52%;stroke-width:2}
+@media (max-width:899px){#chat-new{width:var(--tap);height:var(--tap);min-width:var(--tap);padding:0;justify-content:center}#chat-new .nc-lbl{display:none}#chat-new svg{width:20px;height:20px}}
+.newc[aria-disabled=true]{opacity:.45;cursor:default}
+.newc[aria-disabled=true]:hover{border-color:var(--border)}.pill .newc[aria-disabled=true]:hover{background:transparent;color:var(--muted)}
+#chat-top[hidden]+.talk-log{border-top:0}
+#talk-empty .cleared{margin:0 0 var(--sp-3);text-align:center;color:var(--muted);font-size:var(--fs-xs)}
+#talk-empty.refused > :not(#talk-cleared){display:none}   /* history refused: only who started a new chat (U1997) */
+.reply .rnote{align-self:center;margin:0;padding:0 var(--sp-1);font-size:var(--fs-xs);color:var(--muted);text-shadow:0 0 6px var(--bg),0 0 3px var(--bg)}
+dialog.nc{background:var(--panel);box-shadow:var(--shadow-md)}
+@media (min-width:600px){dialog.nc{width:22rem;max-width:calc(100vw - 32px);padding:var(--sp-4) var(--sp-4);border-radius:var(--radius-lg)}}
+dialog.nc.pop{position:fixed;inset:auto;margin:0;z-index:calc(var(--z-sheet) + 1);overflow:visible}
+dialog.nc.pop::before{content:"";position:absolute;left:calc(var(--ax,50%) - 7px);top:-7px;width:12px;height:12px;background:var(--panel);border-left:1px solid var(--border);border-top:1px solid var(--border);transform:rotate(45deg)}
+dialog.nc.pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
+.nc h2{margin:0 0 var(--sp-1);font-size:var(--fs-base)}
+.nc-text{margin:0;font-size:var(--fs-sm)}
+.nc-msg{margin:var(--sp-3) 0 0;font-size:var(--fs-sm)}.nc-msg.is-warn{color:var(--warn-text)}.nc-msg.is-danger{color:var(--danger-text)}
+.nc .acts{margin-top:var(--sp-3)}
+
+/* connecting Claude, quietly (redline 23, U1854): the /designs header link, the chip menu, the footer link, /connect */
+.cx-link{display:inline-flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-2);font-size:var(--fs-sm);color:var(--muted);text-decoration:none;border-radius:var(--radius)}
+.cx-link:hover .cx-lbl{text-decoration:underline}
+.cx-link svg,.cx-ok svg,.cx-cp svg{width:1rem;height:1rem;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:899px){.cx-link{width:var(--tap);height:var(--tap);justify-content:center;padding:0}.cx-link svg{width:18px;height:18px}.cx-link .cx-lbl{display:none}}
+.me-menu{position:relative}
+.me-menu>summary{list-style:none;cursor:pointer}.me-menu>summary::-webkit-details-marker{display:none}
+.me-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:calc(var(--z-sheet) + 1);min-width:11rem;padding:var(--sp-1);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md)}
+.me-pop a{display:flex;align-items:center;min-height:2.25rem;padding:var(--sp-1) var(--sp-2);border-radius:var(--radius-sm);color:var(--text);text-decoration:none;font-size:var(--fs-sm);white-space:nowrap}
+.me-pop a:hover,.me-pop a:focus-visible,.me-out button:hover,.me-out button:focus-visible{background:var(--panel-2)}.me-pop a:focus-visible,.me-out button:focus-visible{outline-offset:-3px}
+.me-out{margin:0}
+.me-sep{margin:var(--sp-1) 0;border:0;border-top:1px solid var(--border)}
+.me-out button{display:flex;align-items:center;width:100%;min-height:2.25rem;margin:0;padding:var(--sp-1) var(--sp-2);border:0;border-radius:var(--radius-sm);background:none;color:var(--text);font:inherit;font-size:var(--fs-sm);text-align:left;white-space:nowrap;cursor:pointer}
+.works{margin:var(--sp-2) 0 0;font-size:var(--fs-sm);color:var(--muted)}
+.cx{max-width:720px}
+.cx h2{font-size:var(--fs-base);margin:var(--sp-6) 0 var(--sp-2)}
+.cx-lead{margin:var(--sp-2) 0 0;color:var(--muted)}
+.cx-note{margin:var(--sp-2) 0;font-size:var(--fs-sm);color:var(--muted)}
+.cx-steps{margin:0;padding-left:1.4rem}.cx-steps li{margin:0 0 var(--sp-1)}
+.cx-copy{display:flex;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-2)}
+.cx-copy code{flex:1;min-width:0;padding:var(--sp-2) var(--sp-2);font-size:var(--fs-sm)}
+.cx-copy button.sm{display:inline-flex;align-items:center;gap:var(--sp-1);margin:0;flex:none}
+.cx-list{list-style:none;margin:var(--sp-4) 0 0;padding:0;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius)}
+.cx-list li{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-md)}
+.cx-list li+li{border-top:1px solid var(--border)}
+.cx-ok{display:inline-grid;place-items:center;color:var(--ok)}.cx-ok svg{width:18px;height:18px;stroke-width:2.2}
+.cx-what{flex:1;min-width:0}.cx-since{color:var(--muted);white-space:nowrap}
+.me-pop.flip{right:auto;left:0}
+.cx-off{margin:0}.cx-off button.sm{margin:0}
+.cx-more{margin-top:var(--sp-6)}
+.cx-more>summary{cursor:pointer;font-weight:600;padding:var(--sp-2) 0}
+.cx-more[open]>summary{margin-bottom:var(--sp-2)}
+
+/* ===== who is here outside the editor (U1828, redline 24 §1): the others' chips between Feedback and the person chip */
+.lobby{display:inline-flex;align-items:center;gap:var(--sp-1);position:relative}
+.lb-chip{text-decoration:none;color:var(--text);transition:opacity var(--dur-slow) var(--ease)}
+a.lb-chip:hover{border-color:var(--muted)}
+.lb-chip i,.lb-row i{width:1.25rem;height:1.25rem;flex:none;border-radius:50%;display:inline-grid;place-items:center;color:var(--on-person);font-style:normal;font-size:var(--fs-xs);font-weight:700}
+.lb-t{white-space:nowrap;max-width:16rem;overflow:hidden;text-overflow:ellipsis}
+.lb-where{color:var(--muted)}
+.lb-more{padding:2px var(--sp-2);font-size:var(--fs-xs);border-radius:var(--radius-pill);line-height:1.25rem;transition:opacity var(--dur-slow) var(--ease)}
+.lobby .lb-in,.lobby .lb-out{opacity:0}
+.lb-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:calc(var(--z-sheet) + 1);min-width:14rem;max-width:min(22rem,calc(100vw - 32px));margin:0;padding:var(--sp-1);list-style:none;
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md)}
+.lb-pop.flip{right:auto;left:0}
+.lb-pop li{display:flex;align-items:center;gap:var(--sp-2);min-height:2.25rem;padding:0 var(--sp-1) 0 0;border-radius:var(--radius-sm);font-size:var(--fs-sm)}
+.lb-row{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2);min-width:0;flex:1}
+.lb-row .lb-t{max-width:none}
+.lb-rowlink{display:flex;flex:1;color:var(--text);text-decoration:none;border-radius:var(--radius-sm)}
+.lb-rowlink:hover,.lb-rowlink:focus-visible{background:var(--panel-2)}.lb-rowlink:focus-visible{outline-offset:-3px}
+.lb-go{margin-left:auto;color:var(--muted);font-size:var(--fs-xs);white-space:nowrap;padding:var(--sp-1) var(--sp-1)}
+@media (max-width:899px){
+  .lobby{gap:0;padding-left:.5rem}
+  .lb-dot{width:2rem;height:2rem;min-width:2rem;padding:0;margin-left:-.5rem;border-radius:50%;border:2px solid var(--panel);background:var(--panel-2);
+    display:inline-grid;place-items:center;transition:opacity var(--dur-slow) var(--ease);position:relative}
+  .lb-dot i{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;color:var(--on-person);font-style:normal;font-size:var(--fs-sm);font-weight:700}
+  .lb-dot.lb-more{font-size:var(--fs-xs);font-weight:600;color:var(--text)}
+  .lb-pop{position:fixed;left:16px;right:16px;top:auto;max-width:none;margin-top:var(--sp-1)}
+}
+/* ≥ 900 px when the named chips would wrap the header (measured in lobby.js): circles only, as at 390 */
+.lobby.lb-round{gap:0;padding-left:.5rem}
+.lobby.lb-round .lb-dot{width:2rem;height:2rem;min-width:2rem;padding:0;margin-left:-.5rem;border-radius:50%;border:2px solid var(--panel);background:var(--panel-2);
+  display:inline-grid;place-items:center;transition:opacity var(--dur-slow) var(--ease);position:relative}
+.lobby.lb-round .lb-dot i{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;color:var(--on-person);font-style:normal;font-size:var(--fs-sm);font-weight:700}
+.lobby.lb-round .lb-dot.lb-more{font-size:var(--fs-xs);font-weight:600;color:var(--text)}
+@media (prefers-reduced-motion:reduce){.lb-chip,.lb-more,.lb-dot{transition:none}}
+
+/* ===== the planned restart notice (U1855, redline 25): top centre, 12 px under the header (top set by notice.js) */
+.rs-note{position:fixed;left:50%;transform:translateX(-50%);z-index:var(--z-alert);display:flex;align-items:center;gap:var(--sp-2);
+  width:max-content;max-width:28rem;padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);border-radius:var(--radius-pill);border:1px solid var(--border);
+  background:color-mix(in srgb,var(--panel) 94%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:var(--shadow-md);
+  font-size:var(--fs-sm);color:var(--text);font-variant-numeric:tabular-nums;transition:opacity var(--dur-slow) var(--ease)}
+.rs-note.rs-fade{opacity:0}
+.rs-ic{display:inline-grid;place-items:center;flex:none;width:1rem;height:1rem;color:var(--muted)}
+.rs-ic svg{width:1rem;height:1rem;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.rs-note[data-phase=back] .rs-ic{color:var(--ok)}
+.rs-spin{animation:spin .9s linear infinite}
+.rs-t{flex:1;min-width:0}
+.rs-n{font-weight:inherit;font-variant-numeric:tabular-nums}
+.rs-note .rs-reload{margin:0 0 0 var(--sp-1);padding:3px var(--sp-2);font-size:var(--fs-xs)}
+.rs-x{flex:none;border:0;background:none;padding:0;width:1.75rem;height:1.75rem;border-radius:50%;color:var(--muted);font-size:1.05rem;line-height:1}
+.rs-x:hover{color:var(--text);background:var(--panel-2)}
+@media (max-width:599px){.rs-note{left:16px;right:16px;transform:none;width:auto;max-width:none;border-radius:var(--radius-lg)}}
+@media (prefers-reduced-motion:reduce){.rs-note{transition:none}.rs-spin{animation-duration:2.4s}}
+/* while restarting: the controls that change the design are aria-disabled, in the disabled style (no overlay) */
+body.restarting [data-rs-off],body.restarting #talk-send[aria-disabled=true]{opacity:.45;cursor:default}
+body.restarting .retry[aria-disabled=true],body.restarting #reply-retry[aria-disabled=true]{opacity:.45;cursor:default;text-decoration:none}
+body.restarting #banner[data-kind=offline]{display:none}
+
+/* ===== «Anton Radio» (U1718, redline 27 r2): gulden-ai's .dj-strip in Anton's pill, same classes, on the shared tokens */
+.pill{container:composer/inline-size;flex-wrap:wrap}
+/* the pill's round ends stay the same 23 px when the slot row makes it two rows tall (a 999 px radius would cut the
+   cover's corner); the single-row pill looks exactly as before */
+/* a press in the slot is not writing: the accent edge stays for the text box (gulden-ai: #composer:has(#input:focus)) */
+.dj-strip{flex:1 0 100%;order:-3;display:flex;align-items:center;gap:var(--sp-2);min-width:0;padding:var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2)}
+.dj-strip--typing:not(.dj-strip--idle){display:none}
+/* the idle control stays while he types: taking it out would move the text box under his cursor */
+.dj-strip--idle{flex:0 0 auto;order:0;padding:0;align-self:flex-end}     /* on the history button's line (laser's row is bottom-aligned) */
+/* the idle icon takes 40 px of the text row; the busy line is a live region, read whole */
+.pill:has(>.dj-strip) textarea:placeholder-shown,.pill:has(>.dj-strip) .busy{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dj-strip .ibtn{position:relative;flex:0 0 auto;display:inline-grid;place-items:center;width:2.25rem;height:2.25rem;padding:0;border:0;border-radius:var(--radius);
+  background:transparent;color:var(--muted);cursor:pointer;transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease)}
+.dj-strip .ibtn:hover{background:var(--panel-2);color:var(--text)}
+.dj-strip .ibtn:focus:not(:focus-visible){outline:none}
+.pill .dj-strip .ibtn svg,.pill .now__glyph svg{width:1.1rem;height:1.1rem;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.pill .dj-strip svg .f{fill:currentColor;stroke:none}
+/* the idle control is the pill's own size, as the history button beside it (laser's pill row is 34 px, not gulden-ai's
+   --tap − 0.25rem: that would make every household's idle pill 6 px taller) */
+.dj-strip__idle.ibtn{width:calc(var(--tap) - .25rem);height:calc(var(--tap) - .25rem);border-radius:var(--radius-lg)}
+/* designer's read (U1718): the pause button is the radio icon's box and colour, so it is as easy to hit */
+.now__ctl .dj-strip__play.ibtn{width:max(var(--tap),44px);height:max(var(--tap),44px);border-radius:var(--radius-lg);color:var(--muted)}
+.now__ctl .dj-strip__play.ibtn:hover{color:var(--text)}
+.pill .dj-strip__play.ibtn svg{width:1.3rem;height:1.3rem}
+/* the open pill (the now row and the text row) must never cover the last row of a page: room for it and a gap (designer, at 390) */
+body:not(.ed){--pillh:8.75rem}
+body:not(.ed):has(.ac-stack) main{padding-bottom:calc(var(--pillh) + var(--sp-4))}
+.pill .dj-strip__idle.ibtn svg{width:1.3rem;height:1.3rem}
+/* R1: on a touch screen every control in the slot is a full tap target */
+@media (hover:none){.now__ctl .ibtn{width:var(--tap);height:var(--tap)}}
+.now__cover{position:relative;flex:0 0 auto;width:2.5rem;height:2.5rem;border-radius:var(--radius-sm);overflow:hidden;background:var(--panel-2);color:var(--muted)}
+.now__cover--glyph{display:grid;place-items:center}
+.now__glyph{display:grid;place-items:center}
+.pill .now__glyph svg{width:1.2rem;height:1.2rem;stroke-width:1.5}
+.now__img{display:block;width:100%;height:100%;object-fit:cover}
+.now__text{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.now__title{font-size:var(--fs-md);font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* not answering: the sentence takes the meta line's place, so it may use two lines there instead of being cut */
+.dj-strip[data-state=fail] .now__title{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+.now__title--new{animation:now-title-in var(--dur-slow) var(--ease)}
+@keyframes now-title-in{from{opacity:0}to{opacity:1}}
+.now__meta{display:flex;align-items:center;gap:var(--sp-1);min-width:0;font-size:var(--fs-sm);color:var(--muted);white-space:nowrap}
+.dj-strip__where{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dj-strip__at:empty,.dj-strip__where:empty{display:none}
+.now__ctl{display:flex;align-items:center;flex:0 0 auto}
+/* «Press to play»: Play with a 1 px accent border (an inset ring: the button keeps its size). No pulse. */
+.dj-strip[data-state=press] .dj-strip__play{box-shadow:inset 0 0 0 1px var(--accent);color:var(--text)}
+/* the equaliser mark (gulden-ai system.css `.eq`): three still bars, accent, in the meta line */
+.dj-strip .eq{display:inline-flex;flex:0 0 auto;gap:2px;align-items:flex-end;height:.7em}
+.dj-strip .eq i{width:2px;background:var(--accent);border-radius:1px}
+.dj-strip .eq i:nth-child(1){height:60%}.dj-strip .eq i:nth-child(2){height:100%}.dj-strip .eq i:nth-child(3){height:40%}
+.dj-strip .now__eq-on{display:none}     /* (gulden-ai has `.now__eq-on`, which `.dj-strip .eq` above outranks) */
+/* loading: the house's one busy state (gulden-ai components/controls.css `.is-busy::after`), an accent arc turning
+   around the control's own edge */
+@property --busy-turn{syntax:"<angle>";inherits:false;initial-value:0deg}
+.dj-strip .ibtn{--busy-radius:var(--radius)}
+.dj-strip .is-busy{cursor:progress}
+.dj-strip .is-busy::after{--busy-gap:3px;--busy-w:2px;content:"";position:absolute;inset:calc(-1 * var(--busy-gap));border:var(--busy-w) solid transparent;
+  border-radius:calc(var(--busy-radius,999px) + var(--busy-gap));background:conic-gradient(from var(--busy-turn),var(--accent) 0 30%,transparent 30%) border-box;
+  -webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) padding-box exclude,linear-gradient(#000 0 0);     /* redline 30 exception (colour): a mask's alpha, not a colour on the screen */
+  animation:control-busy-turn .9s linear infinite;pointer-events:none}
+@keyframes control-busy-turn{to{--busy-turn:360deg}}
+body.restarting .dj-strip .ibtn[aria-disabled=true]{opacity:.45;cursor:default}
+@media (prefers-reduced-motion:reduce){.now__title--new{animation:none}.dj-strip .is-busy::after{animation-duration:2.4s}.dj-strip .ibtn{transition:none}}
+/* D3: inline at 36rem and over (gulden-ai's rule, kept so a wider pill goes inline; laser's pill is at most 560 px,
+   35rem, so on laser the slot is always the row above) */
+@container composer (min-width:36rem){
+  .dj-strip{flex:0 1 auto;order:0;max-width:max(50%,19.5rem);padding:0 0 0 var(--sp-1)}
+  .dj-strip:not(.dj-strip--idle)::after{content:"";flex:0 0 auto;width:1px;height:1.5rem;margin-left:var(--sp-1);background:var(--border)}
+  .dj-strip--typing:not(.dj-strip--idle){display:flex;flex:0 0 auto;max-width:none}
+  .dj-strip--typing .now__text,.dj-strip--typing .now__ctl{display:none}
+  .dj-strip--typing::after{display:none}
+  .dj-strip--typing .now__cover::after{content:"";position:absolute;inset:0;background:var(--scrim);opacity:.85}
+  .dj-strip--typing .now__eq-on{display:inline-flex;position:absolute;left:50%;top:50%;z-index:1;height:.9rem;translate:-50% -50%}
+  .dj-strip--typing .now__eq-on i{width:3px}
+}
+@container composer (min-width:44rem){.dj-strip{max-width:60%}}
+@media (hover:none){@container composer (min-width:36rem){.dj-strip{max-width:max(50%,21rem)}}}
+/* last, so no display rule above outranks a part the script hid */
+.dj-strip[hidden],.dj-strip [hidden]{display:none}
+
+/* ===== Anton's door outside the editor (U1829, redline 24 §3): the editor's bottom stack on the content column */
+html body .bstack.ac-stack{position:fixed;z-index:var(--z-composer);left:50%;right:auto;bottom:16px;transform:translateX(-50%);width:min(560px,calc(min(1100px,100%) - 48px));max-width:none}
+.ac-sheet{position:fixed;z-index:var(--z-sheet);top:var(--ac-top,0px);right:0;bottom:0;width:var(--pane-w);max-width:100%;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--border);box-shadow:var(--shadow-md)}
+.ac-head{display:flex;align-items:center;gap:var(--sp-2);flex:none;padding:var(--sp-2) var(--sp-2) var(--sp-1) var(--sp-4)}
+.ac-head h2{flex:1;min-width:0;margin:0;font-size:var(--fs-base);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-x{flex:none;width:var(--tap);height:var(--tap);padding:0;border:0;background:transparent;color:var(--muted);font-size:var(--fs-xl);line-height:1;border-radius:var(--radius)}
+.ac-x:hover{background:var(--panel-2);color:var(--text)}
+.ac-sheet .side-body{padding:var(--sp-1) var(--sp-4) var(--sp-3)}
+.ac-sheet .grab{display:none}
+/* ≥ 900 px the pane is a column at the right, not a layer (redline 40 §1, U1934); the editor is not in it */
+@media (min-width:900px){
+  .ac-sheet{box-shadow:none}
+  .ac-sheet .side-body{overscroll-behavior:contain}
+  body.ac-sheet-open:not(.ed){padding-right:var(--pane-w)}
+  body.ac-sheet-open:not(.ed)>.appbar{margin-right:calc(-1 * var(--pane-w))}
+  /* phase 2: the left border is the grip, 8 px wide, the full height; a 2 px accent line on hover and focus */
+  .pane-grip{position:absolute;top:0;bottom:0;left:-4px;width:8px;cursor:col-resize;z-index:1;touch-action:none}
+  .pane-grip::after{content:"";position:absolute;top:0;bottom:0;left:3px;width:2px;background:transparent}
+  .pane-grip:hover::after,.pane-grip:focus-visible::after{background:var(--accent)}
+  .pane-grip:focus-visible{outline:none}
+}
+.pane-grip{display:none}
+@media (min-width:900px){.pane-grip{display:block}body.side-off .pane-grip{display:none}}
+a.ref-link{font-weight:600}
+.ref-here{font-weight:600;color:var(--text)}
+@media (max-width:899px){
+  .ac-sheet{top:auto;left:0;width:auto;height:52dvh;border:1px solid var(--border);border-bottom:0;border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;box-shadow:var(--shadow-up);transition:height var(--dur-slow) var(--ease)}
+  .ac-sheet[data-snap=full]{height:calc(100dvh - var(--ac-top,0px))}
+  .ac-sheet .grab{display:grid;place-items:center;flex:none;width:100%;height:22px;border:0;background:none;padding:0;cursor:grab;touch-action:none}
+  .ac-sheet .grab i{display:block;width:40px;height:5px;border-radius:3px;background:var(--border)}
+  .ac-head{padding-top:0}
+}
+@media (prefers-reduced-motion:reduce){.ac-sheet{transition:none}}
+.ac-stack .pill textarea:placeholder-shown{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the tray (r29 review): the reply area and the waiting lines on one solid --panel card down to the pill; the waiting
+   line itself is solid too (lobby pages only: the editor's stack is unchanged) */
+.ac-stack{border:1px solid transparent;border-radius:var(--radius-lg);transition:background-color 1.2s ease,border-color 1.2s ease,box-shadow 1.2s ease}     /* with the 1.2 s reply fade (redline 18 §4, r29) */
+html body .bstack.ac-stack.ac-filled{background:var(--panel);border-color:var(--border);box-shadow:var(--shadow-md);padding:var(--sp-2);bottom:7px;width:min(578px,calc(min(1100px,100%) - 30px))}
+html body .bstack.ac-stack.ac-filled.ac-fade{background:transparent;border-color:transparent;box-shadow:none}
+.ac-stack .wline{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg)}
+.ac-stack .reply .ask,.ac-stack .reply .rnote{text-shadow:none}
+.ac-stack.ac-filled .rcard{box-shadow:none}
+@media (prefers-reduced-motion:reduce){.ac-stack{transition:none}}
+
+/* ===== Anton's pill in the open chat (U1861, redline 29): pillplace.js moves it into #chat-pill; solid, no blur or shadow */
+.chatpill{flex:none;position:relative;padding:var(--sp-2) 0 0}
+.chatpill:empty{display:none}
+.chatpill::before{content:"";position:absolute;left:0;right:0;top:-16px;height:16px;background:linear-gradient(to bottom,color-mix(in srgb,var(--panel) 0%,transparent),var(--panel));pointer-events:none}
+.pill.in-chat{background:var(--panel-2);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}
+.pill.in-chat #pill-hist,.pill.in-chat #pill-new{display:none}
+.pill.in-chat:not(:has(>.dj-strip)) .pillmid{padding-left:calc(var(--sp-3) + var(--sp-2))}
+.chatpill .pill textarea:placeholder-shown{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the move (§4): it leaves its old place at once and fades in at the new one, opacity only; none with reduced motion */
+@keyframes pill-in{from{opacity:0}to{opacity:1}}
+.pill.pill-in{animation:pill-in var(--dur-fast) var(--ease)}
+@media (prefers-reduced-motion:reduce){.pill.pill-in{animation:none}}
+/* the editor: the Chat tab's list, then the pill; the canvas keeps only the selection bar, 16 px above its bottom */
+#p-chat #talk{margin:0}
+body.ed.pill-chat:not(.m) .bstack{bottom:16px}
+/* there the bar sits between the position readout and the zoom buttons, never under them: it wraps instead */
+body.ed.pill-chat:not(.m) .stage:not(.narrow) .bstack .selbar{max-width:calc(var(--stagew,100vw) - 290px)}
+/* phone: the pill is the sheet's bottom row on Chat, with 16 px gutters; the docked strip under the sheet is not
+   there. With the keyboard open the sheet stays at full height above it and the pill sits on the keyboard (§3). */
+body.m .chatpill{padding-left:var(--sp-1);padding-right:var(--sp-1)}
+body.m.ed.pill-chat .bstack{display:none}
+body.m.sheet-open.talk-on.pill-chat .side-body{padding-bottom:var(--sp-3)}
+body.kb.m.ed.pill-chat aside.side,body.kb.m.ed.pill-chat aside.side[data-snap]{bottom:var(--kb,0px);height:calc(var(--vvh,70dvh) - 8px)}
+/* the lobby pages: the side sheet (or the phone's bottom sheet) ends in the pill; the page's stack stays empty and
+   the page's bottom padding does not change (lobbychat.js) */
+html body.pill-chat .bstack.ac-stack{display:none}
+.ac-sheet .side-body{padding-bottom:0}
+.ac-sheet .chatpill{padding:var(--sp-2) var(--sp-3) var(--sp-3)}
+@media (max-width:899px){.ac-sheet .chatpill{padding:var(--sp-2) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom))}}
+/* «New chat» below 900 px (U1861 review): not a row of its own under the title */
+@media (max-width:899px){
+  .ac-sheet #chat-top{position:absolute;z-index:1;top:22px;right:56px;margin:0}
+  .ac-sheet:has(#chat-top:not([hidden])) .ac-head h2{margin-right:calc(var(--sp-6) * 2)}
+  body.m.ed aside.side[data-tab=chat] #chat-top{position:absolute;z-index:1;top:2px;right:12px;margin:0}
+  body.m.ed aside.side[data-tab=chat]:has(#chat-top:not([hidden])) .side-body{padding-top:calc(var(--sp-6) + var(--sp-1))}
+}
+.wide{width:100%}.xsmall{font-size:var(--fs-xs)}
+
+/* redline 41 (U1938): a receipt is one line in Anton's column (icon, sentence, «Undo»); a card is a --panel-2 box */
+.talk-item.receipt,#p-chat .talk-item.receipt{border:0;background:none;padding:var(--sp-1) 0;max-width:100%;color:var(--text);font-size:var(--fs-md)}
+.talk-item.receipt .talk-body{display:flex;align-items:center;gap:var(--sp-2)}
+.rc-icon{flex:none;display:inline-grid;color:var(--muted)}
+.rc-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.rc-text{flex:1;min-width:0;margin-right:var(--sp-2)}
+.talk-item.receipt button.rc-undo{margin-left:auto;flex:none;border-color:transparent;background:none;color:var(--accent);font-size:var(--fs-sm);min-height:max(var(--tap),44px)}
+.talk-item.receipt.undone{color:var(--muted)}
+.rc-problem{color:var(--warn-text);font-size:var(--fs-sm);padding-left:calc(16px + var(--sp-2))}
+.rc-fail{color:var(--danger-text);font-size:var(--fs-sm);padding-left:calc(16px + var(--sp-2))}
+.pt-said{display:block;color:var(--muted);font-size:var(--fs-sm)}
+.talk-item.card,#p-chat .talk-item.card,.reply .talk-item.card{background:var(--panel-2);border:0;border-radius:var(--radius);box-shadow:none;padding:var(--sp-2) var(--sp-3)}
+.talk-item.card>.talk-body{font-weight:600;color:var(--text)}
+.talk-item.card .cnote{font-size:var(--fs-sm);color:var(--text);margin-top:var(--sp-1)}
+.talk-item.card .asst-row{justify-content:flex-end;margin-top:var(--sp-2)}
+.talk-item.card.closed{background:none;padding:var(--sp-1) 0}
+.talk-item.card.closed>.talk-body{font-weight:400}
+.talk-item.card.stale>.talk-body{font-weight:400;color:var(--muted)}
+
+/* ===== the image trace card (U1942, redline 42): the shared dialog, large; a full-height sheet below 900 px */
+dialog.tc{width:min(1100px,calc(100vw - 2 * var(--edge-x)));max-width:none;height:min(760px,90vh);max-height:none;padding:0;background:var(--panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);overflow:hidden}
+dialog.tc[open]{display:flex;flex-direction:column}
+dialog.tc label{margin:0;font-size:var(--fs-md)}
+.tc-head{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border);flex:none}
+.tc-head h2{margin:0;flex:1;min-width:0;font-size:var(--fs-lg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-x{border:0;background:none;font-size:var(--fs-xl);line-height:1;padding:var(--sp-1) var(--sp-2);color:var(--muted)}
+.tc-x:hover{color:var(--text)}
+.tc-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.tc-prev{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0;min-height:0;padding:var(--sp-4)}
+.tc-stage{position:relative;flex:1;min-height:0;background:var(--bed);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.tc-stage>svg{position:absolute;inset:0;width:100%;height:100%}
+.tc-gl{fill:none;stroke:var(--grid);stroke-width:1px;vector-effect:non-scaling-stroke}
+.tc-frame{fill:none;stroke:var(--border);stroke-width:1px;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
+.tc-photo{opacity:.25}
+.tc-shapes.fill{fill:var(--engrave);stroke:none}
+.tc-shapes.cut{fill:none;stroke:var(--text);stroke-width:1.25px;vector-effect:non-scaling-stroke}
+.tc-upd{position:absolute;top:var(--sp-2);right:var(--sp-3);font-size:var(--fs-sm);color:var(--muted)}
+.tc-upd[hidden]{display:none}
+.tc-under{display:flex;align-items:center;gap:var(--sp-2) var(--sp-4);flex:none;flex-wrap:wrap}
+.tc-n{font-size:var(--fs-sm);color:var(--muted)}
+.tc-n.bad{color:var(--danger-text)}
+dialog.tc label.tc-chk{display:inline-flex;align-items:center;gap:var(--sp-2);font-weight:400;min-height:var(--tap)}
+dialog.tc .tc-chk input{width:auto;margin:0;accent-color:var(--accent)}
+.tc-col{display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--border)}
+.tc-form{flex:1;overflow:auto;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4)}
+/* the form scrolls, its parts keep their height: an overflow:hidden child (the «Trace to lines | Engrave as dots» .segb) would shrink to 0 (r63, r65) */
+.tc-form>*{flex-shrink:0}
+.tc-sec{display:flex;flex-direction:column;gap:var(--sp-2)}
+.tc-sec h3{margin:0;font-size:var(--fs-xs);font-weight:600;text-transform:var(--label-case);letter-spacing:var(--label-tracking);color:var(--muted)}
+.tc-size{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+dialog.tc .tc-size label{font-weight:400}
+.tc-num{position:relative;display:inline-block;width:7.5rem}
+dialog.tc .tc-num input{width:100%;padding-right:2.6em}
+.tc-unit{position:absolute;right:var(--sp-2);top:50%;transform:translateY(-50%);font-size:var(--fs-sm);color:var(--muted);pointer-events:none}
+.tc-h{font-size:var(--fs-md);color:var(--muted);margin-left:var(--sp-2)}
+.tc-warn{margin:0;font-size:var(--fs-sm);color:var(--warn-text)}
+.tc-warn[hidden]{display:none}
+.tc-rot{display:flex;gap:var(--sp-2)}
+.tc-ib{display:inline-grid;place-items:center;width:var(--tap);height:var(--tap);padding:0}
+.tc-ib svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.segb.tc-seg{margin:0}
+.tc-th{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-2)}
+dialog.tc .tc-th label{font-weight:600}
+.tc-auto{font-size:var(--fs-sm)}
+.tc-auto[hidden]{display:none}
+dialog.tc input[type=range]{width:100%;margin:0;accent-color:var(--accent)}
+.tc-ends{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--muted);margin-top:calc(-1 * var(--sp-1))}
+.tc-more>summary{cursor:pointer;font-weight:600;font-size:var(--fs-md);min-height:var(--tap);display:flex;align-items:center;gap:var(--sp-1);list-style:none}
+.tc-more>summary::-webkit-details-marker{display:none}
+.tc-more>summary::before{content:"▸";color:var(--muted);transition:transform var(--dur-fast) var(--ease)}
+.tc-more[open]>summary::before{transform:rotate(90deg)}
+.tc-more[open]{display:flex;flex-direction:column;gap:var(--sp-2)}
+.tc-acts{flex:none;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);border-top:1px solid var(--border);background:var(--panel)}
+.tc-fail{flex:1 1 100%;margin:0;font-size:var(--fs-sm);color:var(--danger-text)}
+.tc-fail[hidden]{display:none}
+.tc-prev[hidden],.tc-sec[hidden],.tc-more[hidden],.tc-acts>[hidden]{display:none}
+@media (max-width:899px){
+  dialog.tc{width:100%;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0}
+  .tc-head{padding:var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-4)}
+  .tc-head h2{font-size:var(--fs-base)}
+  .tc-x{width:var(--tap);height:var(--tap);padding:0}
+  .tc-body{display:flex;flex-direction:column}
+  .tc-prev{flex:0 0 40%;padding:0;gap:0;border-bottom:1px solid var(--border)}
+  .tc-stage{border:0;border-radius:0}
+  .tc-under{padding:0 var(--sp-4)}
+  .tc-col{flex:1;border-left:0}
+  .tc-acts{padding:var(--sp-2) var(--sp-4) calc(var(--sp-2) + env(safe-area-inset-bottom))}
+  .tc-acts button{flex:1;min-height:var(--tap)}
+  dialog.tc input,dialog.tc .segb button{min-height:var(--tap)}
+}
+@media (prefers-reduced-motion:reduce){.tc-more>summary::before{transition:none}}
+
+/* the focus ring: gulden-ai's one rule on the shared tokens (--focus-w, --focus-color, --focus-off; redline 30 §4). Last,
+   so it outranks the `all:unset` resets above; list rows only move it inside (outline-offset:-3px) */
+:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+/* photo engraving on the material page (redline 53) */
+.photo-start{display:flex;gap:var(--sp-3);align-items:baseline;flex-wrap:wrap}
+.photo-lab{font-weight:600}
+.photo-start p,#photo-body>p{margin:var(--sp-1) 0}
+.photo-acts{margin:var(--sp-2) 0}
+fieldset.r-ps{border:0;padding:0;margin:0;display:flex;gap:var(--sp-2);grid-column:1/-1}
+fieldset.r-ps legend{font-weight:600;padding:0;margin-bottom:var(--sp-1)}
+@media (max-width:899px){.photo-acts{flex-direction:column;align-items:stretch}.photo-acts>button{width:100%}}
+
+/* U2181: the group tree under a part */
+.prow{position:relative}
+.prow.grow{padding-left:calc(1rem + var(--sp-1) + var(--depth,1) * 1rem);color:var(--muted)}.prow.grow .px{font-size:var(--fs-sm)}
+.prow .pcaret{position:absolute;left:0;top:0;bottom:0;width:28px;padding:0;border:0;background:none;color:var(--muted);font-size:var(--fs-sm);line-height:1;z-index:1;cursor:pointer}
+body.m .prow .pcaret{width:var(--tap)}
+/* U2184: the font picker under the selection bar */
+.fontpop{position:fixed;z-index:var(--z-sheet);top:140px;right:8px;width:344px;max-height:min(60vh,34rem);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--panel);box-shadow:var(--shadow-sm);overflow:auto;padding:var(--sp-2)}
+body.m .fontpop{top:auto;bottom:64px;right:8px;left:8px;width:auto;max-height:42vh}
+.fontpop .fp-note{margin:0 0 var(--sp-2);color:var(--muted);font-size:var(--fs-sm)}.fontpop .fp-note.err{color:var(--danger-text)}
+.fp-list{display:flex;flex-direction:column;gap:2px}
+.fp-row{position:relative;display:grid;grid-template-columns:11rem 1fr 24px;align-items:center;gap:var(--sp-2);width:100%;min-height:48px;padding:var(--sp-1) var(--sp-2);border:0;border-radius:var(--radius-sm);background:none;color:var(--text);text-align:left;cursor:pointer}
+body.m .fp-row{min-height:44px;grid-template-columns:7.5rem 1fr 24px}
+.fp-row:hover{background:var(--panel-2)}.fp-row.on{background:var(--accent-panel)}.fp-row:disabled{opacity:.6;cursor:default}
+.fp-name{font-size:var(--fs-sm);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;overflow-wrap:anywhere}.fp-sub{grid-column:2 / 4;color:var(--muted);font-size:var(--fs-sm)}
+.fp-check{grid-column:3;grid-row:1;justify-self:center;color:var(--accent);font-size:var(--fs-sm)}
+.fp-draw{display:block;min-width:0}.fp-draw svg{display:block;max-width:100%;max-height:2.25rem;width:auto;height:auto;color:var(--text)}.fp-draw svg path{stroke:var(--text);stroke-width:1.5px;vector-effect:non-scaling-stroke}
+
+/* U1838 (sketch): Skip is a mode; Air assist and Z sit behind More; the material's three rows fold */
+.layer .ls.adv{display:flex;gap:var(--sp-2);flex-wrap:wrap}.layer .ls.adv[hidden],.layer .ls[hidden],.layer .skipline[hidden]{display:none}
+.layer .matbox{display:inline-flex;align-items:center;gap:var(--sp-1)}.layer .matbox[hidden]{display:none}
+.layer .ls.adv label{display:inline-flex;align-items:center;gap:var(--sp-1);white-space:nowrap}
+.layer .sfx{position:relative;display:inline-block}.layer .ls.adv .matbox{flex-basis:100%}.layer .ls.adv .sfx input{width:100%;min-width:4.5rem;padding-right:2rem;box-sizing:border-box}.layer .ls.adv .zf{display:flex;flex-direction:column;align-items:stretch;gap:2px;flex:1 1 0;min-width:4.5rem}.layer .ls.adv .zf .sfx{display:block}
+.layer .ls.custom .cf{display:flex;flex-direction:column;gap:2px;min-width:0;color:var(--muted);font-size:var(--fs-xs)}.layer .ls.custom .cf input{width:100%;min-width:0;box-sizing:border-box;color:var(--text)}.layer .ls.custom{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-1)}.layer .ls.custom[hidden]{display:none}.layer .sfx i{position:absolute;right:var(--sp-1);top:50%;transform:translateY(-50%);color:var(--muted);font-size:var(--fs-xs);font-style:normal;pointer-events:none}
+.layer .more{background:none;border:0;padding:0;color:var(--muted);font-size:var(--fs-sm);cursor:pointer}.layer .more:hover{color:var(--text)}
+.layer .skipline{margin-top:2px}.layer .skipchip{padding:0 var(--sp-1);border:1px solid var(--border);border-radius:var(--radius-pill);color:var(--muted);font-size:var(--fs-xs)}
+.layer.skipped .ln{color:var(--muted)}
+.matrows{border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2);margin-bottom:var(--sp-2);background:var(--panel)}
+.matrows .mhead{display:flex;align-items:center;gap:var(--sp-1)}.matrows .mfold{background:none;border:0;padding:0;color:var(--muted);font-size:var(--fs-sm);min-width:28px;min-height:28px}
+body.m .matrows .mfold{min-height:var(--tap);min-width:var(--tap)}
+.matrows .mname{font-weight:600;font-size:var(--fs-sm);text-align:left;padding:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.matrows .mrows{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px var(--sp-2);font-size:var(--fs-sm);margin-top:var(--sp-1);font-variant-numeric:tabular-nums}
+.matrows .mh{color:var(--muted);font-size:var(--fs-xs);text-align:right}.matrows .mop{font-weight:600}.matrows .mv{text-align:right;color:var(--text)}
+.matrows .moff{margin:var(--sp-1) 0 0;color:var(--muted);font-size:var(--fs-xs)}
+
+/* U1838 redline 64: the Size line of an import */
+.isize{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin:var(--sp-1) 0 0}
+.isize-l{color:var(--muted);font-size:var(--fs-sm)}
+.isize-f{position:relative;display:inline-block}.isize-f input{width:5.5rem;min-width:0;box-sizing:border-box;height:2rem;padding:0 calc(var(--sp-1) + var(--unit-w,.9rem) + var(--sp-2)) 0 var(--sp-1);font-variant-numeric:tabular-nums;text-align:right}
+.isize-f i{position:absolute;right:var(--sp-1);top:50%;transform:translateY(-50%);color:var(--muted);font-size:var(--fs-sm);font-style:normal;pointer-events:none}
+.isize .isize-err{flex-basis:100%;margin:0;color:var(--warn-text);font-size:var(--fs-sm)}.isize .isize-err[hidden]{display:none}
+body.m .isize{min-height:var(--tap)}body.m .isize-l{display:flex;align-items:center;min-height:var(--tap)}body.m .isize-f input{height:var(--tap)}
+.isize-log{margin:var(--sp-1) 0 0;color:var(--muted);font-size:var(--fs-sm)}
+.inames{margin:var(--sp-2) 0 0}.inames-h{margin:0;color:var(--text);font-size:var(--fs-sm);font-weight:600}.inames>.sm{margin:var(--sp-3) 0 0}
+.iname{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin:var(--sp-3) 0 0}
+.iname .iname-l{flex-basis:100%;color:var(--text);font-size:var(--fs-sm);order:0;white-space:normal;overflow-wrap:anywhere}
+.iname input{width:12rem;max-width:100%;min-width:0;box-sizing:border-box;height:2rem;order:2}.iname .sm{order:3}.iname input.warn{border-color:var(--warn-text)}
+.iname .iname-err{flex-basis:100%;order:4;margin:0;color:var(--warn-text);font-size:var(--fs-sm)}.iname .iname-err[hidden]{display:none}
+.iname .isize-hint{flex-basis:100%;order:5;margin:0;color:var(--muted);font-size:var(--fs-sm)}
+body.m .iname input{width:100%;min-height:var(--tap)}body.m .iname .sm,body.m .inames>.sm{min-height:var(--tap)}body.m .iname .sm{flex:1 1 0}
+.idpi select{width:14rem;max-width:100%;box-sizing:border-box}.idpi .isize-hint{flex-basis:100%;margin:0;color:var(--muted);font-size:var(--fs-sm)}
+body.m .idpi{display:block}body.m .idpi .isize-l{min-height:0;margin-bottom:var(--sp-1)}      /* the label is not tap high: designer's nit, the gap to the select is the one above Size */body.m .idpi select{display:block;width:100%;min-height:var(--tap)}body.m .idpi .isize-hint{margin-top:var(--sp-1)}
+.isize-f input{-moz-appearance:textfield;appearance:textfield}.isize-f input::-webkit-outer-spin-button,.isize-f input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* ---- «Useful stuff» (U1841, redline 65): kind chips, Cut/Printed control, groups of cards */
+.us .us-bar{display:flex;gap:var(--sp-3);align-items:center;justify-content:space-between;flex-wrap:wrap;margin:var(--sp-4) 0}
+.us .us-chips{display:flex;gap:var(--sp-2);flex-wrap:wrap}
+.us .us-bar.us-wait{visibility:hidden;min-height:calc(var(--tap) + 2px)}   /* U2270: its final height before /api/shelf answers */
+.us .us-chip{font-size:var(--fs-sm);border-radius:var(--radius-pill);padding:var(--sp-1) var(--sp-3);background:var(--panel);border:1px solid var(--border);min-height:var(--tap)}
+.us .us-chip[aria-pressed=true]{background:var(--accent-panel);border-color:var(--accent);font-weight:600}
+.us .us-seg{display:inline-flex;margin:0;gap:0;border:1px solid var(--border);border-radius:var(--radius-pill);overflow:hidden}
+.us .us-seg label{position:relative;margin:0;font-size:var(--fs-sm)}
+.us .us-seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.us .us-seg span{display:flex;align-items:center;min-height:var(--tap);padding:0 var(--sp-3);color:var(--muted)}
+.us .us-seg input:checked+span{background:var(--accent-panel);color:var(--text);font-weight:600}
+.us .us-seg input:focus-visible+span{outline:2px solid var(--accent);outline-offset:-2px}
+.us .us-group{margin:0 0 var(--sp-6)}
+.us .us-group h2{font-size:var(--fs-base);font-weight:600;margin:0 0 var(--sp-3)}
+.us .us-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-4)}
+@media (min-width:1024px){.us .us-grid{grid-template-columns:repeat(3,1fr);gap:var(--sp-6)}}
+.us .us-card{display:flex;flex-direction:column;overflow:hidden}
+.us .us-pic{--us-shadow:color-mix(in srgb,var(--text) 10%,transparent);position:relative;aspect-ratio:4/3;background:var(--thumb-bg);display:grid;place-items:center;overflow:hidden}
+:root[data-theme=dark] .us .us-pic{--us-shadow:color-mix(in srgb,black 35%,transparent)}@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .us .us-pic{--us-shadow:color-mix(in srgb,black 35%,transparent)}}
+.us .us-pic img{width:100%;height:100%;object-fit:contain;padding:var(--sp-3);box-sizing:border-box}
+.us .us-glyph{width:2.5rem;height:2.5rem;fill:none;stroke:var(--thumb-glyph);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.us .us-text{padding:var(--sp-3) var(--sp-3) 0;flex:1}
+.us .us-text p{margin:var(--sp-1) 0 0;font-size:var(--fs-sm)}
+.us .us-title{margin:0;font-size:var(--fs-md);font-weight:700;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.us .us-line{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.us .us-result a{color:inherit;text-decoration:underline;display:inline-flex;align-items:center;min-height:max(var(--tap),44px)}      /* a tap area, not a 16 px line */
+.us .us-acts{display:flex;gap:var(--sp-2);flex-wrap:wrap;padding:var(--sp-3)}
+.us .us-acts:has(.us-act + .us-act) .us-act{flex:1 1 100%}      /* two or more file actions: each the card's full width, no ragged edge (designer, U2390) */
+.us .us-acts .us-act.us-file{flex:1 1 100%}      /* a model's file (STL, 3MF), one or two: the card's full width (designer U3081) */
+.us .us-act{display:inline-flex;align-items:center;justify-content:center;min-height:var(--tap);padding:0 var(--sp-3);font-size:var(--fs-sm);border-radius:var(--radius);text-decoration:none}
+.us a.us-quiet{border:1px solid var(--border);background:var(--panel);color:var(--text)}
+.us a.us-pri,.us-viewer a.us-pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.us a.us-quiet:hover{background:var(--hover-wash)}
+.us .us-err,.us .us-warn{color:var(--warn-text);font-size:var(--fs-sm);margin:0;padding:0 var(--sp-3) var(--sp-3)}
+.us .us-state{text-align:center;padding:var(--sp-8) var(--sp-4)}
+.us .us-state .us-warn{padding:0 0 var(--sp-3)}
+.us .us-empty{margin-top:var(--sp-4)}
+.us .us-skel .us-text i{display:block;height:.8rem;margin:0 0 var(--sp-2);border-radius:var(--radius);background:var(--border);opacity:.6}
+.us .us-skel .us-text i:first-child{width:60%}
+.us .us-skel .us-card{min-height:14rem}
+@media (max-width:719px){
+  .us .us-bar{flex-direction:column;align-items:stretch}
+  .us .us-bar.us-wait{min-height:calc(3 * var(--tap) + var(--sp-2) + var(--sp-3))}   /* two chip rows, their gap, the gap, the cut switch */
+  .us .us-bar>*{min-width:0;max-width:100%}
+  .us .us-chips{flex-wrap:wrap}      /* 0.1.99: the chips wrap to a second line, as at 1440; sideways scrolling hid that more chips exist */
+  .us .us-chip{flex:none}
+  .us .us-seg{display:flex}.us .us-seg label{display:flex;flex:1 1 0;min-width:0}.us .us-seg span{flex:1;justify-content:center}
+  .us .us-grid{grid-template-columns:1fr;gap:var(--sp-3)}
+  .us .us-pic{aspect-ratio:16/10}
+  .us .us-pic .us-flat{padding:var(--sp-3)}
+  .us .us-text{padding-bottom:0}
+  .us .us-acts{padding-top:var(--sp-2)}
+  .us .us-act{flex:1 1 100%}
+}
+@media (min-width:720px) and (max-width:1023px){.us .us-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* U2192: the first stop of the keyboard on every page; hidden above the page until it has focus */
+.skip{position:absolute;left:var(--sp-2);top:-5rem;z-index:var(--z-alert);padding:var(--sp-2) var(--sp-3);background:var(--panel);color:var(--text);border:2px solid var(--accent);border-radius:var(--radius);text-decoration:none}
+.skip:focus{top:var(--sp-2)}main[tabindex="-1"]:focus,#main:focus,#lib:focus{outline:none}
+/* U2181 redline (designer, 2026-10-10): nested group rows keep one height and their names; the count drops its word in a
+   narrow list; only the picked row is filled, the part and groups around it show a thin accent rule */
+#parts{container:parts / inline-size}
+.prow.grow{flex-wrap:nowrap;padding-left:calc(1rem + var(--sp-1) + var(--depth,1) * 12px)}
+.prow.grow .pn{flex:1;min-width:0}
+@container parts (max-width:280px){.prow.grow .pxw{display:none}.prow.grow .px{color:var(--muted);font-variant-numeric:tabular-nums}}
+.prow.path{background:none;box-shadow:inset 2px 0 0 var(--accent)}
+/* the release line on the list pages (U1879 C): fixed bottom-right at every width */
+body:not(.ed):not(.auth){padding-block-end:calc(1.75rem + env(safe-area-inset-bottom))}
+body:not(.ed):not(.auth) .ver{position:fixed;inset-block-end:calc(.5rem + env(safe-area-inset-bottom));inset-inline-end:.75rem;z-index:1;padding:.125rem .375rem;
+  border-radius:var(--radius-sm);background:color-mix(in srgb,var(--bg) 85%,transparent);opacity:1;pointer-events:none}
+@media (max-width:760px){body:not(.ed):not(.auth):has(.ac-stack){--ver-room:calc(1.5rem + env(safe-area-inset-bottom))}
+  body:not(.ed):not(.auth):has(.ac-stack) .ver{inset-block-end:calc(16px + var(--tap) + .5rem + env(safe-area-inset-bottom))}}
+
+/* U2387: at phone width the design card's and the layer's buttons were 24-28 px; they get the tap height (qa's 44 px, as on the materials pages) */
+@media (max-width:620px){
+  .card .row button{min-height:max(var(--tap),44px)}
+  .layer .lh button,.layer .lh .icon-btn,.layer .lh .up,.layer .lh .dn{min-width:max(var(--tap),44px);width:max(var(--tap),44px);height:max(var(--tap),44px)}
+  .layer .lh .ln{min-height:max(var(--tap),44px)}
+  .layer .ls button,#addlayer{min-height:max(var(--tap),44px)}
+  .layer .more{padding:0 var(--sp-2)}
+}
+/* U2387, editor at phone width: the panel-height bar, the Parts/Layers tabs and the header's Undo and .atom are 44 px tall */
+body.m.ed .lview button,body.m.ed .top button:not(.fb-btn):not(.icon),body.m.ed .top a.brand{min-height:max(var(--tap),44px)}
+body.m.ed .top a.brand{display:inline-flex;align-items:center;min-width:max(var(--tap),44px);justify-content:center}
+body.m.ed .top .fb-btn,body.m.ed .top button.icon{min-width:max(var(--tap),44px);min-height:max(var(--tap),44px)}
+/* U2552 (designer): at 390 the header is two rows. The first: ☰, ←, the name, the lock and the status, your account; the second:
+   Feedback, the others' circles, Undo, Redo, .atom. Your own presence circle shows from 600 px up («You» at 1440). */
+@media (max-width:599px){
+  .ed .top>*{order:2}
+  .ed .top>#menu,.ed .top>.brand,.ed .top>#name,.ed .top>#ppill,.ed .top>.ab-mark,.ed .top>#status{order:0}
+  .ed .top>.me-menu{order:1}
+  .ed .top input.name{flex:1 1 72px;min-width:0}
+  .ed .top #status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #people .chip.me{display:none}
+}
+/* U1800 (qa 10:51Z, phone): the whole material row is the link, and the brand is a 44 px tap */
+@media (max-width:620px){
+  table.mats tr{position:relative}
+  table.mats td.name a::after{content:"";position:absolute;inset:0}
+  table.mats td.next{position:relative;z-index:1}
+  .appbar .brand{display:inline-flex;align-items:center;min-height:max(var(--tap),44px)}
+}
+
+/* U2387 (qa 11:42Z, 0.1.85 at 390): «New chat» 43, «Play Anton Radio» and the pill's history button 39 px; all 44 px under 900 px */
+@media (max-width:899px){
+  #chat-new{width:max(var(--tap),44px);height:max(var(--tap),44px);min-width:max(var(--tap),44px)}
+  .pill .hist,.pill .round,.dj-strip__idle.ibtn{width:max(var(--tap),44px);height:max(var(--tap),44px)}
+}
+
+/* U2387 (qa 12:00Z at 390): the Names card's «Use this name», «Keep as is» and «Use all» were 17-28 px tall; 44 px at phone width */
+body.m .psug .linkish{display:inline-flex;align-items:center;min-height:max(var(--tap),44px);padding:0 var(--sp-1)}
+body.m #left .sm,body.m .iname .sm,body.m .inames>.sm{min-height:max(var(--tap),44px)}
+
+/* U2387 (qa 12:16Z, 390): «+ From a template» was 41 px tall and the part «…» buttons 43 px; both 44 px at phone width */
+body.m #tpl-parts,body.m .tp-add{min-height:max(var(--tap),44px)}
+body.m .prow .pm{width:max(var(--tap),44px);height:max(var(--tap),44px)}
+/* U2393 (qa 12:16Z): the walnut page at 390 was 3886 px; a test card is the title, two lines of what it is for, and one 44 px row */
+@media (max-width:620px){
+  .tests{gap:var(--sp-1)}
+  .test{gap:var(--sp-1);padding:var(--sp-1) var(--sp-2)}
+  .test p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;margin:0}
+  .test b{display:block;line-height:1.3}
+}
+/* U2393: the test files that cannot be made yet are folded under one line */
+.moretests{margin-top:var(--sp-1)}
+.moretests>summary{cursor:pointer;color:var(--muted);min-height:max(var(--tap),44px);display:flex;align-items:center;padding:0 var(--sp-2)}
+.moretests[open]>summary{color:var(--text)}
+.moretests>.tests{margin-top:var(--sp-1)}
+
+/* U1910: the version line in the person menu */
+.me-ver{margin:0;padding:var(--sp-2) var(--sp-3) var(--sp-1);font-size:var(--fs-xs);color:var(--muted)}
+
+.fp-head{position:sticky;top:calc(-1 * var(--sp-2));z-index:1;display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin:calc(-1 * var(--sp-2)) calc(-1 * var(--sp-2)) var(--sp-1);padding:var(--sp-2);background:var(--panel)}.fp-row{scroll-margin-top:5rem}.fp-wait{min-height:2.25rem}.fp-head .fp-note{flex:1 1 auto;margin:0}
+.fp-cancel,.fp-use{min-height:44px}.fp-row.look{outline:2px solid var(--accent);outline-offset:-2px}
+.ref-fonts{font:inherit;cursor:pointer;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--radius-sm)}
+.signin-again{position:fixed;z-index:var(--z-sheet);left:50%;top:var(--sp-3);transform:translateX(-50%);padding:var(--sp-2) var(--sp-4);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--panel);box-shadow:var(--shadow-sm)}.signin-again a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
+
+/* the lobby's lines under the Designs title (redline 86 §C, U1868 / U1876): no box, one whole-line link each, › at the end */
+.lobby-lines{margin:0 0 var(--sp-2)}
+.ll{display:flex;align-items:center;gap:var(--sp-1);min-height:var(--tap);font-size:var(--fs-sm);color:var(--text);text-decoration:none}
+.ll:hover{text-decoration:underline}
+.ll svg{flex:none;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ll-due{color:var(--warn-text)}
+.ll-d{color:var(--muted)}
+.ll-go{margin-left:auto;color:var(--muted)}
+.ll>span:first-of-type{min-width:0}
+/* the 3D view (U2890, redline 93): «Drawing | 3D» top-left of the stage, the model in the stage's place, presence drawn over it */
+.stage>.vswitch{position:absolute;left:10px;top:10px;z-index:var(--z-canvas)}
+.vswitch button.dot{position:relative}
+.vswitch button.dot::after{content:"";position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--pt,var(--accent))}
+.stage.in3d :is(#svg,.hud,.emptyhint){display:none}
+/* at phone width the zoom corner hides under a selection or the talk sheet; in 3D «Reset view» stays, top-right on the switch row (93 §6) */
+body:not(.m) .stage.in3d .zoom{flex-direction:column;align-items:flex-end}     /* U3185: clear of the pill (U2559) */
+body.m .stage.in3d .zoom{display:flex;top:10px;bottom:auto;right:10px}
+body.m .stage.in3d .zoom :is(#zin,#zout){display:none}      /* the drawing's hints belong to the drawing: an empty drawing can still have a model */
+.v3d{position:absolute;inset:0}
+.v3d-canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+.v3d-canvas:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.v3d-over{position:absolute;inset:0;pointer-events:none;overflow:hidden;--cur-edge:var(--bed)}
+@media (prefers-color-scheme:light){:root:not([data-theme]) .v3d-over{--cur-edge:var(--panel)}}
+:root[data-theme=light] .v3d-over,:root[data-theme=solarpunk] .v3d-over{--cur-edge:var(--panel)}
+.v3d-pill{position:absolute;left:0;top:0;height:16px;line-height:16px;padding:0 6px;border-radius:var(--radius-pill);font-size:var(--fs-xs);font-weight:600;white-space:nowrap}
+.v3d-cur{position:absolute;left:0;top:0;transition:opacity var(--dur-slow)}
+.v3d-ping{position:absolute;left:0;top:0;pointer-events:none}.v3d-ping svg{position:absolute;left:-24px;top:-24px;overflow:visible}.v3d-ping .v3d-pill{left:30px;top:-8px}   /* the 2D ping's look, at the press point (93 §5) */
+.v3d-cur .v3d-pill{left:10px;top:16px}
+.v3d-cur.idle{opacity:.35}
+.v3d-tl{position:absolute;left:10px;top:calc(46px + var(--sp-2));display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-2);pointer-events:none}
+.v3d-cap{padding:0 8px;border-radius:var(--radius-pill);background:color-mix(in srgb,var(--panel) 85%,transparent);color:var(--text);font-size:var(--fs-xs);line-height:1.6;pointer-events:none}
+.v3d-cap[hidden]{display:none}
+.v3d-fold{pointer-events:auto}.v3d-fold[hidden]{display:none}
+.v3d-tools{display:flex;gap:var(--sp-1);pointer-events:auto}   /* U3120: «Floor» and «Banana for scale», top left (designer 17:31Z) */
+.v3d-tog{background:color-mix(in srgb,var(--panel) 85%,transparent);color:var(--muted)}.v3d-tog[aria-pressed=true]{background:var(--accent-panel);color:var(--accent)}
+.v3d-lock{position:absolute;inset:0;overflow:visible}
+.v3d-edge{position:absolute;z-index:1;left:0;top:0;pointer-events:auto;width:44px;height:44px;min-height:0;padding:0;border:0;border-radius:50%;background:none;display:grid;place-items:center}
+.v3d-edge:focus-visible{outline:2px solid var(--pt);outline-offset:0}
+.v3d-edge[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.v3d-cur{transition:none}}
+.pane-grip.no-range,body .pane-grip.no-range{display:none}
+body.talk-on .stage:not(.narrow) .bstack{max-width:calc(100% - 2 * (var(--zoomw,9rem) + 10px + var(--sp-3)))}
+body.m.talk-on .stage .bstack{max-width:none}
+
+/* holding tabs: the Export tab's row (redline 88 §1) and the import's Place line (§2) */
+#p-export label.tc-chk{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);margin:var(--sp-3) 0 0;font-size:var(--fs-md);font-weight:600}
+#p-export .tc-chk input{width:auto;margin:0;accent-color:var(--accent)}
+.tabs-hint{margin:0 0 var(--sp-2);color:var(--muted);font-size:var(--fs-sm)}
+.tabs-fields{display:flex;flex-wrap:wrap;gap:var(--sp-2) var(--sp-4);margin:0 0 var(--sp-2)}
+.tabs-f{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);color:var(--muted)}
+.tabs-f .isize-f,.iplace-f .isize-f{--unit-w:1.4rem}           /* «mm» is wider than «%»: the shared suffix keeps its gap to the value */
+.tabs-f .isize-f input{width:5.5rem}
+.tabs-f>input{width:5.5rem;box-sizing:border-box;height:2rem;font-variant-numeric:tabular-nums;text-align:right}
+body.m .tabs-f input{height:var(--tap)}
+@media (max-width:22rem){.tabs-fields{flex-direction:column}}
+.iplace-f{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.iplace-f .isize-f input{width:5.5rem}
+body.m .iplace{flex-wrap:wrap}body.m .iplace>.isize-l{flex-basis:100%}body.m .iplace-f{flex:1 1 0}body.m .iplace-f .isize-f{flex:1}body.m .iplace-f .isize-f input{width:100%}
+#tabgaps line{stroke-linecap:butt}
+#tabgaps .tg-break{stroke:var(--bed);stroke-width:5px}
+#tabgaps .tg-tick{stroke:var(--accent);stroke-width:1.5px}
+/* who may open a design (U2989, redline 97): the one mark, the places switch, the owner's Share dialog */
+.state.mark{display:inline-flex;align-items:center;gap:var(--sp-1);color:var(--muted)}
+.state.mark .ico,.share-btn .ico{width:.875rem;height:.875rem;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.share-btn .ico{width:1rem;height:1rem}
+.places{margin:0 0 var(--sp-3)}     /* .seg2's own inline-flex: as wide as its segments (U2551); the phone fills the row below */
+.places button{font-variant-numeric:tabular-nums}
+.card .meta .mark{margin-right:var(--sp-1)}
+.card .row .share-btn{margin-left:auto}
+dialog.share{width:28rem}
+dialog.share fieldset{border:0;margin:var(--sp-3) 0 0;padding:0}
+dialog.share label.sh-radio{display:flex;align-items:center;gap:var(--sp-2);font-weight:400;margin:0;min-height:var(--tap)}
+dialog.share label.sh-radio input{width:auto;margin:0;accent-color:var(--accent)}
+dialog.share .sh-common{width:auto;margin:0 0 var(--sp-2) calc(var(--sp-4) + var(--sp-2))}
+dialog.share h3{margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}
+.sh-people{list-style:none;margin:0;padding:0}
+.sh-people li{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap)}
+.sh-people .sh-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+dialog.share .sh-people select{width:auto}
+.sh-add{display:flex;gap:var(--sp-2);margin-top:var(--sp-2)}
+dialog.share .sh-add input{flex:1}
+.sh-status{min-height:1.4em;margin:var(--sp-2) 0 0;font-size:var(--fs-sm)}
+dialog.share .acts.sh-acts{justify-content:flex-start}
+.ab-mark{flex:none}
+.viewonly{margin:0;padding:var(--sp-1) var(--sp-3);font-size:var(--fs-sm);color:var(--muted);border-bottom:1px solid var(--border);background:var(--panel)}
+@media (max-width:599px){.places{display:flex;width:100%;flex-wrap:wrap}.places button{flex:1 1 auto;min-height:var(--tap)}dialog.share{width:100%}}
+body.view-only :is(#selbox,#layers,#p-material,#tabs-fields) :is(input,select,button:not(.vis)){pointer-events:none;opacity:.55}
+.layer.ro .rotext,#material-ro,#tabs-ro,#notes-ro,#selrow-ro{margin:var(--sp-1) 0 0;font-size:var(--fs-sm);color:var(--muted)}
+/* ---- the card of an object (U3036 O3), a joint (J2) or a box's joints: the panel's tab «Selected» (U3115), no frame of its own */
+.ed aside.side[data-tab=selected] .side-body{padding:0}
+.sel-empty{margin:0;padding:var(--sp-4);color:var(--muted);font-size:var(--fs-sm)}
+.sel-empty:has(~ :is(.objcard,.icard,.tlist,.selbar):not([hidden])){display:none}
+#p-selected>.selbar{max-width:none;border:0;border-bottom:1px solid var(--border);border-radius:0;box-shadow:none;padding:var(--sp-3) var(--sp-4);justify-content:flex-start}
+#p-selected>.selbar .selname{flex:1 1 calc(100% - 3rem);font-size:var(--fs-md);text-align:left;white-space:normal}
+#p-selected .selrow,#p-selected .selbar-acts{flex-basis:100%;flex-wrap:wrap;justify-content:flex-start}#p-selected .selrow .br{display:block;flex-basis:100%;height:0}
+#p-selected #keep{order:1}#p-selected .selrow>.br~.br,#p-selected .selrow>.br~.br~*{order:2}#p-selected .selrow>.f:last-child{flex-basis:100%}#p-selected #slayer{flex:1;max-width:none}
+#p-selected>.selbar.fold>:not(.selname,.selfold){display:none}.selfold::before{content:"▸"}.selfold{min-width:2rem;padding:0;border:0;background:none;font-size:var(--fs-md);transition:transform .15s}.selfold[aria-expanded=true]{transform:rotate(90deg)}.selsz{color:var(--muted);font-weight:400}
+.objcard{display:flex;flex-direction:column;gap:var(--sp-3);padding:0 var(--sp-4);background:var(--panel);scroll-padding-top:3.5rem;scroll-padding-bottom:calc(var(--tap) + 2rem)}   /* a focused field scrolls to above the footer */
+.objcard[hidden]{display:none}
+.oc-h{position:sticky;top:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-3) var(--sp-4) var(--sp-2);background:var(--panel);border-bottom:1px solid var(--border);font-size:var(--fs-sm);font-weight:600}
+.oc-form{display:flex;flex-direction:column;gap:var(--sp-3);padding-bottom:var(--sp-2)}
+.oc-made{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--sp-2);padding:var(--sp-2);border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-2,var(--panel))}
+.oc-made-t{margin:0;font-size:var(--fs-sm);color:var(--muted)}
+.oc-acts{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:var(--sp-2);position:sticky;bottom:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-2) var(--sp-4) var(--sp-3);background:var(--panel);border-top:1px solid var(--border)}   /* Apply, then Close, on the left; both stay in reach while the form scrolls */
+.oc-err{flex-basis:100%;margin:0;font-size:var(--fs-sm);color:var(--danger-text)}
+.objset{white-space:nowrap}
+body.m .objcard input,body.m .objcard select,body.m .objcard button{min-height:var(--tap)}
+.objcard :is(input,select,button,textarea){scroll-margin:3.5rem 0 calc(var(--tap) + 2rem)}
+
+/* the warning row (notice.js warnRows): the template card's warnings and a Make step's tips, one copy (designer 15:03Z) */
+.tp-warns{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:var(--sp-1);flex:none}
+.tp-warns li{display:flex;gap:var(--sp-1);align-items:flex-start;font-size:var(--fs-sm);color:var(--warn-text)}
+.tp-warns span{color:var(--text)}.tp-warns li.info{color:var(--muted)}
+.tp-wi{width:16px;height:16px;flex:none;margin-top:1px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+/* the editor's own template openers, on its first paint (U3099 moved them to picker.css, which loads only with the picker) */
+.tp-add{width:100%;margin:0 0 var(--sp-2)}
+.emptyhint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:var(--sp-2);text-align:center;z-index:2}
+.emptyhint p{margin:0;color:var(--muted);font-size:var(--fs-sm)}
+.emptyhint .eh-acts{display:flex;gap:var(--sp-2);flex-wrap:wrap;justify-content:center}
+
+/* U3146: «View on your table» on a phone, and its row in the Export tab */
+.ar-page{max-width:32rem;margin:0 auto;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.ar-page .ar-ios{display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-2);text-decoration:none}
+.ar-page .ar-ios img{border:1px solid var(--border);border-radius:var(--radius);background:var(--panel)}
+.ar-page .ar-ios span,.ar-page .ar-and{display:inline-flex;align-items:center;min-height:max(var(--tap),44px);padding:0 var(--sp-3);border-radius:var(--radius);background:var(--accent);color:var(--on-accent);font-weight:600;text-decoration:none}
+.pic-out{margin-top:var(--sp-2)}.pic-out :is(img,video){display:block;width:100%;max-width:18rem;border:1px solid var(--border);border-radius:var(--radius)}     /* U3147: the picture just made */
+.ref-pic{display:block;width:12rem;aspect-ratio:4/3;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius)}.ref-pic>:is(img,video){width:100%;height:100%;object-fit:cover;scale:1.1}     /* U3275: the whole model in a 4:3 frame (1.35, 1.2 cut it); the click opens all */
+#pic-share{margin-left:1rem}     /* U3276: two links, not one */
+#ar-row .ar-qr{width:9rem;height:9rem;padding:var(--sp-1);background:#fff;border-radius:var(--radius)}#ar-row .ar-qr svg{width:100%;height:100%}      /* redline 30 exception (colour): a QR code reads only dark on white, in either theme */

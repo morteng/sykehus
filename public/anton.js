@@ -1,15 +1,21 @@
-/* Signing in and Anton on the page. «Logg inn» on the title card asks for the four digits Morten reads on the phone
-   (login.mjs); signed in, the pill at the bottom talks to Anton (assistant.mjs), and the conversation shows above it.
-   The pill and its behaviour are laser's (atomstack hurricane/server/web/lobbychat.js and laser.css .pill,
-   2026-10-25): one box with a round send button that turns into Stop while Anton works, the history button, the reply
-   growing above, approval cards. Here it is plainer, larger and Norwegian, for one person and one site.
+/* Signing in and Anton on the page, in Fab's layout (the Anton-first redlines §2.1, §2.3, §5). The person chip in the
+   app bar signs in (the four digits Morten reads on the phone, login.mjs) and out; signed in, the pill talks to Anton
+   (assistant.mjs). The conversation is the «Anton» tab. While that tab is shut the pill sits at the bottom of the view
+   with Anton's newest reply and a waiting question above it; while it is open the pill moves into its bottom row, one
+   pill, moved, never copied. «Tegn» is the pill's first button; what is picked in the model shows as chips (the kit's
+   g-pick) and goes with the message.
+
+   The pill and its behaviour are Fab's (atomstack hurricane/server/web/editor.html #talk-form, editor.js placePill,
+   laser.css .pill .bstack .reply .talk-item, at c7759f3): one box with a round send button that turns into Stop while
+   Anton works, the reply above, approval cards. Here it is Norwegian, for one person and one site.
 
    When Anton saves one of the person's versions the server says "steps": the page shows that version again, from the
    same place (after the reply is done, so nothing is cut off). */
+import { pick } from "./kit/pick.js";
+
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const SEND = `<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`, STOP = `<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" class="f"/></svg>`;
-const HIST = `<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>`;
+const SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 4.5 19 11.5 17.6 12.9 13 8.3V20h-2V8.3L6.4 12.9 5 11.5z"/></svg>`, STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`;
 const CODES = {
   unavailable: "Anton svarer ikke akkurat nå. Prøv igjen om et minutt.", timeout: "Anton sluttet å svare. Prøv igjen.",
   limit: "Mange meldinger på kort tid. Vent noen minutter.", busy: "Anton er opptatt. Meldingen din venter.",
@@ -17,151 +23,190 @@ const CODES = {
   approval_unknown: "Spørsmålet er allerede besvart.", internal: "Noe gikk galt. Prøv igjen.",
 };
 const POSE = "sykehus-pose";
-const PEN = `<svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>`;
-const TEGN = new URLSearchParams(location.search).has("tegn");   // hidden until the pill is live (ruling 2026-10-25 17:31Z)
+const json = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }).catch(() => null);
 
-export async function start({ viewer, versionId, info, closable, CLOSE, valg = null }) {
+export async function start({ viewer, versionId, panel, valg }) {
   /* back from a redraw: the camera where it was */
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
-  const link = $("loginLink");
-  if (!me.person && !me.login) return;
-  $("me").hidden = false;
-  if (!me.person) { link.onclick = e => { e.preventDefault(); askCode(); }; return; }
-  if (me.via === "gulden.no") { link.textContent = `Logget inn som ${me.person}`; link.removeAttribute("href"); link.onclick = null; }   // signed out on gulden.no, not here
-  else { link.textContent = `Logget inn som ${me.person} · Logg ut`; link.onclick = async e => { e.preventDefault(); await fetch("api/logg-ut", { method: "POST" }); location.reload(); }; }
-  if (me.anton) pill(me.person);
-  wishBox();
+  const chip = $("me");
+  if (!me.person) {
+    /* not signed in: the Anton tab says how, and the chip in the app bar opens it */
+    loginCard(me.login);
+    if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; $("meBtn").onclick = () => { panel.reveal("chat"); $("code")?.focus(); }; }
+    return;
+  }
+  chip.innerHTML = `<button type="button" class="me" id="meBtn" aria-haspopup="true" aria-expanded="false" title="Logget inn som ${esc(me.person)}"><i></i>${esc(me.person)}</button>`;
+  chip.hidden = false; chip.style.position = "relative";
+  if (me.via !== "gulden.no") {   // signed in on gulden.no: signed out there, not here
+    const menu = document.createElement("div"); menu.className = "g-menu me-menu"; menu.setAttribute("role", "menu"); menu.hidden = true;
+    menu.innerHTML = `<button type="button" role="menuitem" id="meOut">Logg ut</button>`; chip.append(menu);
+    $("meBtn").onclick = () => { menu.hidden = !menu.hidden; $("meBtn").setAttribute("aria-expanded", String(!menu.hidden)); if (!menu.hidden) $("meOut").focus(); };
+    $("meOut").onclick = async () => { await json("api/logg-ut"); location.reload(); };
+    addEventListener("pointerdown", e => { if (!chip.contains(e.target)) { menu.hidden = true; $("meBtn").setAttribute("aria-expanded", "false"); } });
+    menu.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; $("meBtn").focus(); } });
+  }
+  wishTab();
+  if (me.anton) talk(); else { $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten et ønske i «Ønsker».</p>`; }
 
   /* «Ønsker»: what Sykehustomta cannot do yet, to Morten (wishes.mjs); your own, and for Morten all of them */
-  function wishBox() {
-    const btn = $("wishBtn"); btn.hidden = false;
-    const ST = { ny: "ny", sett: "sett", laget: "laget", nei: "ikke nå" };
-    btn.onclick = async () => {
-      info.innerHTML = `${CLOSE}<h2>Ønsker</h2><p style="margin:2px 0 8px">Noe du vil at Sykehustomta skal kunne, men som ikke går ennå? Skriv det her, så ser Morten det.</p>
-        <form id="wishForm"><textarea id="wishText" maxlength="4000" placeholder="For eksempel: Jeg vil kunne tegne et snitt gjennom drivhuset."></textarea>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><button type="submit" class="pri">Send</button><span id="wishOk" class="ok" role="status"></span></div></form>
-        <p id="wishErr" class="err" role="alert"></p><ul class="wishes" id="wishList"></ul>`;
-      info.style.display = "block"; closable(info); $("wishText").focus();
-      $("wishForm").onsubmit = async e => {
-        e.preventDefault(); $("wishErr").textContent = ""; $("wishOk").textContent = "";
-        const r = await fetch("api/onsker", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: $("wishText").value, version: versionId }) }).catch(() => null);
-        const j = r ? await r.json().catch(() => ({})) : {};
-        if (r?.ok) { $("wishText").value = ""; $("wishOk").textContent = "Sendt. Morten ser det."; list(); } else $("wishErr").textContent = j.error || "Fikk ikke sendt. Prøv igjen.";
-      };
-      list();
+  function wishTab() {
+    $("tab-wish").hidden = false; $("dock").dataset.tabs = "4"; $("dock").style.setProperty("--tabs", 4);
+    const ST = { ny: "ny", sett: "sett", laget: "laget", nei: "ikke nå" }, p = $("p-wish");
+    p.innerHTML = `<h2>Ønsker</h2><p class="sub">Noe du vil at Sykehustomta skal kunne, men som ikke går ennå? Skriv det her, så ser Morten det.</p>
+      <form id="wishForm"><textarea id="wishText" maxlength="4000" placeholder="For eksempel: Jeg vil kunne tegne et snitt gjennom drivhuset."></textarea>
+      <div class="oc-row"><button type="submit" class="pri">Send til Morten</button><span id="wishOk" class="ok" role="status"></span></div></form>
+      <p id="wishErr" class="err" role="alert"></p><ul class="wishes" id="wishList"></ul>`;
+    $("wishForm").onsubmit = async e => {
+      e.preventDefault(); $("wishErr").textContent = ""; $("wishOk").textContent = "";
+      const r = await json("api/onsker", { text: $("wishText").value, version: versionId });
+      const j = r ? await r.json().catch(() => ({})) : {};
+      if (r?.ok) { $("wishText").value = ""; $("wishOk").textContent = "Sendt. Morten ser det."; list(); } else $("wishErr").textContent = j.error || "Fikk ikke sendt. Prøv igjen.";
     };
+    $("tab-wish").addEventListener("click", list);
     async function list() {
-      const j = await fetch("api/onsker").then(r => r.ok ? r.json() : { wishes: [] }).catch(() => ({ wishes: [] })), ul = $("wishList"); if (!ul) return;
-      ul.innerHTML = j.wishes.length ? j.wishes.map(w => `<li>${esc(w.text)}<br><small>${j.admin ? esc(w.person) + " · " : ""}${new Date(w.at).toLocaleDateString("nb-NO")}</small>
+      const j = await fetch("api/onsker").then(r => r.ok ? r.json() : { wishes: [] }).catch(() => ({ wishes: [] })), ul = $("wishList");
+      ul.innerHTML = j.wishes.map(w => `<li>${esc(w.text)}<br><small>${j.admin ? esc(w.person) + " · " : ""}${new Date(w.at).toLocaleDateString("nb-NO")}</small>
         ${j.admin ? `<select data-id="${esc(w.id)}" aria-label="Status">${Object.entries(ST).map(([k, t]) => `<option value="${k}"${k === w.status ? " selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="st ${esc(w.status)}">${ST[w.status] || esc(w.status)}</span>`}
-        ${w.note ? `<br><small>Morten: ${esc(w.note)}</small>` : ""}</li>`).join("") : "";
-      for (const s of ul.querySelectorAll("select")) s.onchange = () => fetch(`api/onsker/${encodeURIComponent(s.dataset.id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: s.value }) });
+        ${w.note ? `<br><small>Morten: ${esc(w.note)}</small>` : ""}</li>`).join("");
+      for (const s of ul.querySelectorAll("select")) s.onchange = () => json(`api/onsker/${encodeURIComponent(s.dataset.id)}`, { status: s.value });
     }
   }
 
-  /* the four digits, big, in the card */
-  function askCode() {
-    info.innerHTML = `${CLOSE}<h2>Logg inn</h2><p style="margin:4px 0 10px">Skriv de fire sifrene du har fått på telefonen.</p>
-      <form id="codeForm" autocomplete="off"><input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" aria-label="Koden, fire sifre" autofocus>
+  /* the four digits, big, in the Anton tab */
+  function loginCard(can) {
+    $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false;
+    if (!can) { t.innerHTML = `<p class="mut">Anton er for dem som er logget inn. Du kan se alt uten.</p>`; return; }
+    t.innerHTML = `<h2>Logg inn</h2><p class="sub">Skriv de fire sifrene du har fått på telefonen, så kan du snakke med Anton.</p>
+      <form id="codeForm" autocomplete="off" class="oc-row"><input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" aria-label="Koden, fire sifre">
       <button type="submit" class="pri">Logg inn</button></form><p id="codeErr" class="err" role="alert"></p>
       <p class="src">Maskinen husker deg i tre måneder. Uten innlogging kan du se alt, men ikke lagre.</p>`;
-    info.style.display = "block"; closable(info);
-    const code = $("code"); code.focus();
+    const code = $("code");
     code.oninput = () => { code.value = code.value.replace(/\D/g, "").slice(0, 4); if (code.value.length === 4) $("codeForm").requestSubmit(); };
     $("codeForm").onsubmit = async e => {
       e.preventDefault(); $("codeErr").textContent = "";
       const device = /Mac/.test(navigator.userAgent) ? "Mac" : /iPad|iPhone/.test(navigator.userAgent) ? "iPad/iPhone" : /Windows/.test(navigator.userAgent) ? "Windows" : "nettleser";
-      const r = await fetch("api/logg-inn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.value, device }) }).catch(() => null);
+      const r = await json("api/logg-inn", { code: code.value, device });
       const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
       if (r?.ok) return location.reload();
       $("codeErr").textContent = j.error || "Det gikk ikke."; code.value = ""; code.focus();
     };
   }
 
-  function pill(person) {
-    document.body.classList.add("anton");
-    const box = document.createElement("div"); box.id = "anton";
-    box.innerHTML = `<div id="talk" class="card" hidden><div class="talkhead"><button id="talkNew" class="link" title="Glem samtalen og begynn på nytt">Ny samtale</button></div><ol id="talkLog"></ol></div>
-      <div class="pill card"><button class="hist" id="talkHist" title="Samtalen" aria-label="Vis samtalen">${HIST}</button>${TEGN ? `<button class="tegn" id="talkTegn" title="Tegn på et bilde av modellen">${PEN}Tegn</button>` : ""}
-        <div class="pillmid"><p class="pill-about" id="talkAbout" hidden><span id="talkAboutT"></span><button type="button" id="talkAboutX" aria-label="Fjern valget" title="Fjern valget (Esc)">×</button></p><div class="busy" id="talkBusy"></div><textarea id="talkIn" rows="1" placeholder="Spør Anton, eller be ham tegne …" aria-label="Melding til Anton"></textarea></div>
-        <button class="round send" id="talkSend" title="Send" aria-label="Send">${SEND}</button></div>`;
-    document.body.append(box);
-    const log = $("talkLog"), talk = $("talk"), input = $("talkIn"), btn = $("talkSend"), busy = $("talkBusy");
+  function talk() {
+    document.body.classList.add("talk-on");
+    const form = $("talk-form"), log = $("talkLog"), input = $("talkIn"), btn = $("talkSend"), busy = $("talkBusy");
+    form.hidden = false;
     const replies = new Map(), told = new Set();
-    let running = null, redraw = false, waiting = 0;
-    const show = (on = true) => { talk.hidden = !on; if (on) talk.scrollTop = talk.scrollHeight; };
+    let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
+    const chatOpen = () => panel.tab === "chat" && panel.open();
+    const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; };
+    /* the pill where the chat is: in the tab's bottom row while it shows, else at the bottom of the view */
+    function placePill() {
+      const open = chatOpen(), to = open ? $("chat-pill") : $("bstack");
+      document.body.classList.toggle("pill-chat", open);
+      if (form.parentElement !== to) { const f = document.activeElement === input; to.append(form); if (f) input.focus(); }
+      if (open) { unread = 0; toEnd(); }
+      showReply();
+      words();
+      panel.badge("chat", asking ? "!" : unread || 0);
+    }
+    addEventListener("sykehus:panel", placePill);
+    /* the newest reply over the pill while the chat is shut; a waiting question with it */
+    function showReply(text) {
+      const open = chatOpen();
+      if (text != null) $("reply-body").textContent = text;
+      $("reply-card").hidden = open || !$("reply-body").textContent;
+      $("reply").hidden = open || ($("reply-card").hidden && !$("reply-cards").children.length);
+    }
+    $("view").addEventListener("pointerdown", () => { $("reply-body").textContent = ""; showReply(); });   // the model first: touching it puts the reply away
+    $("reply-card").onclick = () => panel.reveal("chat");
+    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = !has; }
     function line(cls, text, who, image, about) {
-      const li = document.createElement("li"); li.className = cls;
-      if (who) li.append(Object.assign(document.createElement("b"), { textContent: who }));
-      if (about) li.append(Object.assign(document.createElement("span"), { textContent: `Om ${about}`, className: "about" }));
-      if (image) li.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "drawn" }));
-      const b = document.createElement("div"); b.textContent = text; li.append(b); log.append(li); show(); return b;
+      const li = document.createElement("li"); li.className = "talk-item " + cls;
+      if (who) li.append(Object.assign(document.createElement("span"), { className: "talk-who", textContent: who }));
+      const b = document.createElement("div"); b.className = "talk-body";
+      if (about) b.append(Object.assign(document.createElement("span"), { textContent: `Om ${about}`, className: "about" }));
+      if (image) b.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "snap" }));
+      const t = document.createElement("span"); t.textContent = text; b.append(t); li.append(b);
+      log.append(li); empty(); toEnd(); return t;
     }
     function state() {
       btn.innerHTML = running ? STOP : SEND; btn.className = "round " + (running ? "stop" : "send");
-      btn.title = btn.ariaLabel = running ? "Stopp" : "Send";
+      btn.title = running ? "Stopp" : "Send"; btn.setAttribute("aria-label", btn.title);
       busy.textContent = running ? (waiting ? `Anton tenker … (${waiting} venter)` : "Anton tenker …") : "";
     }
-    $("talkHist").onclick = () => show(talk.hidden);
-    /* the chip: what is picked goes with the message (Fab's pill-about) */
-    const chip = () => { const s = valg?.summary(); $("talkAbout").hidden = !s; if (s) $("talkAboutT").textContent = `Valgt: ${s}`; };
-    $("talkAboutX").onclick = () => valg?.clear();
-    addEventListener("sykehus:valg", chip);
+    /* the chips: what is picked goes with the message (Fab's pill-about, as the kit's g-pick) */
+    const chips = pick($("talkPick"), { lead: "Valgt:", items: [], removeLabel: l => `Ta bort ${l}`, removeTitle: "Ta bort fra spørsmålet", more: n => `+${n} til`, onRemove: k => valg.remove(k), onClear: () => valg.clear() });
+    const onPicks = () => { const items = valg.items; chips.set(items.map(i => ({ id: valg.key(i), label: i.label }))); words(); };
+    /* the placeholder: what is picked, and in the narrow tab the short one, so it shows whole */
+    const words = () => { input.placeholder = valg.items.length ? (chatOpen() ? "Spør om det valgte" : "Spør Anton om det du har valgt") : chatOpen() ? "Spør Anton" : "Spør Anton, eller be ham vise noe"; };
+    addEventListener("sykehus:valg", onPicks); onPicks();
+    addEventListener("sykehus:ask", () => { placePill(); input.focus(); });
+    input.addEventListener("keydown", e => { if (e.key === "Escape" && valg.items.length) { e.stopPropagation(); valg.clear(); } });
     $("talkNew").onclick = async () => {
-      const r = await fetch("api/anton/ny", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).catch(() => null);
+      const r = await json("api/anton/ny");
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Logg inn på nytt." : j.error || CODES.unavailable); }
     };
-    $("view").addEventListener("pointerdown", () => show(false));   // the model first: touching it folds the talk away
+    for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
     input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
-    btn.onclick = () => running && !input.value.trim() ? fetch("api/anton/stopp", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }) : sendIt();
+    form.onsubmit = e => { e.preventDefault(); if (running && !input.value.trim()) json("api/anton/stopp"); else sendIt(); };
     async function sendIt(drawn) {
       const text = drawn ? drawn.text : input.value.trim(); if (!text) return false;
-      const r = await fetch("api/anton", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, version: versionId, ...(drawn ? { drawing: drawn.drawing } : {}), ...(valg?.forMessage() ? { selection: valg.forMessage() } : {}) }) }).catch(() => null);
+      const sel = valg.forMessage();
+      const r = await json("api/anton", { text, version: versionId, ...(drawn ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return false; }
       if (!drawn) { input.value = ""; input.oninput(); }
       return true;
     }
-    if (TEGN) $("talkTegn").onclick = () => import("./tegn.js").then(m => m.startDrawing({ viewer, labels: viewer.labels, send: (text, drawing) => sendIt({ text, drawing }) }));
+    $("talkTegn").onclick = () => import("./tegn.js").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
-    function signedOut() { if (gone) return; gone = true; if (me.via === "gulden.no") { line("err", "Anton kan ikke jobbe for denne innloggingen akkurat nå."); return; } fetch("api/logg-ut", { method: "POST" }).finally(() => location.reload()); }
+    function signedOut() { if (gone) return; gone = true; if (me.via === "gulden.no") { line("err", "Anton kan ikke jobbe for denne innloggingen akkurat nå."); return; } json("api/logg-ut").finally(() => location.reload()); }
+    /* a question that needs a yes: in the log, and over the pill while the chat is shut; either answers both */
     function card(a) {
-      const li = document.createElement("li"); li.className = "ask";
-      li.innerHTML = `<div>${esc(a.summary || "Anton vil gjøre noe som trenger ditt ja.")}</div><div class="acts"><button class="pri">Ja, gjør det</button><button>Nei</button></div>`;
-      const [yes, no] = li.querySelectorAll("button");
-      const answer = async d => { yes.disabled = no.disabled = true; const r = await fetch("api/anton/godkjenn", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ approval_id: a.id, decision: d }) }).catch(() => null);
-        li.querySelector(".acts").textContent = r?.ok ? (d === "accept" ? "Ja." : "Nei.") : "Fikk ikke svart."; };
-      yes.onclick = () => answer("accept"); no.onclick = () => answer("reject");
-      log.append(li); show();
+      const make = () => { const li = document.createElement("li"); li.className = "talk-item card";
+        li.innerHTML = `<div class="talk-body"><b>${esc(a.summary || "Anton vil gjøre noe som trenger ditt ja.")}</b></div><div class="cnote">Du kan angre i «Forslag».</div><div class="asst-row"><button type="button" class="ckeep">Ikke nå</button><button type="button" class="go">Ja, gjør det</button></div>`; return li; };
+      const copies = [make(), make()]; log.append(copies[0]); $("reply-cards").replaceChildren(copies[1]); empty(); toEnd();
+      asking++; placePill(); showReply(); if (!chatOpen()) copies[1].querySelector(".ckeep").focus({ preventScroll: true });
+      const answer = async d => {
+        for (const c of copies) for (const b of c.querySelectorAll("button")) b.disabled = true;
+        const r = await json("api/anton/godkjenn", { approval_id: a.id, decision: d });
+        for (const c of copies) c.querySelector(".asst-row").textContent = r?.ok ? (d === "accept" ? "Ja." : "Ikke nå.") : "Fikk ikke svart.";
+        asking = Math.max(0, asking - 1); setTimeout(() => { copies[1].remove(); showReply(); }, 1200); placePill();
+      };
+      for (const c of copies) { c.querySelector(".go").onclick = () => answer("accept"); c.querySelector(".ckeep").onclick = () => answer("reject"); }
     }
     function redrawNow() { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.reload(); }
     function goTo(id, title) {
-      const li = document.createElement("li"); li.className = "tool";
-      li.innerHTML = `Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a>`; log.append(li); show();
+      const li = document.createElement("li"); li.className = "talk-item tool";
+      li.innerHTML = `<div class="talk-body">Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a></div>`; log.append(li); empty(); toEnd();
     }
 
     // the history first, then live
     fetch("api/anton/historikk").then(r => r.status === 401 ? signedOut() : r.json()).then(h => {
       for (const it of h?.items || []) {
-        if (it.type === "message") line(it.from === "assistant" ? "from-anton" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
+        if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
         else if (it.type === "tool") line("tool", it.label);
       }
-      if (!log.children.length) line("from-anton", "Hei! Jeg er Anton. Be meg rive bygg, legge til balkonger, tegne et drivhus eller noe annet på tomta, så tegner jeg det i en versjon du kan vise fram.", "Anton");
-      show(false);
+      empty();
     }).catch(() => {});
     const es = new EventSource("api/anton/strom");
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
     on("message", m => line("from-me", m.text, null, m.image, m.about));
-    on("text", t => { let b = replies.get(t.reply_to); if (!b) { b = line("from-anton", "", "Anton"); replies.set(t.reply_to, b); } b.textContent += t.delta || ""; show(); });
+    on("text", t => {
+      let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
+      b.textContent += t.delta || ""; toEnd(); showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
+    });
     on("tool", t => { if (t.label) line("tool", t.label); });
     on("approval", card);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
     on("done", () => { if (redraw) redrawNow(); });
-    on("steps", s => { if (s.version === versionId) { if (running) redraw = true; else redrawNow(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
+    on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === versionId) { if (running) redraw = true; else redrawNow(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
     on("signed_out", signedOut);
-    on("cleared", () => { log.textContent = ""; replies.clear(); line("from-anton", "Ny samtale. Hva vil du gjøre med tomta?", "Anton"); });
+    on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; showReply(); empty(); });
+    placePill(); state(); empty();
   }
 }

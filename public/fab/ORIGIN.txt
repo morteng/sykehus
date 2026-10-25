@@ -1,0 +1,6 @@
+Fab's files, copied as-is (byte for byte) on 2026-10-25 from atomstack (worktree ~/Projects/atomstack-wt-hp-prod) at c7759f3:
+  hurricane/server/web/laser.css      sha256 e480665188ce7baf3d106361a20364f1f2fa39713f83a487c87d2f9811b707bb
+  hurricane/server/web/cardshell.css  sha256 5a456fb0f5b899e116acea29764d6d5249f5e3fe2c1528bc68c43d99223a47f7
+For the Anton-first layout (the designer's redlines, rulings.md). Never edited here; sykehus's own rules are in
+../sykehus.css, after these. The tokens are the kit's (../kit/tokens.css, uikit.lock.json), not Fab's copy.
+tests/fab.test.mjs holds the shas.

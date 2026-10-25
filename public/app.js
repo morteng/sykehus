@@ -1,7 +1,12 @@
-/* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try. */
+/* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try.
+   The layout is Fab's (the Anton-first redlines, 2026-10-25): the view, the storey strip at its left edge, the view's
+   tools over it, Anton's pill at the bottom, and the panel on the right with «Bygget», «Anton», «Forslag» and
+   «Ønsker» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { applyEdits } from "./edits.js";
 import { createSelection } from "./valg.js";
+import { createPanel } from "./panel.js";
+import { levels } from "./kit/levels.js";
 
 /* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
    wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
@@ -19,10 +24,15 @@ const wings = site.wings || [];
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/* the panel; a version or a draft opens on «Forslag», where it is told what it is; else the tab last open, Anton first */
+const panel = createPanel({ start: draft ? "changes" : null, onChange: t => dispatchEvent(new CustomEvent("sykehus:panel", { detail: t })) });
+const toCard = () => panel.show("selected", { quiet: true });   // a tap on the model or the strip shows its card, the sheet stays where it is
 
 const viewer = createViewer({
   container: $("view"), site, floors,
-  onPick: (id, how) => { showInfo(site.buildings.find(b => b.id === id)); valg?.pick(id, how); },
+  onPick: (id, how) => { valg.pick(id, how); showInfo(site.buildings.find(b => b.id === id)); },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
     $("scale").style.display = v.mPerPx ? "block" : "none";
@@ -33,38 +43,54 @@ const viewer = createViewer({
     }
   },
 });
-/* ?valg: picking things to talk to Anton about (valg.js), hidden until the pill is live */
-const valg = qs.has("valg") ? createSelection({ site, floors, viewer, onChange: items => dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })) }) : null;
+/* what is picked in the model, to talk to Anton about (valg.js); the chips are in the pill (anton.js) */
+const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
 /* a high summer sun reads the forms best; choosing the date and hour comes later */
 viewer.setSun(new Date(new Date().getFullYear(), 5, 21, 14));
 
-/* the ladder: the whole site, then every storey some wing has, lowest first ("5" for 5. etasje, as on a section) */
+/* the storey strip (the kit's g-levels): the whole site, then every storey some wing has, top first as on a
+   section; a dot where a storey is drawn, dimmed (still a tap) where the wing picked has none */
 const order = n => parseInt(n) || 0;
 const storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
-const floorBtns = [{ id: null, label: "Hele anlegget" }, ...storeys.map(n => ({ id: n, label: String(order(n) || n), title: n }))].map(f => {
-  const b = document.createElement("button"); b.textContent = f.label; if (f.title) { b.title = f.title; b.setAttribute("aria-label", f.title); b.style.minWidth = "46px"; b.style.padding = "0 8px"; }
-  b.setAttribute("aria-pressed", String(f.id === null)); b.onclick = () => pickStorey(f.id); $("floors").append(b); return [f.id, b];
-});
-if (storeys.length) floorBtns[0][1].after(Object.assign(document.createElement("span"), { className: "lbl", textContent: "Etasje" }));
+const koteOf = n => { const ks = wings.map(w => (w.levels || []).find(l => l.name === n)?.kote).filter(k => k != null); return ks.length ? Math.min(...ks) : null; };
+const stripItems = (wing = null) => storeys.slice().reverse().map(n => ({ id: n, label: String(order(n) || n), title: koteOf(n) != null ? `${n} · ${kote(koteOf(n))}` : n,
+  drawn: floors.some(f => f.name === n), dim: !!wing && !(wing.levels || []).some(l => l.name === n) }));
+const strip = levels($("levels"), { items: stripItems(), all: { label: "Hele anlegget", title: "Hele anlegget" }, value: null, onPick: id => pickStorey(id ?? null), labelOf: i => i.id, name: "Etasjer", cap: "etasje" });
+function dimStrip() { const w = valg.items.find(i => i.kind === "wing"); strip.setItems(stripItems(w ? wings.find(x => x.id === w.id) : null)); }
+let storeyOn = null;
 function pickStorey(name) {
+  storeyOn = name;
   if (name === null) viewer.home(); else viewer.setStorey(name);
-  for (const [k, b] of floorBtns) b.setAttribute("aria-pressed", String(k === name));
-  pressMode(); showStorey(name);
+  strip.set(name); pressMode(); showStorey(name);
 }
 /* how a kote is known: read off a drawing, worked out, or assumed */
-const how = l => l.how && l.how !== "tegning" ? ` <small style="color:var(--soft)">${esc(l.how)}</small>` : "";
+const how = l => l.how && l.how !== "tegning" ? ` · ${esc(l.how)}` : "";
+/* the card in «Bygget»: Fab's card shell (cardshell.css), a heading with its acts, then its rows */
+const ASK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z"/></svg>`, SHUT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+const rows = rs => `<div class="oc-info">${rs.map(([k, v]) => `<div class="oc-info-r"><span class="oc-info-k">${k}</span><span class="oc-info-v">${v}</span></div>`).join("")}</div>`;
+let cardOf = null;   // what the card is about, as a selection item («Spør Anton om dette»)
+function card(title, sub, body, about) {
+  const el = $("info"); cardOf = about;
+  el.innerHTML = `<div class="oc-h"><div><h2>${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ""}</div><span class="oc-acts"><button type="button" class="ask-anton" data-ask title="Spør Anton om dette" aria-label="Spør Anton om dette">${ASK}</button><button type="button" data-shut title="Lukk (Esc)" aria-label="Lukk">${SHUT}</button></span></div>${body}`;
+  el.hidden = false; document.querySelector("#p-selected .sel-empty").hidden = true;
+  el.querySelector("[data-shut]").onclick = shut;
+  el.querySelector("[data-ask]").onclick = () => { if (cardOf) valg.add(cardOf); dispatchEvent(new CustomEvent("sykehus:ask")); };
+  panel.peek(`<span class="pk"><b>${title}</b>${sub ? " · " + sub : ""}</span><button type="button" class="sm" id="peekMore">Mer</button>`);
+  $("peekMore").onclick = () => panel.reveal("selected");
+  toCard();
+}
+function shut() { $("info").hidden = true; $("info").innerHTML = ""; cardOf = null; document.querySelector("#p-selected .sel-empty").hidden = false; panel.peek(""); }
 /* the chosen storey: its kote in each wing that has it, and the drawings of it with their rooms */
 function showStorey(name) {
-  const el = $("info");
-  if (!name) { el.style.display = "none"; return; }
-  const rows = wings.map(w => [w, (w.levels || []).find(l => l.name === name)]).filter(r => r[1]).sort((a, b) => a[1].kote - b[1].kote);
+  if (!name) { shut(); return; }
+  const rs = wings.map(w => [w, (w.levels || []).find(l => l.name === name)]).filter(r => r[1]).sort((a, b) => b[1].kote - a[1].kote);
   const drawn = floors.filter(f => f.name === name), rooms = drawn.flatMap(f => f.rooms || []), sum = rooms.reduce((a, r) => a + (r.area_m2 || 0), 0), withArea = rooms.filter(r => r.area_m2).length, calc = rooms.filter(r => !r.area_m2 && r.area_calc);
-  el.innerHTML = `${CLOSE}<h2>${esc(name)}</h2><dl>${rows.map(([w, l]) => `<dt>${esc(w.name)}</dt><dd>kote ${kote(l.kote)}${how(l)}</dd>`).join("")}
-    ${withArea ? `<dt>Rom</dt><dd>${withArea}, til sammen ${num(sum)} m²</dd>` : rooms.length ? `<dt>Rom</dt><dd>${rooms.length} navngitt, uten areal på tegningen</dd>` : ""}
-    ${calc.length ? `<dt>Målt</dt><dd>${calc.length} rom til, ca. ${num(Math.round(calc.reduce((a, r) => a + r.area_calc, 0)))} m² mellom veggene</dd>` : ""}
-    </dl><div class="src">Snitt 1,2 m over gulv. Skravert gulv: ingen plantegning av etasjen der.${drawn.length
-      ? `<br>${drawn.length === 1 ? "Plantegning" : "Plantegninger"}:<ul>${drawn.map(f => `<li title="${esc(f.source)}">${esc(plainSource(f))}</li>`).join("")}</ul>` : "<br>Ingen plantegning av denne etasjen i arkivet."}</div>`;
-  el.style.display = "block"; closable(el);
+  const sub = `Snitt 1,2 m over gulvet${withArea ? ` · ${withArea} rom tegnet, ${num(sum)} m²` : rooms.length ? ` · ${rooms.length} rom navngitt` : ""}`;
+  card(esc(name), sub, `<h3>Kote i hver fløy</h3>${rows(rs.map(([w, l]) => [esc(w.name), kote(l.kote) + how(l)]))}
+    ${calc.length ? `<p class="note">${calc.length} rom til, ca. ${num(Math.round(calc.reduce((a, r) => a + r.area_calc, 0)))} m² målt mellom veggene.</p>` : ""}
+    <p class="src">Skravert gulv: ingen plantegning av etasjen der.${drawn.length
+      ? `<br>${drawn.length === 1 ? "Plantegning" : "Plantegninger"}:</p><ul class="src">${drawn.map(f => `<li title="${esc(f.source)}">${esc(plainSource(f))}</li>`).join("")}</ul>` : "<br>Ingen plantegning av denne etasjen i arkivet.</p>"}`,
+    { kind: "storey", id: name, label: name });
 }
 /* a floor's source as the card says it: the drawing, and for a traced one how it was read; the whole note (with the
    tools that read it) stays in the data and shows on hover */
@@ -73,13 +99,10 @@ function plainSource(f) {
   const sheet = f.source.split(", sporet")[0];
   return `${sheet}. ${/vektor/.test(f.source) ? "Vegger og rom lest fra vektortegningen" : "Vegger og rom lest maskinelt fra skannet"}, ikke kontrollert.`;
 }
-/* the card's ×, and Esc, put it away */
-const CLOSE = `<button class="x" aria-label="Lukk" title="Lukk (Esc)">×</button>`;
-function closable(el) { el.querySelector(".x").onclick = () => { el.style.display = "none"; }; }
 function setMode(m) {
   viewer.setMode(m); pressMode();
 }
-function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; }
+function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; document.body.classList.toggle("plan", m !== "3d"); }
 /* the plan or the section as a sheet to print: the picture with its names, a title block with what it is, a scale
    bar and the scale it prints at on A4 across, north, and the drawings it is made from */
 async function printSheet() {
@@ -105,24 +128,22 @@ async function printSheet() {
   print();
 }
 $("print").onclick = () => printSheet();
-/* a section through a wing, across or along it, looked at square on with the wing's floor heights beside it */
+/* a section through a wing, across or along it, looked at square on with the wing's floor heights beside it; the
+   card is in the panel now, so the drawing is framed right of the storey strip */
 const LOOK = { N: [0, 1], Ø: [1, 0], S: [0, -1], V: [-1, 0] };   // the way a drawn section looks
 let sheet = null, side = null;   // the drawn section shown, if the cut is one; the side a facade is seen from
 const SIDE = { N: "nord", Ø: "øst", S: "sør", V: "vest" };
+const FREE = () => panel.phone ? 0 : 100;   // the strip's width: the drawing is framed beside it
 /* a wing's facade, looked at square on from that side: what stands in front of it is taken away */
 function facade(b, k) {
-  sheet = null; side = k; showInfo(b);
-  const r = $("info").getBoundingClientRect(), wide = innerWidth > 900, from = LOOK[k];
-  viewer.setSection(b.wing, "fasade", wide ? r.right + 10 : 0, null, [-from[0], -from[1]]); pressMode();
-  for (const [kk, btn] of floorBtns) btn.setAttribute("aria-pressed", String(kk === null));
-  showInfo(b);
+  sheet = null; side = k; const from = LOOK[k];
+  viewer.setSection(b.wing, "fasade", FREE(), null, [-from[0], -from[1]]); pressMode();
+  storeyOn = null; strip.set(null); showInfo(b);
 }
 function section(b, kind, drawn = null) {
-  sheet = drawn; side = null; showInfo(b);   // the card first: with a sheet it grows, and the drawing is framed beside it
-  const r = $("info").getBoundingClientRect(), wide = innerWidth > 900;   // on a phone the card is below or over; the drawing takes the screen
-  viewer.setSection(b.wing, kind, wide ? r.right + 10 : 0, drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
-  for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
-  showInfo(b);
+  sheet = drawn; side = null;
+  viewer.setSection(b.wing, kind, FREE(), drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
+  storeyOn = null; strip.set(null); showInfo(b);
 }
 /* the names over the picture: on unless this viewer took them away (remembered in this browser) */
 let names = true; try { names = localStorage.getItem("sykehus-navn") !== "av"; } catch { }
@@ -130,16 +151,18 @@ function setNames(on) { names = on; viewer.setNames(on); $("names").setAttribute
 setNames(names); $("names").onclick = () => setNames(!names);
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
-/* the keys: + and − zoom, ↑ ↓ (or Page Up / Down) a storey up or down the ladder, Esc puts the card away */
+/* the keys: + and − zoom, ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
+   card and the picks away */
 addEventListener("keydown", e => {
-  if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.target.closest?.(".g-levels")) return;
   if (e.key === "n" || e.key === "N") setNames(!names);
   else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
-  else if (e.key === "Escape") { $("info").style.display = "none"; valg?.clear(); }
+  else if (e.key === "Escape") { shut(); valg.clear(); }
+  else if (e.key === "Home") pickStorey(null);
   else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {
-    const i = floorBtns.findIndex(([, b]) => b.getAttribute("aria-pressed") === "true"), j = Math.max(0, Math.min(floorBtns.length - 1, i + (/Up$/.test(e.key) ? 1 : -1)));
-    if (j !== i) { pickStorey(floorBtns[j][0]); floorBtns[j][1].scrollIntoView({ block: "nearest", inline: "nearest" }); }
+    const ladder = [null, ...storeys], i = ladder.indexOf(storeyOn), j = Math.max(0, Math.min(ladder.length - 1, i + (/Up$/.test(e.key) ? 1 : -1)));
+    if (j !== i) pickStorey(ladder[j]);
   } else return;
   e.preventDefault();
 });
@@ -147,97 +170,80 @@ addEventListener("keydown", e => {
 const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
 let seen = false; try { seen = !!localStorage.getItem("sykehus-tips"); localStorage.setItem("sykehus-tips", "1"); } catch {}
 if (!seen) {
-  const tip = Object.assign(document.createElement("div"), { id: "tip", className: "card", textContent: TAP === "trykk"
+  const tip = Object.assign(document.createElement("div"), { id: "tip", textContent: TAP === "trykk"
     ? "Dra for å snu · to fingre for å flytte og zoome · trykk på et bygg" : "Dra for å snu · høyre knapp eller to fingre for å flytte · + − for å zoome · klikk et bygg" });
-  document.body.append(tip);
+  $("stage").append(tip);
   const gone = () => { tip.classList.add("gone"); setTimeout(() => tip.remove(), 700); removeEventListener("pointerdown", gone); };
   addEventListener("pointerdown", gone); setTimeout(gone, 9000);
 }
 
 /* a building: for a wing of the hospital, what the documents say about it (site.json wings), then its size and
    heights from the laser */
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 function showInfo(b) {
-  const el = $("info");
-  if (!b) { el.style.display = "none"; return; }
+  if (!b) { shut(); return; }
   const h = b.top != null ? b.top - b.base : null, w = (site.wings || []).find(x => x.id === b.wing);
-  const about = w ? [["Bygget", w.built], ["Etasjer", w.storeys], ["Konstruksjon", w.construction], ["Fasade", w.facade]].filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") : "";
-  el.innerHTML = `${CLOSE}<h2>${w ? esc(w.name) : b.own ? "Bygning på tomta" : "Nabobygning"}</h2><dl>${about}
-    <dt>Fotavtrykk</dt><dd>${num(b.area_m2)} m²</dd>
-    ${h != null ? `<dt>Høyde</dt><dd>ca. ${h.toFixed(0)} m</dd><dt>Topp</dt><dd>kote ${kote(b.top)}</dd>` : ""}
-    <dt>Terreng</dt><dd>kote ${kote(b.base)}</dd></dl>` +
+  const about = w ? [["Bygget", w.built], ["Etasjer", w.storeys], ["Konstruksjon", w.construction], ["Fasade", w.facade]].filter(r => r[1]).map(([k, v]) => [k, esc(v)]) : [];
+  const body = rows([...about, ["Fotavtrykk", `${num(b.area_m2)} m²`], ...(h != null ? [["Høyde", `ca. ${h.toFixed(0)} m`], ["Topp", `kote ${kote(b.top)}`]] : []), ["Terreng", `kote ${kote(b.base)}`]]) +
     (w?.levels?.length ? storeyList(b, w) : "") +
     (w ? sectionRow(w) : "") +
-    (w ? `<p style="margin:8px 0 0;font-size:13px;color:var(--soft);max-width:340px">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>${sheetStrip(w)}` : "");
-  el.style.display = "block"; closable(el);
+    (w ? `${sheetStrip(w)}<p class="src">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
+  card(w ? esc(w.name) : b.own ? "Bygning på tomta" : "Nabobygning", w?.alias ? esc(w.alias) : "", body,
+    w ? { kind: "wing", id: w.id, label: w.name } : { kind: "building", id: b.id, label: b.name || (b.own ? `Bygning ${b.id} på tomta` : `Nabobygning ${b.id}`) });
+  const el = $("info");
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
   for (const btn of el.querySelectorAll("[data-fasade]")) btn.onclick = () => facade(b, btn.dataset.fasade);
   for (const btn of el.querySelectorAll("[data-tegnet]")) btn.onclick = () => { const d = drawnSections.find(x => x.id === btn.dataset.tegnet); section(b, d.kind, d); };
 }
 /* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
-   it at that floor; ▲ ▼ step one storey; "Hele bygget" puts it back */
+   it at that floor; "Hele bygget" puts it back */
 function storeyList(b, w) {
-  const v = viewer.view(), on = v.only === b.id ? v.storey : null, ls = w.levels.slice().sort((a, c) => c.kote - a.kote), i = ls.findIndex(l => l.name === on);
-  const up = i > 0 ? ls[i - 1].name : on ? "" : null, down = i >= 0 ? ls[i + 1]?.name : ls[0].name;
-  const s = "min-height:34px;font-size:15px;padding:0 10px";
-  return `<div style="margin-top:10px;display:flex;gap:6px;align-items:center"><b style="font-size:15px;margin-right:auto">Etasjer</b>
-      <button style="${s}" ${up == null ? "disabled" : `data-storey="${esc(up)}"`} aria-label="En etasje opp">▲</button>
-      <button style="${s}" ${down == null ? "disabled" : `data-storey="${esc(down)}"`} aria-label="En etasje ned">▼</button>
-      <button style="${s}" data-storey="" aria-pressed="${!on}">Hele bygget</button></div>
-    <div style="margin-top:6px;max-height:34vh;overflow-y:auto;display:grid;gap:4px">${ls.map(l =>
-      `<button style="${s};text-align:left;display:flex;justify-content:space-between;gap:12px" data-storey="${esc(l.name)}" aria-pressed="${l.name === on}"><span>${esc(l.name)}</span><span>${kote(l.kote)}${l.how && l.how !== "tegning" ? " · " + esc(l.how) : ""}</span></button>`).join("")}</div>`;
+  const v = viewer.view(), on = v.only === b.id ? v.storey : null, ls = w.levels.slice().sort((a, c) => c.kote - a.kote);
+  return `<div class="oc-row"><b>Etasjer i fløyen</b><button type="button" data-storey="" aria-pressed="${!on}">Hele bygget</button></div>
+    <div class="oc-info">${ls.map(l => `<button type="button" class="oc-info-r" data-storey="${esc(l.name)}" aria-pressed="${l.name === on}"><span class="oc-info-k">${esc(l.name)}</span><span class="oc-info-v">${kote(l.kote)}${how(l)}</span></button>`).join("")}</div>`;
 }
 /* cut the wing across or along its middle, or where a drawn section does */
 function sectionRow(w) {
-  const v = viewer.view(), s = "min-height:34px;font-size:15px;padding:0 10px", on = k => v.mode === "section" && v.section.wing === w.id && v.section.kind === k && !sheet;
-  return `<div style="margin-top:8px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Snitt</b>
-      <button style="${s}" data-snitt="tverr" aria-pressed="${on("tverr")}">Tverrsnitt</button>
-      <button style="${s}" data-snitt="lengde" aria-pressed="${on("lengde")}">Lengdesnitt</button></div>
-    <div style="margin-top:6px;display:flex;gap:6px"><b style="font-size:15px;margin-right:auto;align-self:center">Fasade</b>${["N", "Ø", "S", "V"].map(k => {
+  const v = viewer.view(), on = k => v.mode === "section" && v.section.wing === w.id && v.section.kind === k && !sheet;
+  const isFacade = v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade";
+  return `<div class="oc-row"><b>Snitt</b><button type="button" data-snitt="tverr" aria-pressed="${on("tverr")}">Tverrsnitt</button><button type="button" data-snitt="lengde" aria-pressed="${on("lengde")}">Lengdesnitt</button></div>
+    <div class="oc-row"><b>Fasade</b>${["N", "Ø", "S", "V"].map(k => {
       const drawn = (site.facades || []).some(f => f.building === w.id && f.name.endsWith(SIDE[k]));
-      return `<button style="${s};min-width:44px" data-fasade="${k}" aria-pressed="${v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade" && side === k}" title="Fasaden mot ${SIDE[k]}${drawn ? ", vinduer fra tegning" : ""}">${k}${drawn ? "*" : ""}</button>`; }).join("")}</div>${v.mode === "section" && v.section.wing === w.id && v.section.kind !== "fasade" ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}${v.mode === "section" && v.section.wing === w.id && v.section.kind === "fasade" ? `<p style="margin:4px 0 0;font-size:13px;color:var(--soft);max-width:400px">Fasaden mot ${SIDE[side]}, sett rett på. ${(site.facades || []).some(f => f.building === w.id && f.name.endsWith(SIDE[side])) ? "Vinduene fra tegningen." : "Vinduene etter foto, ikke fra tegning."} (* = fasade med tegning)</p>` : ""}${drawnList(w, v, s)}`;
+      return `<button type="button" style="min-width:var(--tap)" data-fasade="${k}" aria-pressed="${isFacade && side === k}" title="Fasaden mot ${SIDE[k]}${drawn ? ", vinduer fra tegning" : ""}">${k}${drawn ? "*" : ""}</button>`; }).join("")}</div>
+    ${v.mode === "section" && v.section.wing === w.id && !isFacade ? `<p class="note">Svart er det snittet går gjennom: yttervegger (0,35 m, antatt), dekker ved etasjene, tak, og innervegger der det finnes plantegning.</p>` : ""}
+    ${isFacade ? `<p class="note">Fasaden mot ${SIDE[side]}, sett rett på. ${(site.facades || []).some(f => f.building === w.id && f.name.endsWith(SIDE[side])) ? "Vinduene fra tegningen." : "Vinduene etter foto, ikke fra tegning."} (* = fasade med tegning)</p>` : ""}${drawnList(w, v)}`;
 }
 /* the wing's drawn sections: each cuts the model where the sheet does, with the sheet beside it */
-function drawnList(w, v, s) {
+function drawnList(w, v) {
   const ds = drawnSections.filter(d => d.wing === w.id); if (!ds.length) return "";
   const on = v.mode === "section" && sheet && sheet.wing === w.id ? sheet : null;
-  return `<div style="margin-top:6px;display:grid;gap:4px"><b style="font-size:15px">Tegnede snitt</b>${ds.map(d =>
-    `<button style="${s};text-align:left" data-tegnet="${esc(d.id)}" aria-pressed="${d === on}">${esc(d.title)} (${d.year})</button>`).join("")}</div>` +
-    (on ? `<figure style="margin:8px 0 0;max-width:420px"><a href="${esc(on.image)}" target="_blank" rel="noopener" title="Åpne tegningen stor"><img src="${esc(on.image)}" alt="${esc(on.title)}" style="width:100%;border:1px solid #d8d2c6;background:#fff"></a>
-      <figcaption style="font-size:13px;color:var(--soft)">${esc(on.levels)}. ${esc(on.note)}. ${on.sure ? "" : "Hvor snittet står i modellen er lest ut fra tegningen og omtrentlig. "}<a href="${esc(on.url)}" target="_blank" rel="noopener">Tegningen (PDF)</a></figcaption></figure>` : "");
+  return `<h3>Tegnede snitt</h3><div class="oc-info">${ds.map(d =>
+    `<button type="button" class="oc-info-r" data-tegnet="${esc(d.id)}" aria-pressed="${d === on}"><span class="oc-info-k">${esc(d.title)}</span><span class="oc-info-v">${d.year}</span></button>`).join("")}</div>` +
+    (on ? `<figure><a href="${esc(on.image)}" target="_blank" rel="noopener" title="Åpne tegningen stor"><img src="${esc(on.image)}" alt="${esc(on.title)}"></a>
+      <figcaption>${esc(on.levels)}. ${esc(on.note)}. ${on.sure ? "" : "Hvor snittet står i modellen er lest ut fra tegningen og omtrentlig. "}<a href="${esc(on.url)}" target="_blank" rel="noopener">Tegningen (PDF)</a></figcaption></figure>` : "");
 }
 function peel(b, w, name) {
   viewer.cutBuilding(b.id, name);
-  for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
+  storeyOn = null; strip.set(null);
   pressMode(); showInfo(b);
 }
 /* a document as the cards name it: its title and year, the page, a link to it */
 function docLink(d) { return d.url ? `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}${d.page ? ", s. " + d.page : ""}</a>` : esc(d.title); }
-/* the wing's drawings as small pictures; a click opens the drawing at its page */
+/* the wing's drawings as small pictures, two across; a tap opens the drawing at its page */
 function sheetStrip(w) {
   const ds = w.sources.map(d => ({ d, key: `${(d.url || "").split("/").pop().split(".")[0]}-p${d.page || 1}` })).filter(x => thumbs[x.key]);
   if (!ds.length) return "";
-  return `<div style="margin-top:8px;display:flex;gap:6px;overflow-x:auto;max-width:420px;padding-bottom:4px">${ds.map(({ d, key }) =>
-    `<a href="${esc(d.url)}#page=${d.page || 1}" target="_blank" rel="noopener" title="${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}" style="flex:none;text-decoration:none;color:var(--soft);font-size:11px;width:120px">
-      <img src="${esc(thumbs[key])}" alt="${esc(d.title)}" loading="lazy" style="width:120px;height:85px;object-fit:contain;background:#fff;border:1px solid var(--line);display:block">
-      <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(d.title)}</span></a>`).join("")}</div>`;
-}
-/* "<docid>#p<n> note" references, as site.json levels carry them, resolved through the wings' sources where they are known */
-function sourceLinks(refs = []) {
-  const known = new Map((site.wings || []).flatMap(w => w.sources).filter(d => d.id).map(d => [d.id, d]));
-  return refs.map(s => { const [ref] = s.split(" "), [id, p] = ref.split("#p"), d = known.get(id); return d ? docLink({ ...d, page: p ? +p : null }) : esc(s); }).join(" · ");
+  return `<h3>Kilder</h3><div class="thumbs">${ds.map(({ d, key }) =>
+    `<a href="${esc(d.url)}#page=${d.page || 1}" target="_blank" rel="noopener" title="${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}"><img src="${esc(thumbs[key])}" alt="" loading="lazy">${esc(d.title)}${d.year ? ", " + esc(d.year) : ""}</a>`).join("")}</div>`;
 }
 
-/* the draft's banner: what is tried, that it is not saved, and its notes */
+/* «Forslag»: the version or draft shown, as the tab's top row, then the versions to see */
 if (draft) {
-  const el = document.createElement("div"); el.id = "draft"; el.className = "card";
   const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
-  el.innerHTML = draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
+  $("draftRow").innerHTML = `<div class="draftrow">${draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
     : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
     : `<b>Utkast, ikke lagret</b> · ${ch} prøvd via Claude. <a href="./">Se modellen uten</a>`
-      + (draft.edits.length ? `<ul>${draft.edits.map(e => `<li>${esc(describe(e))}</li>`).join("")}</ul>` : "");
-  document.body.appendChild(el);
+      + (draft.edits.length ? `<ul>${draft.edits.map(e => `<li>${esc(describe(e))}</li>`).join("")}</ul>` : "")}</div>`;
 }
 function describe(e) {
   const w = (site.wings || []).find(x => x.id === e.wing)?.name || e.wing;
@@ -256,22 +262,19 @@ function describe(e) {
   if (e.kind === "fell") return `Feller trærne i et område${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
-
-/* the public versions of the after («Vis offentlig»): a line on the title card, and the list in the card */
-fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
-  if (!versions.length) return;
-  $("ideasLink").textContent = `Forslag til «etter» (${versions.length})`; $("ideas").hidden = false;
-  $("ideasLink").onclick = e => {
-    e.preventDefault(); const el = $("info");
-    el.innerHTML = `${CLOSE}<h2>Forslag til «etter»</h2><p class="src" style="margin-top:0">Tegnet med Claude over modellen av bygningene i dag. Hver åpner i 3D.</p><ul class="ideas">${versions.map(v =>
-      `<li><a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}">${esc(v.title)}<small>${v.mine ? `din, ${{ privat: "privat", lenke: "bare med lenken", offentlig: "offentlig" }[v.sharing]}` : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></a></li>`).join("")}</ul>`;
-    el.style.display = "block"; closable(el);
-  };
-}).catch(() => {});
+/* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
+const VIS = { privat: "privat", lenke: "bare de med lenken", offentlig: "offentlig" };
+function listVersions() {
+  fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
+    if (!versions.length) return;
+    $("verList").innerHTML = versions.map(v => `<li><a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${v.version === versionId ? ' aria-current="page"' : ""}><span><span class="t">${esc(v.title)}</span><small>${v.mine ? "din" : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></span>${v.mine ? `<span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span>` : ""}</a></li>`).join("");
+  }).catch(() => {});
+}
+listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* ?spor: the trace mode for scanned sheets (trace.js), for those who trace; the page is otherwise as always */
 /* signing in, and Anton for the signed in (anton.js) */
-import("./anton.js").then(m => m.start({ viewer, versionId, info: $("info"), closable, CLOSE, valg })).catch(e => console.error("anton:", e));
+import("./anton.js").then(m => m.start({ viewer, versionId, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
 requestAnimationFrame(() => import("./streets.js").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
 

@@ -1,0 +1,968 @@
+
+      /* One fluid scale, no device breakpoints. The root font-size is clamped
+         against viewport width and every size below derives from it in rem, so
+         a phone, a tablet, a desktop and a TV are the same layout at four
+         different scales. Sizes are decided here and nowhere else — a canvas
+         layer added later inherits the scale instead of bringing its own. */
+      :root,
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        /* U2021 (redline 54 §0.1): the eight person colours, in the order the apps share, the same in
+           every theme. The server sends the index. */
+        --person-0: #d9480f;
+        --person-1: #1971c2;
+        --person-2: #2f9e44;
+        --person-3: #9c36b5;
+        --person-4: #7048e8;
+        --person-5: #0c8599;
+        --person-6: #c2255c;
+        --person-7: #5c940d;
+        /* U2883 (designer 2026-10-17 14:58Z): a chart's series colours, aliases of
+           the categorical person set above, defined once. Never --ok, --warn or --danger:
+           those say good or bad. A theme may override them. */
+        --chart-1: var(--person-1);
+        --chart-2: var(--person-0);
+        --chart-3: var(--person-2);
+        --chart-4: var(--person-3);
+        --chart-5: var(--person-5);
+        --chart-6: var(--person-6);
+        --on-person: #fff;
+        /* White in every theme, deliberately. This is the ground a QR is printed
+           on, and a camera needs dark modules on a light field — a themed value
+           here would put black on near-black and the square would stop working.
+           It is a token rather than a literal so the no-raw-colour rule still holds. */
+        --qr-ground: #ffffff;
+        /* -- surfaces -- */
+        --bg: #0d1117;
+        --panel: #161b22;
+        --panel-2: #1f242c;
+        --panel-3: #12161c;
+        --border: #30363d;
+        --hover-wash: rgba(255, 255, 255, 0.06);
+        --sunken: rgba(0, 0, 0, 0.22);
+        --sunken-strong: rgba(0, 0, 0, 0.3);
+        --scrim: rgba(0, 0, 0, 0.65);
+        --scrim-strong: rgba(0, 0, 0, 0.7);
+        --shadow-sm: 0 2px 12px rgb(0 0 0 / 45%);
+        --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.5);
+        --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6);
+        --shadow-up: 0 -12px 40px rgba(0, 0, 0, 0.7);
+
+        /* -- text -- */
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --on-accent: #04121f;
+        --on-danger: #fff;
+        --on-warn: #1a1207;
+
+        /* -- semantic hues. The -rgb triple is the whole point: every
+        translucent fill in the sheet is rgba(var(--x-rgb), a) at its own
+        alpha, so a theme restates one triple instead of nine washes and
+        no alpha is rounded off in the move. -- */
+        --accent: #58a6ff;
+        --accent-rgb: 88, 166, 255;
+        --accent-panel: #1c2a3a;
+        --accent-panel-edge: #2b4a6e;
+        /* U1115. The doorstep's "something new" dot. Aliased rather than a
+           second colour, so it is not a competing signal beside the door's
+           own accent-coloured active border. */
+        --ok: #3fb950;
+        --ok-rgb: 63, 185, 80;
+        --ok-text: #7ee787;
+        --warn: #f0b429;
+        --warn-rgb: 240, 180, 41;
+        --warn-text: #f0b429;
+        --warn-edge-solid: #7a4a00;
+        --danger: #f85149;
+        --danger-rgb: 248, 81, 73;
+        --danger-text: #ffb3ae;
+        --person: #d2a8ff;
+        --person-rgb: 210, 168, 255;
+
+        /* -- safety surfaces (the approval card) -- */
+        --taint-bg: #2a1c12;
+        --taint-edge: #8a5a2b;
+        --taint-deep: #1a120a;
+        --destructive-bg: #2a1214;
+        --destructive-edge: #b33b36;
+        --destructive-glow: 0 -12px 40px rgba(179, 59, 54, 0.35);
+
+        /* -- media -- */
+        --thumb-bg: #111418;
+        --thumb-glyph: #d5dee8;
+        --avatar-sat: 42%;
+        --avatar-lum: 26%;
+        /* The TV's focus ring, which must out-shout the artwork behind it. It is
+           a token and not #fff because on a light ground a white ring is the
+           only cursor a remote has, rendered invisible. */
+        --focus-loud: #ffffff;
+
+        /* -- geometry -- */
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius: 8px;
+        --radius-md: 10px;
+        /* 12px, not 10: it is what most cards already draw (U1120,
+           plans/the-design-system.md §3). */
+        --radius-lg: 12px;
+        --radius-xl: 14px;
+        --radius-2xl: 22px;
+        --radius-pill: 999px;
+        /* U1881: the corner of every sheet that rises from the screen edge or
+           floats over the page (settings, media, sign-in, approval). One value in
+           every theme: a theme restyles the card inside, not the sheet's corner. */
+        --radius-sheet: 16px;
+
+        /* -- scales (U1120, plans/the-design-system.md §3) --
+           Defined here once, so every register inherits them; a theme may
+           restate one. Type is rem on the fluid root. Nothing a person reads
+           is under --fs-sm; --fs-xs is for stamps and counters. */
+        --fs-xs: 0.72rem;
+        --fs-sm: 0.8rem;
+        --fs-md: 0.9rem;
+        --fs-base: 1rem;
+        --fs-lg: 1.15rem;
+        --fs-xl: 1.4rem;
+        --fs-hero: clamp(1.35rem, 1rem + 0.9vw, 2rem);
+        --sp-1: 0.25rem;
+        --sp-2: 0.5rem;
+        --sp-3: 0.75rem;
+        --sp-4: 1rem;
+        --sp-6: 1.5rem;
+        --sp-8: 2rem;
+        /* Stacking order. Nothing above --z-alert but the full-screen player. */
+        --z-canvas: 10;
+        --z-sticky: 20;
+        --z-dock: 30;
+        --z-composer: 40;
+        --z-sheet: 50;
+        /* U2539: the dock's popover stands above a sheet (so it is never under the pill it opened from). */
+        --z-dock-open: 55;
+        --z-alert: 60;
+        /* U2539: the film sheet covers everything, notices included. */
+        --z-takeover: 120;
+
+        /* -- type -- */
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --font-display: inherit;
+        --label-transform: none;
+        /* Two different questions, which were tangled until 2026-08-18:
+           --label-transform is "what does THIS theme additionally uppercase"
+           (base: nothing; sci-fi and retro: everything label-shaped), and
+           --label-case is "how are things that are ALWAYS labels cased" —
+           badges, section titles, role chips. Those were hardcoded
+           `text-transform: uppercase` in seven rules, so Solarpunk's sentence
+           case had no way to reach them: its rail heading came out sentence
+           case and RECENTLY ADDED right below it did not. Caught by looking at
+           a render, not by a test. */
+        --label-case: uppercase;
+        --label-tracking: 0;
+
+        /* -- effects. Inert here and in light; a theme opts in by defining
+              them, so neither of the other two ships a rule to undo. -- */
+        --glow-accent: none;
+        --glow-text: none;
+        --texture: none;
+        --texture-lit: none;
+        --texture-art: none;
+        --sweep: none;
+        --texture-opacity: 0;
+        --panel-overlay: none;
+        --vignette: none;
+        --chrome-corner: none;
+        /* The artwork MASK is a separate token from --texture-art with the
+           INVERSE contract, and that is not a style choice. --texture-art is a
+           background overlay painted over a poster: transparent means "no
+           effect", opaque-dark means "a strong line". --texture-art-mask is a
+           mask-image on a bare <img> (a rail poster, which can carry no
+           pseudo-element): there, alpha 1 means "no effect" and transparent
+           means ERASED. One token served both, so the sci-fi overlay value —
+           1.5px of rgba(0,0,0,0) — reached .rail-card__art as 1.5px of HOLE,
+           and every rail poster in two themes was perforated with the page
+           showing through. */
+        --texture-art-mask: none;
+        /* Whether the two full-viewport screen overlays exist at all. `none` by
+           default because an empty ::before still creates a box — that was the
+           real reason the rules below once carried a [data-theme="scifi"]
+           prefix, and this token keeps the reason while dropping the scoping. */
+        --fx-overlay: none;
+        --fx-art: none;
+        --texture-blend: normal;
+        /* The emissive scanline layer is TILED, so its tile height has to equal
+           the theme's own scanline period or the lit lines beat against the
+           dark ones instead of sitting on them. This was hardcoded `100% 4px`
+           — the sci-fi period — and applied to every theme, so Retro's 3px mesh
+           was lit on a 4px rhythm. Invisible until Retro rendered at all. */
+        --texture-lit-size: 100% 4px;
+        --sweep-size: 100% 42vh;
+
+        /* -- motion. Durations are tokens so a theme can be slower and more
+              theatrical without editing a single transition, and so the
+              reduced-motion block can zero all of it in one place. -- */
+        --dur-fast: 0.12s;
+        --dur-med: 0.15s;
+        --dur-slow: 0.3s;
+        --ease: ease;
+        --enter-anim: none;
+        /* U2885. The page's entry and a thing's exit, per theme. Dark and light stay as they are: none. */
+        --enter-start-anim: none;
+        --exit-anim: none;
+        /* Ambient page motion, one token per surface it drives. Inert here, so
+           a theme that defines nothing animates nothing. */
+        --fx-scan-anim: none;
+        --fx-sweep-anim: none;
+        --fx-sweep-show: none;
+        /* The pitch of the mesh, so the scan layer is one pitch taller than the screen and its loop is seamless. */
+        --fx-scan-period: 0px;
+        --fx-boot-anim: none;
+        /* U2886: what the scan layers do once a page has settled. Base: nothing changes. Sci-fi sets them to stop. */
+        --fx-settle-opacity: 1;
+        --fx-settled-scan: var(--fx-scan-anim);
+        --fx-settled-sweep: var(--fx-sweep-anim);
+        /* U2886: the multiply mesh over the text. Sci-fi only; the strength is the designer's (rulings c3c3597f). */
+        --fx-text-mesh: none;
+        --fx-text-mesh-show: none;
+        --fx-text-mesh-opacity: 0;
+        /* U992. The canvas skeleton. Plain themes show it still. */
+        --skeleton-anim: none;
+        /* The canvas wipe. Not inert at the base, unlike the ambient effects
+           above: a layer taking most of the viewport with no transition at all
+           is a jump cut, so the neutral themes get an understated fade and a
+           theme with a trope overrides it. Understatement IS dark/light's
+           trope — the absence here is a choice, not a gap. */
+        --wipe-anim: canvas-arrive var(--dur-med) var(--ease) both;
+
+
+        /* Minimum hit target. 2.75rem is 44px at a 16px root and grows with the
+           scale, which is why the TV gets big targets almost for free. */
+        --tap: 2.75rem;
+        /* Focus is loud everywhere, not only on the TV: it is the only cursor a
+           remote has, and the only one a keyboard user has. */
+        --focus-w: 3px;
+        --focus-off: 2px;
+        --focus-color: var(--text);
+        /* Page gutters. max() so the notch always wins when it is bigger. */
+        --edge-x: max(env(safe-area-inset-left), env(safe-area-inset-right), clamp(0.85rem, 2.2vw, 2.25rem));
+        --edge-y: clamp(0.85rem, 1.6vw, 1.75rem);
+        /* How much of the viewport's bottom edge the floating composer covers:
+           its own height plus the gap it floats above, safe-area inset
+           included. ui/composer-ui.ts republishes this from a real measurement
+           every time the box changes size — the box grows to 8rem as you type,
+           and a constant here (which is what this was) leaves the newest two
+           lines of the conversation behind an opaque panel. The value below is
+           the resting height: one tap-target row, 1rem of composer padding,
+           2px of border and the 1rem it floats above. It applies until the
+           first measurement, and for good if script never runs. */
+        --composer-h: calc(var(--tap) + 2.125rem + env(safe-area-inset-bottom));
+        /* Room under the feed for the composer, plus breathing space. The
+           clearance lives here rather than in the measurement, so there is
+           still one place to change how close the feed may come. Overridden
+           outright where there is no composer.
+
+           Redline 7 § 1: it clears the whole stack over the composer, not the
+           composer only — the notice, "Fortsatt her" and "Hopp til nyeste"
+           each publish their height plus the gap above them
+           (`app/composer-stack.ts`), 0px while they are not on screen, so the
+           last line of an answer and the last card's buttons are in full
+           view at the end of the feed.
+
+           U1158: the jump pill is the TOPMOST stack member, so nothing reads
+           its height for its own position the way it reads the others' — but
+           this sum has to clear past its top anyway, or scrolled content can
+           render behind it: the newest answer's last line at 1440, a song
+           card's "· 5m" line at 390. */
+        --berth-over-composer-h: 0px;
+        --canvas-pill-h: 0px;
+        --jump-latest-h: 0px;
+        --feed-bottom: calc(var(--composer-h) + var(--berth-over-composer-h) + var(--canvas-pill-h) + var(--jump-latest-h) + var(--sp-4));
+        --measure: 72ch;
+        /* The kit's own names (S1 list, token-names.ts). An app sets other values in its own block; these are the
+           defaults. --border-strong is --border until a piece needs the stronger line, so S0 changes nothing drawn. */
+        --border-strong: var(--border);
+        --control-h: var(--tap);
+        --card-min: 13rem;
+        --card-ratio: 4 / 3;
+        --tile-ground: var(--panel-2);
+        --tile-line: var(--border);
+        --on-photo: #fff;
+      }
+
+      /* ── LIGHT ────────────────────────────────────────────────────────────
+         Written twice on purpose, and the duplication is *checked* rather than
+         trusted: theme-tokens.test.ts asserts the two blocks are token-for-
+         token identical and fails if they drift.
+
+         Why twice. The choice is stored in localStorage and applied by
+         app/theme.ts once main.js runs — but the SPA's CSP is `default-src
+         'self'` with no 'unsafe-inline' (ROADMAP X0.3), so the usual no-flash
+         trick, an inline <script> in <head>, is forbidden and is not getting
+         an exception for a colour. Without the media query an "auto" reader on
+         a light OS eats a dark flash on every load. The query removes it for
+         exactly that default case, before a byte of JS runs; the attribute
+         block then covers an explicit choice, which the query cannot see.
+
+         Not an inversion of dark. The safety surfaces are re-picked against a
+         light ground rather than lightened: --taint-bg stays a warm field that
+         reads as caution instead of decoration, and --destructive-edge keeps
+         enough weight to survive next to white. --danger-text and --warn-text
+         are contrasted against --panel, because that is where they are painted,
+         not against --bg. */
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme]) {
+          color-scheme: light;
+          /* White in every theme, deliberately. This is the ground a QR is printed
+             on, and a camera needs dark modules on a light field — a themed value
+             here would put black on near-black and the square would stop working.
+             It is a token rather than a literal so the no-raw-colour rule still holds. */
+          --qr-ground: #ffffff;
+          /* -- surfaces -- */
+          --bg: #fbfcfd;
+          --panel: #ffffff;
+          --panel-2: #f3f5f8;
+          --panel-3: #eef1f5;
+          --border: #d5dbe2;
+          --hover-wash: rgba(31, 35, 40, 0.05);
+          --sunken: rgba(31, 35, 40, 0.05);
+          --sunken-strong: rgba(31, 35, 40, 0.07);
+          --scrim: rgba(27, 31, 36, 0.4);
+          --scrim-strong: rgba(27, 31, 36, 0.5);
+          --shadow-sm: 0 2px 8px rgba(31, 35, 40, 0.1);
+          --shadow-md: 0 8px 24px rgba(31, 35, 40, 0.14);
+          --shadow-lg: 0 12px 32px rgba(31, 35, 40, 0.16);
+          --shadow-up: 0 -12px 32px rgba(31, 35, 40, 0.16);
+
+          /* -- text -- */
+          --text: #1c2128;
+          --muted: #5a6672;
+          --on-accent: #ffffff;
+          --on-danger: #ffffff;
+          --on-warn: #2b1d00;
+
+          /* -- semantic hues -- */
+          --accent: #0969da;
+          --accent-rgb: 9, 105, 218;
+          --accent-panel: #ddf0ff;
+          --accent-panel-edge: #a9d3f5;
+          --ok: #1a7f37;
+          --ok-rgb: 26, 127, 55;
+          --ok-text: #116329;
+          --warn: #e3b341;
+          --warn-rgb: 191, 135, 0;
+          --warn-text: #7d4e00;
+          --warn-edge-solid: #bf8700;
+          --danger: #cf222e;
+          --danger-rgb: 207, 34, 46;
+          --danger-text: #a40e26;
+          --person: #8250df;
+          --person-rgb: 130, 80, 223;
+
+          /* -- safety surfaces (the approval card) -- */
+          --taint-bg: #fff6e5;
+          --taint-edge: #bf8700;
+          --taint-deep: #fdf0d5;
+          --destructive-bg: #fff0ef;
+          --destructive-edge: #cf222e;
+          --destructive-glow: 0 -12px 32px rgba(207, 34, 46, 0.22);
+
+          /* -- media -- */
+          --thumb-bg: #e6eaf0;
+          --thumb-glyph: #57606a;
+          --avatar-sat: 46%;
+          --avatar-lum: 86%;
+          --focus-loud: #1c2128;
+        }
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        /* White in every theme, deliberately. This is the ground a QR is printed
+           on, and a camera needs dark modules on a light field — a themed value
+           here would put black on near-black and the square would stop working.
+           It is a token rather than a literal so the no-raw-colour rule still holds. */
+        --qr-ground: #ffffff;
+        /* -- surfaces -- */
+        --bg: #fbfcfd;
+        --panel: #ffffff;
+        --panel-2: #f3f5f8;
+        --panel-3: #eef1f5;
+        --border: #d5dbe2;
+        --hover-wash: rgba(31, 35, 40, 0.05);
+        --sunken: rgba(31, 35, 40, 0.05);
+        --sunken-strong: rgba(31, 35, 40, 0.07);
+        --scrim: rgba(27, 31, 36, 0.4);
+        --scrim-strong: rgba(27, 31, 36, 0.5);
+        --shadow-sm: 0 2px 8px rgba(31, 35, 40, 0.1);
+        --shadow-md: 0 8px 24px rgba(31, 35, 40, 0.14);
+        --shadow-lg: 0 12px 32px rgba(31, 35, 40, 0.16);
+        --shadow-up: 0 -12px 32px rgba(31, 35, 40, 0.16);
+
+        /* -- text -- */
+        --text: #1c2128;
+        --muted: #5a6672;
+        --on-accent: #ffffff;
+        --on-danger: #ffffff;
+        --on-warn: #2b1d00;
+
+        /* -- semantic hues -- */
+        --accent: #0969da;
+        --accent-rgb: 9, 105, 218;
+        --accent-panel: #ddf0ff;
+        --accent-panel-edge: #a9d3f5;
+        --ok: #1a7f37;
+        --ok-rgb: 26, 127, 55;
+        --ok-text: #116329;
+        --warn: #e3b341;
+        --warn-rgb: 191, 135, 0;
+        --warn-text: #7d4e00;
+        --warn-edge-solid: #bf8700;
+        --danger: #cf222e;
+        --danger-rgb: 207, 34, 46;
+        --danger-text: #a40e26;
+        --person: #8250df;
+        --person-rgb: 130, 80, 223;
+
+        /* -- safety surfaces (the approval card) -- */
+        --taint-bg: #fff6e5;
+        --taint-edge: #bf8700;
+        --taint-deep: #fdf0d5;
+        --destructive-bg: #fff0ef;
+        --destructive-edge: #cf222e;
+        --destructive-glow: 0 -12px 32px rgba(207, 34, 46, 0.22);
+
+        /* -- media -- */
+        --thumb-bg: #e6eaf0;
+        --thumb-glyph: #57606a;
+        --avatar-sat: 46%;
+        --avatar-lum: 86%;
+        --focus-loud: #1c2128;
+      }
+
+      /* ── SCI-FI ───────────────────────────────────────────────────────────
+         A CRT-phosphor console: cyan on near-black, amber reserved entirely
+         for caution, square corners, tracked uppercase labels, a scanline
+         field over the whole viewport and glow on anything that carries
+         meaning.
+
+         The palette is doing real work, not cosplay. The classic amber
+         terminal is a trap here — make everything amber and --warn has
+         nowhere left to stand, so the taint field on an approval card reads as
+         chrome instead of as a warning. Hence a cyan ground with amber spent
+         only on caution, and --ok/--danger pushed to phosphor green and a hot
+         red that stay separable from both.
+
+         Every effect is a token dark and light already define as inert, so
+         neither of them ships a rule to undo. Only the three rules below this
+         block are sci-fi-specific, and each is scoped to the attribute so it
+         cannot leak into another theme. */
+      /* ── Solarpunk ────────────────────────────────────────────────────────────
+         A LIGHT theme, deliberately built second rather than last.
+
+         It is the first variation that exercises the light-theme code path under
+         real decoration, so it is the one most likely to expose a component that
+         quietly assumed a dark ground — exactly the class of bug that shipped once
+         already in `letterAvatar`, where a dark-theme lightness was composed in
+         JavaScript and left every poster placeholder near-black on white.
+
+         The world: grown rather than built. Warm paper, leaf and terracotta, soft
+         organic corners, humanist type in sentence case, and motion that eases
+         rather than snaps. No scanlines, no glow — its restraint is the point, and
+         it proves the effect tokens are genuinely opt-in: everything decorative
+         below stays at the inert default. */
+
+      :root[data-theme="solarpunk"] {
+        color-scheme: light;
+        /* White in every theme, deliberately. This is the ground a QR is printed
+           on, and a camera needs dark modules on a light field — a themed value
+           here would put black on near-black and the square would stop working.
+           It is a token rather than a literal so the no-raw-colour rule still holds. */
+        --qr-ground: #ffffff;
+
+        /* Surfaces: paper, not screen. Warmed a few degrees toward the accent so
+           the neutral reads as chosen rather than inherited. */
+        --bg: #f7f4ec;
+        --panel: #fffdf8;
+        --panel-2: #f1ede1;
+        --panel-3: #e9e4d5;
+        --border: #d8d1bd;
+        --hover-wash: rgba(74, 124, 63, 0.07);
+        --sunken: rgba(58, 52, 38, 0.05);
+        --sunken-strong: rgba(58, 52, 38, 0.09);
+        --scrim: rgba(46, 42, 32, 0.42);
+        --scrim-strong: rgba(46, 42, 32, 0.62);
+        /* Soft, diffuse shadows — light through leaves, not a hard studio key. */
+        --shadow-sm: 0 1px 3px rgba(74, 66, 46, 0.09);
+        --shadow-md: 0 6px 20px rgba(74, 66, 46, 0.11);
+        --shadow-lg: 0 14px 36px rgba(74, 66, 46, 0.14);
+        --shadow-up: 0 -12px 32px rgba(74, 66, 46, 0.12);
+
+        --text: #2c2a22;
+        --muted: #6d6754;
+        --on-accent: #f7fbf3;
+        --on-danger: #fff5f3;
+        --on-warn: #2a1f06;
+
+        /* Leaf green leads; terracotta is the warm counterweight, used for person
+           and nothing structural. */
+        --accent: #4a7c3f;
+        --accent-rgb: 74, 124, 63;
+        --accent-panel: #eaf2e4;
+        --accent-panel-edge: #a9c79e;
+        --ok: #3f8f5c;
+        --ok-rgb: 63, 143, 92;
+        --ok-text: #2f6b45;
+        /* Four distinct hues, as the theme test requires: green (ok) and this
+           amber-honey (warn) must not converge on the same reading. */
+        --warn: #c98a12;
+        --warn-rgb: 201, 138, 18;
+        --warn-text: #7d5606;
+        --warn-edge-solid: #a8730f;
+        --danger: #b8452f;
+        --danger-rgb: 184, 69, 47;
+        --danger-text: #8c3423;
+        --person: #8a5fa8;
+        --person-rgb: 138, 95, 168;
+
+        /* Safety surfaces: themed, per the theme-variations plan, §2 rule 1.
+           A caution surface here is warm clay on paper — unmistakably a caution,
+           and unmistakably part of this world rather than a box that failed to
+           load. */
+        --taint-bg: #fbf1dc;
+        --taint-edge: #a8730f;
+        --taint-deep: #f4e6c8;
+        --destructive-bg: #fbeae6;
+        --destructive-edge: #b8452f;
+        --destructive-glow: 0 -12px 36px rgba(184, 69, 47, 0.16), 0 0 28px rgba(184, 69, 47, 0.1);
+
+        --thumb-bg: #eae5d6;
+        --thumb-glyph: #9a9280;
+        /* Placeholder artwork must READ on paper. Higher lightness than any dark
+           theme, and the reason these are tokens at all. */
+        --avatar-sat: 38%;
+        --avatar-lum: 78%;
+        /* Never #ffffff here — a white ring on near-white paper is invisible, and
+           on a TV it is the only cursor a remote has. */
+        --focus-loud: #2c2a22;
+
+        /* Geometry: grown, not machined. */
+        --radius-xs: 6px;
+        --radius-sm: 8px;
+        --radius: 14px;
+        --radius-md: 12px;
+        --radius-lg: 20px;
+        --radius-xl: 22px;
+        --radius-2xl: 28px;
+        --radius-pill: 999px;
+
+        /* Type: humanist, sentence case. No shouting. */
+        --font-display: ui-rounded, "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
+        --label-transform: none;
+        --label-case: none;          /* grown, not shouted */
+        --label-tracking: 0.01em;
+
+        /* Effects: almost everything stays inert, which is the demonstration that
+           opting in is a matter of DEFINING a token rather than shipping selectors
+           other themes must undo. */
+        --glow-accent: none;
+        --glow-text: none;
+        /* A 2% paper grain, and nothing else. Not scanlines — this world has no
+           screens in it. */
+        --texture: radial-gradient(circle at 30% 20%, rgba(120, 106, 74, 0.028) 0 1px, transparent 1px),
+                   radial-gradient(circle at 70% 65%, rgba(120, 106, 74, 0.022) 0 1px, transparent 1px);
+        --texture-opacity: 1;
+        --texture-lit: none;
+        --texture-art: none;
+        --texture-art-mask: none;
+        --sweep: none;
+        --panel-overlay: none;
+        --vignette: none;
+        --chrome-corner: none;
+        /* The grain is the one screen-layer effect this theme takes, so the
+           overlay box exists; nothing animates it, because a world with no
+           screens in it has nothing that scans, sweeps or warms up. */
+        --fx-overlay: block;
+        --fx-art: none;
+        --texture-blend: multiply;
+
+        /* Motion: slow, eased, organic. Growth, not machinery. */
+        --dur-fast: 160ms;
+        --dur-med: 280ms;
+        --dur-slow: 460ms;
+        --ease: cubic-bezier(0.22, 0.68, 0.32, 1);
+        --enter-anim: solarpunk-unfurl var(--dur-med) var(--ease) backwards;
+        --enter-start-anim: fx-grow-in 300ms var(--ease) backwards;
+        --exit-anim: fx-grow-out 180ms var(--ease) both;
+        --wipe-anim: canvas-unfurl var(--dur-slow) var(--ease) both;
+        --skeleton-anim: skeleton-breathe 2.6s ease-in-out infinite;
+      }
+
+      /* Grounded per §2: this fires when an item ARRIVES, and nothing else
+         triggers it. It settles to a static end state (`both`) and never loops.
+         Approvals and failures run the same motion at --dur-fast; see the
+         urgency tier near #surface > *.
+
+         This comment used to also claim a stagger index encoding arrival order.
+         There was never a stagger — items stream in one at a time, so there is
+         no order to encode — and the duration override it described did not
+         exist either. Both were written as intent and read afterwards as fact. */
+      @keyframes solarpunk-unfurl {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: none; }
+      }
+
+      /* ── Retro-Futurism ───────────────────────────────────────────────────────
+         The tube. Amber phosphor on a green-black glass, tactile bevelled keys,
+         mechanical stepped motion. Where Cyberpunk is wet neon and speed, this is
+         warm, slow and physical — a machine you operate rather than a net you jack
+         into.
+
+         Two things distinguish it from the existing sci-fi theme rather than making
+         it a recolour:
+
+         1. The CRT grid is a full mesh (horizontal AND vertical), not just
+            scanlines, and it carries a curvature vignette so the corners fall away
+            like real glass.
+         2. Motion is STEPPED — `steps()` easing, not a smooth curve. A phosphor
+            display refreshes in discrete passes and this is the cheapest way to say
+            so. It is also the reason this theme's durations are longer: mechanical
+            things take time.
+
+         Amber is the accent AND the ground's warm bias, so caution cannot be amber
+         here — it moves to red-orange, and stays the only red-orange on screen. */
+
+      :root[data-theme="retro"] {
+        color-scheme: dark;
+        /* White in every theme, deliberately. This is the ground a QR is printed
+           on, and a camera needs dark modules on a light field — a themed value
+           here would put black on near-black and the square would stop working.
+           It is a token rather than a literal so the no-raw-colour rule still holds. */
+        --qr-ground: #ffffff;
+
+        --bg: #0a0d09;
+        --panel: #121710;
+        --panel-2: #1a2116;
+        --panel-3: #0d1109;
+        --border: #3a4a2e;
+        --hover-wash: rgba(255, 176, 0, 0.08);
+        --sunken: rgba(0, 0, 0, 0.42);
+        --sunken-strong: rgba(0, 0, 0, 0.6);
+        --scrim: rgba(6, 9, 5, 0.8);
+        --scrim-strong: rgba(6, 9, 5, 0.9);
+        /* Bevels, not drop shadows: an inset highlight on top and a dark lip below
+           is what makes a key look pressable. */
+        --shadow-sm: inset 0 1px 0 rgba(255, 200, 90, 0.1), 0 1px 0 rgba(0, 0, 0, 0.6);
+        --shadow-md: inset 0 1px 0 rgba(255, 200, 90, 0.12), 0 3px 0 rgba(0, 0, 0, 0.55), 0 6px 22px rgba(0, 0, 0, 0.5);
+        --shadow-lg: inset 0 1px 0 rgba(255, 200, 90, 0.14), 0 4px 0 rgba(0, 0, 0, 0.6), 0 12px 34px rgba(0, 0, 0, 0.6);
+        --shadow-up: 0 -10px 34px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 200, 90, 0.1);
+
+        --text: #ffcf7a;
+        /* design/legibility-2026-09-01.md found #96793f at 4.42:1 on --panel
+           (AA needs 4.5:1) for 11px muted text. Raised to #a48545 — same hue
+           (40deg, hex rounding drifts it to 40.4deg) and saturation (40.8%),
+           +3.9pp lightness — measured for this change at 5.20:1 on --panel
+           and 5.59:1 on --bg, clearing a 5.0:1 target margin (the report's
+           1px strokes rendered 0.5-1.3 below spec, so AA-by-spec alone
+           wasn't enough), 2026-09-01. The nearest same-hue fit that still
+           clears 5.0 is #a18244 (5.01:1, almost no margin); #a48545 was
+           picked instead for headroom. */
+        --muted: #a48545;
+        --on-accent: #150d00;
+        --on-danger: #1a0600;
+        --on-warn: #1a0800;
+
+        --accent: #ffb000;
+        --accent-rgb: 255, 176, 0;
+        --accent-panel: #2a1e02;
+        --accent-panel-edge: #8a6100;
+        /* Green phosphor for OK — the other half of the classic terminal pair, and
+           it keeps four genuinely distinct hues on screen as the theme test
+           requires. */
+        --ok: #6ee06e;
+        --ok-rgb: 110, 224, 110;
+        --ok-text: #a4f0a4;
+        /* Caution is red-orange, NOT amber: amber is the accent here and a warning
+           that shares the accent hue stops reading as a warning. */
+        --warn: #ff7a1a;
+        --warn-rgb: 255, 122, 26;
+        --warn-text: #ffa969;
+        --warn-edge-solid: #a84c05;
+        --danger: #ff4033;
+        --danger-rgb: 255, 64, 51;
+        --danger-text: #ff9088;
+        --person: #7ad6ff;
+        --person-rgb: 122, 214, 255;
+
+        --taint-bg: #2a1204;
+        --taint-edge: #a84c05;
+        --taint-deep: #1a0b02;
+        --destructive-bg: #2a0a06;
+        --destructive-edge: #ff4033;
+        --destructive-glow: 0 -12px 40px rgba(255, 64, 51, 0.35), 0 0 36px rgba(255, 64, 51, 0.2);
+
+        --thumb-bg: #0d1109;
+        --thumb-glyph: #6b5a2c;
+        --avatar-sat: 48%;
+        --avatar-lum: 20%;
+        --focus-loud: #ffb000;
+
+        /* Geometry: moulded plastic. Small radius plus the bevel in the shadows. */
+        --radius-xs: 1px;
+        --radius-sm: 2px;
+        --radius: 4px;
+        --radius-md: 5px;
+        --radius-lg: 6px;
+        --radius-xl: 6px;
+        --radius-2xl: 6px;
+        --radius-pill: 4px;
+
+        --mono: "Plex Mono UI", "Plex Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
+        --font-display: var(--mono);
+        --label-transform: uppercase;
+        --label-tracking: 0.06em;
+
+        /* Phosphor bloom is warmer and wider than Cyberpunk's tight neon. */
+        --glow-accent: 0 0 14px rgba(255, 176, 0, 0.4);
+        --glow-text: 0 0 8px rgba(255, 207, 122, 0.34);
+
+        /* A full mesh: horizontal scan plus vertical aperture grille. `multiply`
+           over the near-black ground darkens nothing on its own, which is why
+           --texture-lit exists as the emissive companion — learned the hard way
+           when the first scanline pass was simply invisible. */
+        --texture: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.5) 0 1px, transparent 1px 3px),
+                   repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px);
+        --texture-opacity: 0.55;
+        --texture-lit: repeating-linear-gradient(0deg, rgba(255, 176, 0, 0.045) 0 1px, transparent 1px 3px);
+        /* Dense mask on ARTWORK only. Page-wide density at this pitch cuts straight
+           through 16px body text. */
+        --texture-art: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.85) 0 1px, transparent 1px 2px);
+        --sweep: none;
+        --panel-overlay: linear-gradient(180deg, rgba(255, 176, 0, 0.02), transparent 40%);
+        /* Curvature: the glass falls away at the corners. Stronger than Cyberpunk's,
+           because this is a tube and that is a flat panel. */
+        --vignette: radial-gradient(120% 100% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55) 100%);
+        /* Gentler than --texture-art and INVERTED, per the contract note in the
+           base block: this modulates alpha on a bare <img>, so it rides at 1 and
+           dips, rather than sitting at 0 and spiking. The old shared value
+           reached the rails as 1px-on/1px-off and erased half of every poster. */
+        --texture-art-mask: repeating-linear-gradient(0deg,
+          rgba(0, 0, 0, 1) 0 1px, rgba(0, 0, 0, 0.68) 1px 2px);
+        /* 3px mesh, so a 3px lit tile. */
+        --texture-lit-size: 100% 3px;
+        /* No HUD brackets: --chrome-corner is a `display` value, and a tube has
+           a bezel, not a targeting reticle. It previously held
+           `1px solid rgba(255,176,0,0.28)` — a border shorthand fed to
+           `display`, which is invalid and would have rendered the corner boxes
+           as inline elements had the rule ever matched this theme. It never
+           did, which is why nothing corrected it. */
+        --chrome-corner: none;
+        --fx-overlay: block;
+        --fx-art: block;
+        --texture-blend: multiply;
+
+        /* Stepped, not smooth: a phosphor display refreshes in discrete passes.
+           Mechanical things also take longer, hence the wider durations. */
+        --dur-fast: 140ms;
+        --dur-med: 260ms;
+        --dur-slow: 420ms;
+        --ease: steps(6, end);
+        --enter-anim: retro-scanin var(--dur-med) steps(4, end) backwards;
+        --enter-start-anim: fx-rows-in 260ms var(--ease) backwards;
+        --exit-anim: fx-rows-out 156ms var(--ease) both;
+        --wipe-anim: crt-switch var(--dur-slow) var(--ease) both;
+        /* Slower than the flat panel's: a shadow mask at this pitch drifting at
+           the sci-fi rate reads as a fault rather than a refresh. The warm-up is
+           a tube reaching temperature — once, on load, never looping. */
+        --fx-scan-anim: retro-scan 12s steps(4, end) infinite;
+        --fx-scan-period: 3px;
+        --fx-boot-anim: retro-warmup 0.9s ease-out both;
+        --skeleton-anim: skeleton-flicker 1.1s steps(6, end) infinite;
+      }
+
+      /* Grounded per §2: caused by an item arriving, and the shape encodes it — the
+         row wipes in the way a raster paints, top to bottom. Settles static
+         (`both`), never loops. */
+      @keyframes retro-scanin {
+        from { opacity: 0; clip-path: inset(0 0 100% 0); }
+        to   { opacity: 1; clip-path: inset(0 0 0 0); }
+      }
+
+      :root[data-theme="scifi"] {
+        color-scheme: dark;
+        /* White in every theme, deliberately. This is the ground a QR is printed
+           on, and a camera needs dark modules on a light field — a themed value
+           here would put black on near-black and the square would stop working.
+           It is a token rather than a literal so the no-raw-colour rule still holds. */
+        --qr-ground: #ffffff;
+
+        --bg: #04080c;
+        --panel: #071219;
+        --panel-2: #0a1a24;
+        --panel-3: #050e14;
+        --border: #14485f;
+        --hover-wash: rgba(34, 211, 238, 0.09);
+        --sunken: rgba(0, 0, 0, 0.4);
+        --sunken-strong: rgba(0, 0, 0, 0.55);
+        --scrim: rgba(1, 6, 10, 0.78);
+        --scrim-strong: rgba(1, 6, 10, 0.88);
+        --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(34, 211, 238, 0.08);
+        --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.65), 0 0 24px rgba(34, 211, 238, 0.1);
+        --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.7), 0 0 32px rgba(34, 211, 238, 0.12);
+        --shadow-up: 0 -12px 40px rgba(0, 0, 0, 0.75), 0 0 32px rgba(34, 211, 238, 0.12);
+
+        --text: #c9f2ff;
+        --muted: #5f96ab;
+        --on-accent: #001318;
+        --on-danger: #14000a;
+        --on-warn: #1c1200;
+
+        --accent: #22d3ee;
+        --accent-rgb: 34, 211, 238;
+        --accent-panel: #06222e;
+        --accent-panel-edge: #17708c;
+        --ok: #34f5a0;
+        --ok-rgb: 52, 245, 160;
+        --ok-text: #7dffc6;
+        --warn: #ffb000;
+        --warn-rgb: 255, 176, 0;
+        --warn-text: #ffc94d;
+        --warn-edge-solid: #a86f00;
+        --danger: #ff3b52;
+        --danger-rgb: 255, 59, 82;
+        --danger-text: #ff8f9c;
+        --person: #b98cff;
+        --person-rgb: 185, 140, 255;
+
+        --taint-bg: #241700;
+        --taint-edge: #a86f00;
+        --taint-deep: #170f00;
+        --destructive-bg: #26060e;
+        --destructive-edge: #ff3b52;
+        --destructive-glow: 0 -12px 40px rgba(255, 59, 82, 0.4), 0 0 40px rgba(255, 59, 82, 0.2);
+
+        --thumb-bg: #050e14;
+        --thumb-glyph: #3d8ba3;
+        --avatar-sat: 55%;
+        --avatar-lum: 16%;
+        --focus-loud: #22d3ee;
+
+        /* geometry — a console has corners, not pills */
+        --radius-xs: 0px;
+        --radius-sm: 0px;
+        --radius: 2px;
+        --radius-md: 2px;
+        --radius-lg: 3px;
+        --radius-xl: 3px;
+        --radius-2xl: 3px;
+        --radius-pill: 2px;
+
+        /* type */
+        --font-display: "Exo 2 UI", "Exo 2 Fallback", system-ui, sans-serif;
+        --label-transform: uppercase;
+        --label-tracking: 0.09em;
+
+        /* effects */
+        --glow-accent: 0 0 12px rgba(34, 211, 238, 0.45);
+        --glow-text: 0 0 10px rgba(201, 242, 255, 0.3);
+        /* Two layers, because one does not read. The dark lines are
+           `multiply` and behave like a real shadow mask: strong over artwork,
+           invisible over the near-black ground — which is physically right and
+           dramatically useless on a page that is mostly ground. So an emissive
+           companion (--texture-lit, screened on top) carries the effect where
+           multiply cannot, and the sweep is the band that makes it read as a
+           live tube rather than a static overlay. */
+        --texture: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 10, 16, 0.5) 3px,
+          rgba(0, 10, 16, 0.5) 4px);
+        --texture-lit: repeating-linear-gradient(
+          to bottom,
+          rgba(34, 211, 238, 0.022) 0px,
+          rgba(34, 211, 238, 0.022) 2px,
+          rgba(0, 0, 0, 0) 3px,
+          rgba(0, 0, 0, 0) 4px);
+        /* The strong version, painted only over artwork — see the rule near
+           the effect layer. A shadow mask across body text at 16px is the
+           trope winning an argument it should lose. */
+        --texture-art: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0px,
+          rgba(0, 0, 0, 0) 1.5px,
+          rgba(0, 8, 14, 0.8) 2.5px,
+          rgba(0, 8, 14, 0.8) 3px);
+        /* Same pitch, inverse contract — see the base block. Rides at alpha 1
+           and dips to 0.72, so a rail poster reads as scanlined rather than
+           punched through. */
+        --texture-art-mask: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 1) 0px,
+          rgba(0, 0, 0, 1) 1.5px,
+          rgba(0, 0, 0, 0.72) 2.5px,
+          rgba(0, 0, 0, 0.72) 3px);
+        --sweep: linear-gradient(
+          to bottom,
+          rgba(34, 211, 238, 0) 0%,
+          rgba(34, 211, 238, 0.07) 45%,
+          rgba(140, 245, 255, 0.13) 50%,
+          rgba(34, 211, 238, 0.07) 55%,
+          rgba(34, 211, 238, 0) 100%);
+        --texture-opacity: 1;
+        --panel-overlay: linear-gradient(180deg, rgba(34, 211, 238, 0.055), rgba(34, 211, 238, 0) 42%);
+        --vignette: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.45) 100%);
+        --chrome-corner: block;
+        --fx-overlay: block;
+        --fx-art: block;
+        --texture-blend: multiply;
+
+        /* motion — a console boots, it does not pop */
+        --dur-fast: 0.16s;
+        --dur-med: 0.24s;
+        --dur-slow: 0.45s;
+        --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+        --enter-anim: scifi-materialise var(--dur-slow) var(--ease) backwards;
+        --enter-start-anim: fx-wipe-in 320ms var(--ease) backwards;
+        --exit-anim: fx-wipe-out 192ms var(--ease) both;
+        --wipe-anim: scifi-split 360ms var(--ease) both;
+        --fx-scan-anim: scifi-scan 8s steps(4, end) infinite;
+        --fx-sweep-anim: scifi-sweep 7s linear infinite;
+        --fx-sweep-show: block;
+        --fx-scan-period: 4px;
+        --fx-boot-anim: scifi-boot 0.7s var(--ease) both;
+        --fx-settle-opacity: 0;
+        --fx-settled-scan: none;
+        --fx-settled-sweep: none;
+        --fx-text-mesh: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 10, 16, 0.5) 3px,
+          rgba(0, 10, 16, 0.5) 4px);
+        --fx-text-mesh-show: block;
+        --fx-text-mesh-opacity: 0.2;
+        --skeleton-anim: skeleton-scan 1.8s linear infinite;
+      }
+      /* U2928. The light look: what a screen that cannot keep up draws, or what a person asked for. After every theme
+         block, same specificity, so it wins by order. It switches off the things that cost frames and nothing else:
+         the full-screen overlays and the over-text mesh, the endless loops, the boot flash and the text glow. Colour,
+         corners, type and layout are the theme's own. */
+      :root[data-fx="light"] {
+        --fx-overlay: none;
+        --fx-sweep-show: none;
+        --fx-text-mesh-show: none;
+        --fx-scan-anim: none;
+        --fx-sweep-anim: none;
+        --fx-boot-anim: none;
+        --glow-text: none;
+      }
+      /* The low end is expressed in rem so a reader who raised their browser's
+         default text size keeps that increase; only the growth term is vw. */
+      html { font-size: clamp(0.95rem, 0.9rem + 0.28vw, 1.2rem); }
+
+/* Shared recipes: rules every app draws the same way, kept once here with the tokens. */
+
+/* The warn notice: a standing line that asks for attention without being an error (approval waiting, a secret
+   shown once). */
+.notice-warn {
+  background: rgba(var(--warn-rgb), 0.08);
+  border: 1px solid rgba(var(--warn-rgb), 0.4);
+  border-radius: 10px;
+}

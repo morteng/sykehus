@@ -1,0 +1,14 @@
+/* U3036 J2: the joint card shares the object card's shell; only the info block, the line and the trash are its own */
+.objcard .oc-info{display:grid;gap:var(--sp-1);margin:var(--sp-2) 0 0;padding-top:var(--sp-2);border-top:1px solid var(--border)}
+.objcard .oc-info-r{display:grid;grid-template-columns:7rem 1fr;gap:var(--sp-2);align-items:baseline}
+.objcard .oc-info-k{color:var(--muted);font-size:var(--fs-sm)}
+.objcard .oc-info-v{min-width:0;overflow-wrap:anywhere}
+.objcard .oc-info-fit{color:var(--muted);font-size:var(--fs-sm)}
+.objcard .oc-receipt{margin:var(--sp-2) 0 0;padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);background:var(--bg);border:1px solid var(--border);font-size:var(--fs-sm);display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3)}
+.objcard .oc-receipt.err{border-color:var(--danger);color:var(--danger-text)}
+.objcard .oc-receipt .toast-btn{min-height:var(--tap)}
+.objcard .oc-line{color:var(--muted);font-size:var(--fs-sm);margin:0}
+.objcard .oc-trash svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.objcard .oc-trash{display:inline-grid;place-items:center;min-width:var(--tap);min-height:var(--tap);padding:0}
+.objcard .tp-f.bad .tp-seg{outline:2px solid var(--danger-text);outline-offset:1px;border-radius:var(--radius)}
+/* U3090: a box's turnable preview under the card's heading, 4:3, at most 320 px high, the card's full width on a phone */
