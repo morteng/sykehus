@@ -1,0 +1,4 @@
+{
+ "about": "The FDV drawings (PLAN.md milestone 6) for tools/dxfimport.py, one entry a storey of a wing, once they arrive. Example: {\"id\": \"sb-12\", \"file\": \"twin-pack/fdv/SB_plan12.dxf\", \"storey\": \"12. etasje\", \"wing\": \"sentralblokka\", \"kote\": 58.11, \"height\": 3.76, \"how\": \"fra FDV\", \"source\": \"Vestre Viken FDV, SB plan 12\", \"place\": \"utm\", \"walls\": \"(?i)vegg|wall\", \"rooms\": \"(?i)rom|room\", \"replaces\": [\"spor-sb-12\"]}. place \"cp\" with cp \"x,y,site_x,site_y;...\" (drawing units) where the drawing is not in UTM 33. Keep the files themselves in twin-pack/fdv/ (not in the repo).",
+ "sheets": []
+}

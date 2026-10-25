@@ -48,7 +48,12 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   [--turn deg]` places it on its building's outline (two control points), and the page with `?spor` opens the trace
   mode: the sheet under the map, place it by point pairs, draw, move and delete walls and room stamps, download the
   trace. Traces are kept in `tools/traces/`; `node tools/trace-import.mjs` puts them in floors.json as floors
-  `spor-<id>`. Run order: floors.mjs, trace-import.mjs, roompoly.py, ifc.py.
+  `spor-<id>`. Run order: floors.mjs, trace-import.mjs, dxfimport.py, roompoly.py, ifc.py.
+- FDV drawings, when they come (`docs/twin/fdv-request.md`): `python -I tools/dxfimport.py tools/fdv.json` takes each
+  storey listed there (a DXF; a DWG saved as DXF first) into floors.json as `fdv-<id>`: walls from the wall layers
+  (shapes as drawn, line pairs paired), room stamps from blocks or text, placed from UTM 33 or by control points, and
+  the traced floors it `replaces` taken out. `python -I tests/dxfimport_check.py` runs it on a made-up drawing. Needs
+  ezdxf.
 - Room stamps on the traced sheets: `python -I tools/scanrooms.py <pdf> <page> public/data/skann/index.json
   <trace.json> [--debug words.json]` reads a scan's stamps (code, name, area) with the Mac's own text recognition
   (`tools/ocr.swift`, compiled on first use; macOS only) into the trace; its words, given to scanwalls.py as `--mask`,
