@@ -109,9 +109,10 @@ function section(b, kind, drawn = null) {
   for (const [k, btn] of floorBtns) btn.setAttribute("aria-pressed", String(k === null));
   showInfo(b); hint();
 }
+const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
 function hint() {
   pressMode(); const v = viewer.view(), f = floors.find(x => x.id === v.floor);
-  $("hint").textContent = (v.mode === "section" && v.section.kind === "fasade" ? `Fasade mot ${SIDE[side]}, sett rett på${(site.facades || []).some(f => f.building === v.section.wing && f.name.endsWith(SIDE[side])) ? " · vinduene fra tegningen" : " · vinduene etter foto, ikke tegning"} · dra for å flytte · 3D eller Plan for å gå ut` : v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} ${sheet ? " som på tegningen" : " gjennom midten"} · svart: det snittet går gjennom · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · klikk et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
+  $("hint").textContent = (v.mode === "section" && v.section.kind === "fasade" ? `Fasade mot ${SIDE[side]}, sett rett på${(site.facades || []).some(f => f.building === v.section.wing && f.name.endsWith(SIDE[side])) ? " · vinduene fra tegningen" : " · vinduene etter foto, ikke tegning"} · dra for å flytte · 3D eller Plan for å gå ut` : v.mode === "section" ? `${v.section.kind === "lengde" ? "Lengdesnitt" : "Tverrsnitt"} ${sheet ? " som på tegningen" : " gjennom midten"} · svart: det snittet går gjennom · dra for å flytte · 3D eller Plan for å gå ut` : (v.storey ? `${v.storey}, snitt 1,2 m over gulv · ` : "") + (v.mode === "plan" ? "Dra eller to fingre for å flytte · knip eller + − for å zoome" : "Dra for å snu · to fingre for å flytte · knip eller + − for å zoome · " + TAP + " på et bygg")) + (f?.rooms?.length ? " · zoom inn for romnavn" : "");
 }
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
