@@ -1,5 +1,5 @@
 {
-  "renderkit": "df04d4f995c251eef7e7b92f102335007ab40e13",
+  "renderkit": "e7731ef36e4a5f5b7561f4f0ea2fcf930af63e90",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -23,6 +23,7 @@
     "fit.js": "e10ae61e5965478385ab791c53f71122c3118976",
     "views.js": "27feb79e202d7b15432b10a02bf539452c3e4fab",
     "select.js": "ccb48dbd13e700bca8fcc64d64ce18067d0391e5",
-    "build.js": "dd3ba3f25bc70c690638a17dfa27e5a11f3d6471"
+    "build.js": "dd3ba3f25bc70c690638a17dfa27e5a11f3d6471",
+    "shape.js": "e5e10dbfb0ea61a7390831e249a169dacf0f6d5e"
   }
 }

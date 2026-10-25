@@ -8,6 +8,7 @@ import { applyEdits } from "./edits.js";
 import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025f";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
+import { createShape } from "./renderkit/shape.js";
 import { baseOf } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
@@ -722,7 +723,7 @@ function cardFor(keys) {
   if (a) showNew(a); else if (g) showGround(g); else if (b) showInfo(b);
 }
 const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
-  under: e => { if (placing || build?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
+  under: e => { if (placing || build?.busy || shapeEd?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
   windowKeys: (r, inside) => { lastHit = null; return valg.windowKeys(r, inside, viewer.project, windowTest); },
   onChange: (keys, l, how) => { if (how === "sync") return; valg.setKeys(keys); cardFor(keys); },
   onHover: keys => viewer.hover(keys.flatMap(idsOf)) });
@@ -745,6 +746,20 @@ const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K
     if (how === "top") { if (a.storeys) set.storeys = Math.max(1, Math.round(body.height / 3.2)); else set.height = body.height; }
     return reshape(id, set, `${a.name} er ${{ move: "flyttet", ring: "snudd", end: "gjort lengre eller kortere", side: "gjort bredere eller smalere", top: "gjort høyere eller lavere" }[how] || "endret"}`, by);
   } });
+/* a pool, a lawn or a path picked gets its points (renderkit shape.js; pm 00:31Z «the pool with corner and edge knobs
+   and a turn ring, and paths by their points»): each drag one change, through reshape as the card's fields go */
+const SHAPED = { point: "fikk et punkt flyttet", edge: "fikk en kant flyttet", add: "fikk et nytt punkt", remove: "mistet et punkt", move: "flyttet", ring: "snudd" };
+const shapeEd = createShape({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K.scene, camera: K.camera, P: K.P, ground: K.ground, redraw: K.redraw,
+  onBusy: on => picker.pause(on),
+  onCommit: (id, body, how, by) => { const g = (site.landscape || []).find(x => x.id === id); if (!g) return false; return reshape(id, body, `${groundName(g)} ${SHAPED[how] || "endret"}`, by); } });
+function syncShape() {
+  if (shapeEd.busy) return;
+  const i = valg.items.length === 1 && valg.items[0].kind === "ground" ? valg.items[0] : null, g = i && (site.landscape || []).find(x => x.id === i.id);
+  if (!g || !(g.ring || g.line) || viewer.view().mode === "section") { if (shapeEd.item) shapeEd.detach(); return; }
+  shapeEd.attach(g.kind === "path" ? { id: g.id, line: g.line, width: g.width, mesh: K.groupOf(g.id) } : { id: g.id, ring: g.ring, mesh: K.groupOf(g.id) });
+}
+addEventListener("sykehus:valg", syncShape); addEventListener("sykehus:painted", syncShape);
+viewer.follow(() => shapeEd.frame());
 function syncBuild() {
   if (build.busy) return;
   const i = valg.items.length === 1 && valg.items[0].kind === "new" ? valg.items[0] : null, a = i && (site.added || []).find(x => x.id === i.id && x.kind === "volume");
@@ -755,4 +770,4 @@ function syncBuild() {
 addEventListener("sykehus:valg", syncBuild); addEventListener("sykehus:painted", syncBuild);
 viewer.follow(() => build.frame());
 /* ?debug: the parts, for a test that watches the model frame by frame */
-if (new URLSearchParams(location.search).has("debug")) window.sykehusDebug = { viewer, build, picker, valg, K, site };
+if (new URLSearchParams(location.search).has("debug")) window.sykehusDebug = { viewer, build, shapeEd, picker, valg, K, site };
