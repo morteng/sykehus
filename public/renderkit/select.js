@@ -14,6 +14,7 @@
    - a right click that does not drag opens «Select other», what lies under the pointer, nearest first (other)
    - a double click goes a level up (up)
    - the filter (levels) says what a click takes; it is kept in localStorage under store
+   under(e, level) → keys: [] is nothing (a click clears), null is not the picker's (the selection stays)
 
    No three.js: the app hands in its hit tests and its projection. */
 
@@ -94,7 +95,7 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
       Object.assign(box.style, { left: `${x0 - hb.left}px`, top: `${y0 - hb.top}px`, width: `${Math.abs(e.clientX - win.x)}px`, height: `${Math.abs(e.clientY - win.y)}px`, borderStyle: e.clientX >= win.x ? "solid" : "dashed" });
       return;
     }
-    if (fine(e) && !e.buttons && e.target === el) hover(under(e, lvl));
+    if (fine(e) && !e.buttons && e.target === el) hover(under(e, lvl) || []);
   }
   function onUp(e) {
     if (off) return;
@@ -118,7 +119,8 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
   }
   /* a click at e: what is under it, in place of the selection or toggled with a modifier; nothing under it clears */
   function click(e) {
-    const add = e.shiftKey || e.ctrlKey || e.metaKey, keys = under(e, lvl) || [];
+    const add = e.shiftKey || e.ctrlKey || e.metaKey, keys = under(e, lvl);
+    if (keys == null) return;   // the app has the click (a build tool placing): the selection stays
     if (!keys.length) { if (!add && sel.length) set([], lvl, "clear"); return; }
     set(choose(sel, keys, add), lvl, "click");
   }
