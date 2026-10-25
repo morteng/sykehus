@@ -1,4 +1,4 @@
-# Runbook: the Sykehustomta service (connector and drafts)
+# Runbook: the Sykehustomta service (connector, drafts and versions)
 
 What runs: `server.mjs`, one Node process. It serves `public/` as Caddy does today, and adds:
 
@@ -6,6 +6,7 @@ What runs: `server.mjs`, one Node process. It serves `public/` as Caddy does tod
 |---|---|
 | `POST /mcp` | the connector for chat apps (mcp.mjs), MCP **2026-07-28** over Streamable HTTP (JSON answers, no sessions, no SSE); older clients' `initialize` (2025-03-26 … 2025-11-25) still works |
 | `GET /api/utkast/<id>` | a draft's tried changes, read by the page's `?utkast=<id>` and by the chat app |
+| `GET /api/versjon/<id>`, `GET /api/versjoner` | a saved version of the after (versions.mjs), for `?versjon=<id>`; all of them, newest first |
 | `GET /mcp-app.js` (static) | the in-chat view, MCP Apps **2026-01-26** (`ui://sykehus/bygget`, `text/html;profile=mcp-app`) |
 
 Needs: Node 22 or newer (node:sqlite, ESM module detection). No npm packages. About 150 MB memory.
@@ -20,8 +21,15 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
   document tools answer "not loaded" and the rest works.
 - `PUBLIC_ORIGIN`: the origin written into links and into the chat app's `<base>`; without it, `https://<Host>`.
 - The data files (`public/data/site.json`, `floors.json`) are read at start: **restart after each deploy**.
-- Drafts live in memory for a day (at most 500, 200 changes each). A restart drops them: that is by design until
-  saving with a login exists (docs/rulings.md).
+- Drafts live in memory for a day (at most 500, 200 changes each). A restart drops them, by design: what is to be
+  kept is saved as a version.
+- `SYKEHUS_VERSIONS_DIR`: where versions are kept, one JSON file each (on its own volume; back it up). Without it,
+  new_version says versions are not kept here, and the rest works.
+- `SYKEHUS_TRUST_REMOTE_USER=1`: take the `Remote-User` header as the login (Caddy forward_auth to Authelia sets it).
+  Set it **only** where the edge strips `Remote-User` from what clients send; otherwise anyone could claim a name.
+- `SYKEHUS_TOKENS`: a JSON file `{ "<sha256 hex of the token>": "<login>" }` for MCP clients such as Claude Code
+  (`Authorization: Bearer <token>`). Only the hashes are stored; re-read at start.
+- Writes to a version need one of the two and are refused without; looking, trying (drafts) and reading versions stay open.
 
 ## Caddy
 

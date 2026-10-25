@@ -6,14 +6,18 @@
   GET  /...               public/ as it is
   POST /mcp               the connector (mcp.mjs)
   GET  /api/utkast/<id>   a draft's changes, for the page's ?utkast=<id>
+  GET  /api/versjon/<id>  a saved version (versions.mjs), for the page's ?versjon=<id>
+  GET  /api/versjoner     the saved versions, newest first
 
-Open to everyone for looking and trying; saving (to come) needs a login. Without DOCS the document tools say the
+Open to everyone for looking and trying; keeping a version needs a login (mcp.mjs: the gulden.no login's Remote-User
+header, or a personal token), and SYKEHUS_VERSIONS_DIR set to where they are kept. Without DOCS the document tools say the
 store is not loaded and the rest works. The data files are read once at start: restart after a deploy. */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { extname, normalize, join } from "node:path";
 import { createMcp } from "./mcp.mjs";
+import { createVersions } from "./versions.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
@@ -39,13 +43,15 @@ function readJson(req, max) {
   });
 }
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson });
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions: createVersions() });
 
 createServer(async (req, res) => {
   try {
     const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
+    if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
+    if (path === "/api/versjoner") return mcp.handleVersions(req, res);
     const file = normalize(join(PUB, path.endsWith("/") ? path + "index.html" : path));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
     const body = await readFile(file);

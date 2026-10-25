@@ -6,9 +6,10 @@ import { applyEdits } from "./edits.js";
    wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
 const [site0, { floors: floors0 }] = await Promise.all([fetch("data/site.json").then(r => r.json()), fetch("data/floors.json").then(r => r.ok ? r.json() : { floors: [] }).catch(() => ({ floors: [] }))]);
 /* ?utkast=<id>: changes tried through the connector (mcp.mjs try_change), laid over the data and shown as not saved */
-const draftId = new URLSearchParams(location.search).get("utkast");
+/* ?versjon=<id>: a saved version of the after (versions.mjs), someone's own, public to look at */
+const qs = new URLSearchParams(location.search), draftId = qs.get("utkast"), versionId = qs.get("versjon");
 let draft = null;
-if (draftId) { try { const r = await fetch(`api/utkast/${encodeURIComponent(draftId)}`); draft = r.ok ? await r.json() : { missing: true }; } catch { draft = { missing: true }; } }
+if (versionId || draftId) { try { const r = await fetch(versionId ? `api/versjon/${encodeURIComponent(versionId)}` : `api/utkast/${encodeURIComponent(draftId)}`); draft = r.ok ? await r.json() : { missing: true }; } catch { draft = { missing: true }; } }
 /* the drawn sections, by hand from the sheets (data/sections.json) */
 const thumbs = await fetch("data/ark/index.json").then(r => r.ok ? r.json() : {}).catch(() => ({}));   // small pictures of the sheets (tools/thumbs.py)
 const drawnSections = await fetch("data/sections.json").then(r => r.ok ? r.json() : { sections: [] }).then(j => j.sections).catch(() => []);
@@ -223,8 +224,10 @@ function sourceLinks(refs = []) {
 /* the draft's banner: what is tried, that it is not saved, and its notes */
 if (draft) {
   const el = document.createElement("div"); el.id = "draft"; el.className = "card";
-  el.innerHTML = draft.missing ? "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er."
-    : `<b>Utkast, ikke lagret</b> · ${draft.edits.length} ${draft.edits.length === 1 ? "endring" : "endringer"} prøvd via Claude. <a href="./">Se modellen uten</a>`
+  const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
+  el.innerHTML = draft.missing ? (versionId ? "<b>Versjonen finnes ikke.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
+    : draft.version ? `<b>${esc(draft.title)}</b> · versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
+    : `<b>Utkast, ikke lagret</b> · ${ch} prøvd via Claude. <a href="./">Se modellen uten</a>`
       + (draft.edits.length ? `<ul>${draft.edits.map(e => `<li>${esc(describe(e))}</li>`).join("")}</ul>` : "");
   document.body.appendChild(el);
 }

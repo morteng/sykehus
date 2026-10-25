@@ -1,11 +1,16 @@
 // Sykehustomta as an MCP server (Model Context Protocol), so Claude and other chat apps can use it: the documents, the
 // floors and rooms, and the building in 3D inside the chat (an MCP App). No dependencies: JSON-RPC over Streamable
-// HTTP (JSON answers only). The JSON-RPC handling follows hagekart's mcp.mjs (2026-10-24), without its OAuth: every
-// tool here is open, as the whole site is to look at and try. Saving, when it comes, is what will need a login.
+// HTTP (JSON answers only). The JSON-RPC handling follows hagekart's mcp.mjs (2026-10-24), without its OAuth: looking
+// and trying (drafts) are open to everyone; keeping a version (versions.mjs) needs a login: the Remote-User header that
+// the gulden.no login sets in front of this server (trusted only with SYKEHUS_TRUST_REMOTE_USER=1, as the edge strips
+// it from what a client sends), or a personal token (Authorization: Bearer, its sha256 mapped to the login in the
+// JSON file SYKEHUS_TOKENS), for an MCP client such as Claude Code.
 //
 //   POST /mcp     JSON-RPC: initialize, tools/list, tools/call, resources/read ...
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
+import { MAX_EDITS as MAX_VERSION_EDITS } from "./versions.mjs";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
    and the older revisions' initialize for clients that still send it. MCP Apps 2026-01-26 (io.modelcontextprotocol/ui). */
@@ -28,7 +33,17 @@ const dirDeg = d => typeof d === "number" ? d : DIRS[String(d || "").toLowerCase
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null }) {
+  /* who is asking: a login name, or null (looking and trying need none) */
+  const LOGIN = /^[A-Za-z0-9._@-]{1,64}$/;
+  const tokens = (() => { try { return process.env.SYKEHUS_TOKENS ? JSON.parse(readFileSync(process.env.SYKEHUS_TOKENS, "utf8")) : {}; } catch (e) { console.error("tokens:", e.message); return {}; } })();
+  const userOf = req => {
+    const ru = req.headers["remote-user"];
+    if (process.env.SYKEHUS_TRUST_REMOTE_USER === "1" && typeof ru === "string" && LOGIN.test(ru)) return ru;
+    const m = /^Bearer\s+(\S{16,200})$/.exec(req.headers.authorization || "");
+    const who = m && tokens[createHash("sha256").update(m[1]).digest("hex")];
+    return typeof who === "string" && LOGIN.test(who) ? who : null;
+  };
   const counts = new Map();
   const bump = (key, max, windowMs) => {
     const now = Date.now(), h = counts.get(key);
@@ -82,7 +97,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const newId = () => randomBytes(6).toString("base64url");
   const draftOf = id => { const d = drafts.get(String(id)); if (!d || Date.now() - d.t > DRAFT_MS) { drafts.delete(String(id)); throw toolErr(`No draft "${id}" (drafts last a day). Start a new one with try_change.`); } return d; };
   const draftUrl = (o, id) => `${o}/?utkast=${id}`;
-  const model = id => id ? applyEdits(site, floors, draftOf(id).edits) : { site, floors, notes: [], changed: [] };
+  /* a version (versions.mjs) by its id, for anyone to look at; and one to change, for its owner only */
+  const versionOf = id => { const v = versions?.get(id); if (!v) throw toolErr(versions ? `No version "${id}". list_versions shows them.` : "Versions are not kept on this server."); return v; };
+  const ownVersion = (id, req) => {
+    const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten. Utkast (try_change uten version) virker uten.");
+    const v = versionOf(id); if (v.owner !== who) throw toolErr(`Versjonen «${v.title}» er ${v.owner} sin; lag din egen med new_version (from: "${v.id}").`); return v;
+  };
+  const versionUrl = (o, id) => `${o}/?versjon=${id}`;
+  const versionOut = (v, o) => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated, link: versionUrl(o, v.id) });
+  /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
+  const editsOf = id => /^v.{8}$/.test(String(id)) ? versionOf(id).edits : draftOf(id).edits;
+  const model = id => id ? applyEdits(site, floors, editsOf(id)) : { site, floors, notes: [], changed: [] };
 
   // ---------- the picture ----------
   const APP_URI = "ui://sykehus/bygget";
@@ -107,7 +132,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (a.from_direction != null) v.yaw = Math.PI - dirDeg(a.from_direction) * Math.PI / 180;
     if (a.tilt_deg != null) v.pitch = clamp(+a.tilt_deg, 5, 85) * Math.PI / 180;
     if (a.distance_m != null) v.dist = clamp(+a.distance_m, 30, 1200);
-    if (a.draft) { draftOf(a.draft); v.draft = String(a.draft); }
+    if (a.draft) { editsOf(a.draft); v.draft = String(a.draft); }
     return v;
   };
   const appCsp = origin => ({ connectDomains: [origin], resourceDomains: [origin], baseUriDomains: [origin] });
@@ -117,7 +142,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const S = (props, required = []) => ({ type: "object", properties: props, required, additionalProperties: false });
   const WING = { type: "string", description: `Wing name or id: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}` };
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
-  const DRAFT = { type: "string", description: "A draft id from try_change: answer from the model with those changes laid over it" };
+  const DRAFT = { type: "string", description: "A draft id from try_change, or a version id (v…): answer from the model with those changes laid over it" };
   const EDIT = { type: "object", description: "One change. kind level: {wing, storey, kote, why}; kind wing: {wing, field (name|built|storeys|construction|facade|note), value, why}; kind room: {storey, room (code or name), set: {name?, use?, area_m2?}, why}; kind note: {text, wing?, storey?, at?: [east_m, north_m], why?}. why says where it comes from (drawing and page, a measurement, the architect's own judgement). " +
       "The after (a design): kind demolish / restore: {building: a wing, a building id or \"alle\" for every hospital building; demolish alle then restore the ones to keep}; " +
       "kind balconies: {wing, side (N|Ø|S|V: the facades facing it, within 45°), from_storey?, to_storey? (default all above the ground floor), depth? (m, 0.8-4, default 1.8), bay? (m wide each, else along the whole wall), gap? (m between, default 0.6), railing? (glass|steel|concrete)}; " +
@@ -171,21 +196,46 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           return { id: f.id, name: f.name, wall_length_m: round1(Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1])), per_storey: per,
             openings: f.openings.map(o => ({ kind: o.kind, along_m: o.u.map(round1), sill_kote: round1(o.z[0]), head_kote: round1(o.z[1]), panes: o.panes.length })), sheet: f.src.map(docRef) }; }) }; } },
     /* documents: see below */
-    { name: "try_change", title: "Prøv en endring", schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" } }, ["edits"]),
-      description: "Tries changes on the model without saving them: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, or a note pinned to a wing, storey or place. Each is checked; those that pass go into a draft that lasts a day, with a link that opens the website showing the model with them (?utkast=…), and every other tool takes draft: to answer from it. Nothing changes the shared model: saving needs a login, which comes later. Say where each change comes from in why.",
+    { name: "try_change", title: "Prøv en endring", schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" } }, ["edits"]),
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. The before, the shared model, is never changed. Say where each change comes from in why.",
       run: async (a, req) => {
-        let d; if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, v] of drafts) if (Date.now() - v.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) drafts.delete(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
-        const ok = [], bad = [];
-        for (const [i, e] of a.edits.entries()) { try { const c = checkEdit(applyEdits(site, floors, d.edits).site, applyEdits(site, floors, d.edits).floors, e); if (d.edits.length >= MAX_EDITS) throw new Error(`A draft holds at most ${MAX_EDITS} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
-        d.t = Date.now(); const after = afterOf(applyEdits(site, floors, d.edits));
+        let d, v = null;
+        if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
+        else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) drafts.delete(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
+        const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
+        for (const [i, e] of a.edits.entries()) { try { const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
+        const after = afterOf(applyEdits(site, floors, d.edits));
+        if (v) { if (ok.length) versions.save(v); return { ...versionOut(v, originOf(req)), added: ok, rejected: bad, ...(after ? { after } : {}), saved: true }; }
+        d.t = Date.now();
         return { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), saved: false,
-          note: "Ikke lagret: utkastet varer et døgn og endrer ikke fellesmodellen. Åpne lenken for å se det." }; } },
-    { name: "show_draft", title: "Se et utkast", ro: true, schema: S({ draft: { type: "string" } }, ["draft"]),
-      description: "The changes in a draft, in order, numbered, with the link that shows it on the website.",
-      run: async (a, req) => { const d = draftOf(a.draft), after = afterOf(applyEdits(site, floors, d.edits)); return { draft: d.id, link: draftUrl(originOf(req), d.id), changes: d.edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: false }; } },
-    { name: "undo_change", title: "Angre en endring", schema: S({ draft: { type: "string" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
-      description: "Takes one change out of a draft by its number from show_draft.",
-      run: async (a, req) => { const d = draftOf(a.draft); if (a.n > d.edits.length) throw toolErr(`The draft has ${d.edits.length} changes.`); const [gone] = d.edits.splice(a.n - 1, 1); return { draft: d.id, removed: gone, link: draftUrl(originOf(req), d.id), changes_in_draft: d.edits.length }; } },
+          note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; } },
+    { name: "show_draft", title: "Se et utkast eller en versjon", ro: true, schema: S({ draft: { type: "string", description: "A draft id or a version id (v…)" } }, ["draft"]),
+      description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
+      run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
+        return { ...(isV ? versionOut(versionOf(a.draft), o) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV }; } },
+    { name: "undo_change", title: "Angre en endring", schema: S({ draft: { type: "string", description: "A draft id, or a version id of yours (v…)" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
+      description: "Takes one change out of a draft, or out of the person's own version, by its number from show_draft.",
+      run: async (a, req) => {
+        const v = /^v.{8}$/.test(String(a.draft)) ? ownVersion(a.draft, req) : null, edits = v ? v.edits : draftOf(a.draft).edits;
+        if (a.n > edits.length) throw toolErr(`It has ${edits.length} changes.`);
+        const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v);
+        return { ...(v ? versionOut(v, originOf(req)) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
+    { name: "new_version", title: "Ny versjon", schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
+      description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it, public to look at by its link. from: copies a draft's or another version's changes into it. Then add to it with try_change (version:).",
+      run: async (a, req) => {
+        const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten.");
+        if (!versions) throw toolErr("Versions are not kept on this server.");
+        const title = String(a.title || "").trim(); if (!title || title.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn).");
+        bump(`new:${who}`, 20, 3600e3);
+        try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from)) : []); return { ...versionOut(v, originOf(req)), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
+    { name: "list_versions", title: "Versjonene", ro: true, schema: S({ owner: { type: "string", description: "Only this person's (a login name), or \"me\" for the asker's own; leave out for everyone's" } }),
+      description: "The saved versions of the after, newest first: title, owner, how many changes, when, and the link to show it.",
+      run: async (a, req) => { if (!versions) return { versions: [], note: "Versions are not kept on this server." };
+        const owner = a.owner === "me" ? userOf(req) : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
+        return { versions: versions.list(owner).slice(0, 100).map(v => versionOut(v, originOf(req))), you: userOf(req) }; } },
+    { name: "rename_version", title: "Gi versjonen nytt navn", schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
+      description: "Renames one of the person's own versions.",
+      run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req)), saved: true }; } },
     { name: "search_documents", title: "Søk i dokumentene", ro: true, schema: S({ query: { type: "string", description: "Words to find, in Norwegian (all must occur; æøå optional)" }, kind: { type: "string", enum: ["tegning", "rapport", "plan", "saksdokument", "kulturminne", "figur", "notat"] }, limit: { type: "integer", minimum: 1, maximum: 20 } }, ["query"]),
       description: "Full-text search in the document store: building-case drawings 2008–2026 (plans, sections, facades), the 2026 area plan for Bragernes sentrum vest and its reports (DIVE analysis, heritage, geotechnics, the high-rise report), heritage records and a research report. Returns documents with the pages that match and a snippet; read more with read_document. Scanned drawings have no text and are found by title only.",
       run: async a => { needDocs();
@@ -297,5 +347,15 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     try { const d = draftOf(id); return send(res, 200, { draft: d.id, edits: d.edits, saved: false }, open); }
     catch { return send(res, 404, { error: "Utkastet finnes ikke (de varer et døgn)." }, open); }
   }
-  return { handleMcp, handleDraft, TOOLS };
+  /* GET /api/versjon/<id>: a saved version for the page's ?versjon=<id>; GET /api/versjoner: all of them, newest first */
+  function handleVersion(req, res, id) {
+    if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
+    const open = { "access-control-allow-origin": "*" }, v = versions?.get(id);
+    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, updated: v.updated, edits: v.edits, saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
+  }
+  function handleVersions(req, res) {
+    if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
+    return send(res, 200, { versions: (versions?.list() || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated })) }, { "access-control-allow-origin": "*" });
+  }
+  return { handleMcp, handleDraft, handleVersion, handleVersions, TOOLS };
 }
