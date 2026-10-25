@@ -145,10 +145,11 @@ function section(b, kind, drawn = null) {
   viewer.setSection(b.wing, kind, FREE(), drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
   storeyOn = null; strip.set(null); showInfo(b);
 }
-/* the names over the picture: on unless this viewer took them away (remembered in this browser) */
-let names = true; try { names = localStorage.getItem("sykehus-navn") !== "av"; } catch { }
-function setNames(on) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); try { localStorage.setItem("sykehus-navn", on ? "på" : "av"); } catch { } }
-setNames(names); $("names").onclick = () => setNames(!names);
+/* the names over the picture: off until this viewer turns them on with «Navn» or N (U3541, Morten 2026-10-25 19:26Z),
+   remembered in this browser; only a choice is kept, under a new key, since the old one held «på» for everyone */
+let names = false; try { names = localStorage.getItem("sykehus-navn-valgt") === "på"; } catch { }
+function setNames(on, keep = true) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); if (keep) try { localStorage.setItem("sykehus-navn-valgt", on ? "på" : "av"); } catch { } }
+setNames(names, false); $("names").onclick = () => setNames(!names);
 $("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5);
 /* the keys: + and − zoom, ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
@@ -184,6 +185,7 @@ function showInfo(b) {
   const h = b.top != null ? b.top - b.base : null, w = (site.wings || []).find(x => x.id === b.wing);
   const about = w ? [["Bygget", w.built], ["Etasjer", w.storeys], ["Konstruksjon", w.construction], ["Fasade", w.facade]].filter(r => r[1]).map(([k, v]) => [k, esc(v)]) : [];
   const body = rows([...about, ["Fotavtrykk", `${num(b.area_m2)} m²`], ...(h != null ? [["Høyde", `ca. ${h.toFixed(0)} m`], ["Topp", `kote ${kote(b.top)}`]] : []), ["Terreng", `kote ${kote(b.base)}`]]) +
+    rivRow(b, w) +
     (w?.levels?.length ? storeyList(b, w) : "") +
     (w ? sectionRow(w) : "") +
     (w ? `${sheetStrip(w)}<p class="src">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
@@ -193,6 +195,7 @@ function showInfo(b) {
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
   for (const btn of el.querySelectorAll("[data-fasade]")) btn.onclick = () => facade(b, btn.dataset.fasade);
+  el.querySelector("[data-riv]")?.addEventListener("click", () => riv(w ? w.id : b.id, w ? w.name : b.own ? "bygningen" : "nabobygningen"));
   for (const btn of el.querySelectorAll("[data-tegnet]")) btn.onclick = () => { const d = drawnSections.find(x => x.id === btn.dataset.tegnet); section(b, d.kind, d); };
 }
 /* a wing's storeys, top first: choosing one takes the storeys above it off this building alone, so one looks into
@@ -242,8 +245,9 @@ if (draft) {
   const n = draft.edits?.length, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
   $("draftRow").innerHTML = `<div class="draftrow">${draft.missing ? (versionId ? "<b>Versjonen finnes ikke, eller er privat.</b> Du ser modellen slik den er." : "<b>Utkastet finnes ikke lenger</b> (utkast varer et døgn). Du ser modellen slik den er.")
     : draft.version ? `<b>${esc(draft.title)}</b> · ${{ privat: "privat ", lenke: "delt " }[draft.sharing] || ""}versjon av ${esc(draft.owner)}, ${ch}, sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}. <a href="./">Se før</a>`
-    : `<b>Utkast, ikke lagret</b> · ${ch} prøvd via Claude. <a href="./">Se modellen uten</a>`
-      + (draft.edits.length ? `<ul>${draft.edits.map(e => `<li>${esc(describe(e))}</li>`).join("")}</ul>` : "")}</div>`;
+    : `<b>Utkast, ikke lagret</b> · ${ch}. <a href="./">Se modellen uten</a>`
+      + ""}${draft.edits?.length ? `<ol class="changes">${draft.edits.map((e, i) => `<li><span>${esc(describe(e))}</span><button type="button" class="sm" data-undo="${i + 1}" title="Ta denne endringen ut igjen">Angre</button></li>`).join("")}</ol>` : ""}</div>`;
+  for (const b of $("draftRow").querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
 }
 function describe(e) {
   const w = (site.wings || []).find(x => x.id === e.wing)?.name || e.wing;
@@ -262,6 +266,50 @@ function describe(e) {
   if (e.kind === "fell") return `Feller trærne i et område${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
+/* «Riv» (U3542): tear a building or a wing down as a change in the after, never in the data: into the draft shown,
+   or the signed-in person's own version shown, else a new draft (a day, no login). The page then shows the draft
+   from the same place, with «Angre» over the view; «Forslag» lists every change with its own «Angre». */
+const POSE = "sykehus-pose", RIVD = "sykehus-revet";
+const where = () => versionId ? { version: versionId } : draftId && draft && !draft.missing ? { draft: draftId } : {};
+function rivRow(b, w) {
+  return `<div class="oc-row"><b>Etter</b><button type="button" data-riv title="Tas bort i 3D, plan, snitt og IFC-fila. Bare i utkastet: modellen slik den står er urørt, og du kan angre.">Riv ${w ? "fløyen" : "bygningen"}</button></div>`;
+}
+async function change(body) {
+  const r = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
+  return r?.ok ? j : { error: j.error || "Det gikk ikke." };
+}
+function show(j, note) {   // the draft or version again, from the same place
+  try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); if (note) sessionStorage.setItem(RIVD, JSON.stringify(note)); } catch { }
+  const u = new URL(location.href);
+  if (j.version) { u.searchParams.set("versjon", j.version); u.searchParams.delete("utkast"); } else if (j.draft) { u.searchParams.set("utkast", j.draft); u.searchParams.delete("versjon"); u.searchParams.delete("nokkel"); }
+  location.assign(u.href);
+}
+async function riv(target, name) {
+  const j = await change({ ...where(), edits: [{ kind: "demolish", building: target, why: "revet på siden" }] });
+  if (j.error) return toast(`Fikk ikke revet: ${j.error}`);
+  show(j, { name, n: j.changes_in_draft ?? j.changes, at: where() });
+}
+async function undo(n) {
+  const j = await change({ ...where(), undo: n });
+  if (j.error) return toast(`Fikk ikke angret: ${j.error}`);
+  show(j);
+}
+function toast(text, act) {
+  $("toast")?.remove();
+  const t = Object.assign(document.createElement("div"), { id: "toast", role: "status" }); t.innerHTML = `<span></span>`; t.firstChild.textContent = text;
+  if (act) { const b = Object.assign(document.createElement("button"), { type: "button", textContent: act.label }); b.onclick = act.run; t.append(b); }
+  const x = Object.assign(document.createElement("button"), { type: "button", className: "x", textContent: "×", title: "Lukk" }); x.setAttribute("aria-label", "Lukk"); x.onclick = () => t.remove(); t.append(x);
+  $("stage").append(t); setTimeout(() => t.isConnected && t.classList.add("gone"), 15000); setTimeout(() => t.remove(), 15800);
+}
+try { const n = JSON.parse(sessionStorage.getItem(RIVD) || "null"); sessionStorage.removeItem(RIVD); if (n && draft && !draft.missing) toast(`${n.name[0].toUpperCase() + n.name.slice(1)} er revet i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undo(n.n) }); } catch { }
+/* the IFC with the after's demolitions taken out (the server's ifcfilter.mjs) */
+if (draft && !draft.missing) {
+  const a = document.querySelector('a[download]'), q = versionId ? `versjon=${encodeURIComponent(versionId)}${qs.get("nokkel") ? `&nokkel=${encodeURIComponent(qs.get("nokkel"))}` : ""}` : `utkast=${encodeURIComponent(draftId)}`;
+  a.href = `api/ifc?${q}`; a.removeAttribute("download");
+  a.title = "Last ned modellen med endringene (IFC): det som er revet er tatt ut. Det som er bygget nytt er ikke med i fila ennå."; a.setAttribute("aria-label", "Last ned modellen med endringene");
+}
+
 /* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
 const VIS = { privat: "privat", lenke: "bare de med lenken", offentlig: "offentlig" };
 function listVersions() {

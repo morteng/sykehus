@@ -68,7 +68,9 @@ createServer(async (req, res) => {
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (await auth.route(req, res, url) || await streets.route(req, res, path, url)) return;
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path)) return;
-    if (path.startsWith("/api/versjon")) req.webUser = login.personOf(req)?.person ?? null;   // the cookie lets its owner see their own private versions
+    if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;
+    if (path === "/api/endring") return mcp.handleChange(req, res);
+    if (path === "/api/ifc") return mcp.handleIfc(req, res);   // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
     if (path === "/api/versjoner") return mcp.handleVersions(req, res);

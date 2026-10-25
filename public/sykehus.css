@@ -163,3 +163,13 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
   #sheet .nums { display: flex; justify-content: space-between; font-size: 8pt; }
   #sheet .src { font-size: 8pt; color: #333; margin-top: 2mm; }
 }
+
+/* «Riv» (U3542): the notice after, with «Angre», top centre over the view; and the changes in «Forslag» */
+#toast { position: absolute; z-index: calc(var(--z-canvas) + 2); top: 70px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); max-width: calc(100% - 220px); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); font-size: var(--fs-md); transition: opacity .8s; }
+#toast.gone { opacity: 0; }
+#toast button { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); }
+#toast button.x { width: var(--tap); padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 22px; }
+.draftrow ol.changes { margin: var(--sp-2) 0 0; padding-left: 20px; font-size: var(--fs-sm); color: var(--text); }
+.draftrow ol.changes li { padding: 2px 0; }
+.draftrow ol.changes li > span { margin-right: var(--sp-2); }
+.draftrow ol.changes button { min-height: 32px; padding: 0 var(--sp-2); font-size: var(--fs-sm); }

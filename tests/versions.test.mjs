@@ -92,3 +92,28 @@ test("claude.ai's way in: register, consent behind gulden.no, code with PKCE, to
   assert.ok(today.calls > 5 && today.logins.lars >= 1 && today.logins.morten >= 1); assert.equal(usage.grants[0].owner, "lars");
   assert.equal((await fetch(O + "/api/bruk", { headers: { "x-forwarded-for": "203.0.113.9" } })).status, 403, "the counts are not for the outside");
 });
+
+/* the page's «Riv» and «Angre» (U3542), and the IFC without what the after tears down */
+const post = (body, headers = {}) => fetch(O + "/api/endring", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, j: await r.json() }));
+test("«Riv» from the page: a new draft, one more in it, «Angre», and a version only for its owner", async () => {
+  const a = await post({ edits: [{ kind: "demolish", building: "Østfløy" }] });
+  assert.equal(a.status, 200); assert.equal(a.j.changes_in_draft, 1); assert.ok(a.j.draft);
+  const b = await post({ draft: a.j.draft, edits: [{ kind: "demolish", building: "MR-bygget" }] });
+  assert.equal(b.j.changes_in_draft, 2);
+  const u = await post({ draft: a.j.draft, undo: 1 });
+  assert.equal(u.status, 200); assert.equal(u.j.changes_in_draft, 1); assert.equal(u.j.removed.building, "Østfløy");
+  assert.equal((await post({ edits: [{ kind: "volume", name: "Drivhus" }] })).status, 400);   // only riv and sett opp from the page
+  assert.equal((await post({ edits: [{ kind: "demolish", building: "Finnes ikke" }] })).status, 422);
+  const v = (await call("new_version", { title: "Riv fra siden" }, morten)).out;
+  assert.equal((await post({ version: v.version, edits: [{ kind: "demolish", building: "Vestfløy" }] })).status, 400);   // not signed in on the page
+});
+test("/api/ifc: the draft's IFC has the torn-down wing taken out, nothing left pointing at it", async () => {
+  const a = await post({ edits: [{ kind: "demolish", building: "Østfløy" }] });
+  const r = await fetch(`${O}/api/ifc?utkast=${a.j.draft}`); assert.equal(r.status, 200);
+  assert.match(r.headers.get("content-disposition"), /attachment; filename=".*\.ifc"/);
+  const t = await r.text(), names = [...t.matchAll(/=IFCBUILDING\('[^']*',[^,]*,'([^']*)'/g)].map(m => m[1]);
+  assert.ok(!names.includes("\\X2\\00D8\\X0\\stfl\\X2\\00F8\\X0\\y") && names.includes("Sentralblokka"), names.join(" | "));
+  const ids = new Set([...t.matchAll(/^#(\d+)=/gm)].map(m => m[1]));
+  for (const m of t.replace(/'(?:[^']|'')*'/g, "").matchAll(/#(\d+)/g)) assert.ok(ids.has(m[1]), `#${m[1]} dangles`);
+  assert.equal((await fetch(`${O}/api/ifc?utkast=nope1234`)).status, 404);
+});

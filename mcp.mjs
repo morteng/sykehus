@@ -9,6 +9,8 @@ import { randomBytes } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
+import { readFileSync } from "node:fs";
+import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
    and the older revisions' initialize for clients that still send it. MCP Apps 2026-01-26 (io.modelcontextprotocol/ui). */
@@ -378,5 +380,46 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return send(res, 200, { versions: (versions?.list({ viewer: me }) || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated,
       ...(me && v.owner === me ? { mine: true, sharing: v.sharing, ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
   }
-  return { handleMcp, handleDraft, handleVersion, handleVersions, TOOLS };
+  /* POST /api/endring: the page's «Riv» and «Angre» (U3542), the same as try_change and undo_change: {edits, draft?,
+     version?} adds (no draft: a new one), {undo: n, draft | version} takes the n-th out. A version is the signed-in
+     owner's only (req.webUser); a draft needs no login, as through the connector. */
+  async function handleChange(req, res) {
+    if (req.method !== "POST") return send(res, 405, { error: "POST only" }, { allow: "POST" });
+    let a; try { a = await readJson(req, 1e5); } catch { return send(res, 400, { error: "Ugyldig forespørsel." }); }
+    try {
+      bump(`web:${req.socket.remoteAddress}`, 60, 600e3);
+      const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
+      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 10) : [], ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
+      if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
+      if (!a.undo && args.edits.some(e => !["demolish", "restore"].includes(e?.kind))) throw toolErr("Fra siden: bare riv og sett opp igjen.");   // the rest goes through Anton
+      const out = await tool.run(args, req);
+      if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).join(" "), ...out });
+      return send(res, 200, out);
+    } catch (e) { return send(res, e.tool ? 400 : 500, { error: e.tool ? e.message : "Noe gikk galt." }); }
+  }
+  /* GET /api/ifc?utkast=<id> | ?versjon=<id>&nokkel=: the model as IFC without the wings the after tears down
+     (ifcfilter.mjs); the before's file is read once, each answer kept until the draft or version changes */
+  let base = null; const ifcs = new Map();
+  function handleIfc(req, res) {
+    if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
+    const q = new URL(req.url, "http://x").searchParams, vid = q.get("versjon"), did = q.get("utkast");
+    let edits, tag, name;
+    try {
+      if (vid) { const v = versions?.get(vid); if (!v || !versions.visible(v, userOf(req), q.get("nokkel"))) throw toolErr("Versjonen finnes ikke."); edits = v.edits; tag = `${v.id}@${v.updated}`; name = v.title; }
+      else if (did) { const d = draftOf(did); edits = d.edits; tag = `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`; name = "utkast"; }
+      else throw toolErr("Hvilket utkast eller hvilken versjon?");
+    } catch (e) { return send(res, 404, { error: e.tool ? e.message : "Finnes ikke." }); }
+    let body = ifcs.get(tag);
+    if (!body) {
+      const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
+      const gone = (site.wings || []).filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
+      base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
+      body = Buffer.from(withoutBuildings(base, gone).text, "utf8");
+      if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
+    }
+    const file = `gamle-drammen-sykehus-${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;
+    res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
+    return res.end(body);
+  }
+  return { handleMcp, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, TOOLS };
 }
