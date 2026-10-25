@@ -1,14 +1,12 @@
 // Sykehustomta as an MCP server (Model Context Protocol), so Claude and other chat apps can use it: the documents, the
 // floors and rooms, and the building in 3D inside the chat (an MCP App). No dependencies: JSON-RPC over Streamable
-// HTTP (JSON answers only). The JSON-RPC handling follows hagekart's mcp.mjs (2026-10-24), without its OAuth: looking
-// and trying (drafts) are open to everyone; keeping a version (versions.mjs) needs a login: the Remote-User header that
-// the gulden.no login sets in front of this server (trusted only with SYKEHUS_TRUST_REMOTE_USER=1, as the edge strips
-// it from what a client sends), or a personal token (Authorization: Bearer, its sha256 mapped to the login in the
-// JSON file SYKEHUS_TOKENS), for an MCP client such as Claude Code.
+// HTTP (JSON answers only). The JSON-RPC handling follows hagekart's mcp.mjs (2026-10-24): looking and trying (drafts)
+// are open to everyone; keeping a version (versions.mjs) needs a login (auth.mjs: gulden.no in front, a personal
+// token, or OAuth for claude.ai), and a tool that keeps one answers 401 with the sign-in challenge without it.
 //
 //   POST /mcp     JSON-RPC: initialize, tools/list, tools/call, resources/read ...
-import { randomBytes, createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { MAX_EDITS as MAX_VERSION_EDITS } from "./versions.mjs";
 
@@ -33,17 +31,9 @@ const dirDeg = d => typeof d === "number" ? d : DIRS[String(d || "").toLowerCase
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null }) {
-  /* who is asking: a login name, or null (looking and trying need none) */
-  const LOGIN = /^[A-Za-z0-9._@-]{1,64}$/;
-  const tokens = (() => { try { return process.env.SYKEHUS_TOKENS ? JSON.parse(readFileSync(process.env.SYKEHUS_TOKENS, "utf8")) : {}; } catch (e) { console.error("tokens:", e.message); return {}; } })();
-  const userOf = req => {
-    const ru = req.headers["remote-user"];
-    if (process.env.SYKEHUS_TRUST_REMOTE_USER === "1" && typeof ru === "string" && LOGIN.test(ru)) return ru;
-    const m = /^Bearer\s+(\S{16,200})$/.exec(req.headers.authorization || "");
-    const who = m && tokens[createHash("sha256").update(m[1]).digest("hex")];
-    return typeof who === "string" && LOGIN.test(who) ? who : null;
-  };
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null }) {
+  /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
+  const userOf = req => auth?.userOf(req) ?? null;
   const counts = new Map();
   const bump = (key, max, windowMs) => {
     const now = Date.now(), h = counts.get(key);
@@ -196,7 +186,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           return { id: f.id, name: f.name, wall_length_m: round1(Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1])), per_storey: per,
             openings: f.openings.map(o => ({ kind: o.kind, along_m: o.u.map(round1), sill_kote: round1(o.z[0]), head_kote: round1(o.z[1]), panes: o.panes.length })), sheet: f.src.map(docRef) }; }) }; } },
     /* documents: see below */
-    { name: "try_change", title: "Prøv en endring", schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" } }, ["edits"]),
+    { name: "try_change", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" } }, ["edits"]),
       description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. The before, the shared model, is never changed. Say where each change comes from in why.",
       run: async (a, req) => {
         let d, v = null;
@@ -213,14 +203,14 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
         return { ...(isV ? versionOut(versionOf(a.draft), o) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV }; } },
-    { name: "undo_change", title: "Angre en endring", schema: S({ draft: { type: "string", description: "A draft id, or a version id of yours (v…)" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
+    { name: "undo_change", title: "Angre en endring", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ draft: { type: "string", description: "A draft id, or a version id of yours (v…)" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
       description: "Takes one change out of a draft, or out of the person's own version, by its number from show_draft.",
       run: async (a, req) => {
         const v = /^v.{8}$/.test(String(a.draft)) ? ownVersion(a.draft, req) : null, edits = v ? v.edits : draftOf(a.draft).edits;
         if (a.n > edits.length) throw toolErr(`It has ${edits.length} changes.`);
         const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v);
         return { ...(v ? versionOut(v, originOf(req)) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
-    { name: "new_version", title: "Ny versjon", schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
+    { name: "new_version", title: "Ny versjon", write: true, schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
       description: "Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it, public to look at by its link. from: copies a draft's or another version's changes into it. Then add to it with try_change (version:).",
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten.");
@@ -233,7 +223,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => { if (!versions) return { versions: [], note: "Versions are not kept on this server." };
         const owner = a.owner === "me" ? userOf(req) : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
         return { versions: versions.list(owner).slice(0, 100).map(v => versionOut(v, originOf(req))), you: userOf(req) }; } },
-    { name: "rename_version", title: "Gi versjonen nytt navn", schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
+    { name: "rename_version", title: "Gi versjonen nytt navn", write: true, schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
       description: "Renames one of the person's own versions.",
       run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req)), saved: true }; } },
     { name: "search_documents", title: "Søk i dokumentene", ro: true, schema: S({ query: { type: "string", description: "Words to find, in Norwegian (all must occur; æøå optional)" }, kind: { type: "string", enum: ["tegning", "rapport", "plan", "saksdokument", "kulturminne", "figur", "notat"] }, limit: { type: "integer", minimum: 1, maximum: 20 } }, ["query"]),
@@ -274,6 +264,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
   const toolList = () => TOOLS.map(t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.schema,
     annotations: { title: t.title, readOnlyHint: !!t.ro, destructiveHint: false, idempotentHint: !!t.ro, openWorldHint: false },
+    ...(t.write ? { securitySchemes: [{ type: "oauth2", scopes: [SCOPE] }] } : t.writeIf ? { securitySchemes: [{ type: "noauth" }, { type: "oauth2", scopes: [SCOPE] }] } : {}),
     ...(t.ui ? { _meta: { ui: { resourceUri: APP_URI, visibility: ["model", "app"] } } } : {}) }));
 
   // ---------- JSON-RPC ----------
@@ -299,9 +290,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       case "prompts/get": return { description: "Start", messages: [{ role: "user", content: { type: "text", text: "Gi meg en oversikt over gamle Drammen sykehus: fløyene, etasjene vi har tegninger av, og hvilke dokumenter som finnes. Vis anlegget i 3D." } }] };
       case "tools/call": {
         const t = BY[params.name]; if (!t) throw err(-32602, `Unknown tool: ${params.name}`);
+        const a = params.arguments || {}, who = userOf(req);
+        /* a tool that keeps a version, with no one logged in: the sign-in challenge, so a chat app asks the person to connect */
+        if (!who && (t.write || (t.writeIf && t.writeIf(a)))) throw Object.assign(err(401, "Sign-in needed"), { auth: true });
         try {
-          bump("open", 3000, 3600e3);
-          const out = await t.run(params.arguments || {}, req);
+          auth?.count(req, who); bump("open", 3000, 3600e3);
+          const out = await t.run(a, req);
           if (out?._result) return out._result;
           return { content: [{ type: "text", text: JSON.stringify(out) }], structuredContent: out };
         } catch (e) {
@@ -332,6 +326,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (m.id !== undefined && m.id !== null) out.push({ jsonrpc: "2.0", id: m.id, result: result && typeof result === "object"
           ? { resultType: "complete", ...result, _meta: { ...(result._meta || {}), [M("serverInfo")]: SERVER_INFO } } : result });
       } catch (e) {
+        if (e.auth) return send(res, 401, { jsonrpc: "2.0", id: m.id ?? null, error: { code: -32001, message: "Logg inn for å lagre egne versjoner (koble til Sykehustomta)." } }, { "www-authenticate": auth ? auth.challenge(req) : "Bearer" });
         console.error("mcp", m.method, m.params?.name || "", e.message);
         const known = Number.isInteger(e.code) && e.code < 0;
         out.push({ jsonrpc: "2.0", id: m.id ?? null, error: { code: known ? e.code : -32603, message: known ? e.message : "Internal error", ...(known && e.data ? { data: e.data } : {}) } });

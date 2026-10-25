@@ -25,11 +25,18 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
   kept is saved as a version.
 - `SYKEHUS_VERSIONS_DIR`: where versions are kept, one JSON file each (on its own volume; back it up). Without it,
   new_version says versions are not kept here, and the rest works.
-- `SYKEHUS_TRUST_REMOTE_USER=1`: take the `Remote-User` header as the login (Caddy forward_auth to Authelia sets it).
-  Set it **only** where the edge strips `Remote-User` from what clients send; otherwise anyone could claim a name.
+- `SYKEHUS_PROXY_SECRET`: the `Remote-User` header counts as the login only when `X-Sykehus-Proxy-Auth` carries this
+  secret (compared in constant time). Anton sends both on its internal calls; Caddy adds the secret after forward_auth
+  on the consent routes. The edge strips both headers from everything clients send.
 - `SYKEHUS_TOKENS`: a JSON file `{ "<sha256 hex of the token>": "<login>" }` for MCP clients such as Claude Code
   (`Authorization: Bearer <token>`). Only the hashes are stored; re-read at start.
-- Writes to a version need one of the two and are refused without; looking, trying (drafts) and reading versions stay open.
+- OAuth for claude.ai (auth.mjs, hagekart's server): `/.well-known/oauth-*`, `/oauth/register`, `/oauth/token` open;
+  `/oauth/authorize` and `/oauth/approve` behind the gulden.no login (forward_auth, then `header_up X-Sykehus-Proxy-Auth`).
+  Grants (token hashes only) in `SYKEHUS_VERSIONS_DIR/_oauth.json`.
+- A tool that keeps a version answers HTTP 401 with the sign-in challenge without a login; looking, trying (drafts)
+  and reading versions stay open. Tool calls are counted per login and per hashed address; anonymous calls are held
+  to 600 an hour per address, a login to 1000. `GET /api/bruk` gives the counts for the last 14 days, to the proxy
+  secret or from this machine only.
 
 ## Caddy
 
@@ -38,7 +45,11 @@ Either proxy everything to the process, or keep serving `public/` statically and
 ```
 handle /mcp* { reverse_proxy 127.0.0.1:8090 }
 handle /api/* { reverse_proxy 127.0.0.1:8090 }
+handle /.well-known/oauth-* { reverse_proxy 127.0.0.1:8090 }
+handle /oauth/* { reverse_proxy 127.0.0.1:8090 }   # authorize and approve: forward_auth first, then header_up the secret
 ```
+
+On every route: `request_header -Remote-User` and `request_header -X-Sykehus-Proxy-Auth` before anything else.
 
 The chat app runs in the chat host's sandboxed frame on the host's own origin, and loads `mcp-app.js`, the viewer,
 `data/*` and the textures from this site as a module script: those must carry `Access-Control-Allow-Origin: *`

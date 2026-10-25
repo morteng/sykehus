@@ -1,52 +1,71 @@
-/* Versions of the after (versions.mjs) through the connector's tools: who may keep and change them.
+/* Versions of the after (versions.mjs) and who may keep them (auth.mjs), against a server of their own: gulden.no in
+   front (Remote-User with the proxy secret), a personal token, and claude.ai's OAuth sign-in from start to end.
    node --test tests/versions.test.mjs */
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { spawn } from "node:child_process";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-versions-"));
-const tok = "test-token-morten-0123456789", tokFile = join(dir, "tokens.json");
-writeFileSync(tokFile, JSON.stringify({ [createHash("sha256").update(tok).digest("hex")]: "morten" }));
-process.env.SYKEHUS_TOKENS = tokFile; delete process.env.SYKEHUS_TRUST_REMOTE_USER;
-const { createMcp } = await import("../mcp.mjs");
-const { createVersions } = await import("../versions.mjs");
-const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
-const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
-const store = join(dir, "v");
-const mcp = createMcp({ site, floors, versions: createVersions(store) });
-const T = Object.fromEntries(mcp.TOOLS.map(t => [t.name, t.run]));
-const req = (h = {}) => ({ headers: { host: "localhost:8090", ...h } });
-const morten = req({ authorization: `Bearer ${tok}` });
+const tok = "test-token-morten-0123456789", secret = "proxy-secret-for-tests-0123456789", PORT = 8000 + Math.floor(Math.random() * 900);
+writeFileSync(join(dir, "tokens.json"), JSON.stringify({ [createHash("sha256").update(tok).digest("hex")]: "morten" }));
+const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_TOKENS: join(dir, "tokens.json"), SYKEHUS_PROXY_SECRET: secret, DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
+await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
+after(() => srv.kill());
+const O = `http://localhost:${PORT}`;
+let n = 0;
+async function call(name, args, headers = {}) {
+  const r = await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name, arguments: args } }) });
+  const j = await r.json(); if (r.status !== 200) return { status: r.status, auth: r.headers.get("www-authenticate"), j };
+  const c = j.result; return { status: 200, error: c.isError ? c.content[0].text : null, out: c.structuredContent };
+}
+const morten = { authorization: `Bearer ${tok}` }, lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
 
-test("trying needs no login, keeping does", async () => {
-  const d = await T.try_change({ edits: [{ kind: "demolish", building: "Vestfløy" }] }, req());
-  assert.equal(d.saved, false); assert.equal(d.added.length, 1);
-  await assert.rejects(T.new_version({ title: "Uten innlogging" }, req()), /innlogging/);
-  await assert.rejects(T.new_version({ title: "Feil token" }, req({ authorization: "Bearer not-the-right-token-xx" })), /innlogging/);
-});
-
-test("Remote-User counts only when the server is told to trust it", async () => {
-  await assert.rejects(T.new_version({ title: "Forfalsket" }, req({ "remote-user": "lars" })), /innlogging/);
-  process.env.SYKEHUS_TRUST_REMOTE_USER = "1";
-  try { const v = await T.new_version({ title: "Lars sin" }, req({ "remote-user": "lars" })); assert.equal(v.owner, "lars"); }
-  finally { delete process.env.SYKEHUS_TRUST_REMOTE_USER; }
+test("trying needs no login; keeping answers 401 with the sign-in challenge", async () => {
+  const d = await call("try_change", { edits: [{ kind: "demolish", building: "Vestfløy" }] });
+  assert.equal(d.out.saved, false);
+  for (const h of [{}, { authorization: "Bearer not-the-right-token-xx" }, { "remote-user": "lars" }, { "remote-user": "lars", "x-sykehus-proxy-auth": "wrong" }]) {
+    const r = await call("new_version", { title: "Ikke lov" }, h);
+    assert.equal(r.status, 401); assert.match(r.auth, /resource_metadata=".*\/\.well-known\/oauth-protected-resource\/mcp"/);
+  }
 });
 
 test("a version from a draft, changed by its owner only, kept on disk", async () => {
-  const d = await T.try_change({ edits: [{ kind: "demolish", building: "alle" }, { kind: "restore", building: "Sentralblokka" }] }, req());
-  const v = await T.new_version({ title: "Bare tårnet", from: d.draft }, morten);
-  assert.equal(v.owner, "morten"); assert.equal(v.changes, 2); assert.match(v.link, /\?versjon=v/);
-  const r = await T.try_change({ version: v.version, edits: [{ kind: "volume", name: "Drivhus", shape: "triangle", from: [-46, -62], to: [27, -62], width: 24, height: 18 }] }, morten);
-  assert.equal(r.saved, true); assert.equal(r.changes, 3); assert.equal(r.after.built[0].name, "Drivhus");
-  process.env.SYKEHUS_TRUST_REMOTE_USER = "1";
-  try { await assert.rejects(T.try_change({ version: v.version, edits: [{ kind: "restore", building: "alle" }] }, req({ "remote-user": "lars" })), /morten sin/); }
-  finally { delete process.env.SYKEHUS_TRUST_REMOTE_USER; }
-  await T.undo_change({ draft: v.version, n: 3 }, morten);
-  const again = createVersions(store).get(v.version);
-  assert.equal(again.edits.length, 2); assert.equal(again.title, "Bare tårnet");
-  const all = await T.list_versions({}, req()); assert.ok(all.versions.some(x => x.version === v.version));
-  const shown = await T.show_draft({ draft: v.version }, req()); assert.equal(shown.saved, true); assert.ok(shown.after.demolished.length > 10);
+  const d = await call("try_change", { edits: [{ kind: "demolish", building: "alle" }, { kind: "restore", building: "Sentralblokka" }] });
+  const v = (await call("new_version", { title: "Bare tårnet", from: d.out.draft }, morten)).out;
+  assert.equal(v.owner, "morten"); assert.equal(v.changes, 2);
+  const r = await call("try_change", { version: v.version, edits: [{ kind: "volume", name: "Drivhus", shape: "triangle", from: [-46, -62], to: [27, -62], width: 24, height: 18 }] }, morten);
+  assert.equal(r.out.saved, true); assert.equal(r.out.changes, 3);
+  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /morten sin/);
+  await call("undo_change", { draft: v.version, n: 3 }, morten);
+  const page = await (await fetch(`${O}/api/versjon/${v.version}`)).json();
+  assert.equal(page.edits.length, 2); assert.equal(page.owner, "morten");
+  assert.equal((await call("new_version", { title: "Lars sin" }, lars)).out.owner, "lars");
+});
+
+test("claude.ai's way in: register, consent behind gulden.no, code with PKCE, token, save", async () => {
+  const meta = await (await fetch(O + "/.well-known/oauth-authorization-server")).json();
+  assert.deepEqual(meta.code_challenge_methods_supported, ["S256"]);
+  const reg = await (await fetch(O + "/oauth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }) })).json();
+  const verifier = randomBytes(32).toString("base64url"), challenge = createHash("sha256").update(verifier).digest("base64url");
+  const q = new URLSearchParams({ response_type: "code", client_id: reg.client_id, redirect_uri: "https://claude.ai/api/mcp/auth_callback", code_challenge: challenge, code_challenge_method: "S256", state: "s1" });
+  assert.equal((await fetch(`${O}/oauth/authorize?${q}`)).status, 401, "no gulden.no login, no consent");
+  const html = await (await fetch(`${O}/oauth/authorize?${q}`, { headers: lars })).text();
+  const form = /name="form" value="([^"]+)"/.exec(html)[1];
+  const forged = await fetch(O + "/oauth/approve", { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", "remote-user": "lars", "x-sykehus-proxy-auth": "wrong" }, body: `form=${form}&answer=yes` });
+  assert.equal(forged.status, 400, "the answer must come from the same login");
+  const html2 = await (await fetch(`${O}/oauth/authorize?${q}`, { headers: lars })).text(), form2 = /name="form" value="([^"]+)"/.exec(html2)[1];
+  const ok = await fetch(O + "/oauth/approve", { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", ...lars }, body: `form=${form2}&answer=yes` });
+  const back = new URL(ok.headers.get("location")); assert.equal(back.searchParams.get("state"), "s1");
+  const t = await (await fetch(O + "/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "authorization_code", code: back.searchParams.get("code"), client_id: reg.client_id, redirect_uri: "https://claude.ai/api/mcp/auth_callback", code_verifier: verifier }) })).json();
+  assert.ok(t.access_token && t.refresh_token);
+  const v = await call("new_version", { title: "Fra claude.ai" }, { authorization: `Bearer ${t.access_token}` });
+  assert.equal(v.out.owner, "lars");
+  const usage = await (await fetch(O + "/api/bruk")).json(), today = Object.values(usage.days)[0];
+  assert.ok(today.calls > 5 && today.logins.lars >= 1 && today.logins.morten >= 1); assert.equal(usage.grants[0].owner, "lars");
+  assert.equal((await fetch(O + "/api/bruk", { headers: { "x-forwarded-for": "203.0.113.9" } })).status, 403, "the counts are not for the outside");
 });

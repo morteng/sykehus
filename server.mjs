@@ -9,8 +9,11 @@
   GET  /api/versjon/<id>  a saved version (versions.mjs), for the page's ?versjon=<id>
   GET  /api/versjoner     the saved versions, newest first
 
-Open to everyone for looking and trying; keeping a version needs a login (mcp.mjs: the gulden.no login's Remote-User
-header, or a personal token), and SYKEHUS_VERSIONS_DIR set to where they are kept. Without DOCS the document tools say the
+  GET  /api/bruk          calls a day per login and per (hashed) address, for pm's report (the box only)
+  /.well-known/oauth-*, /oauth/*   the sign-in for chat apps (auth.mjs)
+
+Open to everyone for looking and trying; keeping a version needs a login (auth.mjs: gulden.no in front with
+SYKEHUS_PROXY_SECRET, a personal token, or OAuth), and SYKEHUS_VERSIONS_DIR set to where they are kept. Without DOCS the document tools say the
 store is not loaded and the rest works. The data files are read once at start: restart after a deploy. */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -18,6 +21,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { extname, normalize, join } from "node:path";
 import { createMcp } from "./mcp.mjs";
 import { createVersions } from "./versions.mjs";
+import { createAuth } from "./auth.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
@@ -43,12 +47,14 @@ function readJson(req, max) {
   });
 }
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions: createVersions() });
+const auth = createAuth({ SECURITY, readJson });
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions: createVersions(), auth });
 
 createServer(async (req, res) => {
   try {
-    const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+    const url = new URL(req.url, "http://x"), path = decodeURIComponent(url.pathname);
     if (path === "/mcp") return await mcp.handleMcp(req, res);
+    if (await auth.route(req, res, url)) return;
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
     if (path === "/api/versjoner") return mcp.handleVersions(req, res);
