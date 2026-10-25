@@ -44,11 +44,11 @@ test("a version from a draft, changed by its owner only, kept on disk", async ()
   const key = l => new URL(l).searchParams.get("nokkel"), list = async () => (await (await fetch(`${O}/api/versjoner`)).json()).versions.map(x => x.version);
   assert.equal(v.sharing, "privat"); const own = key(v.link); assert.ok(own);
   assert.equal((await fetch(`${O}/api/versjon/${v.version}`)).status, 404);
-  assert.match((await call("show_draft", { draft: v.version }, lars)).error, /No version/);
-  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /No version/, "nor its title");
+  assert.match((await call("show_draft", { draft: v.version }, lars)).error, /Fant ingen versjon/);
+  assert.match((await call("try_change", { version: v.version, edits: [{ kind: "restore", building: "alle" }] }, lars)).error, /Fant ingen versjon/, "nor its title");
   const page = await (await fetch(`${O}/api/versjon/${v.version}?nokkel=${own}`)).json();
   assert.equal(page.edits.length, 2); assert.equal(page.owner, "morten");
-  assert.match((await call("set_sharing", { version: v.version, sharing: "offentlig" }, lars)).error, /No version/, "only the owner chooses");
+  assert.match((await call("set_sharing", { version: v.version, sharing: "offentlig" }, lars)).error, /Fant ingen versjon/, "only the owner chooses");
   // lenke: anyone with the share link, never listed; the owner's own link is not the share link
   const linked = (await call("set_sharing", { version: v.version, sharing: "lenke" }, morten)).out, share = key(linked.link);
   assert.notEqual(share, own);

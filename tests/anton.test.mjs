@@ -135,7 +135,7 @@ test("«Ny samtale» asks gulden-ai for a new thread and empties every page", as
   await new Promise(ok => setTimeout(ok, 200));
   assert.equal((await post("/api/anton/ny", {}, { cookie })).status, 200);
   assert.ok((await got).some(e => e.event === "cleared"));
-  const b = seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).body; assert.equal(b.session, "sykehus:lars"); assert.equal(b.device_id, undefined); assert.equal(seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).device, "dev-1");
+  const b = seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).body; assert.equal(b.session, "sykehus:lars"); assert.equal(b.device_id, undefined); assert.match(b.request_id, /^[A-Za-z0-9._:-]{1,128}$/, "gulden-ai refuses /new-chat without one (21:05Z)"); assert.equal(seen.filter(s => s.path === "/internal/sykehus/new-chat").at(-1).device, "dev-1");
 });
 
 test("a qr line reaches the pages only when it points at this site's /inn/", async () => {

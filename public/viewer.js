@@ -300,7 +300,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
      path across it) */
   const GROUND = { grass: "#a3c072", meadow: "#bcc47e", planting: "#6f8c4c", gravel: "#d3cab6", paving: "#bdb6aa", asphalt: "#66655f", water: "#7fa8c2", wood: "#a8825a" };
   const groundMat = Object.fromEntries(Object.entries(GROUND).map(([k, c]) => [k, mat(c, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, ...(k === "water" ? { roughness: 0.15, metalness: 0.1 } : {}) })]));
-  for (const [n, g] of (site.landscape || []).entries()) {
+  /* drawn again in place when the after changes (setLandscape, 21:07Z «when i edit the whole page reloads»: a pool is a surface) */
+  const groundMeshes = [];
+  function setLandscape(list) {
+    for (const m of groundMeshes.splice(0)) { scene.remove(m); m.geometry.dispose(); }
+    drawLandscape(list); dirty = true;
+  }
+  function drawLandscape(list) { for (const [n, g] of (list || []).entries()) {
     const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
     const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []), pos = [], lim = Math.max(1, T.res) * 1.4;
     const lift = 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
@@ -315,58 +321,81 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     };
     for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, groundMat[g.surface] || groundMat.grass); m.receiveShadow = true; m.userData.added = g.id; scene.add(m);
-  }
+    const m = new THREE.Mesh(geo, groundMat[g.surface] || groundMat.grass); m.receiveShadow = true; m.userData.added = g.id; scene.add(m); groundMeshes.push(m);
+  } }
+  drawLandscape(site.landscape);
 
   /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (renderkit/ez-tree.js, MIT;
      bark and leaf pictures CC0 / MIT, docs/tex-credits.txt). Three models are grown once, oak, aspen and pine, with
      fewer leaves and rounder branches than hagekart's (a few hundred trees here, not a garden's few; quality.js leaves), and every tree is one of them, scaled
      to its height and crown and turned. Anything that goes wrong leaves the site without trees. ---------- */
   const treeHash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
-  if (site.trees?.length && !Q.ez) {
-    /* on a slow device: a trunk and a crown of a few flat faces each, every tree in two draws */
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), n = site.trees.length;
-    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.25, 1, 6).translate(0, 0.5, 0), mat("#6b5a48"), n);
-    const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mat("#7f9a5c", { flatShading: true, side: THREE.FrontSide }), n);
-    site.trees.forEach(([x, y, h, r, form], i) => {
-      const g0 = ground(x, y), cone = form === "cone", ch = cone ? h * 0.8 : Math.min(h * 0.7, r * 2.2);
-      m4.compose(P([x, y], g0), q.identity(), new THREE.Vector3(1, h - ch * 0.6, 1)); trunk.setMatrixAt(i, m4);
-      m4.compose(P([x, y], g0 + h - ch / 2), q.setFromAxisAngle(up, treeHash(y, x) * 6.28), new THREE.Vector3(cone ? r * 0.8 : r, ch / 2, cone ? r * 0.8 : r)); crown.setMatrixAt(i, m4);
-    });
-    for (const m of [trunk, crown]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); }
+  /* drawn again in place when the after plants or fells (setTrees): the models grown once, the instances anew */
+  const treeMeshes = [];
+  let grown = null, treeGen = 0;   // EZ-Tree's three models, grown on the first draw; which setTrees is the last
+  function setTrees(list) {
+    treeGen++; for (const m of treeMeshes.splice(0)) { scene.remove(m); m.dispose?.(); }
+    drawTrees(list || []); dirty = true;
   }
-  if (site.trees?.length && Q.ez) {
-    const url = n => new URL(n, import.meta.url).href, load = n => new Promise(ok => new THREE.TextureLoader().load(url(n), ok, undefined, () => ok(null)));
-    Promise.all([import("./renderkit/ez-tree.js"), ...["ez-bark-oak.jpg", "ez-bark-birch.jpg", "ez-bark-pine.jpg", "ez-leaf-oak.png", "ez-leaf-aspen.png", "ez-leaf-pine.png"].map(n => load(`renderkit/${n}`))]).then(([EZ, ...tx]) => {
-      for (const t of tx) if (t) { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; }
-      tx.slice(0, 3).forEach(t => { if (t) t.wrapS = t.wrapT = THREE.RepeatWrapping; });
-      const KIND = { oak: ["oak_medium", tx[0], tx[3]], aspen: ["aspen_medium", tx[1], tx[4]], pine: ["pine_medium", tx[2], tx[5]] };
+  function drawTrees(trees) {
+    if (!trees.length) return;
+    if (!Q.ez) {
+      /* on a slow device: a trunk and a crown of a few flat faces each, every tree in two draws */
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), n = trees.length;
+      const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.25, 1, 6).translate(0, 0.5, 0), mat("#6b5a48"), n);
+      const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mat("#7f9a5c", { flatShading: true, side: THREE.FrontSide }), n);
+      trees.forEach(([x, y, h, r, form], i) => {
+        const g0 = ground(x, y), cone = form === "cone", ch = cone ? h * 0.8 : Math.min(h * 0.7, r * 2.2);
+        m4.compose(P([x, y], g0), q.identity(), new THREE.Vector3(1, h - ch * 0.6, 1)); trunk.setMatrixAt(i, m4);
+        m4.compose(P([x, y], g0 + h - ch / 2), q.setFromAxisAngle(up, treeHash(y, x) * 6.28), new THREE.Vector3(cone ? r * 0.8 : r, ch / 2, cone ? r * 0.8 : r)); crown.setMatrixAt(i, m4);
+      });
+      for (const m of [trunk, crown]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); treeMeshes.push(m); }
+      return;
+    }
+    grown ??= growTrees();
+    const gen = treeGen;   // a list drawn late, after a newer setTrees, is not added
+    grown.then(models => {
+      if (gen !== treeGen) return;
       const groups = { oak: [], aspen: [], pine: [] };
-      for (const t of site.trees) groups[t[4] === "cone" ? "pine" : treeHash(t[0], t[1]) < 0.35 ? "aspen" : "oak"].push(t);
+      for (const t of trees) groups[t[4] === "cone" ? "pine" : treeHash(t[0], t[1]) < 0.35 ? "aspen" : "oak"].push(t);
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
       for (const [kind, list] of Object.entries(groups)) {
         if (!list.length) continue;
-        const [preset, bark, leaf] = KIND[kind], json = structuredClone(EZ.PRESETS[preset]); json.leaves.count = Math.max(4, Math.round(json.leaves.count * Q.leaves));
+        const { bg, lg, Ht, R, barkMat, leafMat, depthMat } = models[kind];
+        const bm = new THREE.InstancedMesh(bg, barkMat, list.length), lm = new THREE.InstancedMesh(lg, leafMat, list.length); lm.customDepthMaterial = depthMat;
+        list.forEach(([x, y, h, r], i) => {
+          const sy = h / Ht, sxz = Math.min(1.4 * sy, Math.max(0.6 * sy, r / R));
+          m4.compose(P([x, y], ground(x, y)), q.setFromAxisAngle(up, treeHash(y, x) * Math.PI * 2), new THREE.Vector3(sxz, sy, sxz));
+          bm.setMatrixAt(i, m4); lm.setMatrixAt(i, m4);
+        });
+        for (const m of [bm, lm]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); treeMeshes.push(m); }
+      }
+      dirty = true;
+    }).catch(e => console.warn("trees", e));
+  }
+  function growTrees() {
+    const url = n => new URL(n, import.meta.url).href, load = n => new Promise(ok => new THREE.TextureLoader().load(url(n), ok, undefined, () => ok(null)));
+    return Promise.all([import("./renderkit/ez-tree.js"), ...["ez-bark-oak.jpg", "ez-bark-birch.jpg", "ez-bark-pine.jpg", "ez-leaf-oak.png", "ez-leaf-aspen.png", "ez-leaf-pine.png"].map(n => load(`renderkit/${n}`))]).then(([EZ, ...tx]) => {
+      for (const t of tx) if (t) { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; }
+      tx.slice(0, 3).forEach(t => { if (t) t.wrapS = t.wrapT = THREE.RepeatWrapping; });
+      const KIND = { oak: ["oak_medium", tx[0], tx[3]], aspen: ["aspen_medium", tx[1], tx[4]], pine: ["pine_medium", tx[2], tx[5]] }, models = {};
+      for (const [kind, [preset, bark, leaf]] of Object.entries(KIND)) {
+        const json = structuredClone(EZ.PRESETS[preset]); json.leaves.count = Math.max(4, Math.round(json.leaves.count * Q.leaves));
         for (const k in json.branch.segments) json.branch.segments[k] = Math.min(json.branch.segments[k], [5, 4, 3, 3][k]);       // rounder than needed from 30 m away:
         for (const k in json.branch.sections) json.branch.sections[k] = Math.max(1, Math.round(json.branch.sections[k] * 0.6));  // about 6 000 triangles a tree
         const tree = new EZ.Tree(); tree.loadFromJson(json);
         const bg = tree.branchesMesh.geometry, lg = tree.leavesMesh.geometry; bg.computeBoundingBox(); lg.computeBoundingBox();
         const Ht = Math.max(bg.boundingBox.max.y, lg.boundingBox.max.y), R = Math.max(-lg.boundingBox.min.x, lg.boundingBox.max.x, -lg.boundingBox.min.z, lg.boundingBox.max.z, 1);
         if (bark && json.bark?.textureScale) bark.repeat.set(json.bark.textureScale.x, 1 / json.bark.textureScale.y);
-        const bm = new THREE.InstancedMesh(bg, new THREE.MeshStandardMaterial({ map: bark, color: json.bark?.tint ?? 0xffffff, roughness: 0.95 }), list.length);
-        const lm = new THREE.InstancedMesh(lg, new THREE.MeshStandardMaterial({ map: leaf, color: kind === "pine" ? "#c9d6c0" : "#d7e3c2", alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 }), list.length);
-        lm.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaf, alphaTest: 0.5 });
-        list.forEach(([x, y, h, r], i) => {
-          const sy = h / Ht, sxz = Math.min(1.4 * sy, Math.max(0.6 * sy, r / R));
-          m4.compose(P([x, y], ground(x, y)), q.setFromAxisAngle(up, treeHash(y, x) * Math.PI * 2), new THREE.Vector3(sxz, sy, sxz));
-          bm.setMatrixAt(i, m4); lm.setMatrixAt(i, m4);
-        });
-        for (const m of [bm, lm]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); }
+        models[kind] = { bg, lg, Ht, R, barkMat: new THREE.MeshStandardMaterial({ map: bark, color: json.bark?.tint ?? 0xffffff, roughness: 0.95 }),
+          leafMat: new THREE.MeshStandardMaterial({ map: leaf, color: kind === "pine" ? "#c9d6c0" : "#d7e3c2", alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 }),
+          depthMat: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaf, alphaTest: 0.5 }) };
         tree.branchesMesh.material.dispose?.(); tree.leavesMesh.material.dispose?.();
       }
-      dirty = true;
-    }).catch(e => console.warn("trees", e));
+      return models;
+    });
   }
+  drawTrees(site.trees || []);
 
   /* ---------- storeys: each wing has its own (site.json wings[].levels, tools/wings.json), at its own kote. A
      building is cut 1.2 m above the floor of the storey chosen for it, as a plan is cut, with a floor plate there;
@@ -730,7 +759,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   return {
     /* a renamed wing's name over its roof (the after's wing edits, in place) */
     relabel(names) { for (const t of wingTags) { const n = names.get(t.id); if (n && t.el.textContent !== n) { t.el.textContent = n; t.size = null; } } dirty = true; },
-    setSun, select, setGone, setAdded, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    setSun, select, setGone, setAdded, setLandscape, setTrees, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */

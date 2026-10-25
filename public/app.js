@@ -15,6 +15,7 @@ const [site0, { floors: floors0 }] = await Promise.all([fetch("data/site.json").
 /* ?versjon=<id>: a saved version of the after (versions.mjs), someone's own, public to look at */
 const qs = new URLSearchParams(location.search);
 let versionId = qs.get("versjon"), nokkel = qs.get("nokkel"), draftId = qs.get("utkast"), draft = null;   // a «Riv» on the model itself starts a draft in place (U3542)
+if (!versionId && /^v.{8}$/.test(draftId || "")) { versionId = draftId; draftId = null; }   // ?utkast=v…: a version's id, as an older link sent it (21:05Z)
 const fetchDraft = async () => { try { const r = await fetch(versionId ? `api/versjon/${encodeURIComponent(versionId)}${nokkel ? `?nokkel=${encodeURIComponent(nokkel)}` : ""}` : `api/utkast/${encodeURIComponent(draftId)}`); return r.ok ? await r.json() : { missing: true }; } catch { return { missing: true }; } };
 /* everything is kept as it is made (U3555, Morten 20:18Z «everything should be autosaved, only sharing is manual»):
    signed in, the person's work is one private version (the server's «work»), opened here unless the address names
@@ -48,7 +49,7 @@ const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json
    holds them (the selection, the card over the pick) sees the change. */
 const TEARS = e => e.kind === "demolish" || e.kind === "restore";
 /* what the page changes in place: torn down (setGone), new buildings (setAdded), a wing's facts and name (relabel) */
-const LIVE = e => TEARS(e) || e.kind === "volume" || e.kind === "reshape" || e.kind === "wing";
+const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "note"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees
 const modelOf = edits => applyEdits(site0, floors0, edits || []);
 const { site, floors } = modelOf(draft?.edits);
 const shown = modelOf(draft?.edits?.filter(e => !LIVE(e)));   // its own copy: the page's is refilled under it
@@ -87,7 +88,7 @@ const viewer = createViewer({
 });
 /* the after's live part over the viewer's model: what is torn down hidden, the new buildings drawn, the names as edited */
 function paint() {
-  viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []);
+  viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []);
   viewer.relabel(new Map(site.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
 }
 let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)

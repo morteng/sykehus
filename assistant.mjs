@@ -162,9 +162,12 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     }
     if (path === "/api/anton/ny") {
       if (t.running || t.queue.length) return send(res, 409, { error: "Vent til Anton har svart." });
-      const [st, j] = await call("/new-chat", { person: me.person, session: session(me.person) }, null, me.device);
+      /* gulden-ai's /new-chat is idempotent by request_id and refuses a call without one (400 bad_request: the 502 of
+         2026-10-25 21:05Z); the page may send its own, so a retry of the same click is one reset */
+      const rid = /^[A-Za-z0-9._:-]{1,128}$/.test(String(b?.request_id ?? "")) ? String(b.request_id) : randomUUID();
+      const [st, j] = await call("/new-chat", { person: me.person, session: session(me.person), request_id: rid }, null, me.device);
       if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
-      if (st !== 200) return send(res, 502, { error: codeOf(j, "unavailable") });
+      if (st !== 200) { console.error("anton /new-chat", st, codeOf(j, "")); return send(res, 502, { error: codeOf(j, "unavailable") }); }
       publish(me.person, "cleared", { type: "cleared" }); return send(res, 200, { ok: true });
     }
     return send(res, 404, { error: "Ikke funnet" });

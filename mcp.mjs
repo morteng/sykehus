@@ -23,7 +23,8 @@ const SERVER_INFO = { name: "sykehus", title: "Sykehustomta", version: "0.2.0" }
 const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 3019 Drammen, gnr. 114 bnr. 272) for an architect working on reusing the existing buildings. "
   + "The hospital is described as its wings (about_site, about_wing): each with years, storeys and their kote per wing (storeys), drawn floor plans with rooms and areas (floor_plan), and windows from the drawn facades (openings). "
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
-  + "Changes can be tried without saving (try_change): they go into a draft with a link to the website; nothing changes the shared model, saving comes with a login later. "
+  + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
+  + "Tell the person only what a tool result shows: a change is made only when it is in the result's added and the result names the version it went into; when it is rejected or refused, say so and what you do next. "
   + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless he writes otherwise, and cite drawings and documents by title with their link. "
   + "Say how each fact is known: read off a drawing, worked out (beregnet), assumed (antatt) or measured from the laser; areas measured between drawn walls are rough (about 15 %).";
 
@@ -155,7 +156,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const S = (props, required = []) => ({ type: "object", properties: props, required, additionalProperties: false });
   const WING = { type: "string", description: `Wing name or id: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}` };
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
-  const DRAFT = { type: "string", description: "A draft id from try_change, or a version id (v…): answer from the model with those changes laid over it" };
+  /* one target for every tool (Morten 21:08Z «make sure to use best practices»; the toolkit audit: one id field, the
+     server resolves it, so the model never picks between two): a version id, a draft id, or none for the version the
+     person has open. draft and version are its older names, kept while chat clients still hold the old schemas
+     (2026-10-25 21:05Z: Anton put a version id in draft and two of Morten's changes were lost) */
+  const TARGET = { type: "string", description: "Which after: a version id (v and 8 more, from list_versions or a result) or a draft id (8, from try_change). Leave it out for the version the person has open on the website (signed in: their «Mitt etter»), which is nearly always right" };
+  const OLD = { type: "string", description: "Older name for target; use target" };
+  const DRAFT = TARGET, T_ = { target: TARGET, draft: OLD };
   const POINTS = { type: "array", items: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, maxItems: 200 };
   /* one schema per kind (the toolkit audit: a call is checked against its own kind's fields before it is sent) */
   const PT = { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2, description: "[east_m, north_m] from the site origin" };
@@ -176,7 +183,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       steps: { type: "integer", minimum: 2, maximum: 10, description: "terraces: how many (default 3)" }, step_depth: { type: "number", minimum: 0.5, maximum: 20, description: "terraces: m each step is narrower than the one under it (default 3)" },
       on: { type: "string", description: "A wing (id or name) whose roof it stands on: its foot is that roof's kote under its middle (a roof garden, a greenhouse on a roof)" },
       base_kote: { type: "number", description: "Its foot's kote; default the lowest ground under it (leave out with on)" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "glass = a greenhouse" },
-      id: { type: "string", description: "n and 4-12 letters/digits, to name it later" }, ...FACTS }, ["shape", "from", "to", "width"]),
+      id: { type: "string", description: "n and 4-12 letters/digits, to name it later" }, ...FACTS }, ["from", "to", "width"]),
     K("reshape", "Change a new building: rename, re-fact, move or resize it", { id: { type: "string", description: "Its id, from show_draft's after.built or fit" }, name: { type: "string" }, from: PT, to: PT, width: { type: "number" }, height: { type: "number" }, ...FACTS }, ["id"]),
     K("surface", "A surface on the ground", { ring: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"] }, name: { type: "string" }, plants: { type: "array", items: { type: "string" }, maxItems: 30, description: "hagekart ids or Latin names, for a bed" } }, ["ring", "surface"]),
     K("path", "A path", { line: POINTS, width: { type: "number", description: "m, default 2" }, surface: { type: "string", enum: ["gravel", "paving", "asphalt", "wood"] }, name: { type: "string" } }, ["line"]),
@@ -188,6 +195,38 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
     built: (m.site.added || []).map(({ parts, ...a }) => a),
     ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g), planted: m.site.planted, trees_felled: m.site.felled } : {}) } : null;
+  const isVid = id => /^v.{8}$/.test(String(id ?? ""));
+  /* the version the person has open on the website (assistant.mjs pages.open), else their work; none signed out */
+  const openFor = req => { const who = userOf(req); if (!who || !versions) return null; const v = versions.get(pages?.open.get(who)); return v && v.owner === who ? v : versions.list({ owner: who, viewer: who }).find(x => x.work) || null; };
+  const openHint = req => { const v = openFor(req); return v ? `Utelat target for versjonen personen har åpen, «${v.title}» (${v.id}).` : userOf(req) ? "Utelat target for versjonen personen har åpen." : "Utelat target for dagens modell, eller start et utkast med try_change."; };
+  /* target (or its older names) to what each tool's run reads: read tools and undo_change draft (a draft or a version
+     id), try_change version or draft, the version tools version. Checked here, at the boundary, with an error that
+     says what to do: never a bare «No draft» (21:05Z) */
+  function resolveTarget(t, a, req) {
+    if (!t.tgt) return a;
+    const { target, draft, version, ...rest } = a, given = [target, draft, version].find(x => x != null && String(x).trim() !== "");
+    let id = given == null ? null : String(given).trim();
+    if (id == null && t.tgt !== "write") id = openFor(req)?.id ?? null;   // try_change finds its own (openOf, or a new draft)
+    if (id == null) { if (t.tgt === "version") throw toolErr(`Hvilken versjon? ${openHint(req)}`); if (t.tgt === "draft") throw toolErr(`Hvilket utkast eller hvilken versjon? ${openHint(req)}`); return rest; }
+    if (isVid(id)) {
+      const v = versions?.get(id), who = userOf(req);
+      if (!v || !versions.visible(v, who)) throw toolErr(`Fant ingen versjon «${id}» du kan se (en privat versjon åpner bare for eieren; list_versions viser dem). ${openHint(req)}`);
+      if ((t.tgt === "write" || t.tgt === "draft" || t.tgt === "version") && v.owner !== who) throw toolErr(`«${v.title}» (${id}) er ${v.owner} sin; endringer går bare inn i egne versjoner. ${openHint(req)} Eller lag en egen kopi med new_version (from: "${id}").`);
+      return t.tgt === "write" || t.tgt === "version" ? { ...rest, version: id } : { ...rest, draft: id };
+    }
+    if (t.tgt === "version") throw toolErr(`«${id}» er et utkast, ikke en lagret versjon. Lagre det med new_version (from: "${id}"). ${openHint(req)}`);
+    const d = drafts.get(id); if (!DID.test(id) || !d || Date.now() - d.t > DRAFT_MS) throw toolErr(`Fant ikke utkastet «${id}» (utkast varer et døgn; en lagret versjon begynner med v). ${openHint(req)}`);
+    return { ...rest, draft: id };
+  }
+  /* each change's own fields, before it is checked (the toolkit audit: refuse at the boundary, naming what is missing) */
+  function fieldsOf(e) {
+    const k = EDIT.anyOf.find(x => x.properties.kind.const === e?.kind);
+    if (!k) return `kind «${e?.kind}» finnes ikke; kind er en av ${EDIT.anyOf.map(x => x.properties.kind.const).join(", ")}`;
+    const miss = k.required.filter(f => e[f] == null || e[f] === ""), extra = Object.keys(e).filter(f => !(f in k.properties));
+    if (miss.length) return `${e.kind} mangler ${miss.join(", ")} (${e.kind} tar ${Object.keys(k.properties).filter(f => f !== "kind").join(", ")})`;
+    if (extra.length) return `${e.kind} tar ikke ${extra.join(", ")} (${e.kind} tar ${Object.keys(k.properties).filter(f => f !== "kind").join(", ")})`;
+    return null;
+  }
   const VIEW_NAME = { type: "string", enum: Object.keys(VIEWS), description: "isometrisk (from the south-west, from above; default), plan (straight down, north up), N / Ø / S / V (from that side, low), NØ / SØ / SV / NV (from that corner, higher)" };
   /* a picture of a model (render.mjs) and what it shows, in words */
   const hospital = (() => { const ps = site.buildings.filter(b => b.own).flatMap(b => b.ring); return [ps.reduce((s, p) => s + p[0], 0) / ps.length, ps.reduce((s, p) => s + p[1], 0) / ps.length, 25]; })();
@@ -202,7 +241,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(v.tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, ${f.name} i oransje` : ""}. Nordpilen øverst til høyre.` };
   }
   const TOOLS = [
-    { name: "about_site", title: "Tomta og fløyene", ro: true, schema: S({ draft: DRAFT }),
+    { name: "about_site", tgt: "read", title: "Tomta og fløyene", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
       run: async (a, req) => { const m = model(a.draft, req), names = [...new Set(m.floors.map(f => f.name))];
         return { name: site.name, address: "Dronninggata 28, 3019 Drammen", gnr_bnr: "114/272", lot_area_m2: site.lot.area_m2, heights: "NN2000", origin_utm33: site.origin,
@@ -210,16 +249,16 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           drawn_storeys: names.map(n => ({ storey: n, sheets: m.floors.filter(f => f.name === n).map(f => f.source) })),
           bim: "Last ned som BIM-modell: /data/sykehus.ifc (IFC4, FreeCAD/Revit/Solibri)", sources: site.sources, documents: docs ? docs.prepare("SELECT COUNT(*) n FROM docs").get().n : 0,
           ...(a.draft ? { draft: a.draft, notes: m.notes } : {}) }; } },
-    { name: "about_wing", title: "Én fløy", ro: true, schema: S({ wing: WING, draft: DRAFT }, ["wing"]),
+    { name: "about_wing", tgt: "read", title: "Én fløy", ro: true, schema: S({ wing: WING, target: TARGET, draft: OLD }, ["wing"]),
       description: "One wing as on its card: names and aliases, years built, storeys, construction, facade, footprint, ground and roof kote, each storey's kote with how it is known (tegning = read off a drawing, beregnet = worked out, antatt = assumed) and its source, the storeys with a drawn plan, its drawn facades, and the documents it is identified from, with download links.",
       run: async (a, req) => { const m = model(a.draft, req), w = wingOf(m.site, a.wing) || wingOrErr(a.wing); return { ...wingOut(w, true), ...(a.draft ? { draft: a.draft, notes: m.notes.filter(n => n.wing === w.id) } : {}) }; } },
-    { name: "storeys", title: "Etasjene", ro: true, schema: S({ wing: { ...WING, description: WING.description + ". Leave out for all wings" }, draft: DRAFT }),
+    { name: "storeys", tgt: "read", title: "Etasjene", ro: true, schema: S({ wing: { ...WING, description: WING.description + ". Leave out for all wings" }, target: TARGET, draft: OLD }),
       description: "The storey ladder: for each storey (1 … 14) the kote in every wing that has it, how each is known and from where, and which sheets draw that storey. The wings' floors do not line up exactly (Sentralblokka 5. etasje +31,77, Østfløy +32,02).",
       run: async (a, req) => { const m = model(a.draft, req), ws = a.wing ? [wingOf(m.site, a.wing) || wingOrErr(a.wing)] : m.site.wings || [];
         const names = [...new Set([...ws.flatMap(w => (w.levels || []).map(l => l.name)), ...m.floors.map(f => f.name)])].sort((x, y) => parseInt(x) - parseInt(y));
         return { storeys: names.map(n => ({ storey: n, wings: ws.map(w => [w, (w.levels || []).find(l => l.name === n)]).filter(r => r[1]).map(([w, l]) => ({ wing: w.name, kote: l.kote, how: l.how, source: l.src })),
           sheets: m.floors.filter(f => f.name === n).map(f => ({ sheet: f.source, drawn_kote: f.kote, storey_height_m: f.height })) })).filter(s => s.wings.length || s.sheets.length) }; } },
-    { name: "floor_plan", title: "Én etasje: rom og arealer", ro: true, schema: S({ storey: STOREY, wing: { ...WING, description: "Only this wing" }, name_contains: { type: "string", description: "Only rooms whose name has this, e.g. operasjon, lager, wc" }, draft: DRAFT }, ["storey"]),
+    { name: "floor_plan", tgt: "read", title: "Én etasje: rom og arealer", ro: true, schema: S({ storey: STOREY, wing: { ...WING, description: "Only this wing" }, name_contains: { type: "string", description: "Only rooms whose name has this, e.g. operasjon, lager, wc" }, target: TARGET, draft: OLD }, ["storey"]),
       description: "The rooms of one storey from its drawn plans, across the wings: name, room code, the wing it stands in, the area the architect wrote on the drawing (area_m2, net) and the area measured between the drawn walls (area_measured_m2, about 15 % rough; given where an outline closes), position (metres east/north of the site origin) and the sheet. Sums per wing. Many sheets name rooms without areas.",
       run: async (a, req) => { const m = model(a.draft, req), n = storeyName(a.storey), fs = m.floors.filter(f => f.name === n);
         if (!fs.length) throw toolErr(`No drawn plan of "${n}". Drawn: ${[...new Set(floors.map(f => f.name))].join(", ")}.`);
@@ -237,10 +276,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           return { id: f.id, name: f.name, wall_length_m: round1(Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1])), per_storey: per,
             openings: f.openings.map(o => ({ kind: o.kind, along_m: o.u.map(round1), sill_kote: round1(o.z[0]), head_kote: round1(o.z[1]), panes: o.panes.length })), sheet: f.src.map(docRef) }; }) }; } },
     /* documents: see below */
-    { name: "try_change", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, draft: { type: "string", description: "Add to this draft (from an earlier try_change); leave out to start a new one" }, version: { type: "string", description: "Add to this saved version of yours instead (from new_version or list_versions); needs the login" },
+    { name: "try_change", tgt: "write", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, target: { ...TARGET, description: TARGET.description + ". Signed out with none open: a new draft (a day, no login)" }, draft: OLD, version: OLD,
       include_screenshot: { type: "boolean", description: "A picture of the model after the change comes back (default true). false for the middle steps of a sequence; look at the last one" },
       view_name: VIEW_NAME }, ["edits"]),
-      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into a draft that lasts a day (no login needed), or with version: into the person's own saved version. Either has a link that opens the website showing the model with them, and every other tool takes draft: (a draft or version id) to answer from it. Signed in, leave version and draft out: the changes go into the version the person has open on the website (their «Mitt etter»), and their page redraws with them. The before, the shared model, is never changed. Say where each change comes from in why. " +
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground: surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
         "The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
       run: async (a, req) => {
         let d, v = null;
@@ -248,7 +287,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
-        for (const [i, e] of a.edits.entries()) { try { const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
+        for (const [i, e] of a.edits.entries()) { try { const f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m), fit = fitOf(m.site);
         let out;
         if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
@@ -261,11 +300,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         try { const { png, text } = await look(m.site, { view_name: a.view_name, focus: id && m.site.added?.some(x => x.id === id) ? id : null });
           return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text }], structuredContent: out } };
         } catch (e) { console.error("look:", e.message); return out; } } },
-    { name: "show_draft", title: "Se et utkast eller en versjon", ro: true, schema: S({ draft: { type: "string", description: "A draft id or a version id (v…)" } }, ["draft"]),
+    { name: "show_draft", tgt: "read", title: "Se et utkast eller en versjon", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
         return { ...(isV ? versionOut(versionOf(a.draft, req), o, req) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV }; } },
-    { name: "undo_change", title: "Angre en endring", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ draft: { type: "string", description: "A draft id, or a version id of yours (v…)" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
+    { name: "undo_change", tgt: "draft", title: "Angre en endring", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["n"]),
       description: "Takes one change out of a draft, or out of the person's own version, by its number from show_draft.",
       run: async (a, req) => {
         const v = /^v.{8}$/.test(String(a.draft)) ? ownVersion(a.draft, req) : null, edits = v ? v.edits : draftOf(a.draft).edits;
@@ -273,7 +312,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const [gone] = edits.splice(a.n - 1, 1); if (v) versions.save(v); else { const d = draftOf(a.draft); d.t = Date.now(); keepDraft(d); }
         return { ...(v ? versionOut(v, originOf(req), req) : { draft: a.draft, link: draftUrl(originOf(req), a.draft), changes_in_draft: edits.length }), removed: gone }; } },
     { name: "new_version", title: "Ny versjon", write: true, schema: S({ title: { type: "string", description: "Its name, e.g. «Drivhus mot sør, alt revet unntatt Sentralblokka»" }, from: { type: "string", description: "Start from this draft or version (anyone's: it is copied); leave out to start from the before" } }, ["title"]),
-      description: "Only when the person asks for a new, separate alternative (their changes otherwise go into the version they have open, through try_change without version). Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts privat (only they see it); set_sharing makes it lenke (anyone with the link) or offentlig (on the front page). from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
+      description: "Only when the person asks for a new, separate alternative (their changes otherwise go into the version they have open, through try_change without target). Makes a saved version of the after, owned by the person asking (needs the login): a named list of changes over the before, kept until they change it. It starts privat (only they see it); set_sharing makes it lenke (anyone with the link) or offentlig (on the front page). from: copies a draft's or a visible version's changes into it. Then add to it with try_change (version:).",
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten.");
         if (!versions) throw toolErr("Versions are not kept on this server.");
@@ -285,7 +324,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => { if (!versions) return { versions: [], note: "Versions are not kept on this server." };
         const me = userOf(req), owner = a.owner === "me" ? me : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
         return { versions: versions.list({ owner, viewer: me }).slice(0, 100).map(v => versionOut(v, originOf(req), req)), you: me }; } },
-    { name: "set_sharing", title: "Hvem ser versjonen", write: true, schema: S({ version: { type: "string" }, sharing: { type: "string", enum: SHARING, description: "privat: only you. lenke («Bare de med lenken»): anyone you give its link, not listed. offentlig («Vis offentlig»): listed on the front page, open to all without a login" } }, ["version", "sharing"]),
+    { name: "set_sharing", tgt: "version", title: "Hvem ser versjonen", write: true, schema: S({ target: TARGET, version: OLD, sharing: { type: "string", enum: SHARING, description: "privat: only you. lenke («Bare de med lenken»): anyone you give its link, not listed. offentlig («Vis offentlig»): listed on the front page, open to all without a login" } }, ["sharing"]),
       description: "Chooses who sees one of the person's own versions: privat (only them; a new version is privat), lenke (anyone with its link, never listed) or offentlig (on the front page's list and open to everyone). Give the person the link from the answer.",
       run: async (a, req) => { const v = ownVersion(a.version, req); if (!SHARING.includes(a.sharing)) throw toolErr(`sharing er ${SHARING.join(", ")}`); v.sharing = a.sharing; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
     { name: "send_wish", title: "Send et ønske", write: true, schema: S({ text: { type: "string", description: "What they want, in their own words (Norwegian is fine)" }, tried: { type: "string", description: "What was tried and why the tools could not do it" }, version_id: { type: "string", description: "The version it is about, if any" } }, ["text"]),
@@ -296,7 +335,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
         try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link }); return { sent: true, wish: w.id, status: w.status, receipt: "Sendt. Morten ser det.", see_them: `${originOf(req)}/ (Ønsker)` }; }
         catch (e) { throw toolErr(e.message); } } },
-    { name: "rename_version", title: "Gi versjonen nytt navn", write: true, schema: S({ version: { type: "string" }, title: { type: "string" } }, ["version", "title"]),
+    { name: "rename_version", tgt: "version", title: "Gi versjonen nytt navn", write: true, schema: S({ target: TARGET, version: OLD, title: { type: "string" } }, ["title"]),
       description: "Renames one of the person's own versions.",
       run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
     { name: "search_documents", title: "Søk i dokumentene", ro: true, schema: S({ query: { type: "string", description: "Words to find, in Norwegian (all must occur; æøå optional)" }, kind: { type: "string", enum: ["tegning", "rapport", "plan", "saksdokument", "kulturminne", "figur", "notat"] }, limit: { type: "integer", minimum: 1, maximum: 20 } }, ["query"]),
@@ -321,28 +360,30 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const t = a.title_contains ? `%${String(a.title_contains).slice(0, 60)}%` : null;
         const rows = docs.prepare(`SELECT id, title, kind, year, file, pages, has_text, urls FROM docs WHERE 1=1 ${a.kind ? "AND kind=?" : ""} ${t ? "AND title LIKE ?" : ""} ORDER BY kind, year, title LIMIT 250`).all(...[a.kind, t].filter(Boolean));
         return { documents: rows.map(docOut) }; } },
-    { name: "look", title: "Se på modellen", ro: true, schema: S({ view_name: VIEW_NAME, focus: { type: "string", description: "A wing (id or name), a building id, or a new building's id or name: aimed at and picked out in orange" },
+    { name: "look", tgt: "read", title: "Se på modellen", ro: true, schema: S({ view_name: VIEW_NAME, focus: { type: "string", description: "A wing (id or name), a building id, or a new building's id or name: aimed at and picked out in orange" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees; overrides view_name's" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85 }, distance_m: { type: "number", minimum: 30, maximum: 1200 },
         draft: DRAFT, width: { type: "integer", minimum: 320, maximum: 1280 }, height: { type: "integer", minimum: 240, maximum: 960 } }),
-      description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With draft: the model with those changes (a version id works too); without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
+      description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With target: that version or draft; without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
       run: async (a, req) => {
         const who = userOf(req), open = who && versions ? versions.get(pages?.open.get(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
         const { png, text } = await look(m.site, a);
         return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: text + (id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.") }] } }; } },
-    { name: "show_building", title: "Vis bygget", ro: true, ui: true, schema: S({
+    { name: "show_building", tgt: "read", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },
         wing: { ...WING, description: "Look at this wing and ring it in yellow" },
         mode: { type: "string", enum: ["3d", "plan", "tverrsnitt", "lengdesnitt", "fasade"], description: "3d: tilted view (default). plan: straight down, north up, with scale bar. fasade: the wing's facade seen square on from from_direction (N, Ø, S or V; needs wing), what stands in front taken away; windows from the drawings where a facade sheet exists (openings), else from photos. tverrsnitt / lengdesnitt: a section across or along the wing (needs wing) through its middle, looked at square on, with what the cut goes through filled black and the wing's storeys and kote on the right" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees (3d)" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85, description: "Camera angle above the ground (3d)" },
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
-        drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, draft: DRAFT }),
-      description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With draft: the model with those tried changes. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it. To see the model yourself, use look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link.",
+        drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" }, target: TARGET, draft: OLD }),
+      description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With target: that version or draft; without, the version the person has open. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it. To see the model yourself, use look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link.",
       run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing), who = userOf(req);
         /* through the pill: the person's open pages go to this view (assistant.mjs pages.show), else say they did not */
-        const moved = who && pages ? pages.show(who, { ...view, ...(view.draft ? {} : { version: pages.open.get(who) || null }) }) : null;
-        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? `?utkast=${view.draft}` : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
+        /* a version's id names a version, not a draft (21:05Z: the page went to ?utkast=v…, a draft that is not there) */
+        const { draft: dv, ...rest } = view, isV = /^v.{8}$/.test(String(dv ?? ""));
+        const moved = who && pages ? pages.show(who, { ...rest, ...(dv && !isV ? { draft: dv } : { version: isV ? dv : pages.open.get(who) || null }) }) : null;
+        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : "3D"}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -374,7 +415,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       case "prompts/get": return { description: "Start", messages: [{ role: "user", content: { type: "text", text: "Gi meg en oversikt over gamle Drammen sykehus: fløyene, etasjene vi har tegninger av, og hvilke dokumenter som finnes. Vis anlegget i 3D." } }] };
       case "tools/call": {
         const t = BY[params.name]; if (!t) throw err(-32602, `Unknown tool: ${params.name}`);
-        const a = params.arguments || {}, who = userOf(req);
+        const who = userOf(req);
+        let a; try { a = resolveTarget(t, params.arguments || {}, req); } catch (e) { if (e.tool) return { content: [{ type: "text", text: e.message }], isError: true }; throw e; }
         /* a tool that keeps a version, with no one logged in: the sign-in challenge, so a chat app asks the person to connect */
         if (!who && (t.write || (t.writeIf && t.writeIf(a)))) throw Object.assign(err(401, "Sign-in needed"), { auth: true });
         try {

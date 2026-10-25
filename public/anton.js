@@ -230,7 +230,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     /* Anton saved a version: the one open is shown again (in place when it can be), another gets a link */
     on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === version()) { if (running) redraw = true; else refresh(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
     /* «vis meg»: show_building through the pill moves this page (mcp.mjs, assistant.mjs pages.show) */
-    on("show", v => { if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}`); } else showView(v); });
+    on("show", v => { if (/^v.{8}$/.test(v.draft || "")) { v = { ...v, version: v.draft }; delete v.draft; }   // a version's id is a version (21:05Z)
+      if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}${v.key ? `&nokkel=${encodeURIComponent(v.key)}` : ""}`); } else showView(v); });
     on("signed_out", signedOut);
     on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); empty(); });
     placePill(); state(); empty();
