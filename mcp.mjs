@@ -588,6 +588,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         return send(res, 200, versionOut(v, o, req));
       }
       if (me && versions && !a.version && !a.draft && !a.undo) a.version = work().id;
+      /* an undo from the page says which change it means; when that is not the change at that number now, nothing is
+         taken out (a second tab, or Anton, changed it since the page was drawn) */
+      if (a.undo && a.expect !== undefined) {
+        const id = String(a.version || a.draft || ""), es = editsOf(id, req), at = es[+a.undo - 1];
+        if (JSON.stringify(at) !== JSON.stringify(a.expect)) return send(res, 409, { stale: true, error: `forslaget er endret et annet sted siden siden ble tegnet${at ? `; nr. ${+a.undo} er nå en annen endring` : ""}. Siden er oppdatert; se over og prøv igjen.` });
+      }
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
       const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");

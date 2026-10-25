@@ -335,7 +335,7 @@ function drawDraft() {
     `<li title="${esc(describe(e))}"><span>${esc(short(e))}</span>${may ? `<button type="button" class="dr-x" data-undo="${k}" title="${g.tip}" aria-label="${g.tip}: ${esc(short(e))}">${IC.back}</button>` : ""}</li>`).join("")}</ul></details>`).join("");
   $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h">${title}<span class="dr-s">${status}</span></div>
     <div class="dr-acts">${acts}<a href="./?for">Se før</a></div>
-    ${n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Ta ut den siste endringen">${IC.undo}Angre siste</button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`}</div>`;
+    ${n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Angre siste: ta ut «${esc(short(draft.edits[n - 1]))}»">${IC.undo}<span>Ta ut «${esc(short(draft.edits[n - 1]))}»</span></button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`}</div>`;
   const R = $("draftRow");
   for (const b of R.querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
   R.querySelector("[data-last]")?.addEventListener("click", () => undo(n));
@@ -480,7 +480,7 @@ let busy = false;   // one change at a time
 async function change(body) {
   const r = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
-  return r?.ok ? j : { error: j.error || "Det gikk ikke." };
+  return r?.ok ? j : { error: j.error || "Det gikk ikke.", ...(j.stale ? { stale: true } : {}) };
 }
 /* the draft or version after a change, in place: its edits fetched, the model laid anew over the same objects, the
    viewer told what is gone, the strip, «Forslag» and the IFC link redrawn, the address changed without a reload */
@@ -577,9 +577,12 @@ function showNew(a) {
     ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`]]) +
     (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + `<p class="src">Satt opp i forslaget; ikke i IFC-fila ennå.</p>`, { kind: "new", id: a.id, label: a.name });
 }
-async function undo(n) {
+/* an undo names the change it takes out (expect), so a page that is behind (another tab, Anton) takes out nothing it
+   did not show (pm 22:08Z: an undo in a second tab took out Morten's three newest changes); then the page is shown
+   again as it is */
+async function undo(n, expect = draft?.edits?.[n - 1]) {
   if (busy) return; busy = true;
-  try { const j = await change({ ...where(), undo: n }); if (j.error) return toast(`Fikk ikke angret: ${j.error}`); $("toast")?.remove(); await show(j); }
+  try { const j = await change({ ...where(), undo: n, expect }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return; } $("toast")?.remove(); await show(j); }
   finally { busy = false; }
 }
 function toast(text, act) {
@@ -590,7 +593,7 @@ function toast(text, act) {
   $("stage").append(t); setTimeout(() => t.isConnected && t.classList.add("gone"), 15000); setTimeout(() => t.remove(), 15800);
 }
 /* «Angre» on the toast takes back every edit the one «Riv» made, the last first */
-async function undoLast(n, k) { for (let i = 0; i < k - 1; i++) { const j = await change({ ...where(), undo: n - i }); if (j.error) return toast(`Fikk ikke angret: ${j.error}`); } undo(n - k + 1); }
+async function undoLast(n, k) { const was = draft.edits.slice(); for (let i = 0; i < k - 1; i++) { const j = await change({ ...where(), undo: n - i, expect: was[n - i - 1] }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return; } } undo(n - k + 1, was[n - k]); }
 /* the IFC with the after's demolitions taken out (the server's ifcfilter.mjs) */
 function ifcLink() {
   if (!draft || draft.missing) return;

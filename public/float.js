@@ -88,7 +88,13 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     if (!front) { el.style.visibility = "hidden"; return; }
     el.style.visibility = "";
     let top = y - size[1] - 34; if (top < 60) top = Math.min(H - size[1] - 8, y + 24);
-    const left = Math.max(8, Math.min(W - size[0] - 8, x - size[0] / 2));
+    const L0 = W > size[0] + 120 ? 100 : 8;   // right of the storey rail, as the tools are, where there is room
+    const left = Math.max(L0, Math.min(W - size[0] - 8, x - size[0] / 2));
+    /* never under the pill (U3565, Morten 22:08Z: «endre nytt bygg modal is under anton pill»): where they would
+       share columns, the card's foot stays 12 px over the pill's top, «Ferdig» in sight */
+    const sb = stage.getBoundingClientRect(), pb = bstack.getBoundingClientRect();
+    if (pb.height && left < pb.right - sb.left && left + size[0] > pb.left - sb.left) top = Math.min(top, pb.top - sb.top - 12 - size[1]);
+    top = Math.max(8, top);
     el.style.transform = `translate(${left.toFixed(0)}px, ${top.toFixed(0)}px)`;
   }
   function dock() {

@@ -81,3 +81,13 @@ test("Anton's change with no version named goes into the person's open work, not
   const t = await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...lars }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "show_building", arguments: { wing: "Sentralblokka" } } }) })).json();
   assert.match(t.result.content[0].text, /no page of the website open/);
 });
+
+test("an undo names the change it means: a page that is behind takes out nothing (pm 22:08Z: a second tab took out three)", async () => {
+  const f = await post({ fresh: true }, lars); const v = f.j.version;
+  for (const b of ["Østfløy", "Midtfløy", "Vestfløy"]) await post({ ...riv(b), version: v }, lars);
+  const stale = await post({ undo: 3, version: v, expect: { kind: "demolish", building: "MR-bygget" } }, lars);
+  assert.equal(stale.status, 409); assert.equal(stale.j.stale, true); assert.match(stale.j.error, /endret et annet sted/);
+  const now = (await (await fetch(`${O}/api/versjon/${v}`, { headers: lars })).json()).edits; assert.equal(now.length, 3, "nothing taken out");
+  const ok = await post({ undo: 3, version: v, expect: now[2] }, lars); assert.equal(ok.status, 200);
+  assert.deepEqual((await (await fetch(`${O}/api/versjon/${v}`, { headers: lars })).json()).edits.map(e => e.building), ["Østfløy", "Midtfløy"]);
+});

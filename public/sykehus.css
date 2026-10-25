@@ -21,7 +21,7 @@
 .appbar .brand { display: flex; flex-direction: column; line-height: 1.2; font-weight: 600; text-decoration: none; color: var(--text); }
 .appbar .brand small { font-weight: 400; color: var(--muted); font-size: var(--fs-sm); }
 .appbar .sp { flex: 1; }
-.ab-ic { display: inline-grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; background: transparent; color: var(--muted); border-radius: var(--radius); }
+.ab-ic { display: inline-grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; background: transparent; color: var(--muted); border-radius: var(--radius-lg); }
 .ab-ic:hover { background: var(--hover-wash); color: var(--text); }
 .ab-ic[hidden] { display: none; }
 .ab-ic svg, .vt svg, .pill .tegn svg, .oc-acts svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -240,7 +240,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 @media (hover: none) { .dr-x { opacity: .7; } }
 
 /* the label over the view, top left, under the 3D·Plan row (clear of the storey strip): what is open */
-.wherebar { position: absolute; z-index: var(--z-canvas); top: 64px; left: 100px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: min(340px, calc(100% - 220px)); }
 .where { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; max-width: 100%; padding: 6px var(--sp-3); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); text-align: left; font: inherit; color: var(--text); cursor: pointer; }
 .where b { font-size: var(--fs-md); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .where span { font-size: var(--fs-sm); color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -275,3 +274,37 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading .spin { animation: none; } }
 .side-wait { padding: var(--sp-3); }
+
+/* U3565 (Morten 22:08Z «the mitt etter 3 part should be where gamle drammen sykehus is now … all the ui elements need
+   a little polish»): the open version and its views in the app bar, the site's name smaller beside them; and one
+   scale for every control over the model: one height (--tap), one radius (--radius-lg), one shadow (--shadow-sm),
+   one gap (--sp-2), 12 px in from the view's edges */
+.appbar .brand { font-size: var(--fs-md); flex: none; }
+.appbar .brand small { font-size: var(--fs-sm); }
+.appbar .wherebar { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; flex: 0 1 auto; margin-left: var(--sp-2); padding-left: var(--sp-3); border-left: 1px solid var(--border); }
+.appbar .where { flex-direction: column; justify-content: center; height: var(--tap); min-width: 0; max-width: 380px; padding: 0 var(--sp-3); box-shadow: none; background: var(--panel); }
+.appbar .where b { font-size: var(--fs-md); line-height: 1.2; }
+.appbar .where span { line-height: 1.2; }
+.appbar .views-btn { height: var(--tap); padding: 0 var(--sp-3); box-shadow: none; white-space: nowrap; }
+.appbar .views-pop { z-index: 60; }
+@media (max-width: 900px) { .appbar .brand small { display: none; } }
+@media (max-width: 760px) { body.ed .top.appbar a.brand, body.m.ed .top.appbar a.brand { display: none; } body header.appbar { flex-wrap: nowrap; } body .appbar { flex-wrap: nowrap; } body .appbar .wherebar { margin-left: 0; padding-left: 0; border-left: 0; flex: 1 1 auto; } body .appbar .views-btn span, body .appbar .where span { display: none; } body .appbar .where { max-width: none; flex: 0 1 auto; } }
+
+.vt .seg2, .vt .tgl { height: var(--tap); min-height: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.vt .seg2 { display: inline-flex; overflow: hidden; }
+.vt .seg2 button { height: 100%; min-height: 0; padding: 0 var(--sp-3); }
+.vt .tgl { padding: 0 var(--sp-3); }
+.nz .north { width: var(--tap); height: var(--tap); }
+.nz .north svg { width: 30px; height: 30px; }
+.nz .zoom2 button { width: var(--tap); height: var(--tap); font-size: 22px; }
+.pill { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+#scale, #tip, .views-pop { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.dr-top button { min-width: 0; max-width: 70%; }
+.dr-top button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the storey rail inside the view whatever its height: shorter rows on a short screen, and it scrolls before it runs
+   under the app bar (1024 × 768: «Hele anlegget» was under the bar, «etasje» cut) */
+#levels .g-levels { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+@media (max-height: 860px) { #levels .g-levels button:not(.all) { height: 36px; min-height: 36px; } #levels .g-levels button.all { height: 44px; min-height: 44px; } }
+@media (max-height: 640px) { #levels .g-levels button:not(.all) { height: 30px; min-height: 30px; } }
+/* the views list over everything beside it while open (the panel's fold tab stood over it) */
+.appbar:has(.views-pop:not([hidden])) { z-index: calc(var(--z-sticky) + 20); }
