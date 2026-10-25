@@ -6,7 +6,9 @@
    { kind: "level", wing, storey, kote, why }            a storey's kote in one wing (adds the storey if it is new)
    { kind: "wing", wing, field, value, why }             a fact on the wing card: name, built, storeys, construction, facade, note
    { kind: "room", storey, room, set: { name, use, area_m2 }, why }   a room by its code or name on that storey
-   { kind: "note", text, wing?, storey?, at?: [east, north], why? }    a note pinned to a wing, a storey or a place */
+   { kind: "note", text, wing?, storey?, at?: [east, north], why? }    a note pinned to a wing, a storey or a place
+   and the after's: demolish, restore, balconies, volume (design.js) */
+import { checkDesign, applyDesign } from "./design.js";
 
 export const WING_FIELDS = ["name", "built", "storeys", "construction", "facade", "note"];
 const MAX = { text: 400, why: 300, name: 80 };
@@ -56,7 +58,10 @@ export function checkEdit(site, floors, e) {
       if (why) out.why = why;
       return out;
     }
-    default: throw new Error(`Ukjent slags endring «${e.kind}»: level, wing, room eller note`);
+    default: {
+      const d = checkDesign(site, e, str); if (d) return d;
+      throw new Error(`Ukjent slags endring «${e.kind}»: level, wing, room, note, demolish, restore, balconies eller volume`);
+    }
   }
 }
 
@@ -78,5 +83,6 @@ export function applyEdits(site0, floors0, edits = []) {
       for (const f of floors) if (f.name === e.storey) for (const r of f.rooms || []) if (roomMatch(r, e.room)) { Object.assign(r, e.set); r.draft = e.why || true; changed.add(`floor:${f.id}`); }
     } else if (e.kind === "note") notes.push(e);
   }
+  applyDesign(site, floors, edits);
   return { site, floors, notes, changed: [...changed] };
 }

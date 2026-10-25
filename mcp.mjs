@@ -118,10 +118,23 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const WING = { type: "string", description: `Wing name or id: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}` };
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
   const DRAFT = { type: "string", description: "A draft id from try_change: answer from the model with those changes laid over it" };
-  const EDIT = { type: "object", description: "One change. kind level: {wing, storey, kote, why}; kind wing: {wing, field (name|built|storeys|construction|facade|note), value, why}; kind room: {storey, room (code or name), set: {name?, use?, area_m2?}, why}; kind note: {text, wing?, storey?, at?: [east_m, north_m], why?}. why says where it comes from (drawing and page, a measurement, the architect's own judgement).",
-    properties: { kind: { type: "string", enum: ["level", "wing", "room", "note"] }, wing: { type: "string" }, storey: { type: "string" }, kote: { type: "number" }, field: { type: "string" }, value: { type: "string" },
+  const EDIT = { type: "object", description: "One change. kind level: {wing, storey, kote, why}; kind wing: {wing, field (name|built|storeys|construction|facade|note), value, why}; kind room: {storey, room (code or name), set: {name?, use?, area_m2?}, why}; kind note: {text, wing?, storey?, at?: [east_m, north_m], why?}. why says where it comes from (drawing and page, a measurement, the architect's own judgement). " +
+      "The after (a design): kind demolish / restore: {building: a wing, a building id or \"alle\" for every hospital building; demolish alle then restore the ones to keep}; " +
+      "kind balconies: {wing, side (N|Ø|S|V: the facades facing it, within 45°), from_storey?, to_storey? (default all above the ground floor), depth? (m, 0.8-4, default 1.8), bay? (m wide each, else along the whole wall), gap? (m between, default 0.6), railing? (glass|steel|concrete)}; " +
+      "kind volume: {name, shape (box|gable|triangle = A frame, roof to the ground|lean_to = one slope), from, to ([east_m, north_m]: the middle or ridge line), width (m across), height (m to the top), wall_height? (gable, lean_to: the low eaves), high_side? (lean_to: left|right walking from -> to), base_kote? (default the lowest ground under it), material? (glass = a greenhouse|concrete|steel|wood|brick)}. " +
+      "about_wing gives a wing's footprint and kote; site positions are metres east and north of the site origin.",
+    properties: { kind: { type: "string", enum: ["level", "wing", "room", "note", "demolish", "restore", "balconies", "volume"] }, wing: { type: "string" }, storey: { type: "string" }, kote: { type: "number" }, field: { type: "string" }, value: { type: "string" },
       room: { type: "string" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false },
-      text: { type: "string" }, at: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, why: { type: "string" } }, required: ["kind"], additionalProperties: false };
+      text: { type: "string" }, at: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, why: { type: "string" },
+      building: { type: "string" }, side: { type: "string", enum: ["N", "Ø", "S", "V"] }, from_storey: { type: "string" }, to_storey: { type: "string" }, depth: { type: "number" }, bay: { type: "number" }, gap: { type: "number" },
+      railing: { type: "string", enum: ["glass", "steel", "concrete"] }, name: { type: "string" }, shape: { type: "string", enum: ["box", "gable", "triangle", "lean_to"] },
+      from: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }, to: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 },
+      width: { type: "number" }, height: { type: "number" }, wall_height: { type: "number" }, high_side: { type: "string", enum: ["left", "right"] }, base_kote: { type: "number" },
+      material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"] } }, required: ["kind"], additionalProperties: false };
+  /* what a draft builds and takes away, without the geometry: for the agent to report back */
+  const afterOf = m => (m.site.demolished || m.site.added) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
+    demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
+    built: (m.site.added || []).map(({ parts, ...a }) => a) } : null;
   const TOOLS = [
     { name: "about_site", title: "Tomta og fløyene", ro: true, schema: S({ draft: DRAFT }),
       description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
@@ -164,12 +177,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         let d; if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, v] of drafts) if (Date.now() - v.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) drafts.delete(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [];
         for (const [i, e] of a.edits.entries()) { try { const c = checkEdit(applyEdits(site, floors, d.edits).site, applyEdits(site, floors, d.edits).floors, e); if (d.edits.length >= MAX_EDITS) throw new Error(`A draft holds at most ${MAX_EDITS} changes`); d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
-        d.t = Date.now();
-        return { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, saved: false,
+        d.t = Date.now(); const after = afterOf(applyEdits(site, floors, d.edits));
+        return { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), saved: false,
           note: "Ikke lagret: utkastet varer et døgn og endrer ikke fellesmodellen. Åpne lenken for å se det." }; } },
     { name: "show_draft", title: "Se et utkast", ro: true, schema: S({ draft: { type: "string" } }, ["draft"]),
       description: "The changes in a draft, in order, numbered, with the link that shows it on the website.",
-      run: async (a, req) => { const d = draftOf(a.draft); return { draft: d.id, link: draftUrl(originOf(req), d.id), changes: d.edits.map((e, i) => ({ n: i + 1, ...e })), saved: false }; } },
+      run: async (a, req) => { const d = draftOf(a.draft), after = afterOf(applyEdits(site, floors, d.edits)); return { draft: d.id, link: draftUrl(originOf(req), d.id), changes: d.edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: false }; } },
     { name: "undo_change", title: "Angre en endring", schema: S({ draft: { type: "string" }, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["draft", "n"]),
       description: "Takes one change out of a draft by its number from show_draft.",
       run: async (a, req) => { const d = draftOf(a.draft); if (a.n > d.edits.length) throw toolErr(`The draft has ${d.edits.length} changes.`); const [gone] = d.edits.splice(a.n - 1, 1); return { draft: d.id, removed: gone, link: draftUrl(originOf(req), d.id), changes_in_draft: d.edits.length }; } },

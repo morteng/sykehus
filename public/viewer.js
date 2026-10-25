@@ -259,6 +259,24 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }
     grp.userData.id = b.id; grp.traverse(o => { o.userData.id = b.id; }); scene.add(grp); meshes.set(b.id, grp);
   }
+  /* ---------- the after: what a draft builds (design.js), each part a profile [across, kote] drawn along its axis,
+     across to the left of the axis; glass seen through, as a greenhouse is ---------- */
+  const ADDED = { glass: mat("#cfe6e2", { transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.1, depthWrite: false }), concrete: mat("#ddd8cc"),
+    steel: mat(C.steel, { roughness: 0.5, metalness: 0.4 }), wood: mat("#b48a5a"), brick: mat("#a65b44") };
+  for (const a of site.added || []) {
+    const grp = new THREE.Group();
+    for (const p of a.parts) {
+      const [[x0, y0], [x1, y1]] = p.axis, L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.01) continue;
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(p.profile.map(([s, z]) => new THREE.Vector2(s, z - base))), { depth: L, bevelEnabled: false });
+      /* the shape's x is across (to the left of the axis), y up, its depth along the axis: P maps east, north to x, -z */
+      const d = new THREE.Vector3((x1 - x0) / L, 0, -(y1 - y0) / L), n = new THREE.Vector3(-(y1 - y0) / L, 0, -(x1 - x0) / L);
+      const m4 = new THREE.Matrix4().makeBasis(n, new THREE.Vector3(0, 1, 0), d).setPosition(x0, 0, -y0);
+      const mesh = new THREE.Mesh(g.applyMatrix4(m4), ADDED[p.mat] || ADDED.concrete);
+      mesh.castShadow = p.mat !== "glass"; mesh.receiveShadow = true; grp.add(mesh);
+      if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
+    }
+    grp.userData.added = a.id; scene.add(grp);
+  }
 
   /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (renderkit/ez-tree.js, MIT;
      bark and leaf pictures CC0 / MIT, docs/tex-credits.txt). Three models are grown once, oak, aspen and pine, with
