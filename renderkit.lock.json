@@ -1,9 +1,12 @@
 {
-  "renderkit": "31c411048eddacd87aa4ff522cc15b0925734ce5",
+  "kits": "3a4c987febe99d6ab6d343ad469c90752f7113d2",
+  "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
-  "three": "../vendor/three.module.js",
+  "map": {
+    "./three.js": "../vendor/three.module.js"
+  },
   "files": {
     "sun.js": "2caa173fdc3adcc0a12d2e2fbf28a4dfd9fdd492",
     "quality.js": "fa251f11621def68ddada3c47032a99dc21584f6",

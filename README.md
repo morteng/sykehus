@@ -66,12 +66,12 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
 `tools/osm-buildings.mjs`, `tools/osm-rings.mjs`, `public/tex-grass.jpg` and `public/vendor/` are copied from hagekart
 (each says so, or `docs/tex-credits.txt` does).
 
-`public/renderkit/` is renderkit (github.com/morteng/renderkit, private, MIT), the 3D kit shared with laser: the sun
+`public/renderkit/` is the 3D kit (github.com/morteng/kits, `render/`, private, MIT; was renderkit), the 3D kit shared with laser: the sun
 (`sun.js`), the quality levels (`quality.js`; this site's table and keys are in `public/quality.js`), EZ-Tree
 (`ez-tree.js`) with its bark and leaf pictures, and the camera rig (`camera.js`, laser's too): a change of storey, a
 building in focus and the home view ease there from where the view is, at the speed it has, and a drag, a wheel, a pinch
 or the zoom buttons stop the move at once. It is taken by sha, never edited here: `renderkit.lock.json` names the
-sha and each file's git blob id. Take a new sha with `node <renderkit>/tools/take.mjs <sha> renderkit.lock.json`;
+sha and each file's git blob id. Take a new kits sha with `node <kits>/tools/take.mjs <sha> renderkit.lock.json`;
 `node --test` fails when a copy is not the file at the locked sha. renderkit is pinned to three 0.186.1, the version
 this site vendors.
 
