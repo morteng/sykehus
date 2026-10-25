@@ -60,6 +60,20 @@ test("a draft: tried, read back by the page, undone; the shared model is unchang
   assert.equal(u.changes_in_draft, 3);
   assert.equal((await fetch(`${BASE}/api/utkast/nope`)).status, 404);
 });
+test("a new building is never refused over its id: the server makes one (pm 23:31Z, Anton's four roof gardens)", async () => {
+  const garden = (id, dx) => ({ kind: "volume", id, name: "Takhage", shape: "box", from: [30 + dx, -90], to: [40 + dx, -90], width: 6, height: 3, material: "wood", why: "test: takhage" });
+  let draft;
+  for (const [asked, got, dx] of [["takhage1", "ntakhage1", 0], ["takhagesb", "ntakhagesb", 12], ["takhage5", "ntakhage5", 24], ["tak7", "ntak7", 36]]) {
+    const t = (await call("try_change", { edits: [garden(asked, dx)], include_screenshot: false, ...(draft ? { draft } : {}) })).data;
+    assert.deepEqual(t.rejected, [], asked); assert.equal(t.added[0].id, got); assert.equal(t.ids[asked], got); draft = t.draft;
+  }
+  /* the same garden again with its id taken: one there already, not a second */
+  const again = (await call("try_change", { edits: [garden("ntakhage1", 0)], include_screenshot: false, draft })).data;
+  assert.match(again.rejected[0].error, /Finnes allerede/);
+  /* a taken id on a different one: it gets a free one */
+  const other = (await call("try_change", { edits: [garden("ntakhage1", 48)], include_screenshot: false, draft })).data;
+  assert.equal(other.added[0].id, "ntakhage12"); assert.equal(other.changes_in_draft, 5);
+});
 test("show_building gives the app its view", async () => {
   const r = await rpc("tools/call", { name: "show_building", arguments: { storey: "6", wing: "Østre nordfløy", mode: "plan" } });
   assert.equal(r.structuredContent.view.storey, "6. etasje"); assert.equal(r.structuredContent.view.mode, "plan");

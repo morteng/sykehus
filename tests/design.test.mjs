@@ -42,7 +42,8 @@ test("a new building from the page (U3556): storeys, facts, reshaped, and torn d
   const c = checkEdit(site, floors, vol); assert.equal(c.height, 12.8); assert.equal(c.storeys, 4);
   let m = applyEdits(site, floors, [c]); const a = m.site.added.find(x => x.id === "nAbc123");
   assert.equal(a.use, "Boliger"); assert.equal(a.footprint_m2, 360); assert.equal(a.top_kote - a.base_kote, 12.8);
-  assert.throws(() => checkEdit(m.site, m.floors, { ...vol }), /ikke brukt før/);
+  assert.equal(checkEdit(m.site, m.floors, { ...vol }).id, "nAbc1232");   // its id taken: a free one, not a refusal (pm 23:31Z)
+  assert.equal(checkEdit(site, floors, { ...vol, id: "takhage1" }).id, "ntakhage1");
   const r = checkEdit(m.site, m.floors, { kind: "reshape", id: "nAbc123", name: "Bolighuset", storeys: 6, from: [-40, -60], to: [-10, -60] });
   m = applyEdits(site, floors, [c, r]); const b = m.site.added.find(x => x.id === "nAbc123");
   assert.equal(b.name, "Bolighuset"); assert.equal(b.top_kote - b.base_kote, 19.2); assert.deepEqual(b.from, [-40, -60]);

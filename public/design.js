@@ -36,6 +36,19 @@ export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
+/* a new building's id: the one asked for when it has the form (n and 4–12 letters or digits) and is free; else one made
+   from it that has and is (pm 23:31Z: Anton's «takhage1» was refused four times over a rule it could not see). A new
+   thing is never refused over its id; the result's added says the id it got. */
+export function freeId(asked, site) {
+  const taken = new Set([...(site.added || []).map(a => a.id), ...(site.buildings || []).map(b => b.id)]);
+  if (NID.test(asked) && !taken.has(asked)) return asked;
+  let core = asked.normalize("NFKD").replace(/[^A-Za-z0-9]/g, "");
+  if (core.startsWith("n")) core = core.slice(1);
+  core = core.slice(0, 12); if (core.length < 4) core = (core + "nytt").slice(0, 4);
+  let id = "n" + core;
+  for (let k = 2; taken.has(id); k++) id = "n" + core.slice(0, 12 - String(k).length) + k;
+  return id;
+}
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
   if (e.use != null) out.use = str(String(e.use), 80, "Bruken");
@@ -107,7 +120,7 @@ export function checkDesign(site, e, str) {
       const from = pt(e.from, "from"), to = pt(e.to, "to"), L = Math.hypot(to[0] - from[0], to[1] - from[1]);
       if (L < 1 || L > 250) throw new Error("Fra from til to må være mellom 1 og 250 m");
       const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
-      if (out.id && (!NID.test(out.id) || (site.added || []).some(a => a.id === out.id))) throw new Error("id er n og 4–12 bokstaver eller tall, og ikke brukt før");
+      if (out.id) out.id = freeId(out.id, site);
       out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), 1, 80, "Høyden"); Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }

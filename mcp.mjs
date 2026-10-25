@@ -211,7 +211,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       steps: { type: "integer", minimum: 2, maximum: 10, description: "terraces: how many (default 3)" }, step_depth: { type: "number", minimum: 0.5, maximum: 20, description: "terraces: m each step is narrower than the one under it (default 3)" },
       on: { type: "string", description: "A wing (id or name) whose roof it stands on: its foot is that roof's kote under its middle (a roof garden, a greenhouse on a roof)" },
       base_kote: { type: "number", description: "Its foot's kote; default the lowest ground under it (leave out with on)" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "glass = a greenhouse" },
-      id: { type: "string", description: "n and 4-12 letters/digits, to name it later" }, ...FACTS }, ["from", "to", "width"]),
+      id: { type: "string", description: "Optional, to name it later: any short name. The server makes it a valid free id (n and 4-12 letters/digits), so it may come back changed: use the id in the result's added" }, ...FACTS }, ["from", "to", "width"]),
     K("reshape", "Change a new building (rename, re-fact, move or resize it), or a surface, path or planting by its id (flate-1, sti-2 from show_draft's after.ground, tre-1 from after.plantings): its name, surface, ring; a path's line and width; a planting's height and crown", { id: { type: "string", description: "Its id, from show_draft's after.built, after.ground or fit" }, name: { type: "string" }, from: PT, to: PT, width: { type: "number" }, height: { type: "number" },
       surface: { type: "string", description: "a surface's or path's material, as surface and path take" }, crown: { type: "number", description: "a planting: m wide" }, ring: POINTS, line: POINTS, plants: { type: "array", items: { type: "string" }, maxItems: 30 }, ...FACTS }, ["id"]),
     K("surface", "A surface on the ground: a lawn, a bed, a square, and water = a pool, a pond or a basin", { ring: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"] }, name: { type: "string" }, plants: { type: "array", items: { type: "string" }, maxItems: 30, description: "hagekart ids or Latin names, for a bed" } }, ["ring", "surface"]),
@@ -315,18 +315,22 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (!a.version && !a.draft && versions && userOf(req)) a = { ...a, version: openOf(userOf(req)).id };
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
-        const ok = [], bad = [], max = v ? MAX_VERSION_EDITS : MAX_EDITS;
+        const ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         for (const [i, e] of a.edits.entries()) { try { const f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
-            const same = d.edits.findIndex(x => JSON.stringify(x) === JSON.stringify(c)); if (same >= 0) throw new Error(`Finnes allerede som endring nr. ${same + 1}; den står, send bare det nye`);
-            d.edits.push(c); ok.push(c); } catch (x) { bad.push({ index: i, error: x.message }); } }
+            /* a new building that differs only in the id it was given is the same one sent again */
+            const bare = x => JSON.stringify(x.kind === "volume" ? { ...x, id: undefined } : x);
+            const same = d.edits.findIndex(x => bare(x) === bare(c)); if (same >= 0) throw new Error(`Finnes allerede som endring nr. ${same + 1}; den står, send bare det nye`);
+            d.edits.push(c); ok.push(c); if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
         const fit = [...fitOf(m.site), ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit(m.site, ways ? await ways() : []) : [])];
+        /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
+        const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
         let out;
-        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...named, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
         else { d.t = Date.now(); keepDraft(d);
-          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: false,
+          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
         if (a.include_screenshot === false || !ok.length) return out;
         /* the picture of what it made (the FreeCAD MCP's pattern): aimed at the last new or changed building, else the whole site */
@@ -436,6 +440,24 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const text = `${said}${guessed ? `Viser ${guessed}; si fra om du mente en annen fløy (wing). ` : ""}Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view, ...(kept ? { saved_view: { id: kept.id, name: kept.name } } : {}) } } }; } },
   ];
+  /* the writes one at a time, from Anton and from the page alike, and each one a line in the log (pm 23:31Z: two
+     changes left voy_p_Vm2 and nothing said how): «endring <version|draft> <kinds|undo n> <before>→<after> <who>» */
+  let writes = Promise.resolve();
+  for (const t of TOOLS.filter(t => t.name === "try_change" || t.name === "undo_change")) {
+    const run = t.run;
+    t.run = (a, req) => {
+      const p = writes.then(async () => {
+        const out = await run(a, req), s = out?._result?.structuredContent ?? out;
+        const n = s.changes_in_draft ?? (typeof s.changes === "number" ? s.changes : null);
+        const what = t.name === "undo_change" ? `undo ${a.n}` : (s.added || []).map(e => e.kind).join(",") || "ingen";
+        const before = n == null ? "?" : t.name === "undo_change" ? n + 1 : n - (s.added || []).length;
+        console.log(`endring ${s.version || s.draft || a.version || a.draft || "?"} ${what} ${before}→${n ?? "?"} ${userOf(req) || "ute"}${s.rejected?.length ? ` (${s.rejected.length} avvist)` : ""}`);
+        return out;
+      });
+      writes = p.catch(() => {});
+      return p;
+    };
+  }
   const short = x => typeof x === "string" ? JSON.stringify(x.length > 24 ? x.slice(0, 24) + "…" : x) : typeof x === "number" || typeof x === "boolean" || x == null ? String(x)
     : Array.isArray(x) ? `[${x.length}]` : `{${Object.keys(x).slice(0, 12).join(",")}}`;
   const argsLine = a => !a || typeof a !== "object" ? short(a) : Object.entries(a).slice(0, 16).map(([k, v]) =>
