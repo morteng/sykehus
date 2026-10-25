@@ -68,6 +68,7 @@ export function createLogin({ SECURITY, readJson, proxyUser = () => null, fetchI
       r = await fetchImpl(base + codePath, { method: "POST", headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" }, body: JSON.stringify({ code, device, app: "sykehus" }), signal: AbortSignal.timeout(10000) });
       j = await r.json().catch(() => ({}));
     } catch (e) { console.error("logg-inn:", e.message); return send(res, 503, { error: "Fikk ikke kontakt. Prøv igjen om litt." }); }
+    if (r.status === 429) return send(res, 429, { error: "Koden er låst etter for mange feil. Be Morten om en ny." });
     if (!r.ok || !LOGIN.test(String(j.person || "")) || typeof j.device_id !== "string" || !j.device_id) return send(res, 401, { error: "Koden stemmer ikke, eller den er for gammel. Be om en ny." });
     res.setHeader("set-cookie", cookie(req, signed({ p: j.person, d: j.device_id.slice(0, 80), e: Math.floor(Date.now() / 1000) + TTL }), TTL));
     return send(res, 200, { person: j.person, name: typeof j.name === "string" ? j.name.slice(0, 80) : null });

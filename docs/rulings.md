@@ -27,3 +27,9 @@ Morten's decisions on how Sykehustomta is built, newest last. Each names when an
   (SYKEHUS_ADMINS) sees all and answers, a webhook for his notices (SYKEHUS_WISH_WEBHOOK).
 - **2026-10-25 17:14Z (Morten, in the sykehus session):** «always deply, no need to ask»: what passes its tests is
   pushed and sent to pm for deploy without asking first.
+- **2026-10-25 17:24Z (via pm):** «let's also think about how he can use an ipad w/pen (i think he has one) to
+  draw/write instructions to anton» and «on images of model he chooses, then draws on and sends (or clears?) something
+  like that»: «Tegn» freezes the view he chose as a picture; Apple Pencil draws on it (pen only, the palm rests),
+  2–3 colours, «Angre», «Tøm», «Avbryt»; words by iPadOS Scribble in the message box; «Send til Anton» sends the
+  picture, each stroke as site metres (raycast) and the camera, so Anton can put a try_change where he drew. Design
+  first: frames at iPad size for Morten to see before it is built, and built after the pill is live.

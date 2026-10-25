@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="nb"><head><meta charset="utf-8"><title>Tegn – skisse</title>
+<style>
+  :root { --ink: #23211e; --soft: #6c675f; --paper: #fbf9f4; --line: #d8d2c6; --red: #b0122b; --pen: #2f6db0; }
+  * { box-sizing: border-box; } html, body { margin: 0; height: 100%; overflow: hidden; font: 17px/1.4 -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink); }
+  #pic { position: fixed; inset: 0; background-size: cover; background-position: center; }
+  .card { position: fixed; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px #0002; }
+  button { font: inherit; font-size: 17px; min-height: 48px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+  button.pri { background: var(--ink); color: #fff; border-color: var(--ink); }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  svg.i { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #title { top: 14px; left: 14px; padding: 10px 16px; } #title h1 { margin: 0; font-size: 21px; font-weight: 600; } #title p { margin: 2px 0 0; color: var(--soft); font-size: 15px; }
+  #bar { left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; padding: 10px; }
+  #bar button { min-height: 46px; padding: 0 13px; }
+  /* the pill as it is today, with «Tegn» first */
+  .pill { left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 14px; }
+  .pill .tx { flex: 1; color: var(--soft); font-size: 18px; padding: 0 8px; }
+  .round { width: 48px; height: 48px; padding: 0; justify-content: center; border: 0; background: var(--ink); color: #fff; border-radius: 12px; }
+  .tegn { border-radius: 12px; }
+  /* drawing: a frame round the picture says it stands still */
+  .frozen #pic::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 5px var(--pen); }
+  #tools { top: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; align-items: center; }
+  #tools .lbl { font-size: 15px; color: var(--soft); padding: 0 6px 0 8px; }
+  .dot { width: 48px; height: 48px; padding: 0; justify-content: center; border-radius: 50%; }
+  .dot i { width: 26px; height: 26px; border-radius: 50%; display: block; }
+  .dot[aria-pressed="true"] { background: #fff; border: 3px solid var(--ink); }
+  .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+  #ink { position: fixed; inset: 0; pointer-events: none; }
+  #ink text { font-family: Noteworthy, "Bradley Hand", "Comic Sans MS", cursive; font-weight: 700; }
+  #send { left: 50%; transform: translateX(-50%); bottom: 18px; padding: 10px; display: flex; gap: 10px; align-items: flex-end; }
+  #send .box { flex: 1; min-height: 56px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 8px 12px; font-size: 18px; }
+  #send .box small { display: block; color: var(--soft); font-size: 13px; margin-top: 2px; }
+  #send .box .scr { font-family: Noteworthy, "Bradley Hand", cursive; color: #555; }
+  #talk { left: 50%; transform: translateX(-50%); padding: 12px 14px; }
+  #talk ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  #talk b { display: block; font-size: 13px; color: var(--soft); font-weight: 600; }
+  .me { justify-self: end; max-width: 80%; background: #ecebe6; padding: 8px 10px; border-radius: 12px; }
+  .me img { display: block; width: 180px; border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--line); }
+  .acts { display: flex; gap: 8px; margin-top: 8px; }
+  .tag { position: fixed; padding: 4px 10px; background: #fff6d6; border: 1px solid #e8d9a0; border-radius: 8px; font-size: 14px; }
+  .note { position: fixed; right: 14px; top: 92px; background: #fff; border: 1px dashed #b9b2a4; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--soft); max-width: 260px; }
+</style></head><body>
+<div id="pic"></div>
+<div id="ui"></div>
+<script>
+const f = new URLSearchParams(location.search), frame = f.get("f"), port = f.get("o") === "port", W = innerWidth, H = innerHeight;
+const pen = '<svg class="i" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>';
+const send = '<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+const undo = '<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>';
+const pic = document.getElementById("pic"), ui = document.getElementById("ui");
+pic.style.backgroundImage = `url(${frame === "svar" ? "base-after.png" : port ? "base-port.png" : "base-land.png"})`;
+const pillW = Math.min(640, W - 28);
+const title = `<div id="title" class="card"><h1>Gamle Drammen sykehus</h1><p>Dronninggata 28 · gnr. 114 bnr. 272</p><p style="font-size:14px;color:var(--ink)">Logget inn som lars</p></div>`;
+const bar = `<div id="bar" class="card"><button aria-pressed="true">Hele anlegget</button>${port ? "<button>1</button><button>2</button><button>3</button><button>4</button><button>5</button>" : "<button>1</button><button>2</button><button>3</button><button>4</button><button>5</button><button>6</button><button>7</button><button>8</button>"}<button aria-pressed="true">3D</button><button>Plan</button><button aria-pressed="true">Navn</button></div>`;
+/* the strokes, where the greenhouse and the balconies go in each picture */
+const ink = port
+  ? `<ellipse cx="300" cy="915" rx="190" ry="62" stroke="#c8102e" stroke-width="5" fill="none" transform="rotate(-6 300 915)"/>
+     <path d="M560 820 C 520 850, 500 870, 470 890" stroke="#c8102e" stroke-width="5" fill="none"/><path d="M470 890 l 22 -2 M470 890 l 6 -20" stroke="#c8102e" stroke-width="5" fill="none"/>
+     <text x="520" y="808" font-size="40" fill="#c8102e" transform="rotate(-4 520 808)">drivhus!</text>
+     <path d="M180 640 l 12 30 l 12 -30 l 12 30 l 12 -30 l 12 30 l 12 -30 l 12 30 l 12 -30 l 12 30 l 12 -30 l 12 30 l 12 -30 l 12 30 l 12 -30" stroke="#1f5fbf" stroke-width="4" fill="none" transform="rotate(14 180 640)"/>
+     <text x="60" y="720" font-size="32" fill="#1f5fbf" transform="rotate(-3 60 720)">balkonger</text>`
+  : `<ellipse cx="555" cy="652" rx="175" ry="52" stroke="#c8102e" stroke-width="5" fill="none" transform="rotate(-3 555 652)"/>
+     <path d="M840 600 C 800 615, 770 630, 735 645" stroke="#c8102e" stroke-width="5" fill="none"/><path d="M735 645 l 22 2 M735 645 l 14 -17" stroke="#c8102e" stroke-width="5" fill="none"/>
+     <text x="800" y="590" font-size="40" fill="#c8102e" transform="rotate(-4 800 590)">drivhus!</text>
+     <path d="M420 440 l 10 26 l 10 -26 l 10 26 l 10 -26 l 10 26 l 10 -26 l 10 26 l 10 -26 l 10 26 l 10 -26 l 10 26" stroke="#1f5fbf" stroke-width="4" fill="none" transform="rotate(24 420 440)"/>
+     <text x="250" y="520" font-size="32" fill="#1f5fbf" transform="rotate(-3 250 520)">balkonger</text>`;
+if (frame === "live") {
+  ui.innerHTML = title + bar + `<div class="card pill" style="bottom:92px;width:${pillW}px"><button class="tegn">${pen}Tegn</button><span class="tx">Spør Anton, eller be ham tegne …</span><button class="round">${send}</button></div>
+    <div class="tag" style="left:${W / 2 - pillW / 2}px;bottom:162px">Snu og zoom til det du vil vise, trykk «Tegn»</div>`;
+} else if (frame === "tegn") {
+  document.body.classList.add("frozen");
+  const sw = Math.min(760, W - 28);
+  ui.innerHTML = `<svg id="ink" viewBox="0 0 ${W} ${H}">${ink}</svg>
+    <div id="tools" class="card"><span class="lbl">Tegn med pennen</span>
+      <button class="dot" aria-pressed="true" aria-label="Rød"><i style="background:#c8102e"></i></button><button class="dot" aria-label="Blå"><i style="background:#1f5fbf"></i></button><button class="dot" aria-label="Svart"><i style="background:#23211e"></i></button>
+      <span class="sep"></span><button>${undo}Angre</button><button>Tøm</button><button>Avbryt</button></div>
+    <div id="send" class="card" style="width:${sw}px"><div class="box"><span class="scr">Et stort drivhus i glass her, og balkonger mot sør på blokka</span><small>Skriv med pennen i feltet, eller med tastaturet</small></div><button class="pri" style="min-height:56px">${send}Send til Anton</button></div>`;
+} else if (frame === "svar") {
+  ui.innerHTML = title + `<div id="talk" class="card" style="top:130px;right:14px;left:auto;transform:none;width:420px"><ol>
+      <li class="me"><img src="drawn-land.png" alt="Tegningen">Et stort drivhus i glass her, og balkonger mot sør på blokka</li>
+      <li><b>Anton</b>Jeg har tegnet et drivhus der du ringet inn: en A-form i glass, 73 × 24 m, 18 m høyt, foten på kote +7,5. Det står i utkastet nå, se modellen bak. Balkongene tar jeg etterpå. Ser drivhuset riktig ut?
+        <div class="acts"><button class="pri">Ja, behold det</button><button>Endre</button></div></li></ol></div>
+    <div class="card pill" style="bottom:92px;width:420px;right:14px;left:auto;transform:none"><button class="tegn">${pen}Tegn</button><span class="tx">Svar Anton …</span><button class="round">${send}</button></div>` + bar;
+}
+if (f.has("bare")) for (const s of ["#tools", "#send"]) document.querySelector(s)?.remove();
+else ui.insertAdjacentHTML("beforeend", `<div class="note">Skisse ${{ live: "1 · se", tegn: "2 · tegn", svar: "3 · svar" }[frame]} · iPad ${port ? "stående 820×1180" : "liggende 1180×820"}</div>`);
+</script></body></html>
