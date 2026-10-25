@@ -76,7 +76,8 @@ export function checkDesign(site, e, str) {
     }
     case "reshape": {
       const id = String(e.id ?? ""), a = (site.added || []).find(x => x.id === id && x.kind === "volume");
-      if (!a) throw new Error(`Fant ikke det nye bygget «${e.id}»`);
+      /* teaches what reshape is for (21:22Z: «reshape» id «basseng» was meant as a new pool) */
+      if (!a) { const n = (site.added || []).filter(x => x.kind === "volume"); throw new Error(`Fant ikke det nye bygget «${e.id}». reshape endrer et nytt bygg som alt står i forslaget${n.length ? ` (${n.slice(0, 8).map(x => `«${x.id}»`).join(", ")})` : "; forslaget har ingen nye bygg ennå"}. Et nytt bygg er kind volume; et basseng, en plass eller en plen er kind surface (surface: "water" for vann) med ring.`); }
       const out = facts(e, str, { kind: "reshape", id });
       if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
       if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");

@@ -128,7 +128,18 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const viewOf = (a, req) => {
     const v = {};
     if (a.storey) { const n = storeyName(a.storey); if (!floors.some(f => f.name === n) && !wingsAll().some(w => (w.levels || []).some(l => l.name === n))) throw toolErr(`No storey "${a.storey}".`); v.storey = n; }
-    if (a.wing) { const w = wingOrErr(a.wing); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; }
+    /* the wing under other names a model sends (pm 21:32Z: deepseek asked for the facade twice with no wing) */
+    const wn = a.wing ?? a.building ?? a.name ?? a.focus;
+    if (wn) { const w = wingOrErr(wn); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; }
+    /* a facade or a section with no wing named: the wing picked on the person's page, else the largest standing in
+       the after, and the result says which (a refusal the model repeats is a dead end) */
+    if (!v.wing && !a.drawn_section && ["fasade", "tverrsnitt", "lengdesnitt"].includes(a.mode)) {
+      const s = model(a.draft, req).site, stand = new Set(s.buildings.map(b => b.wing).filter(Boolean)), who = userOf(req);
+      const picked = who && pages?.picked?.get(who), byB = picked && site.buildings.find(b => b.id === picked)?.wing;
+      const area = id => s.buildings.filter(b => b.wing === id).reduce((t, b) => t + (b.area_m2 || 0), 0);
+      const id = [picked, byB].find(x => x && stand.has(x)) || [...stand].sort((x, y) => area(y) - area(x))[0];
+      if (id) { const w = wingOrErr(id); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; v.guessed = w.name; }
+    }
     if (a.mode === "plan" || a.mode === "3d") v.mode = a.mode;
     if (a.drawn_section) {
       const d = sections.find(x => x.id === a.drawn_section); if (!d) throw toolErr(`No drawn section "${a.drawn_section}". Drawn sections: ${sections.map(x => x.id).join(", ")} (about_wing lists them).`);
@@ -384,13 +395,19 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => { const view = viewOf(a, req), w = view.wing && wingOf(site, view.wing), who = userOf(req);
         /* through the pill: the person's open pages go to this view (assistant.mjs pages.show), else say they did not */
         /* a version's id names a version, not a draft (21:05Z: the page went to ?utkast=v…, a draft that is not there) */
-        const { draft: dv, ...rest } = view, isV = /^v.{8}$/.test(String(dv ?? ""));
+        const { draft: dv, guessed, ...rest } = view, isV = /^v.{8}$/.test(String(dv ?? ""));
         const moved = who && pages ? pages.show(who, { ...rest, ...(dv && !isV ? { draft: dv } : { version: isV ? dv : pages.open.get(who) || null }) }) : null;
         const SIDE_ = { N: "nord", Ø: "øst", S: "sør", V: "vest" }, deg = a.from_direction != null ? dirDeg(a.from_direction) : null;
         const cam = view.mode === "section" || view.mode === "plan" ? "" : [deg != null ? `sett fra ${["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8]}` : "", a.tilt_deg != null ? `${Math.round(clamp(+a.tilt_deg, 5, 85))}° over bakken${a.tilt_deg >= 50 ? " (fugleperspektiv)" : ""}` : "", a.distance_m != null ? `${Math.round(clamp(+a.distance_m, 30, 1200))} m unna` : ""].filter(Boolean).join(", ");
-        const text = `Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
+        const text = `${guessed ? `Viser ${guessed}; si fra om du mente en annen fløy (wing). ` : ""}Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}. You have not seen this view (use look for a picture). On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [{ type: "text", text }], structuredContent: { app: "sykehus", view } } }; } },
   ];
+  const short = x => typeof x === "string" ? JSON.stringify(x.length > 24 ? x.slice(0, 24) + "…" : x) : typeof x === "number" || typeof x === "boolean" || x == null ? String(x)
+    : Array.isArray(x) ? `[${x.length}]` : `{${Object.keys(x).slice(0, 12).join(",")}}`;
+  const argsLine = a => !a || typeof a !== "object" ? short(a) : Object.entries(a).slice(0, 16).map(([k, v]) =>
+    k === "edits" && Array.isArray(v) ? `edits=[${v.slice(0, 8).map(e => e && typeof e === "object" ? `${e.kind}{${Object.keys(e).filter(k => k !== "kind").join(",")}}` : short(e)).join(" ")}]`
+    : k === "edit" && v && typeof v === "object" ? `${v.kind}{${Object.entries(v).filter(([k]) => !["kind", "why", "note", "value", "name"].includes(k)).map(([k, x]) => `${k}=${short(x)}`).join(",")}}`
+    : ["why", "note", "text", "title", "value"].includes(k) ? `${k}=…` : `${k}=${short(v)}`).join(" ");
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
   const toolList = () => TOOLS.map(t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.schema,
     annotations: { title: t.title, readOnlyHint: !!t.ro, destructiveHint: false, idempotentHint: !!t.ro, openWorldHint: false },
@@ -421,16 +438,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       case "tools/call": {
         const t = BY[params.name]; if (!t) throw err(-32602, `Unknown tool: ${params.name}`);
         const who = userOf(req);
-        let a; try { a = resolveTarget(t, params.arguments || {}, req); } catch (e) { if (e.tool) return { content: [{ type: "text", text: e.message }], isError: true }; throw e; }
+        /* a refused call in the log, by its argument names and short values (pm 21:32Z: which key did the model send
+           the wing under?); an edit by its kind and field names, no text the person wrote */
+        const refused = (why, args = params.arguments) => console.error("refused", params.name, argsLine(args), "→", String(why).slice(0, 120));
+        let a; try { a = resolveTarget(t, params.arguments || {}, req); } catch (e) { if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; } throw e; }
         /* a tool that keeps a version, with no one logged in: the sign-in challenge, so a chat app asks the person to connect */
         if (!who && (t.write || (t.writeIf && t.writeIf(a)))) throw Object.assign(err(401, "Sign-in needed"), { auth: true });
         try {
           auth?.count(req, who); bump("open", 3000, 3600e3);
           const out = await t.run(a, req);
+          for (const r of out?.rejected || []) refused(r.error, { edit: a.edits?.[r.index] });
           if (out?._result) return out._result;
           return { content: [{ type: "text", text: JSON.stringify(out) }], structuredContent: out };
         } catch (e) {
-          if (e.tool) return { content: [{ type: "text", text: e.message }], isError: true };
+          if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; }
           throw e;
         }
       }

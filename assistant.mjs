@@ -117,6 +117,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       try {
         for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, turn.device, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
       } catch (e) { console.error("anton turn", e); st = 500; j = { error: { code: "internal" } }; }
+      console.log("anton: turn", turn.id.slice(0, 8), "→", st);
       if (st !== 200) {
         if (refusedDevice(st, j)) { publish(person, "signed_out", { type: "signed_out" }); t.queue.length = 0; }
         publish(person, "error", { type: "error", code: codeOf(j, "unavailable"), reply_to: turn.id });
@@ -144,7 +145,10 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       const selection = selectionOf(b?.selection);
       const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection };
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
+      /* the wing or building picked when it was sent: a facade asked for with no wing named is that one's (mcp.mjs viewOf) */
+      if (pages) { pages.picked ??= new Map(); const p = selection?.items.find(i => i.kind === "wing" || i.kind === "building"); if (p) pages.picked.set(me.person, p.id); else pages.picked.delete(me.person); }
       t.queue.push(turn); publish(me.person, "queue", queueView(t)); run(me.person);
+      console.log("anton: turn", turn.id.slice(0, 8), "taken,", t.subs.size, "pages listening");   // no text, no person
       return send(res, 202, { id: turn.id });
     }
     if (path === "/api/anton/godkjenn") {

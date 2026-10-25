@@ -102,6 +102,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     form.hidden = false;
     const replies = new Map(), told = new Set();
     let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
+    const seen = new Set();   // the turns the stream has shown taken
     const chatOpen = () => panel.tab === "chat" && panel.open();
     const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; };
     /* the pill where the chat is: in the tab's bottom row while it shows, else at the bottom of the view */
@@ -171,6 +172,9 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       if (r?.status === 401) { signedOut(); return false; }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return false; }
       if (!drawn) { input.value = ""; input.oninput(); }
+      /* the stream must show the turn taken (queued or running); else the text comes back with a word (pm 21:31Z: the
+         first message after load went away and reached no one) */
+      const { id } = await r.json().catch(() => ({})); if (id && !seen.has(id)) setTimeout(() => { if (seen.has(id)) return; line("err", "Fikk ikke bekreftet at Anton fikk meldingen; den står i feltet igjen om du vil sende den på nytt."); if (!input.value.trim() && !drawn) { input.value = text; input.oninput(); } }, 8000);
       said(text); return true;
     }
     $("talkTegn").onclick = () => import("./tegn.js?v=20261025b").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
@@ -221,8 +225,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     }).catch(() => {});
     const es = new EventSource("api/anton/strom");
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
-    on("queue", q => { running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
-    on("message", m => { line("from-me", m.text, null, m.image, m.about); said(m.text); });
+    on("queue", q => { for (const x of [q.running, ...q.waiting]) if (x) seen.add(x.id); running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
+    on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); said(m.text); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
       b.textContent += t.delta || ""; toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);

@@ -65,7 +65,7 @@ test("show_building gives the app its view", async () => {
   assert.equal(r.structuredContent.view.storey, "6. etasje"); assert.equal(r.structuredContent.view.mode, "plan");
   const sec = await rpc("tools/call", { name: "show_building", arguments: { wing: "Sentralblokka", mode: "lengdesnitt" } });
   assert.equal(sec.structuredContent.view.mode, "section"); assert.equal(sec.structuredContent.view.section, "lengde");
-  assert.equal((await rpc("tools/call", { name: "show_building", arguments: { mode: "tverrsnitt" } })).isError, true);   // a section needs a wing
+  assert.ok(!(await rpc("tools/call", { name: "show_building", arguments: { mode: "tverrsnitt" } })).isError);   // a section with no wing: the largest standing
   const ds = (await call("about_wing", { wing: "Østfløy" })).data.drawn_sections;
   assert.ok(ds.some(d => d.id === "snitt-ost"));
   const dv = (await rpc("tools/call", { name: "show_building", arguments: { drawn_section: "snitt-ost" } })).structuredContent.view;
@@ -101,8 +101,9 @@ test("«fasaden mot sør på Sentralblokka» and «fra fugleperspektiv» through
   assert.ok(!f.isError); assert.deepEqual([f.data.view.mode, f.data.view.section, f.data.view.side, f.data.view.wing], ["section", "fasade", "S", "sentralblokka"]);
   assert.match(f.content[0].text, /Sentralblokka, fasaden mot sør, sett rett på/);
   const none = await call("show_building", { mode: "fasade", from_direction: "S" });
-  assert.equal(none.isError, true); assert.match(none.content[0].text, /Fasaden trenger wing.*Sentralblokka \(sentralblokka\).*wing: "Sentralblokka", from_direction: "S"/);
-  assert.match((await call("show_building", { mode: "lengdesnitt" })).content[0].text, /Snittet trenger wing.*Østfløy/);
+  /* pm 21:32Z: the refusal was repeated, a dead end; with no wing the largest standing one is shown, and named */
+  assert.ok(!none.isError); assert.match(none.content[0].text, /^Viser (.+); si fra om du mente en annen fløy \(wing\)\. Sykehustomta: .*\1, fasaden mot sør/);
+  assert.match((await call("show_building", { mode: "lengdesnitt" })).content[0].text, /^Viser .*lengdesnitt/);
   const bird = await call("show_building", { from_direction: "SV", tilt_deg: 65 });
   assert.ok(Math.abs(bird.data.view.pitch - 65 * Math.PI / 180) < 1e-9); assert.match(bird.content[0].text, /3D sett fra sørvest, 65° over bakken \(fugleperspektiv\)/);
 });

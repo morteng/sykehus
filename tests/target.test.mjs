@@ -75,3 +75,15 @@ test("try_change: a change already there is not added again, and says so (21:23Z
   assert.equal(r.added.length, 2, "the first Østfløy if it was not there, and the pool"); assert.match(r.rejected[0].error, /Finnes allerede som endring nr\. \d+/);
   assert.equal(r.changes, before + 2);
 });
+
+test("show_building: a facade with no wing shows the largest standing wing and says so; building is the wing too (pm 21:32Z)", async () => {
+  const r = await call("show_building", { mode: "fasade", from_direction: "S" }, {}); assert.ok(!r.isError, text(r));
+  assert.match(text(r), /^Viser .+; si fra om du mente en annen fløy/); assert.equal(r.structuredContent.view.side, "S"); assert.ok(r.structuredContent.view.wing);
+  const b = await call("show_building", { mode: "fasade", building: "Sentralblokka", from_direction: "S" }, {}); assert.ok(!b.isError); assert.doesNotMatch(text(b), /^Viser/); assert.equal(b.structuredContent.view.wing, "sentralblokka");
+  const s = await call("show_building", { mode: "tverrsnitt" }, {}); assert.ok(!s.isError, text(s)); assert.match(text(s), /^Viser/);
+});
+
+test("try_change: reshape of a building that is not there says what reshape is for and how a pool is made (21:22Z)", async () => {
+  const r = (await call("try_change", { target: D, edits: [{ kind: "reshape", id: "basseng", from: [0, 0] }], include_screenshot: false }, {})).structuredContent;
+  assert.match(r.rejected[0].error, /reshape endrer et nytt bygg.*kind surface \(surface: "water"/);
+});
