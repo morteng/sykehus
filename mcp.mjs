@@ -176,7 +176,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Offentlig: står i lista på forsiden og åpner for alle." };
   const versionOut = (v, o, req) => { const mine = !!req && userOf(req) === v.owner, k = v.sharing === "offentlig" ? null : v.sharing === "lenke" ? v.key : mine ? v.own : null;
     return { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, changes: v.edits.length, updated: v.updated,
-      link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };
+      link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(v.wish?.text ? { wish: v.wish } : {}), ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };   // wish: what the person asked for when «Nytt forslag» made it (U3786)
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all); a version only for who may see it */
   const editsOf = (id, req) => /^v.{8}$/.test(String(id)) ? versionOf(id, req).edits : draftOf(id).edits;
@@ -921,6 +921,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           let k = 1; while (taken.has(name(k))) k++;
           const v = versions.create(me, name(k).slice(0, 120), from ? structuredClone(from.edits) : []);
           for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
+          const wish = typeof a.wish === "string" ? a.wish.trim().slice(0, 2000) : ""; if (wish) v.wish = { text: wish, at: new Date().toISOString() };   // the person's own words from «Nytt forslag» (U3786)
           v.work = true; versions.save(v);
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
         }

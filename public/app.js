@@ -448,7 +448,7 @@ const nameIt = () => { const t = $("drTitle"); if (t && t.offsetParent) { t.focu
    one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
 let nyttForslag = null;
 function fresh() {
-  nyttForslag ||= import("./nytt-forslag.js").then(({ startNew }) => startNew({
+  nyttForslag ||= import("./nytt-forslag.js?v=20261027b").then(({ startNew }) => startNew({
     signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et forslag."); $("meBtn")?.click(); },
     mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
     create: async o => { const j = await change({ fresh: !o.copy, ...o }); if (j.error) return `Fikk ikke laget et nytt forslag: ${j.error}`; await show(j); return null; },
