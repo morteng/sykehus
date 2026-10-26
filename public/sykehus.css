@@ -392,7 +392,7 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
    the card when something is; the bar over the model keeps the ways of looking only */
 #p-selected:not([hidden]) { display: flex; flex-direction: column; }
 #p-selected:has(#info:not([hidden])) .bygg-acts { order: 2; margin-top: var(--sp-3); }
-.bygg-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-start; margin-bottom: var(--sp-3); }
+.bygg-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-start; padding: var(--sp-3) 18px 0; margin-bottom: var(--sp-3); }
 .bygg-acts .tgl { min-height: var(--tap); display: inline-flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3); border-radius: var(--radius-lg); font-size: var(--fs-md); }
 .bygg-acts .tgl svg { width: 20px; height: 20px; }
 .bygg-acts .tgl[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
