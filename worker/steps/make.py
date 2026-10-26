@@ -81,7 +81,8 @@ def kid(x, tag):
 # ---------- the libraries in this image
 def dirs(kind):
     env = [os.environ[k] for k in os.environ if re.fullmatch(rf"KICAD\d*_{kind}_DIR", k)]
-    return [d for d in env + [f"/usr/share/kicad/{kind.lower()}s", f"/usr/local/share/kicad/{kind.lower()}s", *glob.glob(f"/usr/share/kicad*/{kind.lower()}s"), str(HERE / "lib")] if os.path.isdir(d)]
+    found = [os.path.realpath(d) for d in env + [f"/usr/share/kicad/{kind.lower()}s", f"/usr/local/share/kicad/{kind.lower()}s", *glob.glob(f"/usr/share/kicad*/{kind.lower()}s"), str(HERE / "lib")] if os.path.isdir(d)]
+    return list(dict.fromkeys(found))
 
 
 SYMDIRS, FPDIRS = dirs("SYMBOL"), dirs("FOOTPRINT")
@@ -186,7 +187,17 @@ if unknown:
 G = 2.54
 snap = lambda v: round(round(v / G) * G, 2)
 items, x, y, row_h, W = [], 25.4, 25.4, 0, 400
-flags = [{"ref": f"#FLG{i + 1:02d}", "net": n} for i, n in enumerate(S.get("power_flags") or [])]
+# a PWR_FLAG on each net that power pins draw from but nothing in the circuit drives (ERC: a power output on a net
+# with another is an error, so none where a part's power output is); power_flags in the spec adds to them
+drive = {}
+for p in parts:
+    for q in p["pins"]:
+        n = net_of.get((p["ref"], q["number"]))
+        if n:
+            drive.setdefault(n, set()).add(q["type"])
+want = [n for n in S["nets"] if "power_in" in drive.get(n, ()) and "power_out" not in drive.get(n, ())]
+want += [n for n in S.get("power_flags") or [] if n not in want and "power_out" not in drive.get(n, ())]
+flags = [{"ref": f"#FLG{i + 1:02d}", "net": n} for i, n in enumerate(want)]
 if flags:
     libsyms["power:PWR_FLAG"] = [whole("power", "PWR_FLAG")[0], Q("power:PWR_FLAG")] + whole("power", "PWR_FLAG")[2:]
 loose = []
@@ -224,7 +235,7 @@ sch = ["kicad_sch", ["version", 20250114], ["generator", Q("eeschema")], ["gener
 (HERE / f"{NAME}.kicad_pro").write_text(json.dumps({"meta": {"filename": f"{NAME}.kicad_pro", "version": 3}}, indent=2) + "\n")
 
 # ---------- the board (pcbnew, in the KiCad image)
-made = {"name": NAME, "parts": len(parts), "nets": len(S["nets"]), "unconnected_pins": loose, "symbol_dirs": SYMDIRS, "footprint_dirs": FPDIRS}
+made = {"name": NAME, "parts": len(parts), "nets": len(S["nets"]), "power_flags": want, "unconnected_pins": loose, "symbol_dirs": SYMDIRS, "footprint_dirs": FPDIRS}
 try:
     import pcbnew
 except ImportError as e:
@@ -235,7 +246,8 @@ else:
     b.GetDesignSettings().SetBoardThickness(mm(float(S.get("board", {}).get("thickness", 1.6))))
     nets = {}
     for n in S["nets"]:
-        ni = pcbnew.NETINFO_ITEM(b, n); b.Add(ni); nets[n] = ni
+        # a local label's net is named with its sheet's path: /NAME on the root sheet (schematic parity)
+        ni = pcbnew.NETINFO_ITEM(b, "/" + n); b.Add(ni); nets[n] = ni
     missing = []
     for p in parts:
         if not p.get("footprint"):

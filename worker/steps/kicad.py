@@ -87,6 +87,14 @@ def counts(vs):
     return sum(1 for v in vs if v.get("severity") == "error"), sum(1 for v in vs if v.get("severity") == "warning")
 
 
+def by_type(vs):
+    """how many of each kind (kicad-cli's type), the most first"""
+    n = {}
+    for v in vs:
+        k = f"{v.get('type', '?')} ({v.get('severity', '?')})"; n[k] = n.get(k, 0) + 1
+    return dict(sorted(n.items(), key=lambda kv: -kv[1]))
+
+
 def note(key, facts):
     f = HERE / "kicad.json"
     k = json.loads(f.read_text()) if f.exists() else {}
@@ -101,8 +109,9 @@ if STEP == "erc":
         sys.exit("no schematic: send a .kicad_sch")
     cli("sch", "erc", "--format", "json", "--severity-all", "-o", "erc.json", sch)
     r = json.loads(pathlib.Path("erc.json").read_text())
-    e, w = counts([v for s in r.get("sheets", []) for v in s.get("violations", [])])
-    note("erc", {"errors": e, "warnings": w, "ok": e == 0, "report": "erc.json"})
+    vs = [v for s in r.get("sheets", []) for v in s.get("violations", [])]
+    e, w = counts(vs)
+    note("erc", {"errors": e, "warnings": w, "ok": e == 0, "by_type": by_type(vs), "report": "erc.json"})
 elif STEP == "drc":
     if not board:
         sys.exit("no board: send a .kicad_pcb")
@@ -110,7 +119,8 @@ elif STEP == "drc":
     r = json.loads(pathlib.Path("drc.json").read_text())
     e, w = counts(r.get("violations", []))
     un, par = len(r.get("unconnected_items", [])), len(r.get("schematic_parity", []))
-    note("drc", {"errors": e, "warnings": w, "unconnected": un, "parity": par, "ok": e == 0 and un == 0 and par == 0, "report": "drc.json"})
+    note("drc", {"errors": e, "warnings": w, "unconnected": un, "parity": par, "ok": e == 0 and un == 0 and par == 0,
+                 "by_type": by_type(r.get("violations", []) + r.get("schematic_parity", [])), "report": "drc.json"})
 elif STEP == "step":
     if not board:
         sys.exit("no board: send a .kicad_pcb")
