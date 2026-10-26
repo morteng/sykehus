@@ -1,5 +1,5 @@
 {
-  "renderkit": "3a4a3db693174a9b67192555b085df35f9f29bb6",
+  "renderkit": "0ce1340b36fd6c31dcabb25e9682a361dde289c2",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -26,8 +26,8 @@
     "build.js": "af3ea96aa947cbf0088d043b856febe3d960a650",
     "shape.js": "e5e10dbfb0ea61a7390831e249a169dacf0f6d5e",
     "grade.js": "34a5a56933754484f4a87a16d4f240dbfc52cb8c",
-    "materials.js": "5d873d78dca8d79d56d422b9de3d12e9152f29cd",
-    "materials-three.js": "15ca8196c8ef096cfb10479f682284954dd237a7",
+    "materials.js": "40cb42d2788c06499d05bc38dbbf7eb6e51ec007",
+    "materials-three.js": "c7f5b02b3e879cb753778b18f2299a1580eb5ff5",
     "dirs.js": "9707c3153278720f035d43234fc51f1d4fd08e5c",
     "looks.js": "4beb6d91aae85e9fb3ab4c1c4f11fdf3d8fd7dda",
     "hdr-loader.js": "609d29253905af3fd0a0a732d12100ef203f6ab0",

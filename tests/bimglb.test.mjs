@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { BIM, readGlb } from "../public/bimglb.js";
 import { gzipSync } from "node:zlib";
-import { MATERIALS } from "../public/renderkit/materials.js";
+import { MATERIALS, CLASS_MAT } from "../public/renderkit/materials.js";
 import { parseIfc } from "../ifcfilter.mjs";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url), "utf8"));
@@ -22,7 +22,7 @@ test("the wings the page draws from a model are the wings the IFC builds as an e
 
 test("the high block's file: concrete and glass, in the wing's own heights, every index inside its positions", () => {
   const parts = readGlb(buf("public/" + BIM.sentralblokka)), by = Object.fromEntries(parts.map(p => [p.material, p]));
-  assert.deepEqual(Object.keys(by).sort(), ["concrete", "glass"]);
+  assert.deepEqual(Object.keys(by).sort(), ["concrete", "steel", "window_glass"]);
   const b = site.buildings.find(x => x.wing === "sentralblokka");
   for (const p of parts) {
     assert.equal(p.indices.length % 3, 0);
@@ -30,7 +30,7 @@ test("the high block's file: concrete and glass, in the wing's own heights, ever
   }
   const ys = [...by.concrete.positions].filter((_, i) => i % 3 === 1), lo = Math.min(...ys), hi = Math.max(...ys);
   assert.ok(Math.abs(lo - b.base) < 1.5 && Math.abs(hi - Math.max(b.top, ...b.blocks.map(k => k.top))) < 0.5, `heights ${lo}..${hi} against the wing's ${b.base}..${b.top}`);
-  assert.ok(by.glass.indices.length / 3 > 2750 * 8, "a window is a box: at least the 2750 windows of the IFC");
+  assert.ok(by.window_glass.indices.length / 3 > 2750 * 8, "a window is a box: at least the 2750 windows of the IFC");
 });
 
 test("the reader refuses a file that is not a GLB 2", () => {
@@ -53,18 +53,31 @@ function ifcWindows(wingName) {
   return down(b[0]).filter(k => p.ents.get(k)?.type === "IFCWINDOW").length;
 }
 test("the GLB holds as many windows as the IFC file does for the wing (they cannot drift)", () => {
-  const parts = readGlb(buf("public/" + BIM.sentralblokka)), glass = parts.find(p => p.material === "glass"), n = ifcWindows("Sentralblokka");
+  const parts = readGlb(buf("public/" + BIM.sentralblokka)), glass = parts.find(p => p.material === "window_glass"), n = ifcWindows("Sentralblokka");
   assert.ok(n > 1000, `IFC windows: ${n}`);
   assert.equal(parts.windows, n, "the count tools/glb.py wrote, against the IFC file's");
   assert.equal(glass.indices.length / 3, n * 12, "a window is a box of 12 triangles: the glass in the file is the count it says");
 });
 test("the file is small: quantised, and under 1 MB the way the server sends it (gzip)", () => {
   const f = read("public/" + BIM.sentralblokka);
-  assert.ok(f.length < 1.5e6, `raw ${f.length}`);
+  assert.ok(f.length < 1.8e6, `raw ${f.length}`);
   assert.ok(gzipSync(f).length < 1e6, `gzipped ${gzipSync(f).length}`);
 });
 
 test("every material in the file is a key of renderkit's materials.js (the one library), and the page takes no colour of its own", () => {
   for (const p of readGlb(buf("public/" + BIM.sentralblokka))) assert.ok(MATERIALS[p.material], `GLB material ${p.material}`);
   assert.ok(!/\bC\.pane\b/.test(read("public/viewer.js").toString()), "a local glass colour in viewer.js");
+});
+
+test("U3656: no IfcOpeningElement in the GLB (its volume would fill the hole it cuts), and a frame ring a window", () => {
+  assert.match(read("tools/glb.py").toString(), /^SKIP = \([^)]*"IfcOpeningElement"/m, "tools/glb.py skips the openings");
+  const parts = readGlb(buf("public/" + BIM.sentralblokka)), by = Object.fromEntries(parts.map(p => [p.material, p]));
+  assert.ok(by.concrete.indices.length / 3 < 85000, `concrete triangles ${by.concrete.indices.length / 3}: with the 2750 openings written as boxes it was 103132`);
+  assert.equal(by.steel.indices.length / 3, parts.windows * 16, "a frame: 8 triangles on each of a window's two faces");
+});
+
+test("U3656: greenhouse glass stays see-through, the windows of a facade wear their own glazing (the vendored library)", () => {
+  assert.equal(MATERIALS.glass.look.transparent, true); assert.ok(MATERIALS.glass.look.opacity < 0.6);
+  assert.equal(CLASS_MAT.IfcWindow, "window_glass"); assert.equal(CLASS_MAT.IfcPlate, "glass");
+  assert.notEqual(MATERIALS.window_glass.look.transparent, true);
 });

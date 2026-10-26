@@ -17,7 +17,7 @@ import { fovFor, ratio } from "./renderkit/photo.js";
 import { ease } from "./renderkit/camera.js";
 import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
 import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
-import { texturedMaterial, worldUV } from "./renderkit/materials-three.js";
+import { texturedMaterial, worldUV, skyEnvironment } from "./renderkit/materials-three.js";
 import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
@@ -191,13 +191,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     return done(18);
   }
   /* a sky for the glass to mirror: light blue overhead, pale at the horizon, the ground's green-grey below */
-  const envMap = Q.relief && (() => {
-    const es = new THREE.Scene(), geo = new THREE.SphereGeometry(100, 32, 16), col = [];
-    for (let i = 0; i < geo.attributes.position.count; i++) { const y = geo.attributes.position.getY(i) / 100; const c = y > 0 ? new THREE.Color("#eef2f4").lerp(new THREE.Color("#8fb4da"), Math.pow(y, 0.6)) : new THREE.Color("#9a9c8c"); col.push(c.r, c.g, c.b); }
-    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-    es.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
-    const pm = new THREE.PMREMGenerator(renderer), t = pm.fromScene(es, 0.02).texture; pm.dispose(); return t;
-  })();
+  const envMap = Q.relief && skyEnvironment(renderer);   // renderkit's (materials-three.js), one copy
   /* the drawn facades painted after the first frame, one at a time when the page is idle (pm 21:41Z: painting every
      facade's windows, grain and relief held the load about a second at full speed); each wall shows plain plaster
      until its picture is ready */
@@ -277,13 +271,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const old = [...grp.children], parts = readGlb(buf), cutPlane = [cuts.get(b.id)];
       const pic = Q.pbr && MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, clippingPlanes: cutPlane } }).catch(() => null) : null;
       for (const p of parts) {
-        const glass = p.material === "glass", M = MATERIALS[p.material] || MATERIALS.concrete;
+        const glass = p.material === "window_glass", M = MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};
         let g = new THREE.BufferGeometry(), m;
         g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1));
-        if (!glass && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; }   // concrete as the site's other buildings wear it: its picture and relief
-        else m = mat(M.colour, { ...M.look, flatShading: true, ...(glass && envMap ? { envMap, envMapIntensity: 1 } : {}), clippingPlanes: cutPlane });   // flat: the file carries no normals, and every face is plane
+        if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.7 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
+        else m = mat(M.colour, { ...M.look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // the library's look; flat: the file carries no normals, and every face is plane
         g.computeBoundingSphere();
-        const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
+        const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass && p.material !== "steel"; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
         if (selected === b.id) m.emissive.set("#6b5200");
       }
       for (const o of old) { grp.remove(o); o.traverse(x => { x.geometry?.dispose(); x.material?.dispose?.(); }); }
