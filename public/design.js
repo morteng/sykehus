@@ -73,6 +73,15 @@ function bimBody(from, to, box) {
   const L = Math.max(1, box.max[0] - box.min[0]), c = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], d = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1, u = [(to[0] - from[0]) / d, (to[1] - from[1]) / d], r = v => Math.round(v * 100) / 100;
   return { from: [r(c[0] - u[0] * L / 2), r(c[1] - u[1] * L / 2)], to: [r(c[0] + u[0] * L / 2), r(c[1] + u[1] * L / 2)], width: r(Math.max(1, box.max[1] - box.min[1])), height: r(Math.max(1, box.max[2] - box.min[2])) };
 }
+/* where a new building's foot stands: on a wing's roof (on), at a kote (base_kote), else on the ground under it */
+function footOf(site, e, out, num) {
+  if (e.on != null) {
+    const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k);
+    if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
+    out.on = w.id; if (roofUnder(site, out) == null) throw new Error(`Midten av ${out.name} står ikke på taket til ${w.name}: flytt from og to så midten er innenfor fløyen`);
+  } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
+  return out;
+}
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
   if (e.use != null) out.use = str(String(e.use), 80, "Bruken");
@@ -153,7 +162,7 @@ export function checkDesign(site, e, str) {
       if (L < 1 || L > 250) throw new Error("Fra from til to må være mellom 1 og 250 m");
       const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
       if (out.id) out.id = freeId(out.id, site);
-      if (shape === "bim") { out.bim = bimOf(e.bim); Object.assign(out, bimBody(from, to, out.bim.box), w_); return out; }
+      if (shape === "bim") { out.bim = bimOf(e.bim); Object.assign(out, bimBody(from, to, out.bim.box), w_); return footOf(site, e, out, num); }
       out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), 1, 80, "Høyden"); Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }
@@ -163,12 +172,7 @@ export function checkDesign(site, e, str) {
         if (out.step_depth * (out.steps - 1) >= out.width) throw new Error(`Med ${out.steps} trinn på ${out.step_depth} m blir det øverste uten bredde: gjør bredden større enn ${out.step_depth * (out.steps - 1)} m, eller trinnene grunnere`);
         out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to): den siden trinnene er i flukt med");
       }
-      if (e.on != null) {
-        const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k);
-        if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
-        out.on = w.id; if (roofUnder(site, out) == null) throw new Error(`Midten av ${out.name} står ikke på taket til ${w.name}: flytt from og to så midten er innenfor fløyen`);
-      } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
-      return out;
+      return footOf(site, e, out, num);
     }
   }
   return checkLandscape(site, e, str);

@@ -34,13 +34,15 @@ out = {
   "net_inner": tried(lambda: socket.create_connection((h, int(p)), 3)),
   "net_worker": tried(lambda: socket.create_connection(("worker", 8070), 3)),
   "dns": tried(lambda: socket.getaddrinfo("worker", 8070)),
-  "interfaces": tried(lambda: [l.split(":")[0].strip() for l in open("/proc/net/dev").read().splitlines()[2:]]),
+  "interfaces": tried(lambda: sorted(n for _, n in socket.if_nameindex())),
   "jobs_dir": tried(lambda: ls("/jobs") or (_ for _ in ()).throw(FileNotFoundError("empty"))),
   "blobs": tried(lambda: ls("/jobs/.blobs")),
   "write_service": tried(lambda: open("/srv/worker/x", "w").write("x")),
   "write_etc": tried(lambda: open("/etc/x", "w").write("x")),
-  "pids": tried(lambda: sorted(int(x) for x in os.listdir("/proc") if x.isdigit())),
-  "pid1": tried(lambda: open("/proc/1/cmdline", "rb").read().split(b"\\0")[0].decode(errors="replace")),
+  "proc": tried(lambda: ls("/proc")),
+  "pid1": tried(lambda: open("/proc/1/cmdline", "rb").read()),
+  "service_root": tried(lambda: ls("/proc/1/root/jobs")),
+  "kill_parent": tried(lambda: os.kill(os.getppid(), 0) or os.getppid()),
   "env": sorted(os.environ),
   "uid": os.getuid(),
 }
@@ -65,8 +67,10 @@ else:
     for k in ("net_outside", "net_inner", "net_worker", "dns", "jobs_dir", "blobs", "write_service", "write_etc"):
         say(k, str(r.get(k, "")).startswith("refused"), r.get(k))
     say("interfaces", r.get("interfaces") in ("GOT []", "GOT ['lo']"), r.get("interfaces"))
-    say("pids", r.get("pids", "").startswith("GOT [") and r["pids"].count(",") <= 3, r.get("pids"))
-    say("pid1", r.get("pid1", "").startswith("GOT ") and "python" not in r["pid1"], r.get("pid1"))
+    say("proc", r.get("proc") in ("GOT []", "refused: FileNotFoundError"), r.get("proc"))   # an empty /proc: no process of the service or another job
+    for k in ("pid1", "service_root"):
+        say(k, str(r.get(k, "")).startswith("refused"), r.get(k))
+    say("kill_parent", r.get("kill_parent") in ("GOT 0", "GOT 1") or str(r.get("kill_parent")).startswith("refused"), r.get("kill_parent"))   # its parent is bwrap's, pid 0/1 in its own namespace
     say("env", set(r.get("env", [])) <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE"}, r.get("env"))
 
 j = job("x = bytearray(6 << 30)\n")
@@ -79,5 +83,12 @@ j = job("open('big', 'wb').write(b'0' * (100 << 20))\n")
 say("file_size", j.get("state") != "done", (j.get("state"), (j.get("errors") or [{}])[0].get("code")))
 j = job("import json\nopen('out.txt', 'w').write('hei')\nprint(json.dumps({'ok': 1}))\n")
 say("control", j.get("state") == "done" and [o["name"] for o in j.get("outputs", [])] == ["out.txt"], (j.get("state"), j.get("outputs")))
+# the engines work with an empty /proc: an IFC through the mesh step; FreeCAD's STEP through check, where there is FreeCAD
+IFC = "import ifcopenshell.api as A\nf = A.run('project.create_file', version='IFC4'); p = A.run('root.create_entity', f, ifc_class='IfcProject'); A.run('unit.assign_unit', f, length={'is_metric': True, 'raw': 'METERS'})\nc = A.run('context.add_context', f, context_type='Model'); b = A.run('context.add_context', f, context_type='Model', context_identifier='Body', target_view='MODEL_VIEW', parent=c)\nw = A.run('root.create_entity', f, ifc_class='IfcWall'); A.run('geometry.assign_representation', f, product=w, representation=A.run('geometry.add_wall_representation', f, context=b, length=5, height=3, thickness=0.2))\nf.write('model.ifc')\n"
+j = job(IFC, then=["mesh"])
+say("ifc_engine", j.get("state") == "done" and "mesh.json" in [o["name"] for o in j.get("outputs", [])], (j.get("state"), j.get("errors")))
+if json.loads(urllib.request.urlopen(f"{W}/health", timeout=10).read()).get("engine") == "freecad":
+    j = job("import FreeCAD, Part, Import\nd = FreeCAD.newDocument('t'); o = d.addObject('Part::Feature', 'Box'); o.Shape = Part.makeBox(10, 20, 30); d.recompute(); Import.export([o], 'box.step')\n", then=["check"])
+    say("freecad_engine", j.get("state") == "done" and (j.get("check") or {}).get("files", {}).get("box.step", {}).get("size") == [10.0, 20.0, 30.0], (j.get("state"), j.get("errors"), str(j.get("log"))[-300:]))
 print("all held" if ok_all else "A JOB GOT OUT")
 sys.exit(0 if ok_all else 1)

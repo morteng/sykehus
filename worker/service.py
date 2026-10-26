@@ -13,7 +13,7 @@ what it made. One container on the stack's internal network; shared by sykehus (
   GET  /health          {ok, engine, steps, versions, queue}
 
 A job: script.py and params.json (and the files) in an empty folder; `python script.py` there under bubblewrap
-(--unshare-all: no network; the image read-only; only the job folder writable; no environment; rlimits on CPU time,
+(--unshare-all: no network; the image read-only; only the job folder writable; an empty /proc; no environment; rlimits on CPU time,
 memory, processes and file size; a wall clock). Its result is the last line of its output that is a JSON object.
 then: built-in steps of this image on what it made (trusted code, run the same way): mesh writes mesh.json from the
 IFC (triangles by class, for a viewer), glb a glTF of it, check a report on every file it made (check.json, and the
@@ -53,13 +53,15 @@ jobs, lock = {}, threading.Lock()
 
 
 def sandboxed(cmd, work, caps):
-    """the command under bubblewrap with rlimits; or, in DEV, as it is (the rlimits still)"""
+    """the command under bubblewrap with rlimits; or, in DEV, as it is (the rlimits still). /proc is an empty tmpfs:
+    Docker's masked /proc refuses a new proc mount, and the container's own (which the ro-bind of / would bring in)
+    would show the service's processes, and through /proc/<pid>/root its files; the pid namespace is still the job's"""
     lim = ["prlimit", f"--cpu={caps['s']}", f"--as={caps['mem_mb'] << 20}", "--nproc=256", f"--fsize={MAX_OUT}", "--"]
     if DEV:
         return lim + cmd if shutil.which("prlimit") else cmd
     return ["bwrap", "--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL",
             "--ro-bind", "/", "/", "--tmpfs", "/tmp", "--tmpfs", str(ROOT), "--bind", str(work), "/work",
-            "--proc", "/proc", "--dev", "/dev", "--chdir", "/work", "--clearenv",
+            "--tmpfs", "/proc", "--dev", "/dev", "--chdir", "/work", "--clearenv",
             "--setenv", "HOME", "/tmp", "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin:/opt/conda/bin",
             "--setenv", "MPLCONFIGDIR", "/tmp", "--setenv", "QT_QPA_PLATFORM", "offscreen", "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
             "--"] + lim + cmd
