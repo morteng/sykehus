@@ -72,7 +72,7 @@ function bimOf(b) {
     if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Delen er ikke bygget ennå: serveren bygger den først");
     const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !(typeof v === "boolean" || typeof v === "string" && v.length <= 40 || Number.isFinite(+v) && typeof v !== "object")) throw new Error(`Innstillingen «${k}» må ha et navn av bokstaver og et tall, et ord eller ja/nei`); params[k] = typeof v === "number" || typeof v === "boolean" ? v : Number.isFinite(+v) && String(v).trim() !== "" ? +v : v; }
     const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Delen har ingen form");
-    return { part: String(b.part), script: null, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}) };
+    return { part: String(b.part), script: null, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), ...(b.nopad ? { nopad: true } : {}) };   // nopad: a part that stands on the ground (a stair, a railing) cuts no pad as a house does
   }
   if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
   if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");
@@ -181,6 +181,8 @@ export function checkDesign(site, e, str) {
       const f = storey(e.from_storey, "from_storey"), t = storey(e.to_storey, "to_storey"); if (f) out.from_storey = f; if (t) out.to_storey = t;
       if (e.face != null) { const fs = facadesOf(site, w.id), d = num(e.face, 0, 360, "face (retningen fasaden vender, grader fra nord)") % 360; if (!fs.some(x => turn(x.bearing, d) <= 20)) throw new Error(`${w.name} har ingen fasade som vender ${d}°. Fasadene vender ${fs.map(x => `${x.bearing}° (${String(x.length_m).replace(".", ",")} m)`).join(", ")}`); out.face = d; }
       else faceFor(site, w, side);
+      /* a whole facade asked with no width: one balcony per window axis (2.5 m), never one slab along all of it (pm 13:06Z: 165 m seen) */
+      if (!e.windows && e.bay == null) { if (balconyParts(site, { ...out, windows: true }).length) e = { ...e, windows: true }; else { e = { ...e, bay: 1.9, gap: 0.6 }; } }
       if (e.windows) { out.windows = true; if (e.bay != null) out.bay = num(e.bay, 1, 2.4, "Bredden på hver balkong (bay; høyst 2,4 m med én per vindu, 2,5 m mellom vinduene)"); }
       else if (e.bay != null) { out.bay = num(e.bay, 1.5, 20, "Bredden på hver balkong (bay)"); out.gap = num(e.gap, 0, 10, "Mellomrommet (gap)", 0.6); }
       if (!balconyParts(site, out).length) throw new Error(`${w.name} har ingen fasade mot ${side} der balkongene kan stå (eller ingen etasjer i det valgte spennet)`);
@@ -469,7 +471,7 @@ function lotDistance(site, a) {
   const m = Math.round(best * 10) / 10;
   return { m, ...(m < LOT_MIN ? { near: true } : {}) };
 }
-const lotOf = (site, e) => e.on == null && !e.bim?.plan ? lotDistance(site, e) : null;
+const lotOf = (site, e) => e.on == null && !e.bim?.plan && !e.bim?.nopad ? lotDistance(site, e) : null;
 /* the near-the-line words, for the card and Anton */
 export function lotText(l) {
   if (!l) return "";
@@ -547,7 +549,7 @@ export function applyDesign(site, floors, edits) {
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
-  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan ? baseOf(site, { ...e, base_kote: undefined }) : null]);
+  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan && !e.bim?.nopad ? baseOf(site, { ...e, base_kote: undefined }) : null]);
   if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
   const keep = new Map(), guard = pathCells(site), lot = feet.some(([, e]) => e.on == null) ? lotCells(site) : null;
   for (const [id, e, { parts, base }, free] of feet) {
