@@ -35,6 +35,7 @@ const M = k => `io.modelcontextprotocol/${k}`;
 const SERVER_INFO = { name: "sykehus", title: "Sykehustomta", version: "0.2.0" };
 const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 3019 Drammen, gnr. 114 bnr. 272) for an architect working on reusing the existing buildings. "
   + "The hospital is described as its wings (about_site, about_wing): each with years, storeys and their kote per wing (storeys), drawn floor plans with rooms and areas (floor_plan), and windows from the drawn facades (openings). "
+  + "For people: the page has a guided tour, under the «?» in the top bar (a short one for a visitor, ending on «Logg inn»; the full one once signed in, and the newer steps again after an update). Say so when someone asks how to get started or what the page can do. "
   + "about_site also lists the named streets and places around the site (streets: Welhavens gate, Dronninggata …), the names show_building's from_place stands in. "
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
   + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
