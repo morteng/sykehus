@@ -298,7 +298,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     dirty = true;
   }
   /* a construction's triangles by IFC class (U3570: what the worker made from its script, mesh.json), once per sha */
-  const meshCache = new Map(), CLASS_MAT = { IfcMember: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass", IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood" };
+  const meshCache = new Map(), CLASS_MAT = { IfcMember: "steel", IfcAnnotation: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass", IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood" };
   const meshOf = sha => { if (!meshCache.has(sha)) meshCache.set(sha, fetch(`api/bim/${sha}/mesh.json`).then(r => r.ok ? r.json() : null).catch(() => null)); return meshCache.get(sha); };
   function drawBim(a, grp) {
     /* till it comes: its box, faint, so it stands, is picked and has its handles */

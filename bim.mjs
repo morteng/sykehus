@@ -17,7 +17,7 @@ const toolErr = message => Object.assign(new Error(message), { tool: true });
 const DIR = join(process.env.SYKEHUS_VERSIONS_DIR || tmpdir(), "bim");
 const FILES = { "mesh.json": "application/json", "model.ifc": "application/p21", "model.glb": "model/gltf-binary" };
 /* the IFC classes in the five colours the page and the picture have */
-export const CLASS_MAT = { IfcMember: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass",
+export const CLASS_MAT = { IfcMember: "steel", IfcAnnotation: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass",
   IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcStair: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood", IfcFurnishingElement: "wood" };
 
 export const shaOf = (script, params) => createHash("sha256").update(script + "\0" + JSON.stringify(Object.keys(params).sort().map(k => [k, params[k]]))).digest("hex");
@@ -74,7 +74,7 @@ export const MAX_IMPORT = 100 << 20;
 /* the formats a file may come in (U3571 S2): IFC as it is; STEP (the FreeCAD worker), glTF, OBJ and STL through the
    worker's import step, which makes an IFC of it (metres, one IfcBuildingElementProxy per part, Z up). OBJ and STL
    say no unit: the person says it (unit), or the file is refused */
-const UNIT_NAME = { m: "metre", cm: "centimetre", mm: "millimetre", in: "inch", ft: "foot" };
+const UNIT_NAME = { m: "metre", dm: "decimetre", cm: "centimetre", mm: "millimetre", in: "inch", ft: "foot" };
 function formatOf(bytes, filename) {
   const ext = (/\.([a-z0-9]{1,6})$/i.exec(filename || "")?.[1] || "").toLowerCase(), head = bytes.subarray(0, 4096).toString("latin1");
   if (/^\s*ISO-10303-21;/.test(head)) return /FILE_SCHEMA\s*\(\s*\(\s*'IFC/i.test(head) ? "ifc" : "step";
@@ -83,41 +83,43 @@ function formatOf(bytes, filename) {
   if (ext === "obj") return "obj";
   if (ext === "stl") return "stl";
   if (ext === "skp") throw toolErr("SketchUp-filer (.skp) kan ikke leses her: eksporter den fra SketchUp som IFC, glTF (.glb) eller OBJ.");
-  if (ext === "dxf" || ext === "dwg") throw toolErr("DXF og DWG (tegninger) kommer snart; nå tas IFC, STEP, glTF, OBJ og STL.");
-  throw toolErr("Ukjent filtype: send IFC (.ifc), STEP (.step, .stp), glTF (.glb, .gltf), OBJ (.obj) eller STL (.stl).");
+  if (ext === "dwg") { if (/^AC10\d\d/.test(head)) return "dwg"; throw toolErr("Det er ikke en DWG-fil AutoCAD kan ha skrevet (den begynner ikke med AC10..)."); }
+  if (ext === "dxf") return "dxf";
+  throw toolErr("Ukjent filtype: send IFC (.ifc), STEP (.step, .stp), glTF (.glb, .gltf), OBJ (.obj), STL (.stl), eller en tegning som DXF (.dxf) eller DWG (.dwg).");
 }
 export async function importFile(bytes, meta = {}) {
   if (!bytes?.length) throw toolErr("Fila er tom.");
   if (bytes.length > MAX_IMPORT) throw toolErr("Fila er større enn 100 MB.");
-  const fmt = formatOf(bytes, meta.filename), bare = fmt === "obj" || fmt === "stl";
+  /* bare: no unit in the file (OBJ, STL); a plan (DXF, DWG) says its own, mostly: the person's is used when it does not */
+  const fmt = formatOf(bytes, meta.filename), bare = fmt === "obj" || fmt === "stl", plan = fmt === "dxf" || fmt === "dwg";
   const unit = meta.unit ? String(meta.unit).toLowerCase() : null, up = meta.up ? String(meta.up).toLowerCase() : null;
   if (unit && !UNIT_NAME[unit]) throw toolErr("Enheten er m, cm, mm, in eller ft.");
   if (up && up !== "y" && up !== "z") throw toolErr("Opp er y eller z.");
   if (bare && !unit) throw toolErr(`En ${fmt.toUpperCase()}-fil sier ikke hvilken enhet den er tegnet i: velg enheten (m, cm, mm, tommer, fot).`);
   const fileSha = createHash("sha256").update(bytes).digest("hex");
   /* the same bytes in another unit or way up are another thing: the key says what it was read as */
-  const sha = bare ? createHash("sha256").update(bytes).update(`\0unit=${unit},up=${up || ""}`).digest("hex") : fileSha, have = meshOf(sha);
+  const sha = bare || plan && unit ? createHash("sha256").update(bytes).update(`\0unit=${unit},up=${up || ""}`).digest("hex") : fileSha, have = meshOf(sha);
   if (have) return { file: sha, ...importSummary(have, rawSource(sha)), ...sourceOf(sha) };
   const W = fmt === "step" ? process.env.SYKEHUS_WORKER_FREECAD || process.env.GULDEN_WORKER_FREECAD : workerUrl();
   if (!W) throw toolErr(fmt === "step" ? "STEP leses av FreeCAD-arbeideren, som ikke er satt opp her (SYKEHUS_WORKER_FREECAD)." : "Filer leses av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
-  const base = W.replace(/\/+$/, ""), ext = { ifc: "ifc", step: "step", glb: "glb", gltf: "gltf", obj: "obj", stl: "stl" }[fmt];
+  const base = W.replace(/\/+$/, ""), ext = { ifc: "ifc", step: "step", glb: "glb", gltf: "gltf", obj: "obj", stl: "stl", dxf: "dxf", dwg: "dwg" }[fmt];
   const stem = (String(meta.filename || "").replace(/\.[^.]*$/, "").normalize("NFKD").replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60)) || "modell";
   const input = fmt === "ifc" ? "model.ifc" : `${stem}.${ext}`;
   let j;
   try {
     const b = await (await fetch(`${base}/blobs`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: bytes, signal: AbortSignal.timeout(120000) })).json();
     if (b.sha256 !== fileSha) throw new Error(b.errors?.[0]?.message || "fila kom ikke fram");
-    const job = { inputs: { [input]: fileSha }, then: fmt === "ifc" ? ["mesh"] : ["import", "mesh"], ...(bare || up ? { params: { ...(unit ? { unit } : {}), ...(up ? { up } : {}) } } : {}) };
+    const job = { inputs: { [input]: fileSha }, then: fmt === "ifc" ? ["mesh"] : ["import", "mesh"], ...(unit || up ? { params: { ...(unit ? { unit } : {}), ...(up ? { up } : {}) } } : {}) };
     const r = await fetch(`${base}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(job), signal: AbortSignal.timeout(360000) });
     j = await r.json();
   } catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
   const why = j.errors?.[0]?.message || "";
-  if (j.state !== "done" || !j.files?.["mesh.json"]) throw toolErr(/no geometry/.test(why) ? "Fila har ingen former arbeideren kan tegne." : /too many/.test(why) ? `Fila er for tung: ${why}` : /compressed|other files/.test(why) ? `glTF-fila kan ikke leses slik: ${why}` : `Arbeideren kunne ikke lese fila: ${why || j.state || "ukjent"}`);
+  if (j.state !== "done" || !j.files?.["mesh.json"]) throw toolErr(/^no unit/.test(why) ? "Tegningen sier ikke hvilken enhet den er tegnet i: velg enheten og send den igjen." : /spans/.test(why) ? `Tegningen er for stor: noe ligger langt fra resten (${why.replace(/^the drawing spans ([\d.]+) km.*/, "$1 km")}). Slett det, eller send planen alene.` : /DWG/.test(why) ? `DWG-fila kunne ikke leses: ${why}. Lagre den som DXF og prøv igjen.` : /no geometry/.test(why) ? "Fila har ingen former arbeideren kan tegne (på lag som er på)." : /too many/.test(why) ? `Fila er for tung: ${why}` : /compressed|other files/.test(why) ? `glTF-fila kan ikke leses slik: ${why}` : `Arbeideren kunne ikke lese fila: ${why || j.state || "ukjent"}`);
   const get = async f => Buffer.from(await (await fetch(`${base}${j.files[f]}`, { signal: AbortSignal.timeout(120000) })).arrayBuffer());
   const mesh = JSON.parse((await get("mesh.json")).toString("utf8")), info = j.files["import.json"] ? JSON.parse((await get("import.json")).toString("utf8")) : null;
   const tmp = join(DIR, `.${sha}.${process.pid}`); mkdirSync(tmp, { recursive: true });
   const src = { filename: String(meta.filename || `modell.${ext}`).replace(/[\p{C}\/\\"<>]/gu, "_").slice(0, 120), bytes: bytes.length, format: fmt, by: meta.by ?? null, at: new Date().toISOString(),
-    ...(info ? { unit: info.unit, unit_from: info.unit_from, up: info.up, parts: info.parts } : {}) };
+    ...(info ? { unit: info.unit, unit_from: info.unit_from, up: info.up, parts: info.parts, ...(info.segments ? { segments: info.segments, layers: info.names } : {}) } : {}) };
   writeFileSync(join(tmp, "mesh.json"), JSON.stringify(mesh)); writeFileSync(join(tmp, "source.json"), JSON.stringify(src));
   writeFileSync(join(tmp, "model.ifc"), fmt === "ifc" ? bytes : await get("model.ifc"));
   if (j.files["model.glb"]) writeFileSync(join(tmp, "model.glb"), await get("model.glb"));
@@ -164,7 +166,7 @@ export async function prepare(e, site) {
   /* a file brought in (U3571): placed like a construction, the box its file's */
   if (e?.kind === "import") {
     const { kind, file, source, licence, material, ...rest } = e, bim = importBim(e);
-    const m = meshOf(bim.file), mat = material || (m.classes?.IfcPlate || m.classes?.IfcWindow || m.classes?.IfcCurtainWall ? "glass" : "concrete");
+    const m = meshOf(bim.file), mat = material || (m.classes?.IfcAnnotation ? "steel" : m.classes?.IfcPlate || m.classes?.IfcWindow || m.classes?.IfcCurtainWall ? "glass" : "concrete");
     return { ...rest, name: rest.name || bim.filename?.replace(/\.[a-z0-9]{2,5}$/i, "") || "Innhentet", kind: "volume", shape: "bim", material: mat, bim, _ran: { file: bim.file, ...importSummary(m, rawSource(bim.file)) } };
   }
   if (e?.kind === "construction") {

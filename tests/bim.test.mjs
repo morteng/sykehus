@@ -120,7 +120,7 @@ test("importFile and prepare: an uploaded IFC is read once, kept by its sha, and
   process.env.SYKEHUS_WORKER = `http://127.0.0.1:${srv.address().port}`;
   try {
     const { importFile, prepare, slim } = await import("../bim.mjs");
-    await assert.rejects(importFile(Buffer.from("solid x\nendsolid\n"), { filename: "x.dwg" }), /DXF og DWG/);
+    await assert.rejects(importFile(Buffer.from("solid x\nendsolid\n"), { filename: "x.dwg" }), /ikke en DWG-fil/);
     await assert.rejects(importFile(Buffer.from("v 0 0 0\n"), { filename: "x.obj" }), /enhet/);
     await assert.rejects(importFile(Buffer.from("x"), { filename: "x.skp" }), /SketchUp/);
     const r = await importFile(ifc, { filename: "Vindu «A».ifc", by: "p1" });
@@ -147,9 +147,23 @@ test("importFile and prepare: an uploaded IFC is read once, kept by its sha, and
     assert.equal(o1.format, "obj"); assert.deepEqual(o1.unit, { length: "centimetre", from: "person" });
     const o2 = await importFile(obj, { filename: "Kube.obj", unit: "mm" }); assert.notEqual(o2.file, o1.file);
     const again = await importFile(obj, { filename: "Kube.obj", unit: "cm" }); assert.equal(again.file, o1.file); assert.deepEqual(again.unit, o1.unit, "kept, with its unit");
+    /* a DXF that says no unit is sent on without one; the worker's «no unit» is said in the page's words */
+    const dxf = await importFile(Buffer.from("0\nSECTION\n"), { filename: "Plan.dxf", unit: "mm" }), jd = seen.findLast(x => x.inputs);
+    assert.deepEqual(jd.then, ["import", "mesh"]); assert.deepEqual(jd.params, { unit: "mm" }); assert.equal(dxf.format, "dxf");
     const po = await prepare({ kind: "import", file: o1.file, from: [0, -80], to: [6, -80], licence: "CC0" }, site);
     assert.equal(po.bim.format, "obj"); assert.equal(po.name, "Kube");
     delete process.env.SYKEHUS_WORKER_FREECAD; delete process.env.GULDEN_WORKER_FREECAD;
     await assert.rejects(importFile(Buffer.from("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\n"), { filename: "a.step" }), /FreeCAD-arbeideren/);
   } finally { srv.close(); }
+});
+
+/* a plan brought in (U3571 S3): flat, over the highest ground under it, no pad dug for it */
+test("a DXF plan lies flat over the highest ground under it, with no pad", async () => {
+  const { groundAt } = await import("../public/renderkit/fit.js");
+  const plan = { kind: "volume", id: "nPlan", name: "Plan", shape: "bim", material: "steel", from: [-6, -80], to: [6, -80],
+    bim: { file: SHA, sha: SHA, box: { min: [0, 0, 0], max: [12, 8, 0] }, classes: { IfcAnnotation: 3 }, format: "dxf", filename: "plan.dxf", licence: "egen" } };
+  const m = applyEdits(site, floors, add([], plan)), a = m.site.added[0];
+  assert.equal(a.bim.plan, true); assert.equal(a.ground, undefined, "no digging for a drawing");
+  const hi = Math.max(...[-6, 0, 6].flatMap(x => [-84, -80, -76].map(y => groundAt(site, [x, y]))));
+  assert.ok(a.base_kote >= Math.round((hi + 0.05) * 10) / 10 - 0.05, `${a.base_kote} over ${hi}`);
 });

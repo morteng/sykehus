@@ -562,8 +562,8 @@ $("mimp").onclick = () => {
   impOpen(impPop.hidden);
 };
 /* OBJ and STL say no unit: the person picks it before it goes */
-const bare = f => /\.(obj|stl)$/i.test(f?.name || "");
-$("impFile").onchange = () => { $("impUnitL").hidden = !bare($("impFile").files?.[0]); };
+const bare = f => /\.(obj|stl)$/i.test(f?.name || ""), plan = f => /\.(dxf|dwg)$/i.test(f?.name || "");
+$("impFile").onchange = () => { const f = $("impFile").files?.[0]; $("impUnitL").hidden = !bare(f) && !plan(f); $("impUnitL").firstChild.textContent = plan(f) ? "Tegnet i (om fila ikke sier det)" : "Tegnet i (fila sier det ikke)"; };
 impPop.onsubmit = async ev => {
   ev.preventDefault();
   const f = $("impFile").files?.[0], licence = $("impLic").value.trim(), source = $("impSrc").value.trim(), unit = $("impUnit").value;
@@ -572,10 +572,10 @@ impPop.onsubmit = async ev => {
   if (f.size > 100 * 1024 * 1024) return impSay("Fila er større enn 100 MB.");
   $("impGo").disabled = true; impSay(`Leser ${f.name} …`);
   let j;
-  try { j = await fetch(`api/import?filename=${encodeURIComponent(f.name)}${bare(f) ? `&unit=${unit}` : ""}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: f }).then(r => r.json()); }
+  try { j = await fetch(`api/import?filename=${encodeURIComponent(f.name)}${(bare(f) || plan(f)) && unit ? `&unit=${unit}` : ""}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: f }).then(r => r.json()); }
   catch { j = { error: "Fikk ikke sendt fila." }; }
   finally { $("impGo").disabled = false; }
-  if (j.error) return impSay(j.error);
+  if (j.error) { if (/enhet/.test(j.error)) $("impUnitL").hidden = false; return impSay(j.error); }
   impOpen(false);
   const [lx, ly, lz] = j.size_m || [10, 10, 5], m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   aim(async ([x, y]) => {
@@ -660,6 +660,9 @@ function showGround(g) {
 /* a new building's card in «Bygget» */
 function showNew(a) {
   const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+  /* a plan brought in (U3571 S3: DXF, DWG): flat on the ground, its size and its layers, no height or digging */
+  if (a.bim?.plan) return card(esc(a.name), "Tegning i forslaget", rows([["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Lag", String(Object.values(a.bim.classes || {}).reduce((x, y) => x + y, 0))], ["Ligger på", `kote ${kote(a.base_kote)}`]]) +
+    (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + `<p class="src">Innhentet tegning «${esc(a.bim.filename || "plan.dxf")}», lagt flatt over bakken. Kilde: ${/^https?:\/\//.test(a.bim.source || "") ? `<a href="${esc(a.bim.source)}" target="_blank" rel="noopener noreferrer">${esc(a.bim.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a>` : esc(a.bim.source || "ikke oppgitt")}. Lisens: ${esc(a.bim.licence || "ukjent")}. <a href="api/bim/${a.bim.file}/model.ifc" download>Last ned IFC</a></p>`, { kind: "new", id: a.id, label: a.name });
   card(esc(a.name), a.bim?.file ? "Innhentet i forslaget" : "Nytt bygg i forslaget", rows([...(a.use ? [["Bruk", esc(a.use)]] : []), ...(a.storeys ? [["Etasjer", String(a.storeys)]] : []), ...(a.built ? [["Bygget", esc(a.built)]] : []),
     ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`],
     ...(a.ground ? [["Graving", `${num(a.ground.cut_m3)} m³ ut, ${num(a.ground.fill_m3)} m³ fylling`]] : [])]) +

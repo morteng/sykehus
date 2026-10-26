@@ -59,7 +59,7 @@ function bimOf(b) {
     if (!/^[0-9a-f]{64}$/.test(String(b.file)) || b.sha !== b.file) throw new Error("Fila er ikke lastet opp ennå: serveren leser den først");
     const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Fila har ingen form");
     const t = (v, n) => v == null ? undefined : String(v).slice(0, n);
-    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(/^(step|glb|gltf|obj|stl)$/.test(b.format || "") ? { format: b.format } : {}), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
+    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(/^(step|glb|gltf|obj|stl|dxf|dwg)$/.test(b.format || "") ? { format: b.format } : {}), ...(b.format === "dxf" || b.format === "dwg" ? { plan: true } : {}), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
   }
   if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
   if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");
@@ -136,7 +136,7 @@ export function checkDesign(site, e, str) {
       const out = facts(e, str, { kind: "reshape", id });
       if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
       if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");
-      const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]); if (L < 1 || L > 250) throw new Error("Lengden må være mellom 1 og 250 m");
+      const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]), maxL = a.bim?.plan ? 1000 : 250; if (L < 1 || L > maxL) throw new Error(`Lengden må være mellom 1 og ${maxL} m`);
       if (a.shape === "bim") {
         /* a construction's size is its script's: its parameters change it (the server runs it again and sends bim) */
         if (e.bim != null) out.bim = bimOf(e.bim);
@@ -166,7 +166,8 @@ export function checkDesign(site, e, str) {
       const shape = String(e.shape ?? "box"); if (!SHAPES.includes(shape)) throw new Error(`shape er ${SHAPES.join(", ")}`);
       const material = String(e.material ?? "glass"); if (!MATERIALS.includes(material)) throw new Error(`material er ${MATERIALS.join(", ")}`);
       const from = pt(e.from, "from"), to = pt(e.to, "to"), L = Math.hypot(to[0] - from[0], to[1] - from[1]);
-      if (L < 1 || L > 250) throw new Error("Fra from til to må være mellom 1 og 250 m");
+      /* a plan brought in (DXF, DWG) may be a whole quarter's: to 1 km */
+      const maxL = /^(dxf|dwg)$/.test(e.bim?.format || "") ? 1000 : 250; if (L < 1 || L > maxL) throw new Error(`Fra from til to må være mellom 1 og ${maxL} m`);
       const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
       if (out.id) out.id = freeId(out.id, site);
       if (shape === "bim") { out.bim = bimOf(e.bim); Object.assign(out, bimBody(from, to, out.bim.box), w_); return footOf(site, e, out, num); }
@@ -237,6 +238,11 @@ function balconyParts(site, e) {
 export function baseOf(site, e) {
   const { from, to, width: W } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
   const corners = [-h, h].flatMap(s => [from, to].map(p => [p[0] + n[0] * s, p[1] + n[1] * s]));
+  /* a plan brought in (DXF, DWG: flat) lies 5 cm over the highest ground under it, so the ground hides none of it */
+  if (e.bim?.plan && !e.on && e.base_kote == null) {
+    const at = (u, v) => [from[0] + d[0] * u + n[0] * (v - 0.5) * W, from[1] + d[1] * u + n[1] * (v - 0.5) * W], ks = [0, 0.25, 0.5, 0.75, 1];
+    return Math.max(...ks.flatMap(u => ks.map(v => groundAt(site, at(u, v))))) + 0.05;
+  }
   return (e.on ? roofUnder(site, e) : null) ?? e.base_kote ?? Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
 }
 function volumeParts(site, e) {
@@ -331,7 +337,7 @@ export function applyDesign(site, floors, edits) {
   const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e)]);
   if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
   for (const [id, e, { parts, base }] of feet) {
-    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = e.on == null && Math.abs(base - baseOf(site, { ...e, base_kote: undefined })) <= PAD_FAR ? padGround(site, e, base) : null;
+    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = e.on == null && !e.bim?.plan && Math.abs(base - baseOf(site, { ...e, base_kote: undefined })) <= PAD_FAR ? padGround(site, e, base) : null;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
       footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
