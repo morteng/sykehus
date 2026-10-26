@@ -5,6 +5,7 @@
 import { siteBox, siteGrid } from "./public/utm.js";
 import { streetsFrom } from "./public/renderkit/streets.js";
 import { pathRing } from "./public/renderkit/paths2d.js";
+import { wayKind } from "./public/roads.js";
 
 const DAY = 864e5;
 export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKEHUS_STREETS_URL || "https://hagekart.gulden.no", fetchImpl = fetch } = {}) {
@@ -24,12 +25,10 @@ export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKE
      ms for them (a change is not held up by hagekart); the last made are kept */
   const grid = siteGrid(site.origin), toUtm = q => grid.fromLngLat(q);
   let ways = null, waysOf = null;
-  const NAME = p => p.kind === "parking" ? "parkeringsplass" : p.kind === "road" ? (p.type === "adkomst" ? "adkomstvei" : "kjørevei")
-    : p.type === "gangsykkel" ? "gang- og sykkelvei" : p.raise ? "fortau" : p.cross ? "gangfelt" : p.width <= 1.2 ? "sti" : "gangvei";
   function wayRings(osm, nv) {
     return streetsFrom(osm, nv, toUtm).filter(p => ["path", "road", "parking"].includes(p.kind)).map(p => {
       const ring = p.ring ? p.ring.map(toUtm) : pathRing(p.pts.map(toUtm), p.width || 2);
-      return { name: `${NAME(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
+      return { name: `${wayKind(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
     }).filter(w => w.ring.length > 2);
   }
   /* U3527: the named streets and places around (OpenStreetMap's name), each as its points on the site, roads marked:

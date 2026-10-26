@@ -237,8 +237,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     K("wing", "A fact on a wing's card", { wing: WING, field: { type: "string", enum: ["name", "built", "storeys", "use", "construction", "facade", "note"] }, value: { type: "string" } }, ["wing", "field", "value"]),
     K("room", "A room's name, use or area", { storey: STOREY, room: { type: "string", description: "Its code or name" }, at: { ...PT, description: "Its stamp's place [east_m, north_m] from floor_plan: for a room with no code, or one of several with the same name" }, set: { type: "object", properties: { name: { type: "string" }, use: { type: "string" }, area_m2: { type: "number" } }, additionalProperties: false } }, ["storey", "set"]),
     K("note", "A note on the model", { text: { type: "string" }, wing: WING, storey: STOREY, at: PT }, ["text"]),
-    K("demolish", "Tear down: a wing, a building id, a new building's id, a surface's, path's or planting's id (flate-1, sti-2, tre-1: takes it away), or \"alle\" for every hospital building (then restore the ones to keep)", { building: { type: "string" } }, ["building"]),
-    K("restore", "Put back what a demolish took", { building: { type: "string" } }, ["building"]),
+    K("demolish", "Tear down: a wing, a building id, a new building's id, a surface's, path's or planting's id (flate-1, sti-2, tre-1: takes it away), a road section's id around the site (vei-osm-…, vei-nvdb-…, as a selection from the page gives it: takes it away), or \"alle\" for every hospital building (then restore the ones to keep)", { building: { type: "string" }, name: { type: "string", description: "A road section's name, as the selection gives it (vei-… only)" } }, ["building"]),
+    K("restore", "Put back what a demolish took", { building: { type: "string" }, name: { type: "string", description: "A road section's name (vei-… only)" } }, ["building"]),
     K("balconies", "Balconies on a wing's facades facing side (within 45°)", { wing: WING, side: { type: "string", enum: ["N", "Ø", "S", "V"] }, from_storey: STOREY, to_storey: STOREY, depth: { type: "number", minimum: 0.8, maximum: 4, description: "m out, default 1.8" }, bay: { type: "number", description: "m wide each, else along the whole wall" }, gap: { type: "number", description: "m between bays, default 0.6" }, railing: { type: "string", enum: ["glass", "steel", "concrete"] } }, ["wing", "side"]),
     K("volume", "A new building or structure over its middle or ridge line from -> to", { name: { type: "string" }, shape: SHAPE, from: PT, to: PT, width: { type: "number", minimum: 1, maximum: 120, description: "m across the line" }, height: { type: "number", minimum: 1, maximum: 80, description: "m from its foot to the top" },
       wall_height: { type: "number", description: "gable, lean_to: the low eaves" }, high_side: { type: "string", enum: ["left", "right"], description: "lean_to: the high side; terraces: the back, where the steps are flush (walking from -> to)" },
@@ -261,9 +261,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     K("fell", "Take down today's trees inside a ring", { ring: POINTS }, ["ring"]),
   ] };
   /* what a draft builds and takes away, without the geometry: for the agent to report back */
-  const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
+  const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape || m.site.roads_removed) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
     demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
     built: (m.site.added || []).map(({ parts, ...a }) => slim(a)),
+    ...(m.site.roads_removed ? { roads_removed: m.site.roads_removed.map(r => r.name || "en veistrekning") } : {}),
     ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g), planted: m.site.planted, plantings: (m.site.plantings || []).map(({ why, ...g }) => g), trees_felled: m.site.felled } : {}) } : null;
   const isVid = id => /^v.{8}$/.test(String(id ?? ""));
   /* the version the person has open on the website (assistant.mjs pages.open), else their work; none signed out */

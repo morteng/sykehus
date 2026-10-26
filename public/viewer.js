@@ -19,7 +19,7 @@ import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
 
-export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality() }) {
+export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality(), walkKeys = () => true }) {
   const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
   /* its own T: setTerrain swaps in the after's grid (U3566, a building's pad), base stays the before's lowest */
   const T = { ...site.terrain }, base = Math.min(...T.z.filter(v => v != null));
@@ -773,9 +773,68 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     if (!drag || !pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2) { const p = pinchOf(); if (drag.pinch) { O.dist = Math.max(30, Math.min(1200, O.dist * drag.pinch.d / p.d)); pan(p.x - drag.pinch.x, p.y - drag.pinch.y); } drag.pinch = p; drag.moved += 10; place(); return; }
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
-    if (drag.pan || mode !== "3d") pan(dx, dy); else { O.yaw -= dx * 0.006; O.pitch = Math.max(0.08, Math.min(1.53, O.pitch + dy * 0.005)); }
+    if (drag.pan || mode !== "3d") pan(dx, dy); else if (O.eye) eyeTurn(dx, dy); else { O.yaw -= dx * 0.006; O.pitch = Math.max(0.08, Math.min(1.53, O.pitch + dy * 0.005)); }
     place();
   });
+  /* U3605 (Morten 2026-10-26 10:00Z «in gateplan mode we should have wasd navigation too (with mouselook correct
+     way)»): in «Gateplan» the eye stays where it stands and the view turns, as in a game: a drag right turns right, a
+     drag up looks up; W/S (or ↑/↓) walk along the way one looks, A/D (or ←/→) step sideways, Shift faster. The eye is
+     the centre plus dist toward yaw (place()), so a turn moves the centre round the eye, and a look up lifts it. */
+  const eyeAt = () => { const x = O.x + O.dist * Math.sin(O.yaw), y = O.y - O.dist * Math.cos(O.yaw), h = ground(x, y) - base + EYE_M; return { x, y, h, look: Math.atan2(O.h - h, O.dist) }; };
+  function eyeTo(x, y, yaw, look) {
+    const h = ground(x, y) - base + EYE_M;
+    O.yaw = yaw; O.x = x - O.dist * Math.sin(yaw); O.y = y + O.dist * Math.cos(yaw); O.h = h + O.dist * Math.tan(look);
+  }
+  function eyeTurn(dx, dy) { const e = eyeAt(); eyeTo(e.x, e.y, O.yaw - dx * 0.004, Math.max(-1.2, Math.min(1.2, e.look - dy * 0.004))); }
+  function eyeWalk(fwd, side) {   // metres along the way one looks, and to the right of it, on the ground
+    const e = eyeAt(), s = Math.sin(O.yaw), c = Math.cos(O.yaw);
+    eyeTo(e.x - s * fwd + c * side, e.y + c * fwd + s * side, O.yaw, e.look);
+  }
+  const WALK = { KeyW: [1, 0], ArrowUp: [1, 0], KeyS: [-1, 0], ArrowDown: [-1, 0], KeyA: [0, -1], ArrowLeft: [0, -1], KeyD: [0, 1], ArrowRight: [0, 1] };
+  const held = new Set(); let walkT = 0, fast = false;
+  const typing = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  function walkStep(now) {
+    if (!held.size || !(mode === "3d" && O.eye)) { held.clear(); walkT = 0; return; }
+    const dt = walkT ? Math.min(0.1, (now - walkT) / 1000) : 1 / 60; walkT = now;
+    let f = 0, r = 0; for (const k of held) { f += WALK[k][0]; r += WALK[k][1]; }
+    const v = (fast ? 18 : 6) * dt, n = Math.hypot(f, r) || 1;
+    if (f || r) { eyeWalk(f / n * v, r / n * v); place(); }
+    requestAnimationFrame(walkStep);
+  }
+  addEventListener("keydown", e => {
+    fast = e.shiftKey;
+    if (!WALK[e.code] || !(mode === "3d" && O.eye) || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || typing(e.target) || typing(document.activeElement) || !walkKeys()) return;
+    e.preventDefault(); hand();
+    if (!held.size) { held.add(e.code); walkT = 0; requestAnimationFrame(walkStep); } else held.add(e.code);
+  });
+  addEventListener("keyup", e => { fast = e.shiftKey; held.delete(e.code); });
+  /* U3606 (Morten 10:01Z «the google maps way of getting to gateplan mode by dropping a small person icon»): where a
+     person dropped at a screen point would stand: on the ground, a road or a lawn; not on a roof, a tree or past the
+     model. A ring on the ground shows it while the person is dragged. */
+  function standable(cx, cy) {
+    const r = el.getBoundingClientRect(), rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+    const h = rc.intersectObjects(scene.children, true).find(i => i.object.isMesh && shown(i.object) && !i.object.material?.transparent && !i.object.userData.standRing);
+    if (!h) return { ok: false, why: "Utenfor modellen: slipp på bakken." };
+    const x = h.point.x, y = -h.point.z;
+    if (x < T.x0 || x > T.x0 + T.w * T.res || y > T.y1 || y < T.y1 - T.h * T.res) return { ok: false, at: [x, y], why: "Utenfor modellen: slipp på bakken." };
+    if (h.point.y - (ground(x, y) - base) > 1.2) return { ok: false, at: [x, y], why: "Ikke på et tak eller i et tre: slipp på bakken, en vei eller en plen." };
+    return { ok: true, at: [x, y] };
+  }
+  const standRing = new THREE.Mesh(new THREE.RingGeometry(0.75, 1, 40), new THREE.MeshBasicMaterial({ color: "#2e9d5b", depthTest: false, transparent: true, side: THREE.DoubleSide }));
+  standRing.rotation.x = -Math.PI / 2; standRing.renderOrder = 16; standRing.visible = false; standRing.userData.standRing = true; scene.add(standRing);
+  function ringAt(s) {
+    standRing.visible = !!s?.at; if (s?.at) { const v = P(s.at, ground(...s.at) + 0.2), k = Math.max(1.5, (mode === "plan" ? O.dist * 0.72 / (container.clientHeight || 400) : O.dist * 0.0016) * 18); standRing.position.copy(v); standRing.scale.setScalar(k); standRing.material.color.set(s.ok ? "#2e9d5b" : "#c8102e"); }
+    dirty = true;
+  }
+  /* to Gateplan standing there: the same eye as «Gateplan» (place(), eyeTo), looking level, the way the view looked
+     (in the plan: north) */
+  function standAt(at, yaw = mode === "plan" ? 0 : O.yaw) {
+    hand(); land(); ringAt(null);
+    if (mode !== "3d") setMode("3d");
+    O.eye = true; O.dist = 40; eyeTo(at[0], at[1], yaw, 0); place();
+  }
+  addEventListener("blur", () => held.clear());
   const up = e => { pts.delete(e.pointerId); if (drag && drag.moved < 6 && !pts.size) pick(e); if (!pts.size) drag = null; };
   el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("contextmenu", e => e.preventDefault());
   /* a trackpad as in Maps: two fingers move the view the way the fingers go, a pinch zooms. Chrome and Firefox send
@@ -819,7 +878,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const ray = new THREE.Raycaster(); let selected = null;
   function pick(e) {
     const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-    const hit = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...addedGroups.values(), ...groundMeshes], true).find(h => h.object.isMesh); select(hit?.object.userData.id || null);
+    const hit = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...addedGroups.values(), ...groundMeshes, ...shownRoads()], true).find(h => h.object.isMesh); select(hit?.object.userData.id || null);
     onPick(selected, { shift: e.shiftKey, x: e.clientX, y: e.clientY, at: hit ? [hit.point.x, -hit.point.z, hit.point.y + base] : null });   // where on it, for a room or a facade
   }
   /* a hit's thing: its id, or its parent's (pm 23:17Z: the first click on the pool took nothing), and only if it shows */
@@ -827,7 +886,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const shown = o => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
   /* more than one building lit, for a selection of several (app.js «Valgt») */
   let marked = [];
-  const groupOf = id => meshes.get(id) || addedGroups.get(id) || groundMeshes.find(m => m.userData.id === id);
+  const groupOf = id => meshes.get(id) || addedGroups.get(id) || groundMeshes.find(m => m.userData.id === id) || roadGroups.get(id);
+  /* the road sections around (streets.js, U3543): each way a group, picked like a path, its own materials to light up alone */
+  let roadGroups = new Map();
+  const shownRoads = () => [...roadGroups.values()].filter(g => g.visible);
+  function setRoads(map) { roadGroups = map; for (const g of map.values()) g.traverse(o => { if (o.isMesh && o.material) o.material = o.material.clone(); }); dirty = true; }
   /* a planting picked or under the pointer: a ring on the ground round each of its trees (they share their materials) */
   const treeRings = new THREE.Group(); scene.add(treeRings);
   function ringTrees(picked, hov) {
@@ -843,13 +906,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
      at site zoom), as wide as about 3 px at the distance the view has, drawn again when the zoom changes much */
   const groundRims = new THREE.Group(); scene.add(groundRims); let rimFor = null;
   function rimGround(force) {
-    const picked = [...marked, selected].filter(id => /^(flate|sti)-/.test(id || "")), hov = hovered.filter(id => /^(flate|sti)-/.test(id));
+    const picked = [...marked, selected].filter(id => /^(flate|sti|vei)-/.test(id || "")), hov = hovered.filter(id => /^(flate|sti|vei)-/.test(id));
     const key = picked.join() + "|" + hov.join(), w = Math.max(0.25, O.dist * 0.0035);
     if (!force && rimFor && rimFor.key === key && Math.abs(Math.log(rimFor.w / w)) < 0.25) return;
     rimFor = { key, w };
     for (const o of groundRims.children) { o.geometry.dispose(); o.material.dispose(); } groundRims.clear();
     for (const [ids, color] of [[hov, "#fff6d6"], [picked, "#ffcf33"]]) for (const id of ids) {
-      const m = groundMeshes.find(x => x.userData.id === id); if (!m) continue;
+      const m = groundMeshes.find(x => x.userData.id === id) || roadGroups.get(id); if (!m?.userData.ring) continue;
       const r = m.userData.ring, pos = [], step = Math.max(1, T.res);
       for (let i = 0; i < r.length; i++) {
         const a = r[i], b = r[(i + 1) % r.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
@@ -924,6 +987,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     relabel(names) { for (const t of wingTags) { const n = names.get(t.id); if (n && t.el.textContent !== n) { t.el.textContent = n; t.size = null; } } dirty = true; },
     /* the yellow band round a picked surface or path, out of the way while its points are dragged */
     bands(on) { if (groundRims.visible !== on) { groundRims.visible = on; dirty = true; } },
+    setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
     setSun, select, setGone, setTerrain, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); O.eye = false; glide(home); },
@@ -961,7 +1025,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     /* what a pointer at cx, cy is on: a building's or a new building's id, and the point [east, north, kote] */
     hitAt(cx, cy) {
       const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
-      const h = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes], true).find(x => x.object.isMesh && shown(x.object) && idOf(x.object));
+      const h = ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes, ...shownRoads()], true).find(x => x.object.isMesh && shown(x.object) && idOf(x.object));
       /* a planted tree in front of that: the ray within most of its crown of its trunk's line (U3569) */
       let tree = null; const near = new THREE.Vector3();
       for (const t of treeList) if (t[6]) {

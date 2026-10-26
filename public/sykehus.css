@@ -43,6 +43,10 @@
 .nz .zoom2 { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-sm); }
 .nz .zoom2 button { width: 48px; height: 48px; min-height: 0; border: 0; border-radius: 0; font-size: 24px; line-height: 1; padding: 0; background: var(--panel); color: var(--text); }
 .nz .zoom2 button + button { border-top: 1px solid var(--border); }
+/* U3606: the person dropped where one will stand in «Gateplan»; dragged as a ghost over the view */
+.nz .zoom2 .peg svg { width: 22px; height: 22px; fill: #e8a317; stroke: #7a5200; stroke-width: 1; }
+.nz .zoom2 .peg[aria-pressed=true] { background: var(--accent-panel); }
+.peg-ghost { position: fixed; z-index: 1000; width: 28px; height: 28px; margin: -26px 0 0 -14px; pointer-events: none; fill: #e8a317; stroke: #7a5200; stroke-width: 1; }
 
 /* S6 the storey strip (the kit's g-levels): its place at the left edge, centred */
 #levels { position: absolute; z-index: var(--z-canvas); left: 12px; top: 12px; bottom: 12px; display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
@@ -277,6 +281,15 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .imp-pop .imp-say { margin: 0; color: var(--text); }
 .imp-pop button { justify-self: start; padding: 7px 12px; font: inherit; color: var(--on-accent, #fff); background: var(--accent); border: 0; border-radius: var(--radius); cursor: pointer; }
 .imp-pop button:disabled { opacity: .6; cursor: progress; }
+/* «Gjengi» (U3526): the «Hent fil» pop's look, with the pictures of the open work under it */
+.gj-pop { width: min(340px, calc(100vw - 132px)); max-height: min(70vh, 640px); overflow: auto; }
+.gj-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.gj-list:empty { display: none; }
+.gj-list img { display: block; width: 100%; border-radius: var(--radius); border: 1px solid var(--border); }
+.gj-r { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-top: 4px; }
+.gj-r small { color: var(--muted); }
+.gj-pop .gj-fav { padding: 2px 8px; font-size: 1.1em; line-height: 1.2; color: var(--text); background: transparent; border: 1px solid var(--border); }
+.gj-pop .gj-fav[aria-pressed="true"] { color: #b8860b; }
 .views-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px var(--sp-3); font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); cursor: pointer; }
 .views-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 .views-btn:hover, .views-btn[aria-expanded="true"] { border-color: var(--accent-panel-edge); }
@@ -375,3 +388,16 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .tour-acts button[hidden] { display: none; }
 .tour-acts .go { color: var(--on-accent, #fff); background: var(--accent); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .tour-hole, .tour-card { transition: none; } }
+/* U3607 (Morten 2026-10-26 10:04Z): «Nytt bygg» and «Hent fil» live in «Bygg»: first when nothing is picked, under
+   the card when something is; the bar over the model keeps the ways of looking only */
+#p-selected:not([hidden]) { display: flex; flex-direction: column; }
+#p-selected:has(#info:not([hidden])) .bygg-acts { order: 2; margin-top: var(--sp-3); }
+.bygg-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-start; margin-bottom: var(--sp-3); }
+.bygg-acts .tgl { min-height: var(--tap); display: inline-flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3); border-radius: var(--radius-lg); font-size: var(--fs-md); }
+.bygg-acts .tgl svg { width: 18px; height: 18px; }
+.bygg-acts .tgl[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
+.bygg-acts .imp { position: static; display: contents; }
+.bygg-acts .imp-pop { position: static; width: 100%; box-shadow: none; }
+/* «Gjengi» sits in the header now: its pop opens from the right edge */
+header .gj .gj-pop { left: auto; right: 0; z-index: 30; }
+header .gj .ab-ic[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); }

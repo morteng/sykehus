@@ -12,6 +12,7 @@
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
   /api/onsker             wishes for what it cannot do yet (wishes.mjs)
+  /api/gjengi             «Gjengi»: a view made a realistic picture by an image model, within the month's cap (gjengi.mjs)
 
   GET  /api/bruk          calls a day per login and per (hashed) address, for pm's report (the box only)
   /.well-known/oauth-*, /oauth/*   the sign-in for chat apps (auth.mjs)
@@ -31,6 +32,7 @@ import { createAssistant } from "./assistant.mjs";
 import { createStreets } from "./gater.mjs";
 import { createWishes } from "./wishes.mjs";
 import { importFile, MAX_IMPORT } from "./bim.mjs";
+import { createRenderings } from "./gjengi.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
@@ -92,6 +94,7 @@ const pages = { open: new Map(), show: () => false };
 const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
 const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 const streets = createStreets({ site, SECURITY });
+const gjengi = createRenderings({ SECURITY, readJson, login, versions });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
 
 createServer(async (req, res) => {
   try {
@@ -105,6 +108,7 @@ createServer(async (req, res) => {
     if (path === "/api/endring") return mcp.handleChange(req, res);
     if (path === "/api/ifc") return mcp.handleIfc(req, res);
     if (path === "/api/import") return await handleImport(req, res);
+    if (await gjengi?.route(req, res, path, url)) return;
     if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));

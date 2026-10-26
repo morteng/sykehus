@@ -30,6 +30,13 @@
     </div>
   </div>
   <span class="sp"></span>
+  <span class="imp gj"><button type="button" class="ab-ic" id="mgj" aria-pressed="false" aria-expanded="false" aria-controls="gjPop" aria-label="Gjengi" title="Gjengi: gjør det du ser nå til et realistisk bilde. Prisen står før du lager det"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg></button>
+        <form class="imp-pop gj-pop" id="gjPop" hidden>
+          <p class="imp-say" id="gjSay">Henter prisen …</p>
+          <label>Ønske (valgfritt)<input id="gjWish" maxlength="300" placeholder="kveldslys, vinter, tegl på det nye bygget …" autocomplete="off"></label>
+          <button type="submit" id="gjGo" disabled>Lag bilde</button>
+          <ul class="gj-list" id="gjList"></ul>
+        </form></span>
   <button class="ab-ic" id="tourBtn" title="Omvisning: en kort gjennomgang av siden" aria-label="Omvisning"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r=".6"/></svg></button>
   <button class="ab-ic" id="print" hidden title="Skriv ut det du ser, med målestokk og kilder" aria-label="Skriv ut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/></svg></button>
   <a class="ab-ic" href="data/sykehus.ifc" download="gamle-drammen-sykehus.ifc" title="Last ned modellen (IFC, 12 MB) til arkitektprogrammet: fløyer, etasjer, vegger, dekker, vinduer og dører, med kilder" aria-label="Last ned modellen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19h14"/></svg></a>
@@ -42,23 +49,12 @@
     <div class="loading" id="loading" role="status"><span class="spin" aria-hidden="true"></span>Laster modellen av sykehuset …</div>
     <div class="levels" id="levels"></div>
     <div class="vt">
-      <span class="seg2" role="group" aria-label="Visning"><button type="button" id="m3d" aria-pressed="true">3D</button><button type="button" id="meye" aria-pressed="false" title="Som en som står på bakken: øyet 1,7 m over terrenget. Dra for å gå rundt, rull for å gå nærmere">Gateplan</button><button type="button" id="mplan" aria-pressed="false">Plan</button></span>
+      <span class="seg2" role="group" aria-label="Visning"><button type="button" id="m3d" aria-pressed="true">3D</button><button type="button" id="meye" aria-pressed="false" title="Som en som står på bakken: øyet 1,7 m over terrenget. Dra for å se deg rundt, W A S D eller piltastene for å gå (Shift går fortere), rull for å gå nærmere">Gateplan</button><button type="button" id="mplan" aria-pressed="false">Plan</button></span>
       <button type="button" class="tgl" id="names" aria-pressed="false" title="Vis eller skjul navnene på fløyene og rommene (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10l4 5-4 5H4z"/></svg>Navn</button>
-      <button type="button" class="tgl" id="mnew" aria-pressed="false" title="Sett et nytt bygg på tomta: trykk der det skal stå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>Nytt bygg</button>
-      <span class="imp"><button type="button" class="tgl" id="mimp" aria-pressed="false" aria-expanded="false" aria-controls="impPop" title="Sett en modell fra en produsent på tomta (et drivhus, et vindu: IFC, STEP, glTF, OBJ, STL), eller en plantegning (DXF, DWG): oppgi kilden og lisensen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>Hent fil</button>
-        <form class="imp-pop" id="impPop" hidden>
-          <label>Fil: IFC, STEP, glTF, OBJ, STL, eller en tegning i DXF eller DWG (høyst 100 MB)<input type="file" id="impFile" accept=".ifc,.step,.stp,.glb,.gltf,.obj,.stl,.dxf,.dwg" required></label>
-          <label id="impUnitL" hidden>Tegnet i (fila sier det ikke)<select id="impUnit"><option value="">Velg enhet</option><option value="m">meter</option><option value="cm">centimeter</option><option value="mm">millimeter</option><option value="in">tommer</option><option value="ft">fot</option></select></label>
-          <label>Hvor er den fra?<input id="impSrc" maxlength="300" placeholder="Produsentens side, lenke" autocomplete="off"></label>
-          <label>Lisens<input id="impLic" maxlength="120" list="impLics" required placeholder="Det produsenten sier om bruk" autocomplete="off"></label>
-          <datalist id="impLics"><option value="Fri bruk fra produsenten"><option value="CC BY 4.0"><option value="CC0"><option value="Ukjent"></datalist>
-          <p class="imp-say" id="impSay" hidden></p>
-          <button type="submit" id="impGo">Sett på tomta</button>
-        </form></span>
     </div>
     <div class="nz">
       <div class="north" id="north" title="Nord"><svg viewBox="-20 -20 40 40" aria-label="Nordpil"><path d="M0 -8 L7 17 L0 12 L-7 17 Z" fill="currentColor"/><text x="0" y="-10" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">N</text></svg></div>
-      <div class="zoom2"><button type="button" id="zin" title="Zoom inn (+)" aria-label="Zoom inn">+</button><button type="button" id="zout" title="Zoom ut (−)" aria-label="Zoom ut">−</button><button type="button" id="zhome" title="Tilbake til startvisningen (0)" aria-label="Tilbake til startvisningen">⌂</button></div>
+      <div class="zoom2"><button type="button" id="zin" title="Zoom inn (+)" aria-label="Zoom inn">+</button><button type="button" id="zout" title="Zoom ut (−)" aria-label="Zoom ut">−</button><button type="button" id="zhome" title="Tilbake til startvisningen (0)" aria-label="Tilbake til startvisningen">⌂</button><button type="button" id="peg" class="peg" title="Gateplan herfra: dra mannen dit du vil stå, eller trykk på ham og så på stedet" aria-label="Gateplan: velg hvor du vil stå"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.6"/><path d="M8.5 10.5h7l-1 6h-1.4l-.6 5h-1l-.6-5H9.5z"/></svg></button></div>
     </div>
     <div id="scale"><div class="ticks"><i></i><i></i><i></i><i></i></div><div class="nums"><span>0</span><span id="scaleEnd"></span></div></div>
     <!-- Fab's bottom stack: Anton's newest reply and a waiting question over the pill, while the Anton tab is shut -->
@@ -83,7 +79,7 @@
     <button type="button" class="grab" id="grab" aria-label="Panelets høyde" aria-controls="right"><i></i></button>
     <div class="peekhead" id="peekhead"></div>
     <nav class="dock" id="dock" data-tabs="4" role="tablist" aria-label="Panel">
-      <button type="button" role="tab" data-tab="selected" id="tab-selected" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>Bygget</button>
+      <button type="button" role="tab" data-tab="selected" id="tab-selected" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>Bygg</button>
       <button type="button" role="tab" data-tab="chat" id="tab-chat" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z"/></svg>Anton<span class="dbadge" id="b-chat" hidden></span></button>
       <button type="button" role="tab" data-tab="changes" id="tab-changes" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>Forslag<span class="dbadge" id="b-changes" hidden></span></button>
       <button type="button" role="tab" data-tab="wish" id="tab-wish" aria-selected="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z"/></svg>Ønsker</button>
@@ -91,6 +87,19 @@
     <div class="side-body">
       <p class="sel-empty side-wait" id="sideWait">Laster …</p>
       <section class="tabp" id="p-selected" data-tab="selected" role="tabpanel" aria-labelledby="tab-selected" hidden>
+        <div class="bygg-acts" id="byggActs">
+          <button type="button" class="tgl" id="mnew" aria-pressed="false" title="Sett et nytt bygg på tomta: trykk der det skal stå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>Nytt bygg</button>
+          <span class="imp"><button type="button" class="tgl" id="mimp" aria-pressed="false" aria-expanded="false" aria-controls="impPop" title="Sett en modell fra en produsent på tomta (et drivhus, et vindu: IFC, STEP, glTF, OBJ, STL), eller en plantegning (DXF, DWG): oppgi kilden og lisensen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>Hent fil</button>
+            <form class="imp-pop" id="impPop" hidden>
+              <label>Fil: IFC, STEP, glTF, OBJ, STL, eller en tegning i DXF eller DWG (høyst 100 MB)<input type="file" id="impFile" accept=".ifc,.step,.stp,.glb,.gltf,.obj,.stl,.dxf,.dwg" required></label>
+              <label id="impUnitL" hidden>Tegnet i (fila sier det ikke)<select id="impUnit"><option value="">Velg enhet</option><option value="m">meter</option><option value="cm">centimeter</option><option value="mm">millimeter</option><option value="in">tommer</option><option value="ft">fot</option></select></label>
+              <label>Hvor er den fra?<input id="impSrc" maxlength="300" placeholder="Produsentens side, lenke" autocomplete="off"></label>
+              <label>Lisens<input id="impLic" maxlength="120" list="impLics" required placeholder="Det produsenten sier om bruk" autocomplete="off"></label>
+              <datalist id="impLics"><option value="Fri bruk fra produsenten"><option value="CC BY 4.0"><option value="CC0"><option value="Ukjent"></datalist>
+              <p class="imp-say" id="impSay" hidden></p>
+              <button type="submit" id="impGo">Sett på tomta</button>
+            </form></span>
+        </div>
         <p class="sel-empty">Trykk på en fløy eller velg en etasje.</p>
         <section class="objcard" id="info" hidden></section>
       </section>
@@ -120,6 +129,6 @@
 <div id="sheet"></div>
 <!-- ?v: once, past what browsers held from before the edge sent no-cache (2026-10-25) -->
 <script src="early.js" defer></script>
-<script type="module" src="app.js?v=20261026o"></script>
+<script type="module" src="app.js?v=20261026r"></script>
 </body>
 </html>

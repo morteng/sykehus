@@ -31,6 +31,7 @@
 
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
 import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./landscape.js";
+import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { fitOf, surfaceFit, groundAt, inRing } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
@@ -131,6 +132,7 @@ export function checkDesign(site, e, str) {
     case "demolish": case "restore": {
       const k = String(e.building ?? "").trim();
       if (e.kind === "demolish" && GROUND_ID.test(k)) return checkGroundEdit(site, e, str);   // a surface or a path, by its id
+      if (ROAD_ID.test(k)) return checkRoadEdit(e, str);   // a road section, by its way's id (U3543)
       if (!(e.kind === "demolish" && (site.added || []).some(a => a.id === k))) targets(site, e.building);   // a new building, by its id, goes the same way
       return { kind: e.kind, building: k, ...w_ };
     }
@@ -470,9 +472,11 @@ const round1 = v => Math.round(v * 10) / 10;
 /* the after's changes laid over the model (copies, made by applyEdits): what is taken away goes, what is built is added */
 export function applyDesign(site, floors, edits) {
   applyLandscape(site, edits);
+  applyRoads(site, edits);
   const gone = new Set(), added = [], vols = new Map();   // vols: the new buildings, by id, as their edits leave them
   for (const e of edits) {
     if ((e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id)) continue;   // landscape.js's
+    if ((e.kind === "demolish" || e.kind === "restore") && ROAD_ID.test(e.building)) continue;   // roads.js's
     if (e.kind === "demolish" && vols.has(e.building)) vols.delete(e.building);
     else if (e.kind === "demolish") for (const id of targets(site, e.building)) gone.add(id);
     else if (e.kind === "restore") for (const id of targets(site, e.building)) gone.delete(id);

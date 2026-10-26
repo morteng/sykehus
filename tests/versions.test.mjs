@@ -107,6 +107,13 @@ test("«Riv» from the page: a new draft, one more in it, «Angre», and a versi
   const v = (await call("new_version", { title: "Riv fra siden" }, morten)).out;
   assert.equal((await post({ version: v.version, edits: [{ kind: "demolish", building: "Vestfløy" }] })).status, 400);   // not signed in on the page
 });
+test("«Fjern veistykket» from the page (U3543): the road's id and name go in, the after says it, «Angre» takes it out", async () => {
+  const a = await post({ edits: [{ kind: "demolish", building: "vei-osm-24365596", name: "Welhavens gate", why: "fjernet på siden" }] });
+  assert.equal(a.status, 200, JSON.stringify(a.j)); assert.equal(a.j.changes_in_draft, 1);
+  assert.deepEqual(a.j.after.roads_removed, ["Welhavens gate"]);
+  const u = await post({ draft: a.j.draft, undo: 1 });
+  assert.equal(u.status, 200); assert.equal(u.j.changes_in_draft, 0); assert.equal(u.j.removed.building, "vei-osm-24365596");
+});
 test("/api/ifc: the draft's IFC has the torn-down wing taken out, nothing left pointing at it", async () => {
   const a = await post({ edits: [{ kind: "demolish", building: "Østfløy" }] });
   const r = await fetch(`${O}/api/ifc?utkast=${a.j.draft}`); assert.equal(r.status, 200);

@@ -5,7 +5,8 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
-import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025f";
+import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026r";
+import { ROAD_ID } from "./roads.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
@@ -77,8 +78,9 @@ const toCard = () => panel.show("selected", { quiet: true });   // a tap on the 
 
 const viewer = createViewer({
   container: $("view"), site: shown.site, floors: shown.floors,
+  walkKeys: () => { try { return !series; } catch { return true; } },   // a shot series has the arrow keys (U3605)
   onPick: (id, how) => {
-    if (placing) { const at = viewer.hit(how.x, how.y); if (at) placing(at); }   // «Nytt bygg»: where on the ground; a pick is the picker's (renderkit select.js, below)
+    if (placing) { const at = viewer.hit(how.x, how.y); if (at) placing(at, how); }   // «Nytt bygg»: where on the ground; a pick is the picker's (renderkit select.js, below)
   },
   onView: v => {
     $("north").querySelector("svg").style.transform = `rotate(${-v.north * 180 / Math.PI}deg)`;
@@ -95,11 +97,13 @@ function paint(s = site, f = floors) {
   showingBefore = s !== site;
   viewer.setTerrain(s.terrain?.z); viewer.setGone((s.demolished || []).map(d => d.id)); viewer.setAdded(s.added || []); viewer.setLandscape(s.landscape || []); viewer.setTrees(s.trees || []); viewer.setLevels(s.wings || []); viewer.setRooms(f);
   viewer.relabel(new Map(s.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
+  streetsOn?.setRemoved((s.roads_removed || []).map(r => r.id));   // the road sections the after takes away (U3543)
   if (!showingBefore) dispatchEvent(new CustomEvent("sykehus:painted"));   // the build tools take the new building's new shapes
 }
 /* U3527: the before painted in place for a shot's «før», the after again for its «etter» or anything else */
 let showingBefore = false;
 const paintEra = era => { if (era === "før") { if (!showingBefore) paint(site0, floors0); } else if (showingBefore) paint(); };
+let streetsOn = null;   // the streets around, once they are drawn (streets.js)
 let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)
 paint();
 /* the model is up: the first load's «Laster» goes (pm 21:20Z: a grey map and an empty panel for some seconds, no sign) */
@@ -213,12 +217,47 @@ let names = false; try { names = localStorage.getItem("sykehus-navn-valgt") === 
 function setNames(on, keep = true) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); if (keep) try { localStorage.setItem("sykehus-navn-valgt", on ? "på" : "av"); } catch { } }
 setNames(names, false); $("names").onclick = () => setNames(!names);
 $("m3d").onclick = () => { setMode("3d"); viewer.eye(false); pressMode(); }; $("mplan").onclick = () => setMode("plan");
-$("meye").onclick = () => { setMode("3d"); viewer.eye(true); pressMode(); };
+/* U3605: in «Gateplan» the keys are said once each time one goes there (not on a phone, which has no keys) */
+const EYE_KEYS = "Gateplan: dra for å se deg rundt · W A S D eller piltastene for å gå · Shift går fortere · rull for å gå nærmere";
+const eyeSay = () => { if (!matchMedia("(pointer: coarse)").matches) toast(EYE_KEYS); };
+$("meye").onclick = () => { setMode("3d"); viewer.eye(true); pressMode(); eyeSay(); };
+/* U3606: the person by the zoom: dragged onto the model, a ring shows where it lands, and a drop stands there in
+   «Gateplan»; a press without a drag (a finger, the keyboard) waits for a tap on the spot */
+{
+  const peg = $("peg"), say = r => toast(r.why);
+  const go = r => { if (!r.ok) return say(r); viewer.standAt(r.at); pressMode(); eyeSay(); };
+  let drag = null;
+  peg.addEventListener("pointerdown", e => {
+    if (e.button) return; e.preventDefault(); peg.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, moved: false, ghost: null, last: null };
+  });
+  peg.addEventListener("pointermove", e => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+    if (!drag.moved) { drag.moved = true; drag.ghost = Object.assign(document.createElementNS("http://www.w3.org/2000/svg", "svg"), {}); drag.ghost.setAttribute("viewBox", "0 0 24 24"); drag.ghost.setAttribute("class", "peg-ghost"); drag.ghost.innerHTML = peg.querySelector("svg").innerHTML; document.body.append(drag.ghost); }
+    drag.ghost.style.left = e.clientX + "px"; drag.ghost.style.top = e.clientY + "px";
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("#view");
+    drag.last = over ? viewer.standable(e.clientX, e.clientY) : null; viewer.ringAt(drag.last);
+  });
+  const end = e => {
+    if (!drag) return; const d = drag; drag = null; d.ghost?.remove(); viewer.ringAt(null);
+    if (!d.moved) return arm();
+    if (e.type === "pointerup" && d.last) go(d.last);
+  };
+  peg.addEventListener("pointerup", end); peg.addEventListener("pointercancel", end);
+  peg.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); arm(); } });
+  function arm() {
+    if (placing) { placing = null; peg.setAttribute("aria-pressed", "false"); $("toast")?.remove(); return; }
+    peg.setAttribute("aria-pressed", "true");
+    placing = (at, how) => { placing = null; peg.setAttribute("aria-pressed", "false"); $("toast")?.remove(); go(viewer.standable(how.x, how.y)); };
+    toast("Trykk der du vil stå i gateplan.", { label: "Avbryt", run: () => { placing = null; peg.setAttribute("aria-pressed", "false"); $("toast")?.remove(); } });
+  }
+}
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5); $("zhome").onclick = () => viewer.reset();
 /* the keys: + and − zoom, 0 the view as it opened (⌂), ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
    card and the picks away */
 addEventListener("keydown", e => {
-  if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.target.closest?.(".g-levels")) return;
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.target.closest?.(".g-levels")) return;
   if (e.key === "n" || e.key === "N") setNames(!names);
   else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
@@ -316,9 +355,11 @@ const IC = {
   ny: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>',
   ed: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
   ute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-6"/><path d="M12 3l5 8H7z"/><path d="M12 8l6 8H6z"/></svg>',
+  vei: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3L5 21M16 3l3 18"/><path d="M12 5v3M12 11v3M12 17v2"/></svg>',
   note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v12l-4 4H5z"/><path d="M8 9h8M8 13h5"/></svg>',
 };
 const GROUPS = [
+  { k: "vei", name: "Veier fjernet", of: e => e.kind === "demolish" && ROAD_ID.test(e.building), tip: "Legg veistykket tilbake" },
   { k: "riv", name: "Revet", of: e => e.kind === "demolish", tip: "Sett opp igjen" },
   { k: "keep", name: "Beholdt", of: e => e.kind === "restore", tip: "Ta ut igjen" },
   { k: "ny", name: "Nye bygg", of: e => e.kind === "volume", tip: "Ta bort igjen" },
@@ -383,6 +424,7 @@ function nameOf(id) {
   if (id === "alle") return "Alle sykehusbyggene";
   const low = String(id).toLowerCase(), w = (site0.wings || []).find(x => x.id === id || x.name.toLowerCase() === low); if (w) return w.name;   // Anton names wings too
   const a = draft?.edits?.findLast(x => x.id === id && (x.kind === "volume" || x.kind === "reshape") && x.name); if (a) return a.name;
+  if (ROAD_ID.test(id)) { const e = draft?.edits?.findLast(x => x.building === id && x.name); return e ? e.name : "Et veistykke"; }   // a road section (U3543)
   if (/^(flate|sti|tre)-\d+$/.test(id)) { const g = [...(site.landscape || []), ...(site.plantings || [])].find(x => x.id === id); return g ? groundName(g) : id.startsWith("sti") ? "En sti" : id.startsWith("tre") ? "Trær" : "En flate"; }   // a surface or a path (U3569)
   const b = site0.buildings.find(x => x.id === id); if (!b) return String(id);
   if (b.wing) return (site0.wings || []).find(x => x.id === b.wing)?.name || "Bygning på tomta";
@@ -559,7 +601,8 @@ async function show(j) {
   const goneNow = new Set((m.site.demolished || []).map(x => x.id));
   const newNow = new Set((m.site.added || []).map(a => a.id));
   const groundNow = new Set([...(m.site.landscape || []), ...(m.site.plantings || [])].map(g => g.id));
-  if (valg.items.some(i => i.kind === "ground" ? !groundNow.has(i.id) : i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : i.kind === "new" ? !newNow.has(i.id) : goneNow.has(i.id))) { valg.clear(); shut(); }
+  const roadsGone = new Set((m.site.roads_removed || []).map(r => r.id));
+  if (valg.items.some(i => i.kind === "road" ? roadsGone.has(i.id) : i.kind === "ground" ? !groundNow.has(i.id) : i.kind === "wing" ? site.buildings.some(b => b.wing === i.id && goneNow.has(b.id)) : i.kind === "new" ? !newNow.has(i.id) : goneNow.has(i.id))) { valg.clear(); shut(); }
   refill(site, m.site); refill(floors, m.floors);
   refill(drawnSections, drawnSections0.filter(x => !x.wing || wings.some(w => w.id === x.wing)));
   paint();
@@ -591,7 +634,8 @@ async function edit(mine_, failed) {
   } finally { busy = false; }
 }
 async function riv(targets, name, ground = false) {   // ground: a surface or a path, taken away (U3569)
-  const r = await edit(targets.map(t => ({ kind: "demolish", building: t, why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet"); if (!r) return;
+  /* a target is an id, or { building, name } for a road section (U3543), whose name the server cannot look up */
+  const r = await edit(targets.map(t => ({ kind: "demolish", ...(typeof t === "string" ? { building: t } : t), why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet"); if (!r) return;
   toast(`${name[0].toUpperCase() + name.slice(1)} er ${ground ? "fjernet" : "revet"} i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
 
@@ -717,6 +761,12 @@ function showGround(g) {
     ["Areal", `${num(g.area_m2)} m²`], ...(g.plants?.length ? [["Planter", g.plants.map(p => esc(plant(p))).join(", ")]] : [])]) +
     (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Lagt i forslaget; ikke i IFC-fila.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
 }
+/* a road section's card in «Bygget» (U3543): what it is, its size here, where it comes from; «Fjern» is on the acts */
+function showRoad(r) {
+  const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+  card(esc(roadName(r)), "Vei rundt tomta", rows([["Slags", esc(r.what)], ...(r.width ? [["Bredde", `${m1(r.width)} m`]] : []), ...(r.length_m ? [["Lengde her", `${m1(r.length_m)} m`]] : [])]) +
+    `<p class="src">${r.src === "nvdb" ? "Kjørebanen målt av Statens vegvesen (NVDB)" : "Fra OpenStreetMap"}, hentet hver dag. Fjernes den, blir den borte i forslaget også når gatene hentes på nytt.</p>`, { kind: "road", id: r.id, label: roadName(r) });
+}
 /* a new building's card in «Bygget» */
 function showNew(a) {
   const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
@@ -823,8 +873,11 @@ import("./tour.js").then(({ createTour }) => {
   if (tour.due) setTimeout(() => { if (!document.querySelector(".tour:not([hidden])")) tour.start(); }, 1500);
 }).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
+/* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
+import("./gjengi.js?v=20261026r").then(m => m.startGjengi({ btn: $("mgj"), pop: $("gjPop"), viewer, toast,
+  work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
-requestAnimationFrame(() => import("./streets.js?v=20261025b").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));
+requestAnimationFrame(() => import("./streets.js?v=20261026r").then(m => m.addStreets({ viewer, site })).then(h => { streetsOn = h; h?.setRemoved(((showingBefore ? site0 : site).roads_removed || []).map(r => r.id)); }).catch(e => console.warn("gater:", e)));
 
 if (new URLSearchParams(location.search).has("spor")) import("./trace.js").then(m => m.startTrace({ viewer, site, container: $("view"), setMode }));
 
@@ -838,7 +891,7 @@ const idsOf = k => {
   const i = valg.items.find(x => valg.key(x) === k) || { kind: k.split(":")[0], id: k.split(":").slice(2).join(":") };
   if (i.kind === "wing") return site.buildings.filter(b => b.wing === i.id).map(b => b.id);
   if (i.kind === "facade") { const f = (site.facades || []).find(x => x.id === i.id); return f ? site.buildings.filter(b => b.wing === f.building).map(b => b.id) : []; }
-  return i.kind === "building" || i.kind === "new" || i.kind === "ground" ? [i.id] : [];
+  return i.kind === "building" || i.kind === "new" || i.kind === "ground" || i.kind === "road" ? [i.id] : [];
 };
 /* the card for what was picked: the thing clicked, if it is still picked, else the last one */
 function cardFor(keys) {
@@ -847,7 +900,8 @@ function cardFor(keys) {
   if (!i) return;
   const id = i.kind === "wing" ? site.buildings.find(b => b.wing === i.id)?.id : i.kind === "facade" ? lastHit?.id : i.id;
   const a = (site.added || []).find(x => x.id === id), g = (site.landscape || []).find(x => x.id === id) || (site.plantings || []).find(x => x.id === id), b = site.buildings.find(x => x.id === id);
-  if (a) showNew(a); else if (g) showGround(g); else if (b) showInfo(b);
+  const rd = i.kind === "road" && viewer.roadOf(i.id);
+  if (rd) showRoad(rd); else if (a) showNew(a); else if (g) showGround(g); else if (b) showInfo(b);
 }
 const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
   under: e => { if (placing || build?.busy || shapeEd?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },

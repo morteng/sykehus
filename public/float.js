@@ -10,7 +10,7 @@
    - the panel open: the acts sit in «Bygget»'s card (#selActs, app.js card()), and nothing floats;
    - the panel folded: a small card beside the pick, never over it, that folds to a chip (its «–», or Esc) with the
      pick kept; the chip opens it again. Below 900 px it sits in the bottom stack, over the sheet (Fab's .bstack). */
-import { SURFACE_NO, groundName } from "./valg.js?v=20261025f";
+import { SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026r";
 import { groundAt } from "./renderkit/fit.js";
 const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"], PATHS = ["gravel", "paving", "asphalt", "wood"];   // landscape.js's
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -65,6 +65,9 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     fm.querySelector("input").focus();
   }
 
+  /* a road section (U3543): what it is, how wide and long, where it comes from */
+  const roadFacts = r => [r.what, r.width ? `${m1(r.width)} m bred` : null, r.length_m ? `${m1(r.length_m)} m lang` : null, r.src === "nvdb" ? "målt av Statens vegvesen" : "fra OpenStreetMap"].filter(Boolean);
+
   /* «Endre»: the facts that may be set from the page, and for a new building its length and width */
   function form(host, i, w, a) {
     const f = (k, label, v, extra = "") => `<label>${label}<input name="${k}" value="${esc(v ?? "")}" ${extra}></label>`;
@@ -92,7 +95,12 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     const key = groups.length === 1 ? valg.key(groups[0].i) : null;
     if (key && editing === key) { if (groups[0].gr) groundForm(host, groups[0].i, groups[0].gr); else form(host, groups[0].i, groups[0].w, groups[0].a); return; }
     const head = (b, sub) => card ? `<div class="fl-h"><span class="fl-t"><b>${b}</b><button type="button" class="fl-fold" data-fold title="Skjul kortet (Esc); bygget er fortsatt valgt" aria-label="Skjul kortet">${FOLD}</button></span><span>${sub}</span></div>` : "";
-    if (groups.length === 1 && groups[0].gr) {
+    if (groups.length === 1 && groups[0].rd) {
+      const { rd } = groups[0];
+      host.innerHTML = `${head(esc(roadName(rd)), roadFacts(rd).map(esc).join(" · "))}
+        <div class="fl-acts"><button type="button" class="riv" data-riv>Fjern veistykket</button><button type="button" data-ask>Spør Anton</button></div>`;
+      host.querySelector("[data-riv]").onclick = () => onRiv([{ building: rd.id, ...(rd.name ? { name: rd.name } : { name: rd.what }) }], `${rd.name || rd.what}`, true);
+    } else if (groups.length === 1 && groups[0].gr) {
       const { i, gr } = groups[0];
       host.innerHTML = `${head(esc(groundName(gr)), groundFacts(gr).map(esc).join(" · "))}
         <div class="fl-acts"><button type="button" data-ed>Endre</button><button type="button" data-riv>Riv</button><button type="button" data-ask>Spør Anton</button></div>`;
@@ -114,17 +122,17 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
       host.querySelector("[data-et]")?.addEventListener("click", () => onStoreys(bs[0]));
       host.querySelector("[data-ed]")?.addEventListener("click", () => { editing = valg.key(i); render(); });
     } else {
-      const n = groups.length, what = groups.every(g => g.w) ? "fløyer" : groups.every(g => g.gr) ? "flater" : groups.some(g => g.gr) ? "valgt" : "bygg";
+      const n = groups.length, what = groups.every(g => g.w) ? "fløyer" : groups.every(g => g.gr) ? "flater" : groups.every(g => g.rd) ? "veistykker" : groups.some(g => g.gr || g.rd) ? "valgt" : "bygg";
       host.innerHTML = `${head(what === "valgt" ? `${n} valgt` : `${n} ${what} valgt`, `${num(all.reduce((a, b) => a + (b.area_m2 || 0), 0) + news.reduce((s, g) => s + g.a.footprint_m2, 0) + groups.reduce((s, g) => s + (g.gr?.area_m2 || 0), 0))} m²`)}
         <div class="fl-acts"><button type="button" class="riv" data-riv>Riv alle ${n}</button><button type="button" data-ask>Spør Anton</button></div>`;
-      host.querySelector("[data-riv]").onclick = () => onRiv(groups.map(g => g.gr ? g.gr.id : g.a ? g.a.id : g.w ? g.w.id : g.bs[0].id), `${n} ${what === "valgt" ? "ting" : what}`);
+      host.querySelector("[data-riv]").onclick = () => onRiv(groups.map(g => g.rd ? { building: g.rd.id, name: g.rd.name || g.rd.what } : g.gr ? g.gr.id : g.a ? g.a.id : g.w ? g.w.id : g.bs[0].id), `${n} ${what === "valgt" ? "ting" : what}`, groups.every(g => g.gr || g.rd));
     }
     host.querySelector("[data-ask]")?.addEventListener("click", () => { if (!document.body.classList.contains("talk-on")) panel.reveal("chat"); dispatchEvent(new CustomEvent("sykehus:ask")); });
     host.querySelector("[data-fold]")?.addEventListener("click", () => setFolded(true));
   }
   /* the chip: the name and a «+» to open the card again */
   function chip(groups) {
-    const name = groups.length > 1 ? `${groups.length} valgt` : groups[0].gr ? groundName(groups[0].gr) : groups[0].a ? groups[0].a.name : groups[0].w ? groups[0].w.name : groups[0].i.label;
+    const name = groups.length > 1 ? `${groups.length} valgt` : groups[0].rd ? roadName(groups[0].rd) : groups[0].gr ? groundName(groups[0].gr) : groups[0].a ? groups[0].a.name : groups[0].w ? groups[0].w.name : groups[0].i.label;
     el.innerHTML = `<button type="button" class="fl-chip" data-open title="Vis kortet" aria-expanded="false"><span>${esc(name)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button>`;
     el.querySelector("[data-open]").onclick = () => setFolded(false);
   }
@@ -132,16 +140,16 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
 
   function render() {
     const slot = document.getElementById("selActs");
-    const picked = valg.items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground");
+    const picked = valg.items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground" || i.kind === "road");
     const v = viewer.view();
-    const groups = picked.map(i => i.kind === "ground" ? { i, gr: (site.landscape || []).find(x => x.id === i.id) || (site.plantings || []).find(x => x.id === i.id), bs: [] } : i.kind === "new" ? { i, a: (site.added || []).find(x => x.id === i.id), bs: [] }
-      : i.kind === "wing" ? { i, w: wings.find(x => x.id === i.id), bs: site.buildings.filter(b => b.wing === i.id) } : { i, w: null, bs: site.buildings.filter(b => b.id === i.id) }).filter(g => g.bs.length || g.a || g.gr);
+    const groups = picked.map(i => i.kind === "road" ? { i, rd: viewer.roadOf(i.id), bs: [] } : i.kind === "ground" ? { i, gr: (site.landscape || []).find(x => x.id === i.id) || (site.plantings || []).find(x => x.id === i.id), bs: [] } : i.kind === "new" ? { i, a: (site.added || []).find(x => x.id === i.id), bs: [] }
+      : i.kind === "wing" ? { i, w: wings.find(x => x.id === i.id), bs: site.buildings.filter(b => b.wing === i.id) } : { i, w: null, bs: site.buildings.filter(b => b.id === i.id) }).filter(g => g.bs.length || g.a || g.gr || g.rd);
     if (!groups.length || v.mode === "section" || v.storey && !v.only) { el.hidden = true; box = null; editing = null; if (slot) slot.innerHTML = ""; return; }
     const key = groups.length === 1 ? valg.key(groups[0].i) : null;
     if (editing && editing !== key) editing = null;
     if (inPane()) { el.hidden = true; box = null; if (slot) fill(slot, groups, false); return; }
     if (slot) slot.innerHTML = "";
-    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr?.ring).flatMap(g => g.gr.ring.map(p => [p[0], p[1], groundAt(site, p)])),
+    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.rd).flatMap(g => g.rd.ring.filter((p, n) => n % 4 === 0).map(p => [p[0], p[1], groundAt(site, p)])), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr?.ring).flatMap(g => g.gr.ring.map(p => [p[0], p[1], groundAt(site, p)])),
       ...groups.filter(g => g.gr?.kind === "trees").flatMap(g => (site.trees || []).filter(t => t[6] === g.gr.id).flatMap(t => [[t[0] - t[3], t[1], groundAt(site, t)], [t[0] + t[3], t[1], groundAt(site, t) + t[2]]]))];
     el.classList.toggle("folded", folded && !editing);
     if (folded && !editing) chip(groups); else fill(el, groups, true);

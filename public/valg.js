@@ -4,8 +4,9 @@
    facade it is on; shift-click adds, a click on nothing or Esc clears, a chip's × (the kit's g-pick, in the pill) takes one away,
    and a card's «Spør Anton om dette» adds its wing or storey.
 
-   Each item is { kind: "wing" | "building" | "new" | "ground" | "storey" | "room" | "facade", id, label, storey? } (new: a
-   building the after adds, by its id, U3556; ground: a surface or a path the after lays, flate-1, sti-2, U3569), with the ids the
+   Each item is { kind: "wing" | "building" | "new" | "ground" | "road" | "storey" | "room" | "facade", id, label, storey? } (new: a
+   building the after adds, by its id, U3556; ground: a surface or a path the after lays, flate-1, sti-2, U3569; road: a road
+   section around, by its way's id, vei-osm-24365596, U3543), with the ids the
    connector's tools take (a wing's id, a storey's name, a room's code or name with its storey, a facade's id), so
    Anton can pass them straight on. Sent with a message as { items, ids, summary } (Fab's {ids, summary} and more). */
 import { groundAt } from "./renderkit/fit.js";
@@ -15,6 +16,9 @@ const segDist = ([x, y], [ax, ay], [bx, by]) => { const dx = bx - ax, dy = by - 
 /* a surface's or a path's name: its own, else what it is */
 export const SURFACE_NO = { grass: "Plen", meadow: "Eng", planting: "Beplantning", gravel: "Grus", paving: "Belegningsstein", asphalt: "Asfalt", water: "Vann", wood: "Tre" };
 export const groundName = g => g.kind === "trees" ? `${g.name || g.species}${g.count > 1 ? ` × ${g.count}` : ""}` : g.name || (g.kind === "path" ? `Sti (${(SURFACE_NO[g.surface] || g.surface).toLowerCase()})` : g.surface === "water" ? "Vann" : SURFACE_NO[g.surface] || "Flate");
+
+/* a road section's name: its street's and what it is (Welhavens gate, kjørevei), else what it is */
+export const roadName = r => r.name ? `${r.name} (${r.what})` : r.what[0].toUpperCase() + r.what.slice(1);
 
 export function createSelection({ site, floors, viewer, onChange = () => {} }) {
   let items = [];
@@ -33,6 +37,8 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
       out.push({ kind: "storey", id: v.storey, label: v.storey });
       if (hit) { out.push({ kind: "room", id: hit.r.code || hit.r.name, storey: v.storey, label: hit.r.code && hit.r.code !== hit.r.name ? `${hit.r.name} (${hit.r.code})` : hit.r.name }); return out; }
     }
+    const rd = !b && viewer.roadOf?.(buildingId);   // a road section around (U3543): by its way's id
+    if (rd) { out.push({ kind: "road", id: rd.id, label: roadName(rd) }); return out; }
     const g = !b && ((site.landscape || []).find(x => x.id === buildingId) || (site.plantings || []).find(x => x.id === buildingId));   // a pool, a lawn, a path, a planting (U3569)
     if (g) { out.push({ kind: "ground", id: g.id, label: groundName(g) }); return out; }
     const n = !b && (site.added || []).find(x => x.id === buildingId && x.kind === "volume");
@@ -46,7 +52,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
     }
     return out;
   }
-  function changed() { viewer.mark(items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground").flatMap(i => i.kind === "wing" ? site.buildings.filter(b => b.wing === i.id).map(b => b.id) : [i.id])); onChange(items); }
+  function changed() { viewer.mark(items.filter(i => i.kind === "wing" || i.kind === "building" || i.kind === "new" || i.kind === "ground" || i.kind === "road").flatMap(i => i.kind === "wing" ? site.buildings.filter(b => b.wing === i.id).map(b => b.id) : [i.id])); onChange(items); }
   return {
     get items() { return items; },
     pick(buildingId, { shift, at, x, y } = {}) {

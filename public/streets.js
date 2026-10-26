@@ -9,7 +9,9 @@
    toUtm([lon, lat]) → [east, north] on the site (utm.js), streetCtx what streets3d.js needs to know about the
    streets together. The loop that cuts each street to the grid is hagekart's (public/garden3d.js at e636f49). */
 import * as THREE from "./vendor/three.module.js";
-import { loadStreets } from "./renderkit/streets.js";
+import { loadRaw, streetsFrom } from "./renderkit/streets.js";
+import { pathRing } from "./renderkit/paths2d.js";
+import { tagStreets, wayKind } from "./roads.js";
 import { createStreetMeshes, streetContext } from "./renderkit/streets3d.js";
 import { siteGrid, siteBox } from "./utm.js?v=20261025b";
 
@@ -28,21 +30,39 @@ export async function addStreets({ viewer, site, api = STREETS_API }) {
     cellAt(x, y) { const c = Math.floor((x - T.x0) / T.res), r = Math.floor((T.y1 - y) / T.res); return c < 0 || r < 0 || c >= T.w || r >= T.h ? -1 : r * T.w + c; },
     toUtm: q => grid.fromLngLat(q),
   };
-  const sts = await loadStreets(siteBox(site), { toUtm: F.toUtm, base: api });
+  /* each way with its id and name (roads.js), so one can be picked and taken away (U3543) */
+  const [osm, nv] = await loadRaw(siteBox(site), api), sts = streetsFrom(osm, nv, F.toUtm), ways = tagStreets(osm, nv, sts, F.toUtm);
   if (!sts.length) return null;
   F.streetCtx = streetContext(F, sts);
   F.streetCtx.trunks = (site.trees || []).filter(t => t[2] >= 4).map(([x, y, h]) => ({ x, y, r: Math.min(0.6, 0.12 + 0.02 * h) }));
   const M = createStreetMeshes({ PATHLIFT: 0.08 });   // a little over hagekart's 4,5 cm: this terrain is a 2 m grid, not a garden's
   const g = new THREE.Group(); g.name = "streets";
-  const put = o => { if (!o) return; o.traverse(m => { if (m.isMesh) m.receiveShadow = true; }); g.add(o); };
+  /* a way's meshes in a group of its own (its id, what it is, its outline on the site), the markings on it in another */
+  const byId = new Map(), marks = new Map();
+  const holder = (map, id) => { let h = map.get(id); if (!h) { h = new THREE.Group(); map.set(id, h); g.add(h); } return h; };
+  const put = (o, id = null, on = null) => { if (!o) return; o.traverse(m => { if (m.isMesh) m.receiveShadow = true; }); (id ? holder(byId, id) : on ? holder(marks, on) : g).add(o); };
   const cut = pts => { const runs = []; let cur = []; for (const q of pts) { const [x, y] = F.toUtm(q); if (F.cellAt(x, y) >= 0) cur.push(q); else { if (cur.length > 1) runs.push(cur); cur = []; } } if (cur.length > 1) runs.push(cur); return runs; };
   for (const st of sts.filter(q => q.kind === "poi")) put(M.furnitureMesh(F, st));
   for (const st of sts.filter(q => q.kind === "nvdb")) {
     if (st.t === "holdeplass") { put(M.furnitureMesh(F, { type: "busstop", pt: st.geo.type === "Point" ? st.geo.coordinates : st.geo.coordinates[0], shelter: false })); continue; }
-    put(M.nvdbMesh(F, st));
+    put(M.nvdbMesh(F, st), null, st.on);
   }
-  for (const st of sts.filter(q => q.kind === "parking")) put(M.pathMesh(F, st));
-  for (const st of sts.filter(q => q.kind !== "poi" && q.kind !== "nvdb" && q.kind !== "parking")) for (const run of cut(st.pts)) put(M.pathMesh(F, { ...st, pts: run }));
+  for (const st of sts.filter(q => q.kind === "parking")) put(M.pathMesh(F, st), st.id);
+  for (const st of sts.filter(q => q.kind !== "poi" && q.kind !== "nvdb" && q.kind !== "parking")) for (const run of cut(st.pts)) put(M.pathMesh(F, { ...st, pts: run }), st.id);
+  /* what the page tells of a way: its name, what it is, how long and wide, its outline on the site */
+  const len = l => l.reduce((a, p, i) => i ? a + Math.hypot(p[0] - l[i - 1][0], p[1] - l[i - 1][1]) : 0, 0);
+  for (const w of ways) {
+    const h = byId.get(w.id); if (!h) continue;
+    const line = w.pts ? w.pts.map(F.toUtm).filter(([x, y]) => F.cellAt(x, y) >= 0) : null, ring = w.ring ? w.ring.map(F.toUtm) : line?.length > 1 ? pathRing(line, w.width || 2) : null;
+    if (!ring?.length) continue;
+    h.userData = { id: w.id, ring, lift: 0.1, road: { id: w.id, name: w.name, what: wayKind(w), width: w.ring ? null : w.width, length_m: line ? Math.round(len(line) * 10) / 10 : null, ring, src: w.src } };
+    h.traverse(o => { o.userData.id = w.id; });
+  }
   viewer.add(g);
-  return g;
+  viewer.setRoads?.(new Map([...byId].filter(([, h]) => h.userData.road)));
+  return {
+    group: g,
+    /* the after's removed road sections (site.roads_removed): hidden, with what is painted on them */
+    setRemoved(ids) { const off = new Set(ids); for (const [id, h] of byId) h.visible = !off.has(id); for (const [id, h] of marks) h.visible = !off.has(id); viewer.redraw(); },
+  };
 }
