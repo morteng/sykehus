@@ -79,7 +79,7 @@ g-item{--status:var(--muted)}
 .g-pick .lead{margin-right:2px;color:var(--muted);font-size:var(--fs-sm)}
 .g-pick .chip{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:36px;padding:0 4px 0 var(--sp-2);box-sizing:border-box;
   border:1px dashed var(--accent);border-radius:var(--radius-pill);background:var(--accent-panel);color:var(--accent);font-size:var(--fs-sm);font-weight:600}
-.g-pick .chip i{flex:none;width:9px;height:9px;border-radius:2px;background:var(--g-pick-mark);outline:1px solid var(--g-pick-mark-edge)}
+.g-pick .chip i{flex:none;width:9px;height:9px;border-radius:var(--radius-xs);background:var(--g-pick-mark);outline:1px solid var(--g-pick-mark-edge)}
 .g-pick .chip button{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:0;border-radius:50%;background:none;
   color:var(--muted);font:inherit;font-size:20px;font-weight:400;line-height:1;cursor:pointer}
 .g-pick .chip button:hover{background:var(--hover-wash);color:var(--text)}
@@ -145,6 +145,7 @@ g-collection[data-view="cards"] .g-act{flex:0 0 100%;justify-content:flex-start;
 g-collection[data-view="cards"] .g-act__do{max-width:100%;white-space:normal;padding-block:var(--sp-1)}      /* a long label wraps inside the card, a second action goes under it */
 
 /* list */
+g-collection{--g-cols-wide:minmax(0,1fr);--g-cols-desktop:minmax(0,1fr);--g-cols-medium:minmax(0,1fr)}      /* the one-column default; a collection with a shape sets its own on itself (collection.ts), so a copy of this sheet alone still defines what it reads */
 g-collection[data-view="list"] .g-head,g-collection[data-view="list"] g-item{display:grid;grid-template-columns:var(--g-cols-wide);align-items:center;gap:0 var(--sp-3)}
 g-collection[data-view="list"] .g-head{padding:0 0 var(--sp-1);color:var(--muted);font-size:var(--fs-xs);text-transform:var(--label-transform);letter-spacing:var(--label-tracking)}
 g-collection[data-view="list"] .g-head>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -181,7 +182,7 @@ g-collection[data-view="list"] .g-act__do{max-width:100%;white-space:normal;padd
 }
 /* ---- follow (follow.ts): the pill that takes a list back to its end; the host is positioned, the app may set --g-follow-bottom */
 .g-follow{position:absolute;left:50%;bottom:var(--sp-2);transform:translateX(-50%);z-index:2;display:inline-flex;align-items:center;justify-content:center;
-  width:var(--control-h);height:var(--control-h);padding:0;border:1px solid var(--border-strong);border-radius:999px;background:var(--panel);color:var(--text);
+  width:var(--control-h);height:var(--control-h);padding:0;border:1px solid var(--border-strong);border-radius:var(--radius-pill);background:var(--panel);color:var(--text);
   box-shadow:var(--shadow-sm);cursor:pointer}
 .g-follow[hidden]{display:none}
 .g-follow svg{width:1rem;height:1rem}
@@ -211,7 +212,7 @@ g-collection[data-view="list"] .g-act__do{max-width:100%;white-space:normal;padd
 .g-split{position:absolute;top:0;bottom:0;width:9px;cursor:col-resize;z-index:5;touch-action:none}
 .g-split.start{left:-4px}
 .g-split.end{right:-4px}
-.g-split::after{content:"";position:absolute;left:3px;top:50%;width:3px;height:36px;margin-top:-18px;border-radius:2px;background:var(--border);opacity:0;transition:opacity .15s}
+.g-split::after{content:"";position:absolute;left:3px;top:50%;width:3px;height:36px;margin-top:-18px;border-radius:var(--radius-xs);background:var(--border);opacity:0;transition:opacity .15s}
 .g-split:hover::after,.g-split:focus-visible::after,.g-split.sizing::after{opacity:1;background:var(--accent)}
 .g-split:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .g-split[hidden]{display:none}
@@ -298,3 +299,16 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-typein__in[aria-invalid="true"]{border-color:var(--danger)}
 .g-typein__unit{color:var(--muted);min-width:1.5em}
 @media (hover: none), (pointer: coarse) { .g-typein__in{height:max(var(--tap), 44px)} }
+
+/* ---- effects (effects.ts): leaves for a win, dust for a removal; one layer, pointer-events none, off for reduced motion */
+.g-fx-layer{position:fixed;left:0;top:0;width:0;height:0;overflow:visible;z-index:var(--z-alert);pointer-events:none}
+.g-fx-layer>span{position:fixed;display:block;pointer-events:none;background:var(--g-fx-c,var(--accent));will-change:transform,opacity}
+.g-fx-leaf{width:12px;height:7px;border-radius:7px 0;animation:g-fx-leaf .9s var(--ease) forwards}
+.g-fx-dust{width:9px;height:9px;border-radius:50%;animation:g-fx-dust .8s ease-out forwards}
+.g-fx-spark{width:5px;height:5px;border-radius:50%;animation:g-fx-leaf .6s ease-out forwards}
+.g-fx-pop{animation:g-fx-pop .35s var(--ease)}
+.g-fx-rise{animation:g-fx-rise .3s var(--ease)}
+@keyframes g-fx-leaf{from{transform:translate(-50%,-50%) scale(var(--g-fx-s,1));opacity:1}55%{opacity:1}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) rotate(var(--g-fx-rot)) scale(var(--g-fx-s,1));opacity:0}}
+@keyframes g-fx-dust{from{transform:translate(-50%,-50%) scale(.6);opacity:.9}45%{opacity:.75}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) scale(calc(var(--g-fx-s,1) * 1.7));opacity:0}}
+@keyframes g-fx-pop{from{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}to{transform:none;opacity:1}}
+@keyframes g-fx-rise{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}

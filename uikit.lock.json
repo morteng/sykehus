@@ -1,12 +1,12 @@
 {
-  "kits": "57421756265f5532b1847d826f90c21cda2f9d6a",
+  "kits": "9df5af07535faab9c7fa2aa297c8249e5a41ef6a",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "fac6ec7c766df641f51d55fc74231b6afc2c5c31",
+    "kit.css": "f329bae1c412a677878f649ab6ccecb28bde9670",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
@@ -20,6 +20,7 @@
     "icons.js": "b89831f1322f2f765659e27b1e81ea3e1ac768c6",
     "surfaces.js": "931571fcc8bfa87dee1dd24f3e1214b1cd73c4ce",
     "typein.js": "c2a067fb12c213d003444ec42ee69343c6c6b33b",
-    "html.js": "fddaca736d72d73ab32408e89c42ef4cfb634ebd"
+    "html.js": "fddaca736d72d73ab32408e89c42ef4cfb634ebd",
+    "effects.js": "4a4282e7d2aa28137bdabccf49d3f0e25ab5216e"
   }
 }
