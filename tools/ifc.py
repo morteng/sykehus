@@ -19,17 +19,39 @@ figure where there is one), its Pset_*Common (outside or in, Status EXISTING), i
 23 yttervegger, 24 innervegger, 25 dekker, 26 yttertak, 222 søyler, 234 vinduer og dører) and its material where the
 wing's construction gives one (site.json wings[].materials, assumed, and said so in Pset Sykehustomta_Materiale).
 
+Only the high block (Sentralblokka, ENVELOPE) is drawn as a model (U3637, Morten 2026-10-26: the rest is to be torn down): its
+storeys, outer walls, slabs, roof and, where no facade drawing gives windows, the window bays the page paints (public/bays.js,
+a rule, not measured), one IfcWindowType a size, the materials from public/renderkit/materials.js (node reads both). Every
+other wing is an IfcBuilding with one simple block (IfcBuildingElementProxy, Status DEMOLISH, its volume) per roof level.
+
 The worker on the server can import build() and run it on the agent's edits; it needs IfcOpenShell only."""
-import sys, json, math, uuid
+import sys, json, math, uuid, subprocess, os
 from collections import Counter
 import ifcopenshell, ifcopenshell.guid
 import ifcopenshell.api.root, ifcopenshell.api.unit, ifcopenshell.api.context, ifcopenshell.api.aggregate
-import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature, ifcopenshell.api.classification, ifcopenshell.api.material
+import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature, ifcopenshell.api.classification, ifcopenshell.api.material, ifcopenshell.api.type
 
 T_WALL, T_SLAB = 0.35, 0.30
 # the building parts as NS 3451:2022 names them (two digits where the drawings cannot say bearing or not)
 NS3451 = {"222": "Søyler", "23": "Yttervegger", "234": "Vinduer, dører, porter", "24": "Innervegger", "25": "Dekker", "26": "Yttertak"}
-MATERIAL_CATEGORY = {"Betong": "concrete", "Murverk": "masonry"}   # IFC4's own words for them
+MAT_KEY = {"Betong": "concrete"}   # site.json's word for a wing's material -> the key of public/renderkit/materials.js
+# the one building drawn as a model (U3637): the high block. The rest are simple blocks, marked to be demolished (the regulation)
+ENVELOPE = {"sentralblokka"}
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+def from_js(code, data=None):
+    """what the page's own modules say (one copy): a node snippet run in the repo, its JSON read back"""
+    root = os.path.join(HERE, "..", "public")
+    out = subprocess.run(["node", "--input-type=module", "-e", code.replace("ROOT", "file://" + os.path.abspath(root))], input=json.dumps(data), capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+def js_materials(keys):   # IfcMaterial's name, description and category for each key (renderkit/materials.js ifcMaterial)
+    return from_js('import { ifcMaterial } from "ROOT/renderkit/materials.js"; const k = JSON.parse(await new Response(process.stdin).text()); console.log(JSON.stringify(Object.fromEntries(k.map(x => [x, ifcMaterial(x)]))));', keys)
+
+def js_bays(walls):   # each wall [x0, y0, x1, y1]: the bay's windows ([u0, u1] from the wall's start) along it, and the bay rule (public/bays.js)
+    return from_js('import { windowsOn, WINDOWS, STOREY } from "ROOT/bays.js"; const w = JSON.parse(await new Response(process.stdin).text()); '
+                   'const W = WINDOWS.tower, x0 = Math.min(...W.map(g => g[0])) - 0.06; '
+                   'console.log(JSON.stringify({ storey: STOREY, windows: W, spans: w.map(q => windowsOn("tower", q).map(([t0]) => Math.round((t0 - x0) * 100) / 100)) }));', walls)
 REGULATED = "Områderegulering for Bragernes sentrum vest, vedtatt 17.02.2026: sykehusbygningene er satt av til riving; interiør og rivemasser bes gjenbrukt"
 
 def area(p):   # a plan polygon's area (m2)
@@ -84,10 +106,11 @@ def build(site, floors, only=None):
     def qto(e, name, props):   # the standard quantities (Qto_*), so a BIM tool's schedules and takeoffs find them
         ifcopenshell.api.pset.edit_qto(m, qto=ifcopenshell.api.pset.add_qto(m, product=e, name=name), properties={k: round(float(v), 3) for k, v in props.items()})
     # what the element is, in NS 3451 (bygningsdelstabellen) and of what, gathered and tied on at the end
-    classed, made = {}, {}
+    classed, made, types = {}, {}, {}
     def ns(e, code): classed.setdefault(code, []).append(e)
-    def of(e, mat, how):
-        if mat: made.setdefault(mat, []).append(e); pset(e, "Sykehustomta_Materiale", {"Materiale": mat, "Hvordan": how})
+    def of(e, mat, how):   # mat: a key of renderkit/materials.js (or site.json's word for one)
+        mat = MAT_KEY.get(mat, mat)
+        if mat in ("concrete", "glass"): made.setdefault(mat, []).append(e); pset(e, "Sykehustomta_Materiale", {"Materiale": mat, "Hvordan": how})
 
     ifc_site = new("IfcSite", name=site.get("address", "Tomta")); ifc_site.ObjectPlacement = place()
     ifcopenshell.api.aggregate.assign_object(m, products=[ifc_site], relating_object=project)
@@ -95,7 +118,7 @@ def build(site, floors, only=None):
     for b in site["buildings"]:
         if b.get("wing"): pieces.setdefault(b["wing"], []).append(b)
     wings = [w for w in site["wings"] if w["id"] in pieces and (not only or w["id"] in only)]
-    counts = {"wall": 0, "slab": 0, "opening": 0, "inner": 0, "space": 0}
+    counts = {"wall": 0, "slab": 0, "opening": 0, "window": 0, "block": 0, "inner": 0, "space": 0}
     storeys_of, rings_of = {}, {}
 
     for w in wings:
@@ -106,6 +129,20 @@ def build(site, floors, only=None):
             k: str(v) for k, v in {"Id": w["id"], "Byggeår": w.get("built"), "Etasjer": w.get("storeys"), "Konstruksjon": w.get("construction"),
                                    "Fasade": w.get("facade"), "Sikker": w.get("sure"), "Regulering": REGULATED}.items() if v is not None})
         if w.get("built"): pset(bld, "Pset_BuildingCommon", {"YearOfConstruction": str(w["built"])})
+        if w["id"] not in ENVELOPE:   # not drawn: one simple block per roof level, to be demolished (the regulation), nothing inside
+            s = new("IfcBuildingStorey", name="Hele bygget"); s.Elevation = float(base); s.ObjectPlacement = place(base)
+            ifcopenshell.api.aggregate.assign_object(m, products=[s], relating_object=bld)
+            blocks_ = []
+            for b in bs:
+                for k in b.get("blocks") or [{"p": b["ring"], "top": b["top"]}]:
+                    p = k["p"][:-1] if k["p"][0] == k["p"][-1] else k["p"]
+                    e = element("IfcBuildingElementProxy", "Blokk (skal rives)", p, b["base"], k["top"] - b["base"], b.get("source", ""), "omriss og tak fra laser; enkel blokk", predefined_type="NOTDEFINED")
+                    e.ObjectType = "TO BE DEMOLISHED"; blocks_.append(e)
+                    A = area(p); V = A * (k["top"] - b["base"])
+                    pset(e, "Pset_BuildingElementProxyCommon", {"IsExternal": True, "Status": "DEMOLISH"})
+                    qto(e, "Qto_BuildingElementProxyQuantities", {"GrossSurfaceArea": A, "NetVolume": V, "GrossVolume": V}); counts["block"] += 1
+            ifcopenshell.api.spatial.assign_container(m, products=blocks_, relating_structure=s)
+            continue
         mats = w.get("materials") or {}; mhow = mats.get("how", "antatt")
         levels = sorted(w.get("levels") or [{"name": "Hele bygget", "kote": base, "how": "antatt", "src": "ingen etasjer kjent; ett nivå ved foten"}], key=lambda l: l["kote"])
         storeys = []
@@ -124,11 +161,11 @@ def build(site, floors, only=None):
         put = lambda z, e: contained.setdefault(storey_at(z), []).append(e)
         cuts = [l["kote"] for l in levels]
 
-        walls, cut = [], {}   # (wall element, a, d, n, length, lo, hi) for the openings; the side area they cut from each
+        walls, cut, by_wall = [], {}, {}   # (wall element, a, d, n, length, lo, hi) for the openings; the side area they cut from each
         for b in bs:
             blocks = [k["p"] for k in b.get("blocks", [])] or [b["ring"]]
             src = b.get("source", "")
-            for x0, y0, x1, y1, lo, hi in b.get("walls", []):
+            for wi, (x0, y0, x1, y1, lo, hi) in enumerate(b.get("walls", [])):
                 lo = b.get("lift", b["base"]) if lo is None else lo
                 L = math.hypot(x1 - x0, y1 - y0)
                 if L < 0.3 or hi - lo < 0.2: continue
@@ -139,7 +176,7 @@ def build(site, floors, only=None):
                 edges = [lo] + [c for c in cuts if lo + 0.3 < c < hi - 0.3] + [hi]
                 for z0, z1 in zip(edges, edges[1:]):
                     e = element("IfcWall", "Yttervegg", quad, z0, z1 - z0, src, "omriss og tak fra laser; tykkelse antatt", predefined_type="SOLIDWALL")
-                    put(z0, e); walls.append((e, (x0, y0), d, n, L, z0, z1)); counts["wall"] += 1
+                    put(z0, e); walls.append((e, (x0, y0), d, n, L, z0, z1)); by_wall.setdefault((b["id"], wi), []).append(walls[-1]); counts["wall"] += 1
                     pset(e, "Pset_WallCommon", {"IsExternal": True, "Status": "EXISTING"}); ns(e, "23"); of(e, mats.get("walls"), mhow)
             for p in blocks:
                 top = next((k["top"] for k in b.get("blocks", []) if k["p"] is p), b["top"])
@@ -161,10 +198,24 @@ def build(site, floors, only=None):
                 ns(e, "222"); of(e, mats.get("columns"), mhow)
 
         # openings: each window or door of a drawn facade, cut into the outer walls it stands in
-        for f in site.get("facades", []):
-            if f["building"] != w["id"]: continue
+        # the high block has no facade drawing with its windows: its windows are the bays the page paints (public/bays.js), a row a
+        # storey of the bay rule, each cut into the wall it stands on, as the drawn ones are
+        by_bay = []
+        if w["id"] in ENVELOPE:
+            keys = [(b["id"], wi, (x0, y0, x1, y1), b.get("lift", b["base"]) if lo is None else lo, hi, b["base"]) for b in bs for wi, (x0, y0, x1, y1, lo, hi) in enumerate(b.get("walls", []))]
+            bay = js_bays([list(k[2]) for k in keys])
+            for k, spans in zip(keys, bay["spans"]):
+                ops = []
+                for s0 in spans:
+                    for r in range(int((k[4] - k[5]) // bay["storey"]) + 1):
+                        top = k[5] + (r + 1) * bay["storey"]
+                        for l, t, rt, bt in bay["windows"]:
+                            z0, z1 = top - bt, top - t
+                            if z0 >= k[3] and z1 <= k[4] - 0.3: ops.append({"kind": "window", "u": [round(s0 + l, 3), round(s0 + rt, 3)], "z": [round(z0, 3), round(z1, 3)]})
+                if ops: by_bay.append({"building": w["id"], "from": k[2][:2], "to": k[2][2:], "openings": ops, "src": ["fasaderegelen (public/bays.js): vinduene i hver bukt"], "how": "regel, ikke målt", "wall": (k[0], k[1])})
+        for f in [f for f in site.get("facades", []) if f["building"] == w["id"]] + by_bay:
             (fx, fy), (tx, ty) = f["from"], f["to"]; FL = math.hypot(tx - fx, ty - fy); fd = ((tx - fx) / FL, (ty - fy) / FL)
-            mine = [wl for wl in walls if abs(wl[2][0] * fd[0] + wl[2][1] * fd[1]) > 0.98 and abs((fx - wl[1][0]) * wl[3][0] + (fy - wl[1][1]) * wl[3][1]) < 1.6]
+            mine = by_wall.get(f["wall"], []) if "wall" in f else [wl for wl in walls if abs(wl[2][0] * fd[0] + wl[2][1] * fd[1]) > 0.98 and abs((fx - wl[1][0]) * wl[3][0] + (fy - wl[1][1]) * wl[3][1]) < 1.6]
             for o in f["openings"]:
                 (u0, u1), (z0, z1) = o["u"], o["z"]
                 pa, pb = (fx + fd[0] * u0, fy + fd[1] * u0), (fx + fd[0] * u1, fy + fd[1] * u1)
@@ -176,16 +227,18 @@ def build(site, floors, only=None):
                     q = lambda t, s: (a[0] + d[0] * t + n[0] * s, a[1] + d[1] * t + n[1] * s)
                     zz0, zz1 = max(z0, lo), min(z1, hi)
                     hole = element("IfcOpeningElement", "Åpning", [q(t0, -0.1), q(t1, -0.1), q(t1, T_WALL + 0.1), q(t0, T_WALL + 0.1)], zz0, zz1 - zz0,
-                                   "; ".join(f["src"]), "fra fasadetegning")
+                                   "; ".join(f["src"]), f.get("how", "fra fasadetegning"))
                     ifcopenshell.api.feature.add_feature(m, feature=hole, element=e); counts["opening"] += 1
                     cut[e] = cut.get(e, 0.0) + (t1 - t0) * (zz1 - zz0)
                     if not filled:   # the window itself once, in its full height, in the wall's middle
                         cls, name = {"door": ("IfcDoor", "Dør"), "glazing": ("IfcWindow", "Glassfelt")}.get(o["kind"], ("IfcWindow", "Vindu"))
                         c = T_WALL / 2
-                        fill = element(cls, name, [q(t0, c - 0.04), q(t1, c - 0.04), q(t1, c + 0.04), q(t0, c + 0.04)], z0, z1 - z0, "; ".join(f["src"]), "fra fasadetegning")
+                        fill = element(cls, name, [q(t0, c - 0.04), q(t1, c - 0.04), q(t1, c + 0.04), q(t0, c + 0.04)], z0, z1 - z0, "; ".join(f["src"]), f.get("how", "fra fasadetegning"))
                         fill.OverallWidth, fill.OverallHeight = float(u1 - u0), float(z1 - z0)
                         ifcopenshell.api.feature.add_filling(m, opening=hole, element=fill); put(z0, fill); filled = True
                         pset(fill, f"Pset_{cls[3:]}Common", {"IsExternal": True, "Status": "EXISTING"}); ns(fill, "234")
+                        if cls == "IfcWindow": of(fill, "glass", f.get("how", "fra fasadetegning")); counts["window"] += 1
+                        types.setdefault((cls, round(u1 - u0, 2), round(z1 - z0, 2)), []).append(fill)
                         qto(fill, f"Qto_{cls[3:]}BaseQuantities", {"Width": u1 - u0, "Height": z1 - z0, "Area": (u1 - u0) * (z1 - z0)})
                 if not filled: counts.setdefault("unplaced", []).append(f'{f["id"]} u {u0:.1f}-{u1:.1f} z {z0:.1f}-{z1:.1f}')
         # the outer walls' quantities, less what the openings take
@@ -242,8 +295,13 @@ def build(site, floors, only=None):
     cls.Source, cls.Edition, cls.Name, cls.Description = "Standard Norge", "2022", "NS 3451", "Bygningsdelstabell"
     for code in sorted(classed):
         ifcopenshell.api.classification.add_reference(m, products=classed[code], identification=code, name=NS3451[code], classification=cls)
-    for name in sorted(made):
-        ifcopenshell.api.material.assign_material(m, products=made[name], material=ifcopenshell.api.material.add_material(m, name=name, category=MATERIAL_CATEGORY[name]))
+    for (cls, wd, ht), es in sorted(types.items()):   # one type a size, the windows and doors its occurrences (the same shape again, not copied)
+        t = new(cls + "Type", name=f'{"Vindu" if cls == "IfcWindow" else "Dør"} {wd:.2f} × {ht:.2f} m'.replace(".", ",")); t.PredefinedType = "NOTDEFINED"
+        ifcopenshell.api.type.assign_type(m, related_objects=es, relating_type=t)
+    mats_js = js_materials(sorted(made)) if made else {}
+    for key in sorted(made):
+        im = mats_js[key]; mat = ifcopenshell.api.material.add_material(m, name=im["name"], category=im["category"]); mat.Description = im["description"]
+        ifcopenshell.api.material.assign_material(m, products=made[key], material=mat)
     stable_ids(m)
     return m, counts
 
