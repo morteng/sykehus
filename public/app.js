@@ -7,6 +7,7 @@ import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
 import { createMal, plantAt } from "./mal.js";
 import { searchPlants } from "./plants.js";
+import { SWATCHES, SIZES, OPS, OP_ICON, ERASER, CHIPS, cards, silhouette, heightText } from "./ute.js";
 import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
@@ -699,23 +700,46 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
    mal.js: press and drag, a ghost of what the brush would paint, release to send one change (with Angre). «Terreng» moves
    earth under the same stroke (flatten, raise, lower, pond) and the toast says what was dug and filled. */
 const malPop = $("malPop"); let malMode = "paint", malSp = null, mal = null;   // malSp: the species picked, or null
-const malOpts = () => ({ mode: malMode, surface: $("malSurface").value, erase: $("malErase").checked, r: +$("malSize").value, op: $("malOp").value, h: +$("malH").value, species: malSp?.id, crown: malSp?.sp, gap: +$("malGap").value });
+const malS = { surface: "grass", erase: false, r: 1.5, op: "flatten", h: 0.5, types: new Set() };
+const malOpts = () => ({ mode: malMode, surface: malS.surface, erase: malS.erase, r: malS.r, op: malS.op, h: malS.h, species: malSp?.id, crown: malSp?.sp, gap: +$("malGap").value });
+const pressed = (btn, on) => btn.setAttribute("aria-pressed", String(!!on));
+/* the picker's parts, drawn once: swatches (renderkit's pictures), brush chips, terrain acts */
+function malBuild() {
+  $("malSwatches").replaceChildren(...SWATCHES.map(w => { const b = document.createElement("button"); b.type = "button"; b.dataset.id = w.id; b.title = w.no;
+    b.innerHTML = `<img src="${w.img}" alt="" width="64" height="64" loading="lazy"><span>${w.no}</span>`; b.onclick = () => { malS.surface = w.id; malS.erase = false; malMark(); }; return b; }),
+    (() => { const b = document.createElement("button"); b.type = "button"; b.dataset.id = "erase"; b.title = "Visk ut det du drar over";
+      b.innerHTML = `<span class="ute-pic">${ERASER}</span><span>Visk ut</span>`; b.onclick = () => { malS.erase = true; malMark(); }; return b; })());
+  $("malSizes").replaceChildren(...SIZES.map(z => { const b = document.createElement("button"); b.type = "button"; b.dataset.r = z.r; b.title = z.no; b.setAttribute("aria-label", `${z.no} pensel`);
+    b.innerHTML = `<i style="width:${z.px}px;height:${z.px}px"></i>`; b.onclick = () => { malS.r = z.r; malMark(); }; return b; }));
+  $("malOps").replaceChildren(...OPS.map(o => { const b = document.createElement("button"); b.type = "button"; b.dataset.op = o.op; b.innerHTML = `${OP_ICON[o.op]}<span>${o.no}</span>`; b.onclick = () => { malS.op = o.op; malMark(); }; return b; }));
+  $("malTypes").replaceChildren(...CHIPS.map(c => { const b = document.createElement("button"); b.type = "button"; b.textContent = c; b.dataset.chip = c; b.onclick = () => { malS.types.has(c) ? malS.types.delete(c) : malS.types.add(c); malMark(); malFind(); }; return b; }));
+  $("malHm").onclick = () => { malS.h = Math.max(0.1, Math.round((malS.h - 0.1) * 10) / 10); malMark(); };
+  $("malHp").onclick = () => { malS.h = Math.min(10, Math.round((malS.h + 0.1) * 10) / 10); malMark(); };
+  malMark();
+}
+function malMark() {   // what is picked, ringed
+  for (const b of $("malSwatches").children) pressed(b, b.dataset.id === "erase" ? malS.erase : !malS.erase && b.dataset.id === malS.surface);
+  for (const b of $("malSizes").children) pressed(b, +b.dataset.r === malS.r);
+  for (const b of $("malOps").children) pressed(b, b.dataset.op === malS.op);
+  for (const b of $("malTypes").children) pressed(b, malS.types.has(b.dataset.chip));
+  $("malH").textContent = `${String(malS.h).replace(".", ",")} m`; $("malStep").hidden = !OPS.find(o => o.op === malS.op).h;
+}
 function malKind(mode) {
   malMode = mode;
-  for (const [id, m] of [["malPaint", "paint"], ["malEarth", "terrain"], ["malPlant", "plant"]]) $(id).setAttribute("aria-pressed", String(m === mode));
+  for (const [id, m] of [["malPaint", "paint"], ["malEarth", "terrain"], ["malPlant", "plant"]]) pressed($(id), m === mode);
   for (const el of malPop.querySelectorAll(".mal-paint")) el.hidden = mode !== "paint"; for (const el of malPop.querySelectorAll(".mal-earth")) el.hidden = mode !== "terrain";
   for (const el of malPop.querySelectorAll(".mal-plant")) el.hidden = mode !== "plant"; for (const el of malPop.querySelectorAll(".mal-brush")) el.hidden = mode === "plant";
-  if (mode === "plant") malFind(); else $("malSpList").hidden = true;
+  if (mode === "plant") malFind();
 }
-/* the species picker: hagekart's list (plants.js, the same as Anton's), the banned ones greyed with the reason; a banned one cannot be picked */
+/* the plant cards: hagekart's list (plants.js, the same as Anton's), drawn by kind, the banned ones left out of the grid; typed, a banned one is explained */
 function malFind() {
-  const list = $("malSpList"), found = searchPlants($("malSp").value);
-  list.hidden = !found.length; list.replaceChildren(...found.map(p => {
-    const li = document.createElement("li"), b = document.createElement("button"); b.type = "button"; b.disabled = p.banned; b.setAttribute("aria-pressed", String(malSp?.id === p.id));
-    b.innerHTML = `<span>${esc(p.no)}${p.la ? ` <i>${esc(p.la)}</i>` : ""}</span><small>${p.banned ? esc(p.why) : `${String(p.ht).replace(".", ",")} m høy, ${String(p.sp).replace(".", ",")} m bred`}</small>`;
-    if (p.banned) b.title = p.why; else b.onclick = () => { malSp = p; $("malSp").value = p.no; malFind(); };
-    li.append(b); return li;
-  }));
+  const q = $("malSp").value.trim(), found = q ? searchPlants(q, 40).filter(p => !p.banned) : null, list = $("malSpList"), say = $("malSpSay");
+  const banned = q ? searchPlants(q, 3).filter(p => p.banned) : [];
+  say.hidden = !banned.length; say.textContent = banned.map(p => `${p.no}: ${p.why.toLowerCase().replace(/^forbudt/, "forbudt")}.`).join(" ");
+  const show = cards(found ? PLANTS.filter(p => found.some(f => f.id === p.id)) : PLANTS, [...malS.types]);
+  list.replaceChildren(...show.map(p => { const b = document.createElement("button"); b.type = "button"; b.title = `${p.no}${p.la ? ` (${p.la})` : ""}`; pressed(b, malSp?.id === p.id);
+    b.innerHTML = `<span class="ute-pic">${silhouette(p)}</span><span>${esc(p.no)}</span><small>${esc(heightText(p))}</small>`; b.onclick = () => { malSp = p; malFind(); }; return b; }));
+  if (!show.length && !banned.length) { const n = document.createElement("small"); n.textContent = "Ingen arter passer."; list.append(n); }
 }
 async function malSend(line, o) {
   const earth = o.mode === "terrain", plant = o.mode === "plant";
@@ -738,7 +762,7 @@ function malOpen(on) {
 }
 $("mmal").onclick = () => malOpen(malPop.hidden);
 $("malStop").onclick = () => malOpen(false);
-$("malPaint").onclick = () => malKind("paint"); $("malEarth").onclick = () => malKind("terrain"); $("malPlant").onclick = () => malKind("plant"); $("malSp").oninput = malFind;
+$("malPaint").onclick = () => malKind("paint"); $("malEarth").onclick = () => malKind("terrain"); $("malPlant").onclick = () => malKind("plant"); $("malSp").oninput = malFind; malBuild();
 malPop.onsubmit = ev => ev.preventDefault();
 /* «Hent fil» (U3571): an IFC from a manufacturer (a greenhouse, a window), signed in; the server keeps it by its sha
    and the worker reads it (its own units, made metres), then a tap stands it there as a construction is: its box's

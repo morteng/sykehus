@@ -2,7 +2,7 @@
    in this site's metres [east, north] from the origin.
 
    { kind: "paint", surface, mode?, line, r?, why? }
-        a brush stroke along line (1 or more points), radius r metres, laid as grass, planting (a bed), paving or gravel;
+        a brush stroke along line (1 or more points), radius r metres, laid as grass, meadow, planting (a bed), gravel, paving, asphalt or soil;
         mode "erase" rubs that surface out instead. The brush stops at buildings, water, roads and paths (not at the plot line, which is not exact to the ground), and
         pulls the last 0.8 m to a building, a road or a path, so the lawn meets the wall. Joins the surface it touches.
         around (set by the connector, not asked for): the rings of the ways near the stroke.
@@ -14,8 +14,8 @@ import { designedSurface, TERRAIN_OPS } from "./renderkit/terrain.js";
 import { ringArea as signedArea } from "./renderkit/paths2d.js";
 const ringArea = r => Math.abs(signedArea(r));
 
-export const PAINT_SURFACES = ["grass", "planting", "paving", "gravel"];
-const KIND = { grass: "lawn", planting: "bed", paving: "paving", gravel: "driveway" }, BACK = Object.fromEntries(Object.entries(KIND).map(([k, v]) => [v, k]));
+export const PAINT_SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "soil"];   // what the brush lays: water has a level of its own (surface), concrete and wood are no ground
+const KIND = { grass: "lawn", meadow: "meadow", planting: "bed", paving: "paving", gravel: "driveway", asphalt: "asphalt", soil: "soil" }, BACK = Object.fromEntries(Object.entries(KIND).map(([k, v]) => [v, k]));
 const r1 = v => Math.round(v * 10) / 10;
 
 export function checkPaint(e, { pts, num, name, w_ }) {
@@ -52,7 +52,7 @@ export function applyPaint(land, e, site, gone, nextId) {
   const { rings, blocked, lot, kind, erase } = plan;
   if (!rings.length) return { land, m2: 0 };
   const areas = land.filter(x => x.kind === "surface" && KIND[x.surface]).map(x => ({ id: x.id, kind: KIND[x.surface], st: "exists", ring: closed(x.ring), holes: (x.holes || []).map(closed) }));
-  const res = commit({ rings, mode: erase ? "erase" : "add", kind, st: "exists", areas, lot, buildings: blocked, known: { edges: blocked } });
+  const res = commit({ rings, mode: erase ? "erase" : "add", kind, st: "exists", areas, lot, buildings: blocked, known: { edges: blocked }, kinds: Object.values(KIND) });
   const out = land.filter(x => !res.remove.includes(x.id));
   for (const a of res.add) {
     const was = a.id && land.find(x => x.id === a.id), ring = a.ring.slice(0, -1), holes = (a.holes || []).map(h => h.slice(0, -1));

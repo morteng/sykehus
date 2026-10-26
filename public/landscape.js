@@ -23,7 +23,7 @@ import { SIDE_KEYS } from "./renderkit/dirs.js";
 import { PLANTS } from "./plants.js";
 import { checkPaint, checkTerrain, applyPaint } from "./paint-edit.js";
 
-export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"];
+export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "soil", "water"];
 export const PATHS = ["gravel", "paving", "asphalt", "wood"];
 const MAX_POINTS = 200, MAX_TREES = 300;
 const BY_ID = new Map(PLANTS.map(p => [p.id, p])), BY_LA = new Map(PLANTS.filter(p => p.la).map(p => [p.la.toLowerCase(), p]));

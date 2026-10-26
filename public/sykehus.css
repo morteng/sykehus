@@ -305,12 +305,35 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 #malPop .seg2 button { padding: 7px 14px; color: var(--text); background: transparent; border-radius: 0; }
 #malPop .seg2 button[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); font-weight: 600; }
 #malPop label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 8px; color: var(--text); }
-#malPop .mal-sp { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-#malPop .mal-sp[hidden] { display: none; }
-#malPop .mal-sp button { width: 100%; text-align: left; display: grid; gap: 1px; color: var(--text); background: transparent; border: 1px solid var(--border); }
-#malPop .mal-sp button[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); }
-#malPop .mal-sp button:disabled { opacity: .55; cursor: not-allowed; }
-#malPop .mal-sp small { color: var(--muted); }
+/* Uteområde (U3664): swatches, chips and cards instead of lists. The grids wrap on a wide screen and scroll sideways on a phone. */
+.imp-pop.ute { width: auto; max-width: 100%; box-sizing: border-box; min-width: 0; }
+.imp-pop.ute > * { min-width: 0; }
+.imp-pop.ute .imp-say { overflow-wrap: anywhere; }
+.ute-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ute-grid button, .ute-ops button { display: grid; justify-items: center; gap: 3px; padding: 4px 2px 5px; color: var(--text); background: transparent; border: 2px solid transparent; border-radius: var(--radius); font-size: var(--fs-sm, 12px); }
+.ute-grid button[aria-pressed=true], .ute-ops button[aria-pressed=true], .ute-sizes button[aria-pressed=true], .ute-chips button[aria-pressed=true] { border-color: var(--accent); background: var(--accent-panel); color: var(--accent); }
+.ute-grid img, .ute-grid .ute-pic { width: 100%; max-width: 64px; aspect-ratio: 1; object-fit: cover; border-radius: 6px; display: block; background: var(--bg, #fff); }
+.ute-grid .ute-pic { display: grid; place-items: center; border: 1px solid var(--border); }
+.ute-grid .ute-pic svg { width: 80%; height: 80%; }
+.ute-grid small { color: var(--muted); font-size: 11px; }
+.ute-plants { max-height: 260px; overflow-y: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ute-grid button > span:not(.ute-pic), .ute-grid small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ute-gap select { min-width: 0; }
+.ute-sizes { display: flex; align-items: center; gap: 10px; }
+.ute-sizes button { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: 2px solid var(--border); border-radius: 50%; background: transparent; }
+.ute-sizes i { display: block; border-radius: 50%; background: var(--text); }
+.ute-ops { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ute-ops svg { width: 36px; height: 36px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ute-step { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.ute-step button { width: 44px; height: 44px; padding: 0; font-size: 22px; line-height: 1; border-radius: 50%; }
+.ute-step output { min-width: 4.5em; text-align: center; font-weight: 600; color: var(--text); }
+.ute-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ute-chips button { padding: 6px 12px; color: var(--text); background: transparent; border: 1.5px solid var(--border); border-radius: 999px; }
+.ute-gap { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+@media (max-width: 700px) {
+  .ute-grid, .ute-plants { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 76px; overflow-x: auto; overflow-y: hidden; max-height: none; scroll-snap-type: x proximity; padding-bottom: 4px; }
+  .ute-grid > * { scroll-snap-align: start; }
+}
 .imp-pop button:disabled { opacity: .6; cursor: progress; }
 /* «Gjengi» (U3526): the «Hent fil» pop's look, with the pictures of the open work under it */
 .gj-pop { width: min(340px, calc(100vw - 132px)); max-height: min(70vh, 640px); overflow: auto; }
