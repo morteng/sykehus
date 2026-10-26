@@ -80,8 +80,7 @@ function inline(c, parent, s, inLink = false) {
             parent.appendChild(code);
         }
         else if (m[3] != null) {
-            const src = safeHref(c, m[4] ?? "");
-            const pic = src && c.opts.image ? c.opts.image(m[3], src, c.doc) : null;
+            const pic = c.opts.image ? c.opts.image(m[3], m[4] ?? "", c.doc) : null; // the app owns what a picture may fetch, so it gets the address as written
             parent.appendChild(pic ?? c.doc.createTextNode(m[3]));
         }
         else if (m[5] != null) {
