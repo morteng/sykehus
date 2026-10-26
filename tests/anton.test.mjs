@@ -2,7 +2,7 @@
    node --test tests/anton.test.mjs */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -150,6 +150,20 @@ test("the history names the device in X-Door-Device, never in the query (U3544)"
   assert.equal((await fetch(O + "/api/anton/historikk", { headers: { cookie } })).status, 200);
   const h = seen.filter(s => s.path.startsWith("/internal/sykehus/history")).at(-1);
   assert.equal(h.device, "dev-1"); assert.doesNotMatch(h.path, /device/);
+});
+
+test("a plan Anton showed is listed and served to the person it was shown to, through the server (U3635, the live read 2026-10-26)", async () => {
+  /* the server hands the handlers the person's name; it once handed them the whole record, so the list was empty and the picture a 404 */
+  mkdirSync(join(dir, "v", "skisser"), { recursive: true });
+  const meta = (id, person) => writeFileSync(join(dir, "v", "skisser", id + ".json"), JSON.stringify({ type: "sketch", id, title: "Terrasse", url: `api/skisse/${id}.png`, at: new Date().toISOString(), person }));
+  meta("AAAAAAAA", "lars"); meta("BBBBBBBB", "magnus"); for (const id of ["AAAAAAAA", "BBBBBBBB"]) writeFileSync(join(dir, "v", "skisser", id + ".png"), Buffer.from("89504e470d0a1a0a", "hex"));
+  const list = await (await fetch(O + "/api/skisser", { headers: { cookie } })).json();
+  assert.deepEqual(list.sketches.map(x => x.id), ["AAAAAAAA"], "only his own, and without the owner's name");
+  assert.equal(list.sketches[0].person, undefined);
+  const img = await fetch(O + "/api/skisse/AAAAAAAA.png", { headers: { cookie } });
+  assert.equal(img.status, 200); assert.equal(img.headers.get("content-type"), "image/png");
+  assert.equal((await fetch(O + "/api/skisse/BBBBBBBB.png", { headers: { cookie } })).status, 404, "another person's picture");
+  assert.equal((await fetch(O + "/api/skisser")).status, 401);
 });
 
 test("signing out clears the cookie", async () => {
