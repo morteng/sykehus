@@ -6,7 +6,7 @@ import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
 import { tearAtOnce } from "./optimistic.js";
-import { createKeys } from "./keys.js?v=20261026u";
+import { createKeys } from "./keys.js?v=20261026za";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
@@ -907,8 +907,8 @@ import("./float.js?v=20261026t").then(m => pickActs = m.createFloat({ viewer, si
 const fixed = edits => JSON.stringify((edits || []).filter(e => !LIVE(e)));
 let base = fixed(draft?.edits);
 async function refresh() {
-  keys.clear();   // another tab or Anton changed it: what was taken back is not ours to put back
   const d = await fetchDraft(); if (d.missing) return;
+  keys.echo(d.edits);   // another tab or Anton changed it: what was taken back is not ours to put back (our own change's echo leaves it)
   if (fixed(d.edits) !== base) { try { sessionStorage.setItem("sykehus-pose", JSON.stringify(viewer.pose())); } catch { } return location.reload(); }
   await show(versionId ? { version: versionId } : { draft: draftId });
 }

@@ -25,6 +25,9 @@ export function createKeys({ edits, undo, put, say, name, riv }) {
   return {
     run, redo,
     clear: () => { redo.length = 0; },
+    /* the draft fetched again (Anton's «steps» comes after every change, one's own too): the redo stays when it is the
+       list this page holds, and goes when another tab or Anton made it differ (U3649, the live drive 2026-10-26) */
+    echo: theirs => { if (JSON.stringify(theirs) !== JSON.stringify(edits())) redo.length = 0; },
     taken: e => { redo.push(e); },   // a change taken back by the toast's «Angre»
     /* the page's keydown: true when the key was taken (default stopped) */
     key(e) {

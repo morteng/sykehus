@@ -69,3 +69,11 @@ test("Backspace calls the card's act and stops the default; with nothing picked 
   const e1 = ev("Backspace"); assert.ok(yes.k.key(e1)); assert.equal(e1.stopped, true);
   const e2 = ev("Delete"); assert.equal(no.k.key(e2), false); assert.equal(e2.stopped, undefined);
 });
+
+test("the draft fetched again after one's own undo keeps the redo; one that another tab changed empties it (live drive 2026-10-26)", async () => {
+  const r = rig([a, b]);
+  r.k.key(ev("z", { metaKey: true })); await settle();
+  r.k.echo(r.draft.slice()); assert.equal(r.k.redo.length, 1, "the echo of our own undo");
+  r.k.echo([a, { kind: "demolish", building: "C" }]); assert.equal(r.k.redo.length, 0, "another change to it");
+  r.k.key(ev("Z", { metaKey: true, shiftKey: true })); await settle(); assert.deepEqual(r.redoSent, [], "nothing to put back now");
+});
