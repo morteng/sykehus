@@ -8,6 +8,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
+import { nearWays } from "./public/paint-edit.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS } from "./versions.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -361,8 +362,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* a brush stroke (paint) stops at the ways there are and pulls to their edge: the rings of those near it go with the edit (U3655) */
   const withAround = async e => {
     if (e?.kind !== "paint" || e.around != null || !ways || !Array.isArray(e.line) || !e.line.length) return e;
-    const r = (+e.r || 1.5) + 4, xs = e.line.map(p => +p[0]), ys = e.line.map(p => +p[1]), b = [Math.min(...xs) - r, Math.min(...ys) - r, Math.max(...xs) + r, Math.max(...ys) + r];
-    const near = (await ways()).filter(w => w.ring?.length > 2 && w.ring.some(p => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3])).slice(0, 100).map(w => w.ring);
+    const near = nearWays((await ways()).map(w => w.ring).filter(Boolean), e);
     return { ...e, around: near };
   };
   function fieldsOf(e) {
@@ -921,7 +921,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
       const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
-      if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing", "import"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg og byggenes navn og opplysninger.");   // the rest goes through Anton
+      if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing", "import", "paint", "terrain"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg, byggenes navn og opplysninger, maling og terreng.");   // the rest goes through Anton
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
       if (mine && mine.owner === me) out.nokkel = mine.own;
       if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).join(" "), ...out });

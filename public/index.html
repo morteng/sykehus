@@ -98,11 +98,14 @@
           <button type="button" class="tgl" id="mnew" aria-pressed="false" title="Sett et nytt bygg på tomta: trykk der det skal stå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>Nytt bygg</button>
           <span class="imp"><button type="button" class="tgl" id="mmal" aria-pressed="false" aria-expanded="false" aria-controls="malPop" title="Mal gress, belegg, bed eller grus på bakken: trykk langs der penselen skal gå. Penselen stopper ved hus, vann og veier"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c4-1 3-5 6-8l7-7 2 2-7 7c-3 3-7 2-8 6z"/></svg>Mal</button>
             <form class="imp-pop" id="malPop" hidden>
-              <label>Hva <select id="malSurface"><option value="grass">Gress</option><option value="planting">Bed</option><option value="paving">Belegg</option><option value="gravel">Grus</option></select></label>
+              <span class="seg2" role="group" aria-label="Hva"><button type="button" id="malPaint" aria-pressed="true">Mal</button><button type="button" id="malEarth" aria-pressed="false">Terreng</button></span>
+              <label class="mal-paint">Hva <select id="malSurface"><option value="grass">Gress</option><option value="planting">Bed</option><option value="paving">Belegg</option><option value="gravel">Grus</option></select></label>
+              <label class="mal-paint"><input type="checkbox" id="malErase"> Visk ut</label>
+              <label class="mal-earth" hidden>Hva <select id="malOp"><option value="flatten">Planer</option><option value="raise">Hev</option><option value="lower">Senk</option><option value="pond">Dam</option></select></label>
+              <label class="mal-earth" hidden>Høyde (m) <input type="number" id="malH" min="0.1" max="10" step="0.1" value="0.5"></label>
               <label>Pensel <select id="malSize"><option value="0.8">Smal</option><option value="1.5" selected>Middels</option><option value="3">Bred</option><option value="6">Svært bred</option></select></label>
-              <label><input type="checkbox" id="malErase"> Visk ut</label>
-              <p class="imp-say" id="malSay">Trykk på bakken langs strøket, så «Legg på».</p>
-              <button type="submit" id="malGo" disabled>Legg på</button> <button type="button" id="malStop">Avbryt</button>
+              <p class="imp-say" id="malSay">Trykk og dra på bakken. Slipp for å legge det på.</p>
+              <button type="button" id="malStop">Ferdig</button>
             </form></span>
           <span class="imp"><button type="button" class="tgl" id="mimp" aria-pressed="false" aria-expanded="false" aria-controls="impPop" title="Sett en modell fra en produsent på tomta (et drivhus, et vindu: IFC, STEP, glTF, OBJ, STL), eller en plantegning (DXF, DWG): oppgi kilden og lisensen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>Hent fil</button>
             <form class="imp-pop" id="impPop" hidden>

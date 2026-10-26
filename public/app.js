@@ -5,6 +5,8 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
+import { createMal } from "./mal.js";
+import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
@@ -692,26 +694,34 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
   valg.clear(); valg.add({ kind: "new", id, label: "Nytt bygg" }); const a = site.added.find(x => x.id === id); if (a) showNew(a);
   toast("Nytt bygg satt opp. Trykk «Endre» for navn, etasjer og mål.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }, "ny");
-/* «Mal» (U3655, Morten 13:53Z «painting lawns … do we get those?»): the brush hagekart paints with, from renderkit. Taps on
-   the ground make the stroke; «Legg på» sends it as one paint change (the brush stops at buildings, water and ways and is
-   pulled to their edge on the server's side too, so what Anton paints and what is painted here is the same), with Angre. */
-const malPop = $("malPop"); let malPts = [];
-const malSay = t => { $("malSay").textContent = t; };
-function malOpen(on) {
-  malPop.hidden = !on; $("mmal").setAttribute("aria-expanded", String(on)); $("mmal").setAttribute("aria-pressed", String(on)); malPts = []; $("malGo").disabled = true;
-  if (!on) { if (placing === malTap) placing = null; document.body.classList.remove("placing"); return; }
-  malSay("Trykk på bakken langs strøket, så «Legg på»."); placing = malTap; document.body.classList.add("placing");
+/* «Mal» (U3655, Morten 13:53Z «painting lawns (with edge detection stuff) …»): the drag brush of hagekart, from renderkit, in
+   mal.js: press and drag, a ghost of what the brush would paint, release to send one change (with Angre). «Terreng» moves
+   earth under the same stroke (flatten, raise, lower, pond) and the toast says what was dug and filled. */
+const malPop = $("malPop"); let malEarth = false, mal = null;
+const malOpts = () => ({ mode: malEarth ? "terrain" : "paint", surface: $("malSurface").value, erase: $("malErase").checked, r: +$("malSize").value, op: $("malOp").value, h: +$("malH").value });
+function malKind(earth) {
+  malEarth = earth; $("malPaint").setAttribute("aria-pressed", String(!earth)); $("malEarth").setAttribute("aria-pressed", String(earth));
+  for (const el of malPop.querySelectorAll(".mal-paint")) el.hidden = earth; for (const el of malPop.querySelectorAll(".mal-earth")) el.hidden = !earth;
 }
-function malTap([x, y]) { malPts.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]); $("malGo").disabled = false; malSay(`${malPts.length} ${malPts.length === 1 ? "punkt" : "punkter"}. Trykk videre, eller «Legg på».`); placing = malTap; }
+async function malSend(line, o) {
+  const earth = o.mode === "terrain", edit1 = earth
+    ? { kind: "terrain", op: o.op, shape: { t: "stroke", pts: line, r: o.r }, ...(o.op === "flatten" ? {} : { h: o.h }), why: "flyttet jord på siden" }
+    : { kind: "paint", surface: o.surface, mode: o.erase ? "erase" : "add", line, r: o.r, around: nearWays(streetsOn?.wayRings?.() || [], { line, r: o.r }), why: "malt på siden" };
+  const r = await edit([edit1], earth ? "Fikk ikke flyttet jord" : o.erase ? "Fikk ikke visket ut" : "Fikk ikke malt");
+  if (!r) return;
+  const w = site.earthwork;
+  toast(earth ? `Terrenget er endret i utkastet${w ? `: graves ut ${String(w.cut_m3).replace(".", ",")} m³, fylles ${String(w.fill_m3).replace(".", ",")} m³ (om lag ${w.tippers} lass)` : ""}.` : o.erase ? "Visket ut i utkastet." : "Malt i utkastet. Penselen stoppet ved hus, vann og veier.", { label: "Angre", run: () => undoLast(r.n, r.k) });
+}
+function malOpen(on) {
+  malPop.hidden = !on; $("mmal").setAttribute("aria-expanded", String(on)); $("mmal").setAttribute("aria-pressed", String(on));
+  if (on && placing) { placing = null; document.body.classList.remove("placing"); }
+  mal ||= createMal({ viewer, host: $("view"), site: () => site, ways: () => streetsOn?.wayRings?.() || [], opts: malOpts, send: malSend });
+  mal.set(on);
+}
 $("mmal").onclick = () => malOpen(malPop.hidden);
 $("malStop").onclick = () => malOpen(false);
-malPop.onsubmit = async ev => {
-  ev.preventDefault(); if (!malPts.length) return;
-  const erase = $("malErase").checked, surface = $("malSurface").value, r = await edit([{ kind: "paint", surface, mode: erase ? "erase" : "add", line: malPts, r: +$("malSize").value, why: "malt på siden" }], erase ? "Fikk ikke visket ut" : "Fikk ikke malt");
-  if (!r) return;
-  malPts = []; $("malGo").disabled = true; malSay("Lagt på. Trykk for å male mer.");
-  toast(erase ? "Visket ut i utkastet." : "Malt i utkastet. Penselen stoppet ved hus, vann og veier.", { label: "Angre", run: () => undoLast(r.n, r.k) });
-};
+$("malPaint").onclick = () => malKind(false); $("malEarth").onclick = () => malKind(true);
+malPop.onsubmit = ev => ev.preventDefault();
 /* «Hent fil» (U3571): an IFC from a manufacturer (a greenhouse, a window), signed in; the server keeps it by its sha
    and the worker reads it (its own units, made metres), then a tap stands it there as a construction is: its box's
    middle at the tap, its length across the screen, its foot on the ground; its card says where it came from */

@@ -301,6 +301,10 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .imp-pop input, .imp-pop select { padding: 6px 8px; font: inherit; color: var(--text); background: var(--bg, #fff); border: 1px solid var(--border); border-radius: var(--radius); }
 .imp-pop .imp-say { margin: 0; color: var(--text); }
 .imp-pop button { justify-self: start; padding: 7px 12px; font: inherit; color: var(--on-accent, #fff); background: var(--accent); border: 0; border-radius: var(--radius); cursor: pointer; }
+#malPop .seg2 { display: inline-flex; justify-self: start; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); }
+#malPop .seg2 button { padding: 7px 14px; color: var(--text); background: transparent; border-radius: 0; }
+#malPop .seg2 button[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); font-weight: 600; }
+#malPop label:has(input[type=checkbox]) { display: flex; align-items: center; gap: 8px; color: var(--text); }
 .imp-pop button:disabled { opacity: .6; cursor: progress; }
 /* «Gjengi» (U3526): the «Hent fil» pop's look, with the pictures of the open work under it */
 .gj-pop { width: min(340px, calc(100vw - 132px)); max-height: min(70vh, 640px); overflow: auto; }

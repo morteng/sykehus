@@ -48,17 +48,11 @@ export function checkTerrain(e, { pts, num, name, w_ }) {
    0.8 m to its edge), and committed against the surfaces there are. gone: the buildings the after has torn down already.
    Returns { land, m2 }: the surfaces after, and the net change of that surface in m². */
 export function applyPaint(land, e, site, gone, nextId) {
-  const lot = site.lot?.ring; if (!lot) return { land, m2: 0 };
-  const closed = r => r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1] ? r : [...r, r[0]];
-  const blocked = [...site.buildings.filter(b => !gone.has(b.id) && !gone.has(b.wing)).map(b => b.ring), ...(e.around || []),
-    ...land.filter(g => g.kind === "path" || (g.kind === "surface" && (g.surface === "water" || !KIND[g.surface]))).map(g => g.ring)].map(closed);
-  const kind = KIND[e.surface], erase = e.mode === "erase", L = e.line;
-  const xs = L.map(p => p[0]), ys = L.map(p => p[1]), box = [Math.min(...xs) - e.r, Math.min(...ys) - e.r, Math.max(...xs) + e.r, Math.max(...ys) + e.r];
-  const g = gridOver(box, resFor(box, 4), 4), mask = stampStroke(g, L, e.r);
-  const gh = erase ? ghost({ g, mask, blocked: new Uint8Array(mask.length), box, edges: [], snapM: 0 }) : ghost({ g, mask, blocked: blockedFor(g, { lot: closed(lot), buildings: blocked }), box, edges: blocked });
-  if (!gh.rings.length) return { land, m2: 0 };
+  const plan = paintPlan(land, e, site, gone); if (!plan) return { land, m2: 0 };
+  const { rings, blocked, lot, kind, erase } = plan;
+  if (!rings.length) return { land, m2: 0 };
   const areas = land.filter(x => x.kind === "surface" && KIND[x.surface]).map(x => ({ id: x.id, kind: KIND[x.surface], st: "exists", ring: closed(x.ring), holes: (x.holes || []).map(closed) }));
-  const res = commit({ rings: gh.rings, mode: erase ? "erase" : "add", kind, st: "exists", areas, lot: closed(lot), buildings: blocked, known: { edges: blocked } });
+  const res = commit({ rings, mode: erase ? "erase" : "add", kind, st: "exists", areas, lot, buildings: blocked, known: { edges: blocked } });
   const out = land.filter(x => !res.remove.includes(x.id));
   for (const a of res.add) {
     const was = a.id && land.find(x => x.id === a.id), ring = a.ring.slice(0, -1), holes = (a.holes || []).map(h => h.slice(0, -1));
@@ -67,6 +61,26 @@ export function applyPaint(land, e, site, gone, nextId) {
     const at = was ? out.findIndex(x => x.id === a.id) : -1; if (at >= 0) out[at] = item; else out.push(item);
   }
   return { land: out, m2: res.m2 };
+}
+
+const closed = r => r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1] ? r : [...r, r[0]];
+/* what the brush would paint, before it is committed: the rings of the stroke stopped by what is blocked and pulled the last
+   0.8 m to its edge. The page draws these while one drags (mal.js); applyPaint commits them: one function, one answer */
+export function paintPlan(land, e, site, gone = new Set()) {
+  const lot = site.lot?.ring; if (!lot) return null;
+  const blocked = [...site.buildings.filter(b => !gone.has(b.id) && !gone.has(b.wing)).map(b => b.ring), ...(e.around || []),
+    ...land.filter(g => g.kind === "path" || (g.kind === "surface" && (g.surface === "water" || !KIND[g.surface]))).map(g => g.ring)].map(closed);
+  const erase = e.mode === "erase", L = e.line;
+  const xs = L.map(p => p[0]), ys = L.map(p => p[1]), box = [Math.min(...xs) - e.r, Math.min(...ys) - e.r, Math.max(...xs) + e.r, Math.max(...ys) + e.r];
+  const g = gridOver(box, resFor(box, 4), 4), mask = stampStroke(g, L, e.r);
+  const gh = erase ? ghost({ g, mask, blocked: new Uint8Array(mask.length), box, edges: [], snapM: 0 }) : ghost({ g, mask, blocked: blockedFor(g, { lot: closed(lot), buildings: blocked }), box, edges: blocked });
+  return { rings: gh.rings, polys: gh.polys, m2: gh.m2, blocked, lot: closed(lot), kind: KIND[e.surface], erase };
+}
+
+/* the rings of the ways within reach of a stroke (the edit's `around`), the same on the server and on the page */
+export function nearWays(rings, e) {
+  const r = (+e.r || 1.5) + 4, xs = e.line.map(p => +p[0]), ys = e.line.map(p => +p[1]), b = [Math.min(...xs) - r, Math.min(...ys) - r, Math.max(...xs) + r, Math.max(...ys) + r];
+  return rings.filter(w => w.length > 2 && w.some(p => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3])).slice(0, 100).map(w => w.map(p => [r1(p[0]), r1(p[1])]));
 }
 
 /* the terrain ops of the edits laid on the site's ground grid (a copy; the before's grid stays): what they dig and fill
