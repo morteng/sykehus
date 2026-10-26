@@ -173,3 +173,19 @@ test("U3628: a balcony that would stand inside the low wing in front is not made
   const torn = applyEdits(site, floors, [{ kind: "demolish", building: "sentralblokka-sidebygg" }, e]).site.added[0];
   assert.equal(torn.skipped, undefined, "with the side wing torn down, every bay is made");
 });
+
+test("U3624: one balcony per window: centred on the window bays the facade is drawn with, 2.5 m apart, and counted", async () => {
+  const { windowsOn, BAY, WINDOWS } = await import("../public/bays.js");
+  /* a wall along x from the origin's line: the bays start where x is a multiple of 2.5, the tower's pair of windows at 1.16–2.49 in each */
+  assert.deepEqual(windowsOn("tower", [0, 0, 10, 0]), [[1.16, 2.49], [3.66, 4.99], [6.16, 7.49], [8.66, 9.99]]);
+  assert.deepEqual(windowsOn("tower", [1, 0, 11, 0]), [[0.16, 1.49], [2.66, 3.99], [5.16, 6.49], [7.66, 8.99]], "counted from the line's origin, not the wall's end");
+  assert.equal(BAY, 2.5); assert.equal(WINDOWS.tower.length, 2);
+  const e = checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", side: "Ø", windows: true, depth: 1.5, from_storey: "5" });
+  const a = applyEdits(site, floors, [e]).site.added[0], slabs = a.parts.filter(p => p.role === "slab");
+  const w = Math.hypot(slabs[0].axis[1][0] - slabs[0].axis[0][0], slabs[0].axis[1][1] - slabs[0].axis[0][1]);
+  assert.ok(Math.abs(w - (2.49 - 1.16 + 0.6)) < 0.01, `as wide as the windows and 0,3 m each side (${w})`);
+  const c = q => [(q.axis[0][0] + q.axis[1][0]) / 2, (q.axis[0][1] + q.axis[1][1]) / 2];
+  assert.ok(Math.abs(Math.hypot(c(slabs[1])[0] - c(slabs[0])[0], c(slabs[1])[1] - c(slabs[0])[1]) - BAY) < 0.01, "the next one a bay along");
+  assert.equal(a.window_bays, 38); assert.match(a.window_say, /^Én balkong per vindu: 38 vindusakser \(hver 2,5 m\) mot Ø, 380 balkonger i alt\.$/);
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", side: "Ø", windows: true, bay: 3 }), /høyst 2,4 m/);
+});

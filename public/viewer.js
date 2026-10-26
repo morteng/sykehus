@@ -15,6 +15,7 @@ import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
 import { ease } from "./renderkit/camera.js";
 import { offsetRing } from "./renderkit/paths2d.js";
+import { BAY, STOREY, WINDOWS, kindOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
@@ -153,19 +154,19 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     return { box, pane, glass, done, g, mx, my };
   }
   function facade(kind) {
-    const c = FACADE[kind], { box, glass, done, g, mx, my } = painter(2.5, 3.5, 102.4, c);
+    const c = FACADE[kind], { box, glass, done, g, mx, my } = painter(BAY, STOREY, 102.4, c);
     box(0, 0, 2.5, 3.5, c.concrete, 235, 0);
     if (kind === "tower") {
       box(1.1, 0, 2.5, 3.5, c.reveal, 235, 1);                                       // the slot
-      glass(1.22, 1.0, 1.78, 2.35); glass(1.9, 1.0, 2.43, 2.35);                     // the pair of windows
+      for (const w of WINDOWS.tower) glass(...w);                                    // the pair of windows
       box(0.55, 0, 0.565, 3.5, "rgba(60,58,62,.55)", null, 0.5);                     // the pier's joint
       box(0, 3.47, 1.1, 3.5, "rgba(60,58,62,.45)", null, 0.5);                       // the storey's joint
     } else {
       for (const x of [0, 1.25]) box(x, 0, x + 0.015, 3.5, "rgba(70,60,50,.55)", null, 0.5);   // panel joints
       box(0, 1.15, 2.5, 2.3, c.frame, 150, 0.6);                                     // the ribbon of windows
-      for (const x of [0.06, 1.31]) {
-        box(x, 1.21, x + 1.13, 2.24, c.blind, 120, 0.8);
-        g.fillStyle = "rgba(0,0,0,.16)"; for (let y = 1.21 * my; y < 2.24 * my; y += 3) g.fillRect(x * mx, y, 1.13 * mx, 1);   // slats
+      for (const [x, y0, x1, y1] of WINDOWS.low) {
+        box(x, y0, x1, y1, c.blind, 120, 0.8);
+        g.fillStyle = "rgba(0,0,0,.16)"; for (let y = y0 * my; y < y1 * my; y += 3) g.fillRect(x * mx, y, (x1 - x) * mx, 1);   // slats
       }
       box(0, 3.44, 2.5, 3.5, "rgba(0,0,0,.07)", null, null);                         // the sill's shadow line
     }
@@ -200,7 +201,6 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const idle = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 500 }) : setTimeout(f, 30));
   const paintNext = () => { const job = later.shift(); if (!job) return; try { job(); } catch (e) { console.warn("fasade:", e); } dirty = true; if (later.length) idle(paintNext); };
   const paintLater = job => { later.push(job); if (later.length === 1 && compiled) idle(paintNext); };
-  const BAY = 2.5, STOREY = 3.5;
   const wallTex = { low: facade("low"), tower: facade("tower") };
   /* a building on the lot as blocks (tools/massing.py): flat roofs, and walls only where the roof steps down or the
      building ends, with the facade counted in bays and storeys from the base so the windows line up */
@@ -253,7 +253,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   for (const b of site.buildings) {
     const grp = new THREE.Group(), b0 = b.base - 0.5, ring = b.ring;
-    if (b.own && b.blocks?.length) grp.add(blocksMesh(b, b.top - b.base > 40 ? wallTex.tower : wallTex.low));
+    if (b.own && b.blocks?.length) grp.add(blocksMesh(b, wallTex[kindOf(b)]));
     else if (!b.own || b.top == null) {
       const top = b.top ?? b.base + (b.osmHeight || (b.levels || 2) * 3);
       grp.add(wallsTo(ring, b0, () => top, mat(b.own ? C.own : C.nb)));

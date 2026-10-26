@@ -34,6 +34,7 @@ import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./la
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { batterZ, balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
+import { BAY, windowsOn, kindOf } from "./bays.js";   // the window bays (U3624)
 import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
@@ -168,7 +169,8 @@ export function checkDesign(site, e, str) {
       const out = { kind: "balconies", wing: w.id, side, depth: num(e.depth, 0.8, 4, "Dybden", 1.8), railing: e.railing == null ? "glass" : String(e.railing), ...w_ };
       if (!["glass", "steel", "concrete"].includes(out.railing)) throw new Error("railing er glass, steel eller concrete");
       const f = storey(e.from_storey, "from_storey"), t = storey(e.to_storey, "to_storey"); if (f) out.from_storey = f; if (t) out.to_storey = t;
-      if (e.bay != null) { out.bay = num(e.bay, 1.5, 20, "Bredden på hver balkong (bay)"); out.gap = num(e.gap, 0, 10, "Mellomrommet (gap)", 0.6); }
+      if (e.windows) { out.windows = true; if (e.bay != null) out.bay = num(e.bay, 1, 2.4, "Bredden på hver balkong (bay; høyst 2,4 m med én per vindu, 2,5 m mellom vinduene)"); }
+      else if (e.bay != null) { out.bay = num(e.bay, 1.5, 20, "Bredden på hver balkong (bay)"); out.gap = num(e.gap, 0, 10, "Mellomrommet (gap)", 0.6); }
       if (!balconyParts(site, out).length) throw new Error(`${w.name} har ingen fasade mot ${side} der balkongene kan stå (eller ingen etasjer i det valgte spennet)`);
       return out;
     }
@@ -213,23 +215,18 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map()) {
   const lv = (w.levels || []).slice().sort((a, b) => a.kote - b.kote), ground = Math.min(...bs.map(b => b.base));
   const i0 = e.from_storey ? lv.findIndex(l => l.name === e.from_storey) : lv.findIndex(l => l.kote > ground + 2);
   const i1 = e.to_storey ? lv.findIndex(l => l.name === e.to_storey) : lv.length - 1;
-  const kotes = lv.slice(Math.max(0, i0), i1 + 1).map(l => l.kote), [sx, sy] = SIDES[e.side], parts = [];
-  for (const b of bs) {
-    const rings = (b.blocks || []).map(k => k.p); if (!rings.length) rings.push(b.ring);
-    for (const [x0, y0, x1, y1, lo, hi] of b.walls || []) {
-      const L = Math.hypot(x1 - x0, y1 - y0); if (L < 3) continue;
-      const d = [(x1 - x0) / L, (y1 - y0) / L]; let n = [-d[1], d[0]];
-      const mid = [(x0 + x1) / 2 + n[0] * 0.5, (y0 + y1) / 2 + n[1] * 0.5];
-      if (rings.some(r => inRing(mid, r))) n = [-n[0], -n[1]];   // n points out
-      if (n[0] * sx + n[1] * sy < 0.7) continue;
-      // the axis runs so that its left is out
-      const [a, bb] = -d[1] === n[0] && d[0] === n[1] ? [[x0, y0], [x1, y1]] : [[x1, y1], [x0, y0]];
+  const kotes = lv.slice(Math.max(0, i0), i1 + 1).map(l => l.kote), parts = [];
+  for (const { b, wall, L, n, a, bb, flip, lo, hi } of facingWalls(site, e.wing, e.side)) {
       const dd = [(bb[0] - a[0]) / L, (bb[1] - a[1]) / L], runs = [];
-      if (e.bay) { const k = Math.floor((L + e.gap) / (e.bay + e.gap)); const used = k * e.bay + (k - 1) * e.gap; for (let j = 0; j < k; j++) { const t0 = (L - used) / 2 + j * (e.bay + e.gap); runs.push([t0, t0 + e.bay]); } }
+      if (e.windows) {   // U3624: one a window group, centred on it, as the facade's picture draws them (bays.js)
+        for (const [t0, t1] of windowsOn(kindOf(b), wall)) {
+          const c = flip ? L - (t0 + t1) / 2 : (t0 + t1) / 2, h = (e.bay ?? t1 - t0 + 0.6) / 2;
+          if (c - h >= 0.05 && c + h <= L - 0.05) runs.push([c - h, c + h]);
+        }
+      } else if (e.bay) { const k = Math.floor((L + e.gap) / (e.bay + e.gap)); const used = k * e.bay + (k - 1) * e.gap; for (let j = 0; j < k; j++) { const t0 = (L - used) / 2 + j * (e.bay + e.gap); runs.push([t0, t0 + e.bay]); } }
       else runs.push([0.1, L - 0.1]);
-      const lo_ = lo ?? b.base;
       for (const z of kotes) {
-        if (z < lo_ + 1 || z > hi - 1) continue;
+        if (z < lo + 1 || z > hi - 1) continue;
         for (const [t0, t1] of runs) {
           const p = t => [a[0] + dd[0] * t, a[1] + dd[1] * t], ax = [p(t0), p(t1)];
           const body = [...ax, ...ax.slice().reverse().map(q => [q[0] + n[0] * e.depth, q[1] + n[1] * e.depth])], hit = others.find(o => overlapArea(o.p, body, o.z, [z - 0.2, z + 1.1]) > 0.05);
@@ -243,9 +240,32 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map()) {
           }
         }
       }
-    }
   }
   return parts;
+}
+/* a wing's outline walls that face side (within 45°): each with its outward normal n and its axis a -> bb run so that
+   its left is out (flip: that is the wall's own end to start); walls under 3 m left out */
+function* facingWalls(site, wing, side) {
+  const [sx, sy] = SIDES[side];
+  for (const b of site.buildings.filter(x => x.wing === wing)) {
+    const rings = (b.blocks || []).map(k => k.p); if (!rings.length) rings.push(b.ring);
+    for (const wall of b.walls || []) {
+      const [x0, y0, x1, y1, lo, hi] = wall, L = Math.hypot(x1 - x0, y1 - y0); if (L < 3) continue;
+      const d = [(x1 - x0) / L, (y1 - y0) / L]; let n = [-d[1], d[0]];
+      const mid = [(x0 + x1) / 2 + n[0] * 0.5, (y0 + y1) / 2 + n[1] * 0.5];
+      if (rings.some(r => inRing(mid, r))) n = [-n[0], -n[1]];   // n points out
+      if (n[0] * sx + n[1] * sy < 0.7) continue;
+      const flip = !(-d[1] === n[0] && d[0] === n[1]);
+      yield { b, wall, L, n, a: flip ? [x1, y1] : [x0, y0], bb: flip ? [x0, y0] : [x1, y1], flip, lo: lo ?? b.base, hi };
+    }
+  }
+}
+/* U3624: the window bays a wing's facades have by the rule the picture is drawn with (bays.js), per side: how many
+   window groups along its walls (on one storey), and the bay; for about_wing, so Anton can say «én per vindu» */
+export function windowBays(site, wing) {
+  const out = {};
+  for (const side of Object.keys(SIDES)) { let n = 0, kind = null; for (const { b, wall } of facingWalls(site, wing, side)) { kind ??= kindOf(b); n += windowsOn(kindOf(b), wall).length; } if (n) out[side] = { bays: n, bay_m: BAY, picture: kind === "tower" ? "par av vinduer i en nisje" : "vindusbånd" }; }
+  return out;
 }
 
 /* a volume's one part: its cross-section over the middle line */
@@ -474,8 +494,9 @@ export function applyDesign(site, floors, edits) {
     else if (e.kind === "reshape") { const v = vols.get(e.id); if (v) { const { kind, id, why, ...set } = e; Object.assign(v, set); if (set.storeys != null && set.height == null) v.height = Math.round(set.storeys * STOREY_M * 100) / 100; } }
     else if (e.kind === "balconies") {
       const skipped = new Map(), parts = balconyParts(site, e, gone, skipped), slabs = parts.filter(p => p.role === "slab");
+      const axes = new Set(slabs.map(p => p.axis.flat().map(v => Math.round(v * 10)).join())).size;   // the window bays used: one axis a bay, on every storey
       added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${e.side}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
-        count: slabs.length, ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
+        count: slabs.length, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) mot ${e.side}, ${slabs.length} balkonger i alt.` } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
