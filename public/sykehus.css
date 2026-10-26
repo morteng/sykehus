@@ -401,3 +401,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 /* «Gjengi» sits in the header now: its pop opens from the right edge */
 header .gj .gj-pop { left: auto; right: 0; z-index: 30; }
 header .gj .ab-ic[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); }
+/* a phone: the bar over the model stops short of the north arrow and the zoom (at 390 px the arrow covered «Navn»),
+   and what does not fit goes to a second row */
+@media (max-width: 599px) { .vt { right: calc(40px + var(--tap) + var(--sp-2)); flex-wrap: wrap; } }
