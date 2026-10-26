@@ -29,7 +29,7 @@ import { readPart } from "./partmerge.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { sunOf } from "./public/renderkit/sunpick.js";
 import { sunError } from "./public/gjengi-no.js";
-import { VIEWPOINTS, LOOKS, SIZES } from "./public/renderkit/photo.js";
+import { VIEWPOINTS, LOOKS, SIZES } from "./public/photo-set.js";
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),

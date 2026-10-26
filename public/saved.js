@@ -6,6 +6,7 @@
 export { addView, renameView, removeView, findView, checkViews, freeName, MAX_VIEWS } from "./renderkit/views.js";
 
 export const VIEW_SPEC = {
+  agent: "anton",   // renderkit views.js: the name a saved view carries when the assistant saved it (stored data, so unchanged)
   num: { x: [-3000, 3000], y: [-3000, 3000], h: [-500, 1000], yaw: [-1000, 1000], pitch: [-1.6, 1.6], dist: [1, 5000], kote: [-100, 400], sunM: [1, 12], sunD: [1, 31], sunH: [0, 24], lens: [10, 200], eyeh: [0.3, 50] },
   str: { storey: 40, wing: 60, building: 80, drawn: 80, caption: 240 },
   one: { mode: ["3d", "plan", "section"], section: ["tverr", "lengde", "fasade"], side: ["N", "Ø", "S", "V"],

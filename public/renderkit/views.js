@@ -5,8 +5,8 @@
 
    A view: { id, name, state, by, at }
      state  the app's camera state, checked against its spec: { num: { key: [lo, hi] }, str: { key: maxLength },
-            one: { key: [allowed values] } }; anything not in the spec is dropped, a number out of range is refused
-     by     who saved it: "person" or "anton"
+            one: { key: [allowed values] } }; anything not in the spec is dropped, a number out of range is refused; spec.agent names the agent that saves views (a string)
+     by     who saved it: "person" or the agent's name (spec.agent, default "agent")
      at     ISO time
    The functions return a new list (the old is not changed) or throw an Error whose message, in Norwegian, says what is
    wrong, for an agent or a person to read. */
@@ -38,7 +38,7 @@ const idOf = () => "w" + Math.random().toString(36).slice(2, 10);
 /* a view added; one with the same name is replaced (saving «Fra sør» again moves it) */
 export function addView(list, { name, state, by = "person" }, spec, { id = idOf(), now = new Date().toISOString() } = {}) {
   const l = list || [], n = tidy(name) || freeName(l), s = cleanState(state, spec);
-  if (!["person", "anton"].includes(by)) throw new Error("by er person eller anton");
+  const agent = spec.agent ?? "agent"; if (!["person", agent].includes(by)) throw new Error(`by er person eller ${agent}`);
   const same = l.find(v => v.name.toLowerCase() === n.toLowerCase());
   if (!same && l.length >= MAX_VIEWS) throw new Error(`Høyst ${MAX_VIEWS} lagrede visninger; ta bort en først`);
   const v = { id: same?.id ?? id, name: n, state: s, by, at: now };
@@ -59,5 +59,5 @@ export function findView(list, key) {
 /* the list as it is kept, each view checked again (what was read from a file) */
 export function checkViews(list, spec) {
   if (!Array.isArray(list)) return [];
-  return list.slice(0, MAX_VIEWS).flatMap(v => { try { return [{ id: String(v.id), name: tidy(v.name) || "Visning", state: cleanState(v.state, spec), by: v.by === "anton" ? "anton" : "person", at: String(v.at || "") }]; } catch { return []; } });
+  return list.slice(0, MAX_VIEWS).flatMap(v => { try { return [{ id: String(v.id), name: tidy(v.name) || "Visning", state: cleanState(v.state, spec), by: v.by === (spec.agent ?? "agent") ? v.by : "person", at: String(v.at || "") }]; } catch { return []; } });
 }
