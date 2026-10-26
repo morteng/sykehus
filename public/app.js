@@ -11,6 +11,7 @@ import { SWATCHES, SIZES, OPS, OP_ICON, ERASER, CHIPS, cards, silhouette, height
 import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
+import { burst, burstAt } from "./kit/effects.js";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
 import { ghostIds } from "./livetries.js";
@@ -423,8 +424,8 @@ function drawDraft() {
     <div class="dr-acts">${acts}${mine() ? `<button type="button" class="icon" data-vdel-open title="Slett forslaget" aria-label="Slett forslaget">${IC.bin}</button>` : ""}<a href="./?for">Se før</a></div>
     ${n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Angre siste: ta ut «${esc(short(draft.edits[n - 1]))}»">${IC.undo}<span>Ta ut «${esc(short(draft.edits[n - 1]))}»</span></button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`}</div>`;
   const R = $("draftRow");
-  for (const b of R.querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
-  R.querySelector("[data-last]")?.addEventListener("click", () => undo(n));
+  for (const b of R.querySelectorAll("[data-undo]")) b.onclick = async () => { const li = b.closest("li"), r = li.getBoundingClientRect(); if (await undo(+b.dataset.undo)) fxBox("dust", li, r); };   // U3884: the row's own place, read before it is redrawn
+  R.querySelector("[data-last]")?.addEventListener("click", async e => { const b = e.currentTarget, r = b.getBoundingClientRect(); if (await undo(n)) fxBox("dust", b, r); });
   R.querySelector("[data-del]")?.addEventListener("click", share);
   R.querySelector("[data-priv]")?.addEventListener("click", async () => {   // «Del» undone: the link stops working
     const j = await change({ unshare: versionId }); if (j.error) return toast(`Fikk ikke gjort det privat: ${j.error}`);
@@ -449,9 +450,10 @@ const nameIt = () => { const t = $("drTitle"); if (t && t.offsetParent) { t.focu
    one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
 let nyttForslag = null;
 function fresh() {
-  nyttForslag ||= import("./nytt-forslag.js?v=20261027c").then(({ startNew }) => startNew({
+  nyttForslag ||= import("./nytt-forslag.js?v=20261027d").then(({ startNew }) => startNew({
     signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et forslag."); $("meBtn")?.click(); },
     mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
+    fx: b => fxBox("leaves", b),
     create: async o => { const j = await change({ fresh: !o.copy, ...o }); if (j.error) return `Fikk ikke laget et nytt forslag: ${j.error}`; await show(j); return null; },
     say: text => { $("tab-chat")?.click(); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text } })); },
   }));
@@ -679,6 +681,16 @@ async function edit(mine_, failed, redoing = false) {
     await show(j); return { n: draft.edits.length, k: mine_.length };
   } finally { busy = false; }
 }
+/* U3884: small effects for the person's OWN acts only (kit/effects.js: leaves = added or done, dust = removed). Never called for what Anton
+   builds, so nothing here runs from show() or a stream. A site point is projected to the screen; a row or button uses its own box. */
+const fxSite = (kind, p, kote = viewer.base || 0) => burstAt(p, q => { const s = viewer.project(q, kote), r = $("view").getBoundingClientRect(); return s[2] ? { x: r.left + s[0], y: r.top + s[1] } : null; }, { kind });
+const fxBox = (kind, el, r = el?.getBoundingClientRect?.()) => { if (r && r.width) burst(r.left + r.width / 2, r.top + r.height / 2, { kind }); };
+const midOf = pts => pts?.length ? [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length] : null;
+/* where a thing stands on the site, by its id: a building, a new volume, a surface, a path or a planting; null when not found */
+function spotOf(id) {
+  const t = [...(site.buildings || []), ...(site.added || []), ...(site.landscape || []), ...(site.plantings || [])].find(x => x.id === id);
+  return t ? midOf(t.ring || t.pts || t.points || (t.from && t.to ? [t.from, t.to] : null)) : null;
+}
 /* the viewer's own lists, as tearAtOnce takes them */
 const hiding = () => ({ gone: () => (site.demolished || []).map(d => d.id), roads: () => (site.roads_removed || []).map(x => x.id), setGone: ids => viewer.setGone(ids), setRoads: ids => streetsOn?.setRemoved(ids) });
 /* a demolish put back or taken out again (Cmd-Z, Shift-Cmd-Z), shown at once where the viewer has the thing: a building or a road */
@@ -686,11 +698,13 @@ const quickBack = e => e?.kind === "demolish" && typeof e.building === "string" 
 async function riv(targets, name, ground = false) {   // ground: a surface or a path, taken away (U3569)
   /* a target is an id, or { building, name } for a road section (U3543), whose name the server cannot look up */
   if (busy) return;
+  const spots = targets.map(t => spotOf(typeof t === "string" ? t : t.building)).filter(Boolean), spot = midOf(spots);   // read before it is gone
   const send = () => edit(targets.map(t => ({ kind: "demolish", ...(typeof t === "string" ? { building: t } : t), why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet");
   /* hidden at once (U3649, Morten 13:06Z: «it takes a long time from i press delete to object dissapears»); the viewer's
      gone list takes a surface or a path as it takes a building */
   const r = await tearAtOnce({ ...hiding(), targets, send, clear: () => { valg.clear(); shut(); } });
   if (!r) return;
+  if (spot) fxSite("dust", spot); else fxBox("dust", $("view"));
   toast(`${name[0].toUpperCase() + name.slice(1)} er ${ground ? "fjernet" : "revet"} i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
 
@@ -721,7 +735,7 @@ async function askPoint(q) {
       const phone = innerWidth <= 700, d = q.dist || 140, mpp = d * 0.72 / (innerHeight || 800), shift = phone ? { x, y: y - 0.25 * d * 0.72 } : { x: x + mpp * 180, y };
       setTimeout(() => { viewer.select(null); valg.clear(); shut(); viewer.look({ ...shift, dist: d }, 300); }, 200);
     } });
-  placing = ([x, y, k]) => dlg.place([x, y, k ?? 0]);
+  placing = ([x, y, k]) => { dlg.place([x, y, k ?? 0]); fxSite("spark", [x, y], k ?? undefined); };   // U3884: the person's own tap
   dlg.open();
   if (Number.isFinite(q.x) && Number.isFinite(q.y)) viewer.look({ x: q.x, y: q.y, dist: q.dist || 90, yaw: 0 }, 0);
 }
@@ -729,6 +743,7 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
   aim(null); const [dx, dy] = along(), L = 15, id = newId();
   const r = await edit([{ kind: "volume", id, name: "Nytt bygg", shape: "box", from: [x - dx * L, y - dy * L], to: [x + dx * L, y + dy * L], width: 12, storeys: 3, material: "concrete", why: "satt opp på siden" }], "Fikk ikke satt opp bygget");
   if (!r) return;
+  fxSite("leaves", [x, y]);
   valg.clear(); valg.add({ kind: "new", id, label: "Nytt bygg" }); const a = site.added.find(x => x.id === id); if (a) showNew(a);
   toast("Nytt bygg satt opp. Trykk «Endre» for navn, etasjer og mål.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }, "ny");
@@ -787,6 +802,7 @@ async function malSend(line, o) {
     : { kind: "paint", surface: o.surface, mode: o.erase ? "erase" : "add", line, r: o.r, around: nearWays(streetsOn?.wayRings?.() || [], { line, r: o.r }), why: "malt på siden" };
   const r = await edit([edit1], plant ? "Fikk ikke plantet" : earth ? "Fikk ikke flyttet jord" : o.erase ? "Fikk ikke visket ut" : "Fikk ikke malt");
   if (!r) return;
+  if (!earth && line.length) fxSite(o.erase ? "dust" : "leaves", midOf(line));
   const w = site.earthwork;
   toast(plant ? `${malSp?.no || "Treet"} er plantet i utkastet.` : earth ? `Terrenget er endret i utkastet${w ? `: graves ut ${String(w.cut_m3).replace(".", ",")} m³, fylles ${String(w.fill_m3).replace(".", ",")} m³ (om lag ${w.tippers} lass)` : ""}.` : o.erase ? "Visket ut i utkastet." : "Malt i utkastet. Penselen stoppet ved hus, vann og veier.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
@@ -1079,7 +1095,7 @@ import("./tour.js?v=20261027d").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261027x").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261027y").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
 import("./gjengi.js?v=20261027u3814").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
