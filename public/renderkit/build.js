@@ -17,6 +17,7 @@
      while moving puts it back.
    The pure part (no three.js) is exported for tests: bodyOf, toBody, cornersOf, snapBody, fitBody. */
 import { pointInRing as inRing } from "./paths2d.js";
+import { snapAngle, edgeAngles, snapRect } from "./infer.js";
 
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const wrap = a => ((a % 360) + 540) % 360 - 180;   // degrees into (-180, 180]
@@ -65,46 +66,13 @@ export function fitBody(s, others, lot = null) {
 /* snapped: the angle to 15° or to a near building's direction (within 4°), the centre to 1 m, then an edge or a corner
    to a near building's (within tol m); guides are the lines that line up, [[e, n], [e, n]] */
 export function snapBody(s, others, { grid = 1, step = 15, tol = 1.2, reach = 40, angle = true, place = true } = {}) {
-  const out = { ...s, c: s.c.slice() }, guides = [];
-  const near = others.filter(o => o.ring.some(p => Math.hypot(p[0] - s.c[0], p[1] - s.c[1]) < reach + s.L));
-  if (angle) {
-    const dirs = near.flatMap(o => edges(o.ring).filter(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 3).map(([p, q]) => deg(Math.atan2(q[1] - p[1], q[0] - p[0]))));
-    let best = null;
-    for (const d of dirs) for (const k of [0, 90, 180, 270]) { const x = wrap(d + k), e = Math.abs(wrap(s.a - x)); if (e < 4 && (!best || e < best.e)) best = { e, x }; }
-    out.a = best ? best.x : wrap(round(s.a, step));
-  }
-  if (!place) return { s: out, guides };
+  const out = { ...s, c: s.c.slice() }, rings = others.map(o => o.ring);
+  if (angle) out.a = snapAngle(s.a, edgeAngles(rings, s.c, reach + s.L), { step, tol: 4 }).a;
+  if (!place) return { s: out, guides: [] };
   out.c = [round(out.c[0], grid), round(out.c[1], grid)];
-  const u = [Math.cos(rad(out.a)), Math.sin(rad(out.a))], v = [-u[1], u[0]], dot = (a, b) => a[0] * b[0] + a[1] * b[1];
-  /* each of the body's four edges against the near buildings' edges that run the same way: the smallest shift a normal */
-  const shift = { u: null, v: null };
-  for (const o of near) for (const [p, q] of edges(o.ring)) {
-    const L = Math.hypot(q[0] - p[0], q[1] - p[1]); if (L < 1) continue;
-    const d = [(q[0] - p[0]) / L, (q[1] - p[1]) / L];
-    for (const [n, ax, half, along, halfAlong] of [["v", v, out.W / 2, u, out.L / 2], ["u", u, out.L / 2, v, out.W / 2]]) {
-      if (Math.abs(dot(d, ax)) > Math.sin(rad(2))) continue;   // not parallel to this pair of edges
-      const off = dot([p[0] - out.c[0], p[1] - out.c[1]], ax), a0 = dot([p[0] - out.c[0], p[1] - out.c[1]], along), a1 = dot([q[0] - out.c[0], q[1] - out.c[1]], along);
-      if (Math.min(a0, a1) > halfAlong + reach || Math.max(a0, a1) < -halfAlong - reach) continue;
-      for (const side of [-half, half]) {
-        const dl = off - side; if (Math.abs(dl) > tol) continue;
-        if (!shift[n] || Math.abs(dl) < Math.abs(shift[n].dl)) shift[n] = { dl, ax, along, off, span: [Math.min(a0, a1, -halfAlong), Math.max(a0, a1, halfAlong)] };
-      }
-    }
-  }
-  /* else a corner to a near corner */
-  if (!shift.u && !shift.v) {
-    let best = null;
-    for (const c of cornersOf(out)) for (const o of near) for (const p of o.ring) { const d = Math.hypot(p[0] - c[0], p[1] - c[1]); if (d < tol && (!best || d < best.d)) best = { d, dx: p[0] - c[0], dy: p[1] - c[1], p }; }
-    if (best) { out.c = [out.c[0] + best.dx, out.c[1] + best.dy]; guides.push([[best.p[0] - 2, best.p[1]], [best.p[0] + 2, best.p[1]]], [[best.p[0], best.p[1] - 2], [best.p[0], best.p[1] + 2]]); }
-    return { s: out, guides };
-  }
-  const c0 = out.c.slice();
-  for (const k of ["u", "v"]) if (shift[k]) { out.c[0] += shift[k].ax[0] * shift[k].dl; out.c[1] += shift[k].ax[1] * shift[k].dl; }
-  for (const k of ["u", "v"]) if (shift[k]) {
-    const { ax, along, off, span } = shift[k], base = [c0[0] + ax[0] * off, c0[1] + ax[1] * off];
-    guides.push([[base[0] + along[0] * (span[0] - 2), base[1] + along[1] * (span[0] - 2)], [base[0] + along[0] * (span[1] + 2), base[1] + along[1] * (span[1] + 2)]]);
-  }
-  return { s: out, guides };
+  const r = snapRect(out, rings, { tol, reach });
+  out.c = r.c;
+  return { s: out, guides: r.guides.map(g => [g.from, g.to]) };
 }
 
 /* the three.js part. The app gives:

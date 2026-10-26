@@ -14,6 +14,8 @@
      (onCommit). Esc or a right click puts it back.
    The pure part (no three.js) is exported for tests: centroidOf, areaOf, lengthOf, turnPts, moveEdge, snapPoint. */
 
+import { snapAlign } from "./infer.js";
+
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const r2 = v => Math.round(v * 100) / 100;
 const round = (v, s) => Math.round(v / s) * s;
@@ -38,14 +40,10 @@ function axisOf(pts, closed) {
    else to the grid in that frame; the neighbours it lines up with are the guides. axis: the direction to use (a drag
    gives the shape's as it was, so the frame does not turn with the point in hand) */
 export function snapPoint(pts, i, g, { closed = true, grid = 0.5, tol = 0.6, axis = null } = {}) {
-  const u = axis || axisOf(pts, closed), v = [-u[1], u[0]], dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+  const u = axis || axisOf(pts, closed);
   const nb = [i - 1, i + 1].map(j => closed ? pts[(j + pts.length) % pts.length] : pts[j]).filter(Boolean);
-  let gu = dot(g, u), gv = dot(g, v); const guides = [];
-  const su = nb.map(p => dot(p, u)).find(x => Math.abs(x - gu) < tol), sv = nb.map(p => dot(p, v)).find(x => Math.abs(x - gv) < tol);
-  gu = su ?? round(gu, grid); gv = sv ?? round(gv, grid);
-  const p = [r2(u[0] * gu + v[0] * gv), r2(u[1] * gu + v[1] * gv)];
-  for (const q of nb) if ((su != null && Math.abs(dot(q, u) - gu) < 1e-6) || (sv != null && Math.abs(dot(q, v) - gv) < 1e-6)) guides.push([q, p]);
-  return { p, guides };
+  const a = snapAlign(g, nb, u, { grid, tol }), p = [r2(a.p[0]), r2(a.p[1])];
+  return { p, guides: a.hits.map(h => [h.ref, p]) };
 }
 
 /* the three.js part. The app gives THREE, el (the canvas), host (for the numbers), scene, camera() (the one in use),

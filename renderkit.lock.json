@@ -1,5 +1,5 @@
 {
-  "kits": "eb020abbf12662d704e35300a22e14881bea1a57",
+  "kits": "c476ed22f529c8505b37246e066d6938a98bf4cf",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -26,8 +26,8 @@
     "fit.js": "476f22c5a8d4032393e7fc33be5ae9037b990028",
     "views.js": "0de40109de70b91115a9d1a78ee2a4e27c361229",
     "select.js": "ccb48dbd13e700bca8fcc64d64ce18067d0391e5",
-    "build.js": "af3ea96aa947cbf0088d043b856febe3d960a650",
-    "shape.js": "e5e10dbfb0ea61a7390831e249a169dacf0f6d5e",
+    "build.js": "f00420ff628726870e43e8a0cde2059ad2a16863",
+    "shape.js": "5911d5549f1250d59da4874dabdf0b40946c2ee7",
     "grade.js": "34a5a56933754484f4a87a16d4f240dbfc52cb8c",
     "materials.js": "40cb42d2788c06499d05bc38dbbf7eb6e51ec007",
     "materials-three.js": "c7f5b02b3e879cb753778b18f2299a1580eb5ff5",
