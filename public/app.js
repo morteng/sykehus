@@ -117,7 +117,7 @@ try { const p = JSON.parse(sessionStorage.getItem("sykehus-pose") || "null"); se
 const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
 /* a high summer sun reads the forms best (21 June at 14); the date and the hour are chosen with the sun button, by a view
    (v.sunM, v.sunD, v.sunH: a saved view keeps its light) or by Anton's show_building sun (U3651, sunpick.js) */
-let sun = { ...SUN_DEFAULT };
+let sun = { ...SUN_DEFAULT }, gjengiCtl = null;   // gjengiCtl: the picture card's hand (gjengi.js), set when it has loaded
 function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
 setSunTo(sun);
 $("sunBtn").onclick = () => { const on = $("sunPop").hidden; $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
@@ -884,6 +884,7 @@ function showView(v) {
     const d = v.drawn && drawnSections.find(x => x.id === v.drawn); return d ? section(b, d.kind, d) : section(b, v.section === "lengde" ? "lengde" : "tverr");
   }
   const sv = sunIn(v); if (sv) setSunTo(sv);   // the view's own light, else the light stays
+  gjengiCtl?.setChoice(v);   // Anton's camera, look and size for the picture (U3652)
   paintEra(v.era); if (v.names != null) setNames(!!v.names, false);
   if (v.mode === "plan" || v.mode === "3d") setMode(v.mode); else if (viewer.view().mode === "section") setMode("3d");
   if (v.storey) pickStorey(v.storey); else if (storeyOn) pickStorey(null);
@@ -908,7 +909,7 @@ import("./tour.js").then(({ createTour }) => {
 }).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261026g").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
-import("./gjengi.js?v=20261026r").then(m => m.startGjengi({ btn: $("mgj"), pop: $("gjPop"), viewer, toast,
+import("./gjengi.js?v=20261026s").then(m => gjengiCtl = m.startGjengi({ btn: $("mgj"), pop: $("gjPop"), viewer, toast,
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
 requestAnimationFrame(() => import("./streets.js?v=20261026r").then(m => m.addStreets({ viewer, site })).then(h => { streetsOn = h; h?.setRemoved(((showingBefore ? site0 : site).roads_removed || []).map(r => r.id)); }).catch(e => console.warn("gater:", e)));

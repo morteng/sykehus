@@ -24,7 +24,7 @@ async function fetchImpl(url, opt = {}) {
 const versions = { get: id => id === "vAbcdefgh" ? { id, owner: "lars", sharing: "privat", own: "egen" } : null, visible: (v, who, key) => v.owner === who || key === v.own };
 const login = { personOf: req => req.headers["x-who"] ? { person: req.headers["x-who"] } : null };
 const readJson = req => new Promise((ok, no) => { const p = []; req.on("data", c => p.push(c)); req.on("end", () => { try { ok(JSON.parse(Buffer.concat(p))); } catch (e) { no(e); } }); });
-const g = createRenderings({ dir, key: "test-key", cap: 0.2, readJson, login, versions, fetchImpl });
+const g = createRenderings({ dir, key: "test-key", cap: 0.2, size: "1K", readJson, login, versions, fetchImpl });
 const srv = createServer(async (req, res) => { const url = new URL(req.url, "http://x"); if (!(await g.route(req, res, url.pathname, url))) res.writeHead(404).end(); }).listen(0);
 after(() => srv.close());
 const O = `http://localhost:${srv.address().port}`;
