@@ -89,3 +89,21 @@ test("the page and the server read the ways through one function (roads.js wayRi
   assert.equal(w.length, 1, "a fence is not a way");
   const ys = w[0].ring.map(p => p[1]); assert.ok(Math.abs(Math.max(...ys) - Math.min(...ys) - 2) < 0.01, "2 m wide");
 });
+
+test("the species picker finds by Norwegian or Latin name, shows a banned species with its reason, and the edit still refuses it", async () => {
+  const { searchPlants } = await import("../public/plants.js");
+  assert.equal(searchPlants("Lind")[0].id, "lind");
+  assert.equal(searchPlants("tilia cordata")[0].id, "lind", "by the Latin name");
+  const lupin = searchPlants("lupin")[0];
+  assert.ok(lupin.banned && /Forbudt å plante i Norge/.test(lupin.why), JSON.stringify(lupin));
+  assert.deepEqual(searchPlants("   "), []);
+  assert.throws(() => checkEdit(site, [], { kind: "trees", species: lupin.id, points: [AT] }), /forbudt å plante i Norge/);
+  const s = run([{ kind: "trees", species: "lind", line: [[AT[0] - 10, AT[1]], [AT[0] + 10, AT[1]]], spacing: 6 }]);
+  assert.equal(s.trees.filter(t => t[5] === "lind").length, 4, "a row every 6 m along 20 m: 0, 6, 12, 18");
+});
+
+test("a tap plants one tree, a stroke a row: the page's plantAt gives the points the edit makes", async () => {
+  const { plantAt } = await import("../public/mal.js");
+  assert.deepEqual(plantAt([[0, 0], [0.5, 0.5]], { gap: 6 }), [[0, 0]]);
+  assert.equal(plantAt([[0, 0], [20, 0]], { gap: 6 }).length, 4);
+});

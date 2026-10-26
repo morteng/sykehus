@@ -5,7 +5,8 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
-import { createMal } from "./mal.js";
+import { createMal, plantAt } from "./mal.js";
+import { searchPlants } from "./plants.js";
 import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026u";
@@ -695,20 +696,37 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
 /* «Mal» (U3655, Morten 13:53Z «painting lawns (with edge detection stuff) …»): the drag brush of hagekart, from renderkit, in
    mal.js: press and drag, a ghost of what the brush would paint, release to send one change (with Angre). «Terreng» moves
    earth under the same stroke (flatten, raise, lower, pond) and the toast says what was dug and filled. */
-const malPop = $("malPop"); let malEarth = false, mal = null;
-const malOpts = () => ({ mode: malEarth ? "terrain" : "paint", surface: $("malSurface").value, erase: $("malErase").checked, r: +$("malSize").value, op: $("malOp").value, h: +$("malH").value });
-function malKind(earth) {
-  malEarth = earth; $("malPaint").setAttribute("aria-pressed", String(!earth)); $("malEarth").setAttribute("aria-pressed", String(earth));
-  for (const el of malPop.querySelectorAll(".mal-paint")) el.hidden = earth; for (const el of malPop.querySelectorAll(".mal-earth")) el.hidden = !earth;
+const malPop = $("malPop"); let malMode = "paint", malSp = null, mal = null;   // malSp: the species picked, or null
+const malOpts = () => ({ mode: malMode, surface: $("malSurface").value, erase: $("malErase").checked, r: +$("malSize").value, op: $("malOp").value, h: +$("malH").value, species: malSp?.id, crown: malSp?.sp, gap: +$("malGap").value });
+function malKind(mode) {
+  malMode = mode;
+  for (const [id, m] of [["malPaint", "paint"], ["malEarth", "terrain"], ["malPlant", "plant"]]) $(id).setAttribute("aria-pressed", String(m === mode));
+  for (const el of malPop.querySelectorAll(".mal-paint")) el.hidden = mode !== "paint"; for (const el of malPop.querySelectorAll(".mal-earth")) el.hidden = mode !== "terrain";
+  for (const el of malPop.querySelectorAll(".mal-plant")) el.hidden = mode !== "plant"; for (const el of malPop.querySelectorAll(".mal-brush")) el.hidden = mode === "plant";
+  if (mode === "plant") malFind(); else $("malSpList").hidden = true;
+}
+/* the species picker: hagekart's list (plants.js, the same as Anton's), the banned ones greyed with the reason; a banned one cannot be picked */
+function malFind() {
+  const list = $("malSpList"), found = searchPlants($("malSp").value);
+  list.hidden = !found.length; list.replaceChildren(...found.map(p => {
+    const li = document.createElement("li"), b = document.createElement("button"); b.type = "button"; b.disabled = p.banned; b.setAttribute("aria-pressed", String(malSp?.id === p.id));
+    b.innerHTML = `<span>${esc(p.no)}${p.la ? ` <i>${esc(p.la)}</i>` : ""}</span><small>${p.banned ? esc(p.why) : `${String(p.ht).replace(".", ",")} m høy, ${String(p.sp).replace(".", ",")} m bred`}</small>`;
+    if (p.banned) b.title = p.why; else b.onclick = () => { malSp = p; $("malSp").value = p.no; malFind(); };
+    li.append(b); return li;
+  }));
 }
 async function malSend(line, o) {
-  const earth = o.mode === "terrain", edit1 = earth
+  const earth = o.mode === "terrain", plant = o.mode === "plant";
+  if (plant && !o.species) { toast("Velg en art først."); return; }
+  const rowIt = plantAt(line, o).length > 1, edit1 = plant
+    ? { kind: "trees", species: o.species, ...(rowIt ? { line, spacing: o.gap } : { points: [line[0]] }), why: "plantet på siden" }
+    : earth
     ? { kind: "terrain", op: o.op, shape: { t: "stroke", pts: line, r: o.r }, ...(o.op === "flatten" ? {} : { h: o.h }), why: "flyttet jord på siden" }
     : { kind: "paint", surface: o.surface, mode: o.erase ? "erase" : "add", line, r: o.r, around: nearWays(streetsOn?.wayRings?.() || [], { line, r: o.r }), why: "malt på siden" };
-  const r = await edit([edit1], earth ? "Fikk ikke flyttet jord" : o.erase ? "Fikk ikke visket ut" : "Fikk ikke malt");
+  const r = await edit([edit1], plant ? "Fikk ikke plantet" : earth ? "Fikk ikke flyttet jord" : o.erase ? "Fikk ikke visket ut" : "Fikk ikke malt");
   if (!r) return;
   const w = site.earthwork;
-  toast(earth ? `Terrenget er endret i utkastet${w ? `: graves ut ${String(w.cut_m3).replace(".", ",")} m³, fylles ${String(w.fill_m3).replace(".", ",")} m³ (om lag ${w.tippers} lass)` : ""}.` : o.erase ? "Visket ut i utkastet." : "Malt i utkastet. Penselen stoppet ved hus, vann og veier.", { label: "Angre", run: () => undoLast(r.n, r.k) });
+  toast(plant ? `${malSp?.no || "Treet"} er plantet i utkastet.` : earth ? `Terrenget er endret i utkastet${w ? `: graves ut ${String(w.cut_m3).replace(".", ",")} m³, fylles ${String(w.fill_m3).replace(".", ",")} m³ (om lag ${w.tippers} lass)` : ""}.` : o.erase ? "Visket ut i utkastet." : "Malt i utkastet. Penselen stoppet ved hus, vann og veier.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
 function malOpen(on) {
   malPop.hidden = !on; $("mmal").setAttribute("aria-expanded", String(on)); $("mmal").setAttribute("aria-pressed", String(on));
@@ -718,7 +736,7 @@ function malOpen(on) {
 }
 $("mmal").onclick = () => malOpen(malPop.hidden);
 $("malStop").onclick = () => malOpen(false);
-$("malPaint").onclick = () => malKind(false); $("malEarth").onclick = () => malKind(true);
+$("malPaint").onclick = () => malKind("paint"); $("malEarth").onclick = () => malKind("terrain"); $("malPlant").onclick = () => malKind("plant"); $("malSp").oninput = malFind;
 malPop.onsubmit = ev => ev.preventDefault();
 /* «Hent fil» (U3571): an IFC from a manufacturer (a greenhouse, a window), signed in; the server keeps it by its sha
    and the worker reads it (its own units, made metres), then a tap stands it there as a construction is: its box's
