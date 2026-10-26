@@ -163,7 +163,7 @@ export function checkGroundEdit(site, e, str) {
   return Object.assign(out, w_);
 }
 
-function treePoints(e) {
+export function treePoints(e) {
   if (e.points) return e.points;
   const out = [], l = e.line; let carry = 0;
   for (let i = 1; i < l.length; i++) {

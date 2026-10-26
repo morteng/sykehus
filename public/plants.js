@@ -41,3 +41,14 @@ export const PLANTS = [
   {"id":"rynkerose","no":"Rynkerose","la":"Rosa rugosa","cat":"none","ht":1.5,"sp":1.5,"form":"arch","banned":true},
   {"id":"parkslirekne","no":"Parkslirekne","la":"Reynoutria japonica","cat":"none","ht":3,"sp":2,"form":"vase","banned":true},
 ];
+
+/* U3655: the species picker's search over the list above: by Norwegian or Latin name or id, accents and case ignored; the
+   banned ones come back too, with the reason, so the picker shows them greyed and the server (landscape.js plantOf) still refuses them */
+const fold = t => String(t ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ø/g, "o").replace(/æ/g, "ae").replace(/å/g, "a");
+export const BANNED_WHY = "Forbudt å plante i Norge (forskrift om fremmede organismer)";
+export function searchPlants(q, limit = 8) {
+  const k = fold(q).trim(); if (!k) return [];
+  return PLANTS.filter(p => p.id !== "tre" && p.id !== "busk" && [p.no, p.la, p.id].some(v => fold(v).includes(k)))
+    .sort((a, b) => (fold(b.no).startsWith(k) - fold(a.no).startsWith(k)) || a.no.localeCompare(b.no, "nb")).slice(0, limit)
+    .map(p => ({ id: p.id, no: p.no, la: p.la, cat: p.cat, ht: p.ht, sp: p.sp, banned: !!p.banned, ...(p.banned ? { why: BANNED_WHY } : {}) }));
+}
