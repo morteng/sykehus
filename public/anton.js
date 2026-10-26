@@ -36,12 +36,13 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
   const chip = $("me");
   const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
   if (!me.person) {
-    unmark();
-    /* not signed in: the Anton tab says how, and the chip in the app bar opens it */
-    loginCard(me.login);
-    if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; $("meBtn").onclick = () => { panel.reveal("chat"); $("code")?.focus(); }; }
+    /* not signed in (U3662): nothing of Anton, no tab, no pill, no chips; only «Logg inn» in the bar, with the code in a dialog */
+    unmark(); document.body.classList.add("anon");
+    panel.show(["changes", "selected"].find(t => !$(`tab-${t}`).hidden), { quiet: true });
+    if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; import("./login.js").then(m => m.startLogin({ button: $("meBtn") })).catch(e => console.error("login:", e)); }
     return;
   }
+  document.body.classList.remove("anon");
   chip.innerHTML = `<button type="button" class="me" id="meBtn" aria-haspopup="true" aria-expanded="false" title="Logget inn som ${esc(me.person)}"><i></i>${esc(me.person)}</button>`;
   chip.hidden = false; chip.style.position = "relative";
   if (me.via !== "gulden.no") {   // signed in on gulden.no: signed out there, not here
@@ -53,27 +54,6 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     menu.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; $("meBtn").focus(); } });
   }
   if (me.anton) talk(); else { unmark(); $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten en tilbakemelding.</p>`; }
-
-  /* the four digits, big, in the Anton tab */
-  function loginCard(can) {
-    $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false;
-    if (!can) { t.innerHTML = `<p class="mut">Anton er for dem som er logget inn. Du kan se alt uten.</p>`; return; }
-    t.innerHTML = `<h2>Logg inn</h2><p class="sub">Skriv de fire sifrene du har fått på telefonen, så kan du snakke med Anton.</p>
-      <form id="codeForm" autocomplete="off" class="oc-row"><input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" aria-label="Koden, fire sifre">
-      <button type="submit" class="pri">Logg inn</button></form><p id="codeErr" class="err" role="alert"></p>
-      <p class="src">Maskinen husker deg i tre måneder. Uten innlogging kan du se alt, men ikke lagre.</p>`;
-    const code = $("code");
-    code.oninput = () => { code.value = code.value.replace(/\D/g, "").slice(0, 4); if (code.value.length === 4) $("codeForm").requestSubmit(); };
-    let sending = false;   // the fourth digit submits, and so may the button or Enter: the code goes once
-    $("codeForm").onsubmit = async e => {
-      e.preventDefault(); if (sending) return; sending = true; $("codeErr").textContent = "";
-      const device = /Mac/.test(navigator.userAgent) ? "Mac" : /iPad|iPhone/.test(navigator.userAgent) ? "iPad/iPhone" : /Windows/.test(navigator.userAgent) ? "Windows" : "nettleser";
-      const r = await json("api/logg-inn", { code: code.value, device });
-      const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
-      if (r?.ok) return location.reload();
-      sending = false; $("codeErr").textContent = j.error || "Det gikk ikke."; code.value = ""; code.focus();
-    };
-  }
 
   function talk() {
     document.body.classList.add("talk-on");

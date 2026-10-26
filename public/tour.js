@@ -63,7 +63,7 @@ export function visitorSteps(h) {
   return [
     { ...by("Velkommen til Sykehustomta"), text: "Her er Gamle Drammen sykehus slik det står i dag, bygget opp fra arkivets tegninger, laserdata og kart. Du kan se på alt. Omvisningen tar et minutt." },
     by("Modellen"), by("Tre måter å se på"), by("Etasjene"),
-    { el: () => document.getElementById("meBtn") || document.getElementById("me"), title: "Logg inn", text: "Logg inn for å snakke med Anton og lage ditt eget forslag til hvordan tomta kan bli." },
+    { el: () => document.getElementById("meBtn") || document.getElementById("me"), title: "Logg inn", text: "Logg inn med koden du har fått av Morten, så kan du lage ditt eget forslag til hvordan tomta kan bli, og få hjelp til det." },
   ];
 }
 /* the list for a kind: «nytt» is the intro and the steps newer than the version seen, then the end */

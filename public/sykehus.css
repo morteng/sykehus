@@ -477,3 +477,13 @@ body.tegner .g-chat { visibility: hidden; }
 #mfb { position: relative; }
 .g-modal .fb-sent { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-2); }
 .fb-sent h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
+
+/* U3662: signed out, nothing of Anton: no tab, no panel, no pill, no «Spør Anton» on a card (early.js and anton.js set .anon) */
+body.anon #tab-chat, body.anon #p-chat, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat { display: none !important; }
+body.anon .dock[data-tabs] { --tabs: 2; }
+.login-form { display: grid; gap: var(--sp-3); }
+.login-sub { margin: 0; font-size: var(--fs-md); }
+.login-l { display: grid; gap: 6px; color: var(--muted); }
+.login-code { font: inherit; font-size: 28px; letter-spacing: .5em; text-align: center; padding: 10px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); max-width: 12rem; }
+.login-err { margin: 0; color: var(--danger-text); }
+.login-note { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
