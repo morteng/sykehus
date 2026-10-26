@@ -935,7 +935,7 @@ function listVersions() {
     versions = versions.filter(v => v.version !== versionId);   // the open one is the card above
     verRows = versions; for (const id of [...picked]) if (!versions.some(v => v.version === id && v.mine)) picked.delete(id);
     $("verBar").hidden = !versions.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
-    if (!versions.length) { $("verList").innerHTML = `<li class="sel-empty">Ingen andre forslag ennå.</li>`; return; }
+    if (!versions.length) { $("verList").innerHTML = `<li class="sel-empty">Ingen forslag ennå.</li>`; return; }
     $("verList").innerHTML = versions.map(v => `<li>${selecting && v.mine ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}<a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${v.version === versionId ? ' aria-current="page"' : ""}><span><span class="t">${esc(v.title)}</span><small>${v.mine ? "din" : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></span>${v.mine ? `<span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span>` : ""}</a>${v.mine && !selecting ? `<button type="button" class="icon" data-vdel="${esc(v.version)}" title="Slett forslaget" aria-label="Slett forslaget: ${esc(v.title)}">${IC.bin}</button>` : ""}</li>`).join("");
   }).catch(() => {});
 }

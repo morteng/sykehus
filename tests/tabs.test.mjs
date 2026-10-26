@@ -51,3 +51,13 @@ test("signed out is refused; a bad kind, a bad picture and a text too long have 
   const [code, out] = await call("POST", "/api/feedback", { kind: "bug", text: "eleven" });
   assert.equal(code, 429); assert.equal(out.code, "limit"); assert.ok(Date.parse(out.retry_at) > Date.now());
 });
+
+test("U3672 (Morten 16:51Z «we don't need this text»): the Forslag tab has no «Forslag til «etter»» heading and no paragraph under it; the list and «Nytt forslag» stay, and the tour anchors on the tab, not on a heading", async () => {
+  const { readFileSync } = await import("node:fs"), rd = f => readFileSync(new URL("../public/" + f, import.meta.url), "utf8");
+  const html = rd("index.html"), panel = html.slice(html.indexOf('id="p-changes"'), html.indexOf("</section>", html.indexOf('id="p-changes"')));
+  assert.doesNotMatch(panel, /<h2/); assert.doesNotMatch(panel, /Forslag til «etter»|Tegnet med Anton over modellen/);
+  assert.match(panel, /id="mnp"/); assert.match(panel, /id="verList"/); assert.match(panel, /id="draftRow"/);
+  assert.match(rd("app.js"), /sel-empty">Ingen forslag ennå\.<\/li>/); assert.doesNotMatch(rd("app.js"), /Ingen andre forslag/);
+  const { steps } = await import("../public/tour.js"), s = steps({ phone: () => false, tab() { } }).find(x => x.title === "Forslaget ditt");
+  assert.match(String(s.el), /p-changes/); assert.doesNotMatch(String(s.el), /h2|etter/);
+});
