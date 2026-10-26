@@ -42,9 +42,14 @@ jvm = [JAVA, "-Xmx1500m", "-Xss1m", "-XX:+UseSerialGC", "-XX:-UseContainerSuppor
 cmd = jvm + ["-jar", JAR, "-de", str(dsn), "-do", str(ses), "-mp", str(int(opt.get("passes", 30))), "-mt", str(int(opt.get("threads", 1))),
              "-da", "-dct", "0", "--gui.enabled=false", "--api_server.enabled=false", "--logging.file.enabled=false", "--user_data_path=/tmp/freerouting"]
 t0 = time.time()
-r = subprocess.run(cmd, capture_output=True, text=True)
+# java finds its own libraries at $ORIGIN/../lib, and $ORIGIN is read from /proc/self/exe, which the sandbox's empty
+# /proc does not have: so their folders are named outright
+home = pathlib.Path(JAVA).resolve().parent.parent
+env = {**os.environ, "LD_LIBRARY_PATH": ":".join(str(home / d) for d in ("lib", "lib/server")), "JAVA_HOME": str(home)}
+r = subprocess.run(cmd, capture_output=True, text=True, env=env)
 log = (r.stdout + r.stderr).strip().splitlines()
 if not ses.is_file():
+    print("\n".join(log[-40:]), file=sys.stderr)
     sys.exit("Freerouting wrote no session: " + (" | ".join(log[-4:]) or f"exit {r.returncode}")[-400:])
 if not pcbnew.ImportSpecctraSES(b, str(ses)):
     sys.exit("pcbnew could not read the routed session back")

@@ -140,6 +140,8 @@ def run_job(j):
                 q = subprocess.run(sandboxed([sys.executable, "-I", f".step-{src}.py", *([step] if src == "kicad" else [])], work, caps), cwd=work, capture_output=True, text=True, timeout=caps["s"] + 30)
                 (work / f".step-{src}.py").unlink(missing_ok=True)
                 if q.returncode != 0:
+                    # the step's own words in the job's log too (its last line is the error's message)
+                    j["log"] = ((j.get("log") or "") + f"\n--- step {step} ---\n" + (q.stdout + q.stderr)[-8000:]).strip()
                     j["errors"] = [{"code": "kicad_error" if src == "kicad" else "no_output" if "no IFC" in q.stderr else "script_error", "message": (q.stderr.strip().splitlines() or ["the step failed"])[-1][:500], "step": step}]
                     j["state"] = "failed"; break
             else:
