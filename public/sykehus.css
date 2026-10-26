@@ -194,6 +194,7 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .fl-h b { font-size: var(--fs-lg, 1.05rem); }
 .fl-h span { font-size: var(--fs-sm); color: var(--muted); }
 .fl-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.fl .fl-note { margin: 0; font-size: var(--fs-sm); color: var(--muted); max-width: 34ch; }
 .fl:not(.docked) .fl-acts { flex-wrap: nowrap; }
 .fl-acts button { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); white-space: nowrap; }
 .fl-acts button.riv { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }

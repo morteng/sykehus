@@ -32,6 +32,8 @@
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
 import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./landscape.js";
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
+import { batterZ, balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
+import { applyGrading, lotCells } from "./grading.js";
 import { fitOf, surfaceFit, groundAt, inRing } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
@@ -265,11 +267,9 @@ export function baseOf(site, e) {
 function balancedFoot(site, e, lo) {
   const { from, to, width: W } = e, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L, d[0] / L], ks = [0, 0.25, 0.5, 0.75, 1];
   const hu = 0.5 + PAD_M / L, at = (u, v) => [from[0] + d[0] * (0.5 + (u - 0.5) * 2 * hu) + n[0] * (v - 0.5) * (W + 2 * PAD_M), from[1] + d[1] * (0.5 + (u - 0.5) * 2 * hu) + n[1] * (v - 0.5) * (W + 2 * PAD_M)];
-  let a = lo, b = Math.max(lo, ...ks.flatMap(u => ks.map(v => groundAt(site, at(u, v)))));
-  if (b - a < 0.05) return lo;
-  const net = k => { const g = padGround(site, e, k, false); return g ? g.cut - g.fill : 0; };
-  while (b - a > 0.02) { const m = (a + b) / 2; if (net(m) > 0) a = m; else b = m; }
-  return Math.round((a + b) / 2 * 10) / 10;
+  const b = Math.max(lo, ...ks.flatMap(u => ks.map(v => groundAt(site, at(u, v)))));
+  if (b - lo < 0.05) return lo;
+  return balanceKote(k => { const g = padGround(site, e, k, false); return g ? g.cut - g.fill : 0; }, lo, b);
 }
 function volumeParts(site, e) {
   const { from, to, width: W, height: H } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
@@ -305,7 +305,7 @@ function volumeParts(site, e) {
    onto roads, paths, pools and trees, the plot line, a step-free entrance, the foundation and geotechnics. Its foot,
    unless a kote is asked: where the cut and the fill are the same (balancedFoot, U3566 f), balanced: true. */
 /* PAD_FAR: a foot set more than this over or under the ground (base_kote) stands on its own, on posts or in a pit: no pad */
-const PAD_M = 3, FALL = 1 / 50, SLOPE = 2, WALL_M = 1.5, PAD_FAR = 3, ROOT_M = 0.2;
+const PAD_M = 3, FALL = 1 / 50, WALL_M = 1.5, PAD_FAR = 3;
 /* U3566 (b), TEK17 § 8-6: a step-free entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn),
    then a ramp at most 1:20 (RAMP) to the ground, 1.8 m wide (ENTRY_W), with a rest for every 0.6 m it rises; past
    RAMP_MAX m of ramp it is said to need a lift or another door */
@@ -340,7 +340,7 @@ function padGround(site, a, base, write = true, keep = null, guard = null, lot =
     /* off: how far out from the wall; the fall to PAD_M, then the slope to the ground */
     const du = Math.max(0, Math.abs(x * u[0] + y * u[1]) - L / 2), dv = Math.max(0, Math.abs(-x * u[1] + y * u[0]) - a.width / 2), off = Math.hypot(du, dv);
     const zp = base - FALL * Math.min(off, PAD_M), dist = Math.max(0, off - PAD_M);
-    let z = z0 > zp ? Math.min(z0, zp + dist / SLOPE) : Math.max(z0, zp - dist / SLOPE);
+    let z = batterZ(z0, zp, dist, SLOPE);
     /* in the entrance's way: level with the floor on the landing, then the ramp till it meets the ground */
     if (face) {
       const al = x * u[0] + y * u[1], ac = x * nv[0] + y * nv[1], t = (face.fu ? face.fu * al : face.fn * ac) - face.off0, lat = face.fu ? ac : al;
@@ -368,12 +368,7 @@ function padGround(site, a, base, write = true, keep = null, guard = null, lot =
   const deep = Object.entries(sides).filter(([, s]) => s.cut > WALL_M).sort((p, q) => q[1].cut - p[1].cut)[0];
   if (!write) return { cut, fill };
   const met = [...meets.values()].map(m => ({ ...m, step: r2(m.step) })), walls = [...onto.values()].map(m => ({ ...m, step: r2(m.step) }));
-  /* the trees standing where the ground goes down or up more than ROOT_M: their roots are cut or buried */
-  let trees = 0, deepest = 0;
-  for (const t of site.trees || []) {
-    const k = Math.floor((t[0] - T.x0) / T.res), r = Math.floor((T.y1 - t[1]) / T.res), dz = k >= 0 && r >= 0 && k < T.w && r < T.h ? moved.get(r * T.w + k) : undefined;
-    if (dz != null && Math.abs(dz) > ROOT_M) { trees++; deepest = Math.max(deepest, Math.abs(dz)); }
-  }
+  const hit = rootsHit(T, site.trees, moved), trees = hit?.count || 0, deepest = hit?.deepest || 0;   // their roots are cut or buried
   return { kote: r2(base), reach_m: r2(reach), ...(entry ? { entrance: entry } : {}), ...(met.length ? { meets: met } : {}), ...(walls.length ? { paths: walls } : {}), ...(Math.abs(lotStep) >= 0.05 ? { lot_wall: r2(lotStep) } : {}), ...(trees ? { trees: { count: trees, deepest: r2(deepest) } } : {}), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
 }
 
@@ -389,17 +384,6 @@ export function groundText(g) {
     + (g.lot_wall ? ` Skråningen når tomtegrensen: terrenget utenfor er naboens eller gatens og blir som det er, så en mur på ${m1(Math.abs(g.lot_wall))} m ved grensen tar opp forskjellen.` : "")
     + (g.paths || []).map(w => ` Skråningen når ${w.name}: stien beholder sin høyde, og en mur på ${m1(Math.abs(w.step))} m langs den tar opp forskjellen.`).join("")
     + (g.trees ? ` ${g.trees.count === 1 ? "Ett tre står" : `${g.trees.count} trær står`} der bakken senkes eller heves mer enn ${ROOT_M * 100} cm (opptil ${m1(g.trees.deepest)} m): ${g.trees.count === 1 ? "det" : "de"} må felles, eller rotsonen sikres.` : "");
-}
-/* the cells of the terrain inside the lot (site.lot.ring), or null when there is no lot */
-const lotKept = new Map();   // the same grid and lot give the same cells: made once
-function lotCells(site) {
-  const T = site.terrain, ring = site.lot?.ring; if (!T?.z || !(ring?.length > 2)) return null;
-  const key = `${T.x0},${T.y1},${T.res},${T.w},${T.h}:${ring.length}:${ring.flat().join(",")}`;
-  if (lotKept.has(key)) return lotKept.get(key);
-  const out = new Set();
-  for (let r = 0; r < T.h; r++) for (let k = 0; k < T.w; k++) if (inRing([T.x0 + (k + 0.5) * T.res, T.y1 - (r + 0.5) * T.res], ring)) out.add(r * T.w + k);
-  if (lotKept.size > 4) lotKept.clear(); lotKept.set(key, out);
-  return out;
 }
 /* U3566 (e), pbl. § 29-4: how far a new building stands from the lot's line (0 when it is over it), the near side */
 const LOT_MIN = 4;
@@ -473,6 +457,7 @@ const round1 = v => Math.round(v * 10) / 10;
 export function applyDesign(site, floors, edits) {
   applyLandscape(site, edits);
   applyRoads(site, edits);
+  applyGrading(site, edits);   // U3616: the ground set to a level, water at its own, before the buildings' pads
   const gone = new Set(), added = [], vols = new Map();   // vols: the new buildings, by id, as their edits leave them
   for (const e of edits) {
     if ((e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id)) continue;   // landscape.js's

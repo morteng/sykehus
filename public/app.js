@@ -56,7 +56,7 @@ const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json
    holds them (the selection, the card over the pick) sees the change. */
 const TEARS = e => e.kind === "demolish" || e.kind === "restore";
 /* what the page changes in place: torn down (setGone), new buildings (setAdded), a wing's facts and name (relabel) */
-const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "note", "level", "room"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees; level setLevels; room setRooms
+const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "ground", "note", "level", "room"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees; level setLevels; room setRooms
 const modelOf = edits => applyEdits(site0, floors0, edits || []);
 const { site, floors } = modelOf(draft?.edits);
 const shown = modelOf(draft?.edits?.filter(e => !LIVE(e)));   // its own copy: the page's is refilled under it
@@ -95,7 +95,7 @@ const viewer = createViewer({
 /* the after's live part over the viewer's model: what is torn down hidden, the new buildings drawn, the names as edited */
 function paint(s = site, f = floors) {
   showingBefore = s !== site;
-  viewer.setTerrain(s.terrain?.z); viewer.setGone((s.demolished || []).map(d => d.id)); viewer.setAdded(s.added || []); viewer.setLandscape(s.landscape || []); viewer.setTrees(s.trees || []); viewer.setLevels(s.wings || []); viewer.setRooms(f);
+  viewer.setTerrain(s.terrain?.z); viewer.setGone((s.demolished || []).map(d => d.id)); viewer.setAdded(s.added || []); viewer.setGrading(s.grading || [], false); viewer.setLandscape(s.landscape || []); viewer.setTrees(s.trees || []); viewer.setLevels(s.wings || []); viewer.setRooms(f);
   viewer.relabel(new Map(s.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
   streetsOn?.setRemoved((s.roads_removed || []).map(r => r.id));   // the road sections the after takes away (U3543)
   if (!showingBefore) dispatchEvent(new CustomEvent("sykehus:painted"));   // the build tools take the new building's new shapes
@@ -364,7 +364,7 @@ const GROUPS = [
   { k: "keep", name: "Beholdt", of: e => e.kind === "restore", tip: "Ta ut igjen" },
   { k: "ny", name: "Nye bygg", of: e => e.kind === "volume", tip: "Ta bort igjen" },
   { k: "ed", name: "Endret", of: e => ["reshape", "wing", "level", "room", "balconies"].includes(e.kind), tip: "Ta endringen ut igjen" },
-  { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell"].includes(e.kind), tip: "Ta det ut igjen" },
+  { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell", "ground"].includes(e.kind), tip: "Ta det ut igjen" },
   { k: "note", name: "Notater", of: () => true, tip: "Ta notatet ut igjen" },
 ];
 /* the reasons that say nothing a reader needs: the page's own, and Anton's when it only says the person asked (pm 26.10) */
@@ -425,6 +425,7 @@ function nameOf(id) {
   const low = String(id).toLowerCase(), w = (site0.wings || []).find(x => x.id === id || x.name.toLowerCase() === low); if (w) return w.name;   // Anton names wings too
   const a = draft?.edits?.findLast(x => x.id === id && (x.kind === "volume" || x.kind === "reshape") && x.name); if (a) return a.name;
   if (ROAD_ID.test(id)) { const e = draft?.edits?.findLast(x => x.building === id && x.name); return e ? e.name : "Et veistykke"; }   // a road section (U3543)
+  if (/^terreng-\d+$/.test(id)) return (site.grading || []).find(x => x.id === id)?.name || "Planert flate";   // U3616
   if (/^(flate|sti|tre)-\d+$/.test(id)) { const g = [...(site.landscape || []), ...(site.plantings || [])].find(x => x.id === id); return g ? groundName(g) : id.startsWith("sti") ? "En sti" : id.startsWith("tre") ? "Trær" : "En flate"; }   // a surface or a path (U3569)
   const b = site0.buildings.find(x => x.id === id); if (!b) return String(id);
   if (b.wing) return (site0.wings || []).find(x => x.id === b.wing)?.name || "Bygning på tomta";
@@ -576,6 +577,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   if (e.kind === "path") return `${e.name || "Sti"}: ${SURF[e.surface]}, ${String(e.width).replace(".", ",")} m bred${why}`;
   if (e.kind === "trees") return `Planter ${e.points ? e.points.length : "en rekke"} ${e.species}${why}`;
   if (e.kind === "fell") return `Feller trærne i et område${why}`;
+  if (e.kind === "ground") return `${e.name || "Terrenget"} planeres${e.kote != null ? ` på kote ${kote(e.kote)}` : ""}${e.fall ? `, fall 1:${e.fall}` : ""}${e.edge === "wall" ? ", med støttemur" : ""}${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
 /* «Riv» (U3542, on the card over the pick since U3554, float.js): tear wings or buildings down as a change in the

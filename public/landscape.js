@@ -66,7 +66,13 @@ export function checkLandscape(site, e, str) {
       const surface = String(e.surface ?? ""); if (!SURFACES.includes(surface)) throw new Error(`surface er ${SURFACES.join(", ")}`);
       const out = { kind: "surface", ring, surface, ...w_ }, n = name(); if (n) out.name = n;
       if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
+      Object.assign(out, waterOf(e, surface));
       return out;
+    }
+    case "ground": {   // U3616: the ground set to a level (grading.js)
+      const ring = pts(e.ring, "ring", 3), a = ringArea(ring);
+      if (a < 4 || a > 20000) throw new Error("Flaten som planeres må være mellom 4 og 20 000 m²");
+      return { kind: "ground", ring, ...groundOf(e), ...(name() ? { name: name() } : {}), ...w_ };
     }
     case "path": {
       const line = pts(e.line, "line", 2), L = lineLength(line); if (L < 1) throw new Error("Stien må være minst 1 m lang");
@@ -89,23 +95,51 @@ export function checkLandscape(site, e, str) {
   return null;
 }
 
+/* U3616: a planed area's settings (grading.js), checked; each only when given */
+const EDGES = ["batter", "wall"], SIDES = ["N", "Ø", "S", "V"];
+function groundOf(e) {
+  const out = {};
+  if (e.kote != null) out.kote = num(e.kote, -20, 200, "Koten");
+  if (e.fall != null) out.fall = num(e.fall, 2, 500, "Fallet (1:fall)");
+  if (e.fall_toward != null) { if (!SIDES.includes(e.fall_toward)) throw new Error("fall_toward er N, Ø, S eller V"); out.fall_toward = e.fall_toward; }
+  if (e.edge != null) { if (!EDGES.includes(e.edge)) throw new Error("edge er batter (skråning) eller wall (støttemur)"); out.edge = e.edge; }
+  if (e.slope != null) out.slope = num(e.slope, 1, 10, "Skråningen (1:slope)");
+  return out;
+}
+/* a water surface's settings: a pool (dug basin under a coping) or a pond, its depth and its kote */
+function waterOf(e, surface) {
+  const has = ["pool", "depth", "coping", "kote"].filter(k => e[k] != null);
+  if (!has.length) return {};
+  if (surface !== "water") throw new Error(`${has.join(", ")} gjelder bare vann (surface: water)`);
+  const out = {};
+  if (e.pool != null) out.pool = !!e.pool;
+  if (e.depth != null) out.depth = num(e.depth, 0.2, 4, "Dybden");
+  if (e.coping != null) out.coping = num(e.coping, 0, 1.5, "Kanten (coping)");
+  if (e.kote != null) out.kote = num(e.kote, -20, 200, "Koten");
+  return out;
+}
+
 /* a surface or a path by its id (flate-1, sti-2): changed (reshape) or taken away (demolish), U3569 (Morten 22:41Z «i
    can only select and manipulate buildings, not objects like the "pool"») */
-export const GROUND_ID = /^(flate|sti|tre)-\d+$/;   // tre: a planting, the trees one change planted
+export const GROUND_ID = /^(flate|sti|tre|terreng)-\d+$/;   // tre: a planting, the trees one change planted; terreng: a planed area (U3616)
 export function checkGroundEdit(site, e, str) {
-  const id = String(e.kind === "demolish" ? e.building ?? "" : e.id ?? "").trim(), g = (site.landscape || []).find(x => x.id === id) || (site.plantings || []).find(x => x.id === id);
-  if (!g) { const ls = [...(site.landscape || []), ...(site.plantings || [])].map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; forslaget har ingen flater, stier eller trær ennå"}`); }
+  const id = String(e.kind === "demolish" ? e.building ?? "" : e.id ?? "").trim(), all = [...(site.landscape || []), ...(site.plantings || []), ...(site.grading || [])], g = all.find(x => x.id === id);
+  if (!g) { const ls = all.map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; forslaget har ingen flater, stier eller trær ennå"}`); }
   const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
   if (e.kind === "demolish") return { kind: "demolish", building: id, ...w_ };
   const out = { kind: "reshape", id };
   if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
-  if (g.kind === "trees") {
+  if (g.kind === "ground") {
+    Object.assign(out, groundOf(e));
+    if (e.ring != null) { out.ring = pts(e.ring, "ring", 3); const a = ringArea(out.ring); if (a < 4 || a > 20000) throw new Error("Flaten som planeres må være mellom 4 og 20 000 m²"); }
+  } else if (g.kind === "trees") {
     if (e.height != null) out.height = num(e.height, 0.3, 40, "Høyden");
     if (e.crown != null) out.crown = num(e.crown, 0.3, 30, "Kronebredden (crown)");
   } else if (g.kind === "surface") {
     if (e.surface != null) { if (!SURFACES.includes(String(e.surface))) throw new Error(`surface er ${SURFACES.join(", ")}`); out.surface = String(e.surface); }
     if (e.ring != null) { out.ring = pts(e.ring, "ring", 3); const a = ringArea(out.ring); if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²"); }
     if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
+    Object.assign(out, waterOf(e, out.surface || g.surface));
   } else {
     if (e.surface != null) { if (!PATHS.includes(String(e.surface))) throw new Error(`surface for en sti er ${PATHS.join(", ")}`); out.surface = String(e.surface); }
     if (e.line != null) { out.line = pts(e.line, "line", 2); if (lineLength(out.line) < 1) throw new Error("Stien må være minst 1 m lang"); }
@@ -151,11 +185,11 @@ export function applyLandscape(site, edits) {
     }
     else if (e.kind === "reshape" && GROUND_ID.test(e.id)) {
       const g = land.find(x => x.id === e.id); if (!g) continue;
-      for (const k of ["name", "surface", "plants", "why"]) if (e[k] != null) g[k] = e[k];
+      for (const k of ["name", "surface", "plants", "pool", "depth", "coping", "kote", "why"]) if (e[k] != null) g[k] = e[k];
       if (g.kind === "surface" && e.ring) { g.ring = e.ring; g.area_m2 = round1(ringArea(e.ring)); }
       if (g.kind === "path" && (e.line || e.width != null)) { g.line = e.line || g.line; g.width = e.width ?? g.width; g.ring = pathRing(g.line, g.width); g.length_m = round1(lineLength(g.line)); g.area_m2 = round1(lineLength(g.line) * g.width); }
     }
-    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, ring: e.ring, area_m2: round1(ringArea(e.ring)), plants: e.plants || [], why: e.why });
+    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, ring: e.ring, area_m2: round1(ringArea(e.ring)), plants: e.plants || [], ...Object.fromEntries(["pool", "depth", "coping", "kote"].filter(k => e[k] != null).map(k => [k, e[k]])), why: e.why });
     else if (e.kind === "path") land.push({ id: `sti-${++n}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), why: e.why });
     else if (e.kind === "fell") { const n = trees.length; trees = trees.filter(t => !inRing(t, e.ring)); felled += n - trees.length; }
     else if (e.kind === "trees") {

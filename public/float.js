@@ -12,6 +12,7 @@
      pick kept; the chip opens it again. Below 900 px it sits in the bottom stack, over the sheet (Fab's .bstack). */
 import { SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026r";
 import { groundAt } from "./renderkit/fit.js";
+import { basinText } from "./grading.js";
 const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"], PATHS = ["gravel", "paving", "asphalt", "wood"];   // landscape.js's
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const num = v => Math.round(v).toLocaleString("nb-NO");
@@ -43,7 +44,7 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
   };
   const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   /* a surface or a path (U3569): what it is laid with, how big */
-  const groundFacts = g => g.kind === "trees" ? [`${g.count} ${g.count === 1 ? "tre" : "trær"}`, `${m1(g.height)} m høye`, `${m1(g.crown)} m krone`] : [g.name ? SURFACE_NO[g.surface] : null, g.kind === "path" ? `${m1(g.length_m)} × ${m1(g.width)} m` : `${num(g.area_m2)} m²`, g.plants?.length ? `${g.plants.length} arter` : null].filter(Boolean);
+  const groundFacts = g => g.kind === "trees" ? [`${g.count} ${g.count === 1 ? "tre" : "trær"}`, `${m1(g.height)} m høye`, `${m1(g.crown)} m krone`] : [g.name ? SURFACE_NO[g.surface] : null, g.kind === "path" ? `${m1(g.length_m)} × ${m1(g.width)} m` : `${num(g.area_m2)} m²`, g.plants?.length ? `${g.plants.length} arter` : null, g.level != null ? `vann på kote +${m1(g.level)}` : null, g.basin?.depth ? `${m1(g.basin.depth)} m dypt` : null].filter(Boolean);
   function groundForm(host, i, g) {
     if (g.kind === "trees") {   // a planting: how tall, how wide the crown
       host.innerHTML = `<form class="fl-form" autocomplete="off"><div class="fl-h"><b>Endre ${esc(groundName(g))}</b></div>
@@ -102,7 +103,7 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
       host.querySelector("[data-riv]").onclick = () => onRiv([{ building: rd.id, ...(rd.name ? { name: rd.name } : { name: rd.what }) }], `${rd.name || rd.what}`, true);
     } else if (groups.length === 1 && groups[0].gr) {
       const { i, gr } = groups[0];
-      host.innerHTML = `${head(esc(groundName(gr)), groundFacts(gr).map(esc).join(" · "))}
+      host.innerHTML = `${head(esc(groundName(gr)), groundFacts(gr).map(esc).join(" · "))}${gr.basin ? `<p class="fl-note">${esc(basinText(gr))}</p>` : ""}
         <div class="fl-acts"><button type="button" data-ed>Endre</button><button type="button" data-riv>Riv</button><button type="button" data-ask>Spør Anton</button></div>`;
       host.querySelector("[data-riv]").onclick = () => onRiv([gr.id], groundName(gr).toLowerCase(), true);
       host.querySelector("[data-ed]").onclick = () => { editing = valg.key(i); render(); };

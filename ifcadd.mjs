@@ -6,7 +6,9 @@
    part's profile [across, kote] extruded along its axis, as the viewer draws it; a pyramid's faces as a triangulated
    face set; a construction (bim) as its box, with its sha so its own model.ifc can be fetched beside it. Balconies are
    IfcSlab and IfcRailing in the wing they hang on, on the storey at their kote. Each says what it is and why
-   (Pset Sykehustomta_Nytt), and its Status is NEW. The ground a new building is planed on is not in the file.
+   (Pset Sykehustomta_Nytt), and its Status is NEW. The ground the after moves (U3616: planed areas, pools and ponds, the
+   pads under new buildings) is one IfcGeographicElement TERRAIN on the site, the grid's squares that moved as triangles,
+   with the m³ dug out and filled; each pool's or pond's water an IfcGeographicElement of its own (ObjectType Vann).
 
    GlobalIds come from the new building's id and the part's place in it, so the same after gives the same file and an
    export compares with the last one element by element. The STEP is written by hand, one entity a line, numbered on
@@ -49,7 +51,8 @@ function anchors(parsed) {
    wings' new names by IfcBuilding id */
 export function addedLines(parsed, after, before) {
   const none = { lines: [], renamed: new Map(), counts: {} };
-  if (!(after.added || []).length && !(after.wings || []).some(w => w.draft?.length)) return none;
+  const moved = !!(after.terrain?.z && before.terrain?.z && after.terrain.z !== before.terrain.z), waters = (after.landscape || []).filter(w => w.basin && w.level != null);
+  if (!(after.added || []).length && !(after.wings || []).some(w => w.draft?.length) && !moved && !waters.length) return none;
   const A = anchors(parsed); if (!A.site || !A.body) return none;
   let n = A.top; const lines = [], put = s => { lines.push(`#${++n}=${s};`); return n; }, counts = { buildings: 0, elements: 0 };
   const zUp = put(`IFCDIRECTION(${pt([0, 0, 1])})`);
@@ -112,6 +115,34 @@ export function addedLines(parsed, after, before) {
     }
   }
   if (newBuildings.length) put(`IFCRELAGGREGATES('${gid("site:new")}',$,$,$,#${A.site},(${newBuildings.map(b => "#" + b).join(",")}))`);
+  /* U3616: the ground as the after leaves it, and the water on it */
+  const onSite = [];
+  if (moved) {
+    const Ta = after.terrain, Tb = before.terrain, W = Ta.w, ch = i => Ta.z[i] != null && Tb.z[i] != null && Math.abs(Ta.z[i] - Tb.z[i]) >= 0.005, at = new Map(), xyz = [], tris = [];
+    const ix = i => { if (!at.has(i)) { at.set(i, at.size + 1); xyz.push([Ta.x0 + (i % W + 0.5) * Ta.res, Ta.y1 - (Math.floor(i / W) + 0.5) * Ta.res, Ta.z[i]]); } return at.get(i); };
+    for (let r = 0; r < Ta.h - 1; r++) for (let c = 0; c < W - 1; c++) {
+      const q = [r * W + c, r * W + c + 1, (r + 1) * W + c, (r + 1) * W + c + 1];
+      if (!q.some(ch) || q.some(i => Ta.z[i] == null)) continue;
+      tris.push([ix(q[0]), ix(q[2]), ix(q[1])], [ix(q[1]), ix(q[2]), ix(q[3])]);
+    }
+    if (tris.length) {
+      const list = put(`IFCCARTESIANPOINTLIST3D((${xyz.map(pt).join(",")}),$)`), face = put(`IFCTRIANGULATEDFACESET(#${list},$,.F.,(${tris.map(t => `(${t.join(",")})`).join(",")}),$)`);
+      const rep = put(`IFCSHAPEREPRESENTATION(#${A.body},'Body','Tessellation',(#${face}))`), shp = put(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`);
+      const el = put(`IFCGEOGRAPHICELEMENT('${gid("terrain")}',$,${stepStr("Terreng etter")},${stepStr("Bakken der etter-forslaget graver ut og fyller")},$,#${placeAt(0)},#${shp},$,.TERRAIN.)`); onSite.push(el);
+      const sum = k => (after.grading || []).reduce((a, g) => a + (g[k] || 0), 0) + waters.reduce((a, w) => a + (w.basin[k] || 0), 0) + (after.added || []).reduce((a, x) => a + (x.ground?.[k] || 0), 0);
+      pset("terrain", [el], "Sykehustomta_Terreng", { Utgraving: `${sum("cut_m3")} m³`, Fylling: `${sum("fill_m3")} m³`, Flater: (after.grading || []).map(g => `${g.name}: kote +${g.kote}`).join("; ") || null, Status: "NEW" });
+      counts.elements++;
+    }
+  }
+  for (const w of waters) {
+    const bottom = w.basin.bottom ?? w.level - w.basin.depth, ps = w.ring.map(p => put(`IFCCARTESIANPOINT(${pt(p)})`)), poly = put(`IFCPOLYLINE((${[...ps, ps[0]].map(r => "#" + r).join(",")}))`);
+    const prof = put(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,${stepStr("Vann")},#${poly})`), sol = put(`IFCEXTRUDEDAREASOLID(#${prof},IFCAXIS2PLACEMENT3D(IFCCARTESIANPOINT(${pt([0, 0, bottom])}),$,$),#${zUp},${num(w.level - bottom)})`);
+    const rep = put(`IFCSHAPEREPRESENTATION(#${A.body},'Body','SweptSolid',(#${sol}))`), shp = put(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`);
+    const el = put(`IFCGEOGRAPHICELEMENT('${gid(w.id + ":water")}',$,${stepStr(w.name || (w.pool ? "Basseng" : "Dam"))},$,${stepStr("Vann")},#${placeAt(0)},#${shp},$,.USERDEFINED.)`); onSite.push(el);
+    pset(w.id, [el], "Sykehustomta_Nytt", { Vannstand: `kote +${w.level}`, Dybde: `${w.basin.depth} m`, Kant: w.pool ? `kote +${w.basin.kote}` : null, Utgraving: `${w.basin.cut_m3} m³`, Hvorfor: w.why, Status: "NEW" });
+    counts.elements++;
+  }
+  if (onSite.length) put(`IFCRELCONTAINEDINSPATIALSTRUCTURE('${gid("site:ground")}',$,$,$,(${onSite.map(e => "#" + e).join(",")}),#${A.site})`);
   /* the wings the after renames or gives new facts: their IfcBuilding under the new name, what changed in a set of its own */
   const renamed = new Map();
   for (const w of after.wings || []) {

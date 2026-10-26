@@ -14,6 +14,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
 import { ease } from "./renderkit/camera.js";
+import { offsetRing } from "./renderkit/paths2d.js";
 import { bimPlace } from "./design.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
@@ -349,14 +350,56 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* drawn again in place when the after changes (setLandscape, 21:07Z «when i edit the whole page reloads»: a pool is a surface) */
   const groundMeshes = [];
   function setLandscape(list) {
-    for (const m of groundMeshes.splice(0)) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
-    drawLandscape(list); if (rimFor) rimGround(true); dirty = true;
+    for (const m of [...groundMeshes.splice(0), ...gradeMeshes.splice(0)]) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
+    drawLandscape(list); drawGrading(gradingNow); if (rimFor) rimGround(true); dirty = true;
   }
-  function drawLandscape(list) { for (const [n, g] of (list || []).entries()) {
+  /* U3616: what holds the planed ground and the water's edge, drawn beside the surfaces (not picked): a retaining wall
+     round an area planed with edge "wall", and for a pool its coping, sides and floor (until the basin is a part of its own, U3620) */
+  const gradeMeshes = [], CONCRETE = "#b9b5ad", TILE = "#d6e6ea";
+  let gradingNow = site.grading || [];
+  function setGrading(list, redraw = true) { gradingNow = list || []; if (redraw) setLandscape(landNow); }   // redraw false: a setLandscape follows
+  function quads(list, color) {   // list: [[x, y, z], × 4] each, drawn as two triangles
+    if (!list.length) return;
+    const pos = []; for (const q of list) for (const k of [0, 1, 2, 0, 2, 3]) { const v = P([q[k][0], q[k][1]], q[k][2]); pos.push(v.x, v.y, v.z); }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat(color)); m.castShadow = m.receiveShadow = true; scene.add(m); gradeMeshes.push(m);
+  }
+  function drawBasin(ring, b) {
+    const out = offsetRing(ring, b.coping || 0.05), n = ring.length, top = b.kote + 0.03, cop = [], sides = [];
+    for (let i = 0; i < n; i++) {
+      const a = ring[i], c = ring[(i + 1) % n], A = out[i], C = out[(i + 1) % n];
+      cop.push([[...a, top], [...c, top], [...C, top], [...A, top]]);
+      sides.push([[...a, top], [...c, top], [...c, b.bottom], [...a, b.bottom]]);
+    }
+    quads(cop, CONCRETE); quads(sides, TILE);
+    const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []);
+    quads(tris.map(([i, j, k]) => [[...ring[i], b.bottom + 0.02], [...ring[j], b.bottom + 0.02], [...ring[k], b.bottom + 0.02], [...ring[k], b.bottom + 0.02]]), TILE);
+  }
+  function drawGrading(list) {
+    for (const g of list || []) {
+      if (g.edge !== "wall" || !g.plane) continue;
+      const fall = g.plane.fall, zIn = p => g.plane.kote - (fall ? ((p[0] - g.plane.at[0]) * fall.toward[0] + (p[1] - g.plane.at[1]) * fall.toward[1]) / fall.per : 0), r = g.ring, walls = [];
+      const ccw = ringArea2(r) > 0 ? 1 : -1;
+      for (let i = 0; i < r.length; i++) {
+        const a = r[i], c = r[(i + 1) % r.length], L = Math.hypot(c[0] - a[0], c[1] - a[1]) || 1, k = Math.max(1, Math.ceil(L)), nv = [ccw * (c[1] - a[1]) / L, -ccw * (c[0] - a[0]) / L];
+        for (let j = 0; j < k; j++) {
+          const p = [a[0] + (c[0] - a[0]) * j / k, a[1] + (c[1] - a[1]) * j / k], q = [a[0] + (c[0] - a[0]) * (j + 1) / k, a[1] + (c[1] - a[1]) * (j + 1) / k], m = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+          const zo = ground(m[0] + nv[0] * T.res * 1.5, m[1] + nv[1] * T.res * 1.5), zi = zIn(m); if (Math.abs(zi - zo) < 0.1) continue;
+          const hi = Math.max(zi, zo) + 0.15, lo = Math.min(zi, zo) - 0.3;
+          walls.push([[...p, lo], [...q, lo], [...q, hi], [...p, hi]]);
+        }
+      }
+      quads(walls, CONCRETE);
+    }
+  }
+  let landNow = site.landscape || [];
+  function drawLandscape(list) { landNow = list || []; for (const [n, g] of (list || []).entries()) {
     const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
     const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []), pos = [], lim = Math.max(1, T.res) * 1.4;
     const lift = 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
-    const put = p => { const v = P(p, ground(...p) + lift); pos.push(v.x, v.y, v.z); };
+    const flat = g.level != null;   // water lies flat at its own level (U3616), whatever the ground under it
+    const put = p => { const v = P(p, flat ? g.level : ground(...p) + lift); pos.push(v.x, v.y, v.z); };
+    if (g.pool && g.basin) drawBasin(ring, g.basin);
     const split = (a, b, c, d) => {
       const e = [[a, b], [b, c], [c, a]].map(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1])), m = Math.max(...e);
       if (m <= lim || d > 9) { put(a); put(b); put(c); return; }
@@ -368,9 +411,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
     /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
-    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; scene.add(m); groundMeshes.push(m);
+    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = g.level; scene.add(m); groundMeshes.push(m);
   } }
-  drawLandscape(site.landscape);
+  drawLandscape(site.landscape); drawGrading(gradingNow);
 
   /* ---------- trees: where the laser found them (tools/trees.py), grown by EZ-Tree as in hagekart (renderkit/ez-tree.js, MIT;
      bark and leaf pictures CC0 / MIT, docs/tex-credits.txt). Three models are grown once, oak, aspen and pine, with
@@ -930,7 +973,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         const nx = -(b[1] - a[1]) / L * w / 2, ny = (b[0] - a[0]) / L * w / 2, k = Math.max(1, Math.ceil(L / step));
         for (let j = 0; j < k; j++) {
           const p = [a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k], q = [a[0] + (b[0] - a[0]) * (j + 1) / k, a[1] + (b[1] - a[1]) * (j + 1) / k];
-          const at = (u, s) => { const v = P([u[0] + nx * s, u[1] + ny * s], ground(...u) + m.userData.lift + 0.1); pos.push(v.x, v.y, v.z); };
+          const at = (u, s) => { const v = P([u[0] + nx * s, u[1] + ny * s], (m.userData.level ?? ground(...u) + m.userData.lift) + 0.1); pos.push(v.x, v.y, v.z); };
           at(p, -1); at(q, -1); at(q, 1); at(p, -1); at(q, 1); at(p, 1);
         }
       }
@@ -999,7 +1042,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     /* the yellow band round a picked surface or path, out of the way while its points are dragged */
     bands(on) { if (groundRims.visible !== on) { groundRims.visible = on; dirty = true; } },
     setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
-    setSun, select, setGone, setTerrain, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    setSun, select, setGone, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); O.eye = false; glide(home); },
     /* the view as it opened, the storey left as it is */
