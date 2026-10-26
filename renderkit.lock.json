@@ -1,5 +1,5 @@
 {
-  "renderkit": "96b4b535813d020321293c30e7d79f09c353af36",
+  "renderkit": "f268073acc04acdc6cc978ae145a6b3b6a48af38",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -65,8 +65,18 @@
     "sunpick.js": "e4efe0f58fab9f20f478a5d8cb45f1b786b27899",
     "photo.js": "93ce8f8792d64e4bf04fc8940fd50f5ec34292b4",
     "grid2d.js": "7ba402edbec5bb2aaeb5d057588e626c4b06163a",
-    "paint.js": "f614df5ffe6404ba230771ceec9003bf5cd045fb",
+    "paint.js": "c4b2f9b6c06aa4237e8182b6bce77200d22c10d9",
     "terrain.js": "b98d60291e2d28aa9dd9758e74c23220d168d302",
-    "photoframe.js": "e201b08b58fc1d6234a60bd8705955cb970fd963"
+    "photoframe.js": "e201b08b58fc1d6234a60bd8705955cb970fd963",
+    "thumb-grass.webp": "f493565373b00d2aa01cef4e7a30dccd2c595998",
+    "thumb-meadow.webp": "320483185f396529a293401797977d6470a8d024",
+    "thumb-planting.webp": "180e8e0935eb0d1ff9b0fe029b993f2fa6b20da1",
+    "thumb-gravel.webp": "70d011cb30dbea95ccfdf3cbe930fc2eb4b97356",
+    "thumb-paving.webp": "c19e64b6a6bafa33a33ff274dc18d6bc5660569f",
+    "thumb-asphalt.webp": "f01964cd53db719860dc4663cc39a0fc77fd803d",
+    "thumb-soil.webp": "1526949d459f68095c3c75032487db2bf3fa7f93",
+    "thumb-water.webp": "8d2601f9d4d454c178992a40edb9eb32b8e7d7e9",
+    "thumb-concrete.webp": "5741b565ec0d678ce86476a27e094801f9518cc7",
+    "thumb-wood.webp": "9f2a2319430e396a95fa1f088f4736a2f87516c6"
   }
 }

@@ -52,7 +52,7 @@ test("a way near the stroke (around) stops it and the edge is pulled to it", () 
 });
 
 test("a paint edit by an unknown surface or a bad radius is refused with the reason", () => {
-  assert.throws(() => checkEdit(site, [], stroke("lava")), /surface for paint er grass, planting, paving, gravel/);
+  assert.throws(() => checkEdit(site, [], stroke("lava")), /surface for paint er grass, meadow, planting, gravel, paving, asphalt, soil/);
   assert.throws(() => checkEdit(site, [], stroke("grass", { r: 40 })), /radius/);
 });
 
@@ -106,4 +106,25 @@ test("a tap plants one tree, a stroke a row: the page's plantAt gives the points
   const { plantAt } = await import("../public/mal.js");
   assert.deepEqual(plantAt([[0, 0], [0.5, 0.5]], { gap: 6 }), [[0, 0]]);
   assert.equal(plantAt([[0, 0], [20, 0]], { gap: 6 }).length, 4);
+});
+
+test("Uteområde: the swatches are the surfaces the brush lays, each with a picture renderkit has; the plant cards leave the banned out", async () => {
+  const { SWATCHES, cards, plantType, chipOf, silhouette, heightText } = await import("../public/ute.js");
+  const { PLANTS } = await import("../public/plants.js");
+  const { existsSync } = await import("node:fs");
+  assert.deepEqual(SWATCHES.map(w => w.id), ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "soil"]);
+  for (const w of SWATCHES) { assert.ok(w.no && !/[a-z]-/.test(w.no), w.id); assert.ok(existsSync(new URL(`../public/${w.img}`, import.meta.url)), `${w.img} is taken from renderkit`); }
+  for (const w of SWATCHES) checkEdit(site, [], stroke(w.id));   // every swatch is a surface the edit accepts
+  const all = cards(PLANTS), trees = cards(PLANTS, ["Trær"]), hedge = cards(PLANTS, ["Hekk"]);
+  assert.ok(all.length > 25 && !all.some(p => p.banned), "no banned species in the grid");
+  assert.ok(trees.length > 5 && trees.every(p => ["tre", "bar"].includes(plantType(p))) && hedge.every(p => chipOf(p) === "Hekk") && hedge.length >= 2);
+  assert.equal(plantType(PLANTS.find(p => p.id === "gran")), "bar"); assert.equal(heightText({ ht: 1.5 }), "1,5 m høy");
+  for (const p of all) assert.match(silhouette(p), /^<svg/);
+});
+
+test("a stroke of each new surface (meadow, asphalt, soil) is painted as that surface, and a meadow over grass takes its ground", () => {
+  for (const sf of ["meadow", "asphalt", "soil"]) assert.equal(run([stroke(sf)]).landscape[0].surface, sf);
+  const s = run([stroke("grass", { r: 5 }), { kind: "paint", surface: "meadow", line: [AT, AT], r: 2 }]);
+  const grass = s.landscape.find(g => g.surface === "grass"), meadow = s.landscape.find(g => g.surface === "meadow");
+  assert.ok(meadow && grass.holes?.length === 1, "the meadow is a piece of its own, a hole in the grass");
 });
