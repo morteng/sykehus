@@ -256,6 +256,51 @@ function volumeParts(site, e) {
   return { parts: [{ axis: [from, to], profile: prof, mat: e.material, role: "volume" }], base: z };
 }
 
+/* U3566: the ground a new building stands on, as a builder leaves it: a level pad at its foot 1 m out past its footprint
+   (PAD_M), and from the pad's edge a slope of 1:2 (SLOPE, run per rise) up to the ground where it is cut and down to it
+   where it is filled, till it meets the ground. Made on the after's own copy of the terrain grid (the before's is shared
+   and never written), so the viewer draws it, and what stands on the ground (paths, trees, the next building) stands on
+   it. Its numbers on the building: ground { kote, cut_m3, fill_m3, max_cut, max_fill, sides { N, Ø, S, V: { cut, fill } }
+   the deepest at each side (m), wall: the side a retaining wall would go, when the cut there is deeper than WALL_M }.
+   Not a roof's (on): that one has no ground. Follow-ups (U3566): the fall away from the house, pads that meet, slopes
+   onto roads, paths, pools and trees, the plot line, a step-free entrance, the foundation, balance and geotechnics. */
+/* PAD_FAR: a foot set more than this over or under the ground (base_kote) stands on its own, on posts or in a pit: no pad */
+const PAD_M = 1, SLOPE = 2, WALL_M = 1.5, PAD_FAR = 3;
+function padGround(site, a, base) {
+  const T = site.terrain; if (!T?.z) return null;
+  const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, u = [d[0] / L, d[1] / L], c = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2];
+  const hu = L / 2 + PAD_M, hv = a.width / 2 + PAD_M, R = Math.hypot(hu, hv) + 40, cell = T.res * T.res;
+  const c0 = Math.max(0, Math.floor((c[0] - R - T.x0) / T.res)), c1 = Math.min(T.w - 1, Math.ceil((c[0] + R - T.x0) / T.res));
+  const r0 = Math.max(0, Math.floor((T.y1 - c[1] - R) / T.res)), r1 = Math.min(T.h - 1, Math.ceil((T.y1 - c[1] + R) / T.res));
+  const sides = { N: { cut: 0, fill: 0 }, "Ø": { cut: 0, fill: 0 }, S: { cut: 0, fill: 0 }, V: { cut: 0, fill: 0 } };
+  let cut = 0, fill = 0;
+  for (let r = r0; r <= r1; r++) for (let k = c0; k <= c1; k++) {
+    const i = r * T.w + k, z0 = T.z[i]; if (z0 == null) continue;
+    const x = T.x0 + (k + 0.5) * T.res - c[0], y = T.y1 - (r + 0.5) * T.res - c[1];
+    const du = Math.max(0, Math.abs(x * u[0] + y * u[1]) - hu), dv = Math.max(0, Math.abs(-x * u[1] + y * u[0]) - hv), dist = Math.hypot(du, dv);
+    const z = z0 > base ? Math.min(z0, base + dist / SLOPE) : Math.max(z0, base - dist / SLOPE);
+    if (Math.abs(z - z0) < 0.005) continue;
+    T.z[i] = z;
+    const dz = z0 - z, side = Math.abs(x) > Math.abs(y) ? (x > 0 ? "Ø" : "V") : (y > 0 ? "N" : "S");
+    if (dz > 0) { cut += dz * cell; sides[side].cut = Math.max(sides[side].cut, dz); } else { fill -= dz * cell; sides[side].fill = Math.max(sides[side].fill, -dz); }
+  }
+  const r2 = v => Math.round(v * 100) / 100, max = k => Math.max(...Object.values(sides).map(s => s[k]));
+  for (const s of Object.values(sides)) { s.cut = r2(s.cut); s.fill = r2(s.fill); }
+  const deep = Object.entries(sides).filter(([, s]) => s.cut > WALL_M).sort((p, q) => q[1].cut - p[1].cut)[0];
+  return { kote: r2(base), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
+}
+
+/* a pad's work in words, for the pane and for Anton (look): «graves ut 1,2 m mot nord, fylles opp 0,8 m mot sør» */
+const SIDE_NO = { N: "nord", "Ø": "øst", S: "sør", V: "vest" }, m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+export function groundText(g) {
+  if (!g) return "";
+  const most = k => Object.entries(g.sides).filter(([, s]) => s[k] >= 0.2).sort((p, q) => q[1][k] - p[1][k])[0];
+  const c = most("cut"), f = most("fill"), bits = [];
+  if (c) bits.push(`graves ut ${m1(c[1].cut)} m mot ${SIDE_NO[c[0]]}`); if (f) bits.push(`fylles opp ${m1(f[1].fill)} m mot ${SIDE_NO[f[0]]}`);
+  return `Tomta planeres på kote +${m1(g.kote)}, 1 m ut fra bygget, med skråning 1:${SLOPE} til terrenget${bits.length ? ": " + bits.join(", ") : ""}. Utgraving ${g.cut_m3.toLocaleString("nb-NO")} m³, fylling ${g.fill_m3.toLocaleString("nb-NO")} m³.`
+    + (g.wall ? ` Skjæringen mot ${SIDE_NO[g.wall]} er ${m1(g.sides[g.wall].cut)} m dyp: en støttemur der tar mindre plass enn skråningen.` : "");
+}
+
 const profArea = p => Math.abs(p.reduce((a, q, i) => { const r = p[(i + 1) % p.length]; return a + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
 const round1 = v => Math.round(v * 10) / 10;
 
@@ -275,10 +320,13 @@ export function applyDesign(site, floors, edits) {
         count: slabs.length, footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
-  for (const [id, e] of vols) {
-    const { parts, base } = volumeParts(site, e), L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]);
+  /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
+  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e)]);
+  if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
+  for (const [id, e, { parts, base }] of feet) {
+    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = e.on == null && Math.abs(base - baseOf(site, { ...e, base_kote: undefined })) <= PAD_FAR ? padGround(site, e, base) : null;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));

@@ -21,7 +21,8 @@ const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94",
 
 export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality() }) {
   const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
-  const T = site.terrain, base = Math.min(...T.z.filter(v => v != null));
+  /* its own T: setTerrain swaps in the after's grid (U3566, a building's pad), base stays the before's lowest */
+  const T = { ...site.terrain }, base = Math.min(...T.z.filter(v => v != null));
   const at = (grid, x, y) => { const c = Math.floor((x - T.x0) / T.res), r = Math.floor((T.y1 - y) / T.res); if (c < 0 || r < 0 || c >= T.w || r >= T.h) return null; return grid[r * T.w + c]; };
   const ground = (x, y) => at(T.z, x, y) ?? base;
   const P = ([x, y], h) => new THREE.Vector3(x, h - base, -y);
@@ -42,11 +43,20 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide, ...o });
 
   /* ---------- terrain ---------- */
+  let terrainGeo = null;
+  /* the after's grid (design.js: the pads under new buildings), its heights written into the drawn terrain in place */
+  function setTerrain(z) {
+    if (!z || z === T.z || z.length !== T.z.length) return;
+    T.z = z; const a = terrainGeo.attributes.position;
+    for (let i = 0; i < z.length; i++) a.setY(i, (z[i] ?? base) - base - 0.05);
+    a.needsUpdate = true; terrainGeo.computeVertexNormals(); terrainGeo.computeBoundingSphere(); dirty = true;
+  }
   {
     const pos = [], idx = [];
     for (let r = 0; r < T.h; r++) for (let c = 0; c < T.w; c++) { const z = T.z[r * T.w + c] ?? base; pos.push(T.x0 + (c + 0.5) * T.res, z - base - 0.05, -(T.y1 - (r + 0.5) * T.res)); }
     for (let r = 0; r < T.h - 1; r++) for (let c = 0; c < T.w - 1; c++) { const a = r * T.w + c; idx.push(a, a + T.w, a + 1, a + 1, a + T.w, a + T.w + 1); }
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    terrainGeo = g;
     /* grass (ambientCG Grass004, as in hagekart): one picture to 3 m, a little lighter than the photo so the plan reads */
     g.setAttribute("uv", new THREE.Float32BufferAttribute(pos.flatMap((v, i) => i % 3 === 0 ? [v / 3] : i % 3 === 2 ? [-v / 3] : []), 2));
     const gc = document.createElement("canvas"); gc.width = gc.height = 512; const gx = gc.getContext("2d"); gx.fillStyle = C.ground; gx.fillRect(0, 0, 512, 512);
@@ -904,7 +914,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     relabel(names) { for (const t of wingTags) { const n = names.get(t.id); if (n && t.el.textContent !== n) { t.el.textContent = n; t.size = null; } } dirty = true; },
     /* the yellow band round a picked surface or path, out of the way while its points are dragged */
     bands(on) { if (groundRims.visible !== on) { groundRims.visible = on; dirty = true; } },
-    setSun, select, setGone, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    setSun, select, setGone, setTerrain, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },
     /* the view as it opened, the storey left as it is */

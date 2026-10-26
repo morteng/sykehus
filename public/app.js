@@ -9,7 +9,7 @@ import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025f";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
-import { baseOf } from "./design.js";
+import { baseOf, groundText } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
@@ -92,7 +92,7 @@ const viewer = createViewer({
 });
 /* the after's live part over the viewer's model: what is torn down hidden, the new buildings drawn, the names as edited */
 function paint() {
-  viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []); viewer.setLevels(site.wings || []); viewer.setRooms(floors);
+  viewer.setTerrain(site.terrain?.z); viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []); viewer.setLevels(site.wings || []); viewer.setRooms(floors);
   viewer.relabel(new Map(site.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
   dispatchEvent(new CustomEvent("sykehus:painted"));   // the build tools take the new building's new shapes
 }
@@ -626,7 +626,9 @@ function showGround(g) {
 function showNew(a) {
   const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   card(esc(a.name), "Nytt bygg i forslaget", rows([...(a.use ? [["Bruk", esc(a.use)]] : []), ...(a.storeys ? [["Etasjer", String(a.storeys)]] : []), ...(a.built ? [["Bygget", esc(a.built)]] : []),
-    ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`]]) +
+    ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`],
+    ...(a.ground ? [["Graving", `${num(a.ground.cut_m3)} m³ ut, ${num(a.ground.fill_m3)} m³ fylling`]] : [])]) +
+    (a.ground ? `<p class="note">${esc(groundText(a.ground))}</p>` : "") +
     (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + (a.shape === "bim" && a.bim?.sha
       /* a construction (U3570): Anton's script made it; its own IFC (an IfcBuilding with its storey and parts) */
       ? `<p class="src">Bygget av Antons skript (${Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). <a href="api/bim/${a.bim.sha}/model.ifc" download>Last ned IFC</a></p>`

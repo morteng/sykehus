@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
+import { groundAt, groundText } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -63,4 +64,23 @@ test("a room by its place (at): one of several with the same name, or one with n
   const m = applyEdits(site, floors, [e]), after = m.floors.filter(f => f.name === "6. etasje").flatMap(f => f.rooms || []);
   assert.equal(after.filter(r => r.name === "Atelier").length, 1); assert.equal(after.filter(r => r.name.toLowerCase() === "behandling" && r.at).length, same.length - 1);
   assert.throws(() => checkEdit(site, floors, { kind: "room", storey: "6", at: [400, 400], set: { name: "x" } }), /innen 6 m/);
+});
+
+test("a new building gets a pad (U3566): level at its foot, slopes 1:2, cut and fill, gone with it", () => {
+  const v = { kind: "volume", id: "nPad1", name: "Drivhus", shape: "box", from: [-5, -62], to: [5, -62], width: 10, height: 4 };
+  const c = add([], v), m = applyEdits(site, floors, c), a = m.site.added.find(x => x.id === "nPad1"), g = a.ground;
+  assert.ok(g && g.cut_m3 + g.fill_m3 > 0, "some ground is moved");
+  assert.equal(g.kote, Math.round(a.base_kote * 100) / 100);
+  assert.notEqual(m.site.terrain.z, site.terrain.z, "the after has its own grid");
+  const at = p => groundAt(m.site, p);
+  for (const p of [[-5, -62], [5, -62], [0, -67.5], [0, -56.5]]) assert.ok(Math.abs(at(p) - a.base_kote) < 0.6, `level on the pad at ${p}`);
+  /* the slope: never steeper than 1:2 from the pad's edge, and the ground far off as it was */
+  assert.equal(groundAt(m.site, [80, 80]), groundAt(site, [80, 80]));
+  const before = site.terrain.z.slice();
+  const moved = applyEdits(site, floors, [...c, checkEdit(m.site, m.floors, { kind: "reshape", id: "nPad1", from: [-25, -62], to: [-15, -62] })]);
+  assert.ok(Math.abs(groundAt(moved.site, [0, -62]) - groundAt(site, [0, -62])) < 0.01, "moved: the old pad is gone");
+  const undone = applyEdits(site, floors, []);
+  assert.equal(undone.site.terrain.z, site.terrain.z, "undone: the before's grid");
+  assert.deepEqual(site.terrain.z, before, "the before is never written");
+  assert.match(groundText(g), /planeres på kote/);
 });
