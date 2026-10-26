@@ -2,7 +2,10 @@
    frame in metres), the picture is kept for that person only. node --test tests/sketch.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+process.env.SYKEHUS_VERSIONS_DIR = mkdtempSync(join(tmpdir(), "sk-"));
 import { createMcp } from "../mcp.mjs";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url))), floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -21,6 +24,9 @@ test("propose_sketch draws the proposal, saves nothing, tells the page, and the 
   const id = e.data.url.replace(/^api\/skisse\//, "").replace(/\.png$/, "");
   assert.equal(get(id, "testperson").code, 200); assert.equal(get(id, "testperson").body.subarray(1, 4).toString(), "PNG", "a PNG picture");
   assert.equal(get(id, "an-other").code, 404, "another person gets nothing"); assert.equal(get(id, null).code, 404);
+  assert.match(e.data.legend, /^Nytt: .*Drivhus/, "a legend says what is new");
+  const list = (person) => { const o = {}; mcp.handleSketches({}, { writeHead: c => { o.code = c; }, end: b => { o.body = JSON.parse(b); } }, person); return o; };
+  assert.equal(list("testperson").body.sketches.at(-1).id, id, "a reload shows it again, from disk"); assert.equal(list("an-other").body.sketches.length, 0); assert.equal(list(null).code, 401);
   const bad = await tool.run({ title: "x", edits: [{ kind: "volume" }, { kind: "volume", name: "Hus", shape: "box", from: [-46, -62], to: [-16, -62], width: 14, height: 4 }] }, { who: "testperson" });
   assert.equal(bad._result.structuredContent.not_drawn.length, 1, "what could not be drawn is said, the rest is shown");
   await assert.rejects(tool.run({ title: "x", edits: [{ kind: "volume" }] }, { who: "testperson" }), /Ingen av endringene/);

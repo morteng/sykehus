@@ -110,6 +110,7 @@ createServer(async (req, res) => {
     if (path === "/api/ifc") return mcp.handleIfc(req, res);
     if (path === "/api/import") return await handleImport(req, res);
     if (await gjengi?.route(req, res, path, url)) return;
+    if (path === "/api/skisser") return mcp.handleSketches(req, res, login.personOf(req));
     if (path.startsWith("/api/skisse/")) return mcp.handleSketch(req, res, path.slice("/api/skisse/".length), login.personOf(req));   // a plan Anton showed (U3635)
     if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));

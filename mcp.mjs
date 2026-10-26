@@ -9,7 +9,8 @@ import { randomBytes, createHash } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
-import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
@@ -112,7 +113,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const keepDraft = d => { if (!ddir) return; const p = join(ddir, d.id + ".json"); try { writeFileSync(p + ".tmp", JSON.stringify(d)); renameSync(p + ".tmp", p); } catch (e) { console.error("drafts: write", e.message); } };
   const dropDraft = id => { drafts.delete(String(id)); if (ddir && DID.test(String(id))) try { unlinkSync(join(ddir, id + ".json")); } catch { } };
   const newId = () => randomBytes(6).toString("base64url");
-  const sketches = new Map(); let notify = null;   // U3635: the plans shown to a person (by id), kept for their page to fetch; notify(person, event, data) tells their page
+  let notify = null;   // U3635: notify(person, event, data) tells their page of a plan Anton showed; the plans are kept on disk (a reload shows them again)
+  const SK = join(process.env.SYKEHUS_VERSIONS_DIR || tmpdir(), "skisser"), SK_KEEP = 3 * 86400e3;
+  const sketchSave = (sid, meta, png) => { mkdirSync(SK, { recursive: true }); writeFileSync(join(SK, sid + ".png"), png); writeFileSync(join(SK, sid + ".json"), JSON.stringify(meta));
+    for (const f of readdirSync(SK)) { try { const p = join(SK, f); if (Date.now() - statSync(p).mtimeMs > SK_KEEP) unlinkSync(p); } catch {} } };
+  const sketchMeta = sid => { try { return /^[A-Za-z0-9_-]{8}$/.test(sid) ? JSON.parse(readFileSync(join(SK, sid + ".json"), "utf8")) : null; } catch { return null; } };
+  const sketchesOf = person => { try { return readdirSync(SK).filter(f => f.endsWith(".json")).map(f => sketchMeta(f.slice(0, -5))).filter(m => m?.person === person && Date.now() - Date.parse(m.at) < SK_KEEP).sort((a, b) => a.at < b.at ? -1 : 1).slice(-6).map(({ person: _p, ...m }) => m); } catch { return []; } };
   /* signed in, the person's work is one private version (U3555), marked work; made on the first change */
   const workOf = me => { const v = versions.list({ owner: me, viewer: me }).find(x => x.work); if (v) return v;
     const n = versions.create(me, "Mitt etter"); n.work = true; return versions.save(n); };
@@ -438,12 +444,19 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (!ok.length) throw toolErr(`Ingen av endringene kunne tegnes: ${bad.map(b => `nr. ${b.n} (${b.kind}): ${b.error}`).join("; ")}`);
         const s = withMeshes(cur.site), before = new Set((site.added || []).concat(applyEdits(site, floors, base).site.added || []).map(x => x.id));
         const made = (s.added || []).find(x => !before.has(x.id)), want = a.focus || made?.id || ok.map(e => e.wing || e.id).find(Boolean), f = want ? aimAt(s, want) : null;
-        const W = 1024, H = 640, dist = a.distance_m ?? (f ? Math.max(50, f.size * 2.6) : 220), target = f ? f.target : hospital, k = (H / 2) / (dist * Math.tan(19 * Math.PI / 180));
-        const png = await picture(s, { plan: true, target, dist, focus: f ? f.ids : [], width: W, height: H });
-        const sid = newId(), mine = [...sketches].filter(([, v]) => v.person === who); for (const [k0] of mine.slice(0, Math.max(0, mine.length - 11))) sketches.delete(k0);
+        const W = 1024, H = 640, fresh = (s.added || []).filter(x => !before.has(x.id)), picked = fresh.length ? fresh.map(x => x.id) : f ? f.ids : [];
+        /* the plan is fitted to what is new (its points, with a margin), so the proposal is big in the picture; else to the focus */
+        const pts = fresh.flatMap(x => [...(x.parts || []).flatMap(p => p.axis || []), ...(x.ring || []), ...(x.from ? [x.from, x.to] : [])]).filter(q => Array.isArray(q) && q.length >= 2 && q.every(Number.isFinite));
+        const lo = pts.length ? [Math.min(...pts.map(q => q[0])), Math.min(...pts.map(q => q[1]))] : null, hi = pts.length ? [Math.max(...pts.map(q => q[0])), Math.max(...pts.map(q => q[1]))] : null;
+        const span = lo ? Math.max((hi[0] - lo[0]) / 1.6, hi[1] - lo[1], 12) * 1.3 : 0, tan = Math.tan(19 * Math.PI / 180);
+        const dist = a.distance_m ?? (lo ? Math.max(30, span / (2 * tan)) : f ? Math.max(50, f.size * 2.6) : 220), target = lo ? [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, f?.target?.[2] ?? 25] : f ? f.target : hospital, k = (H / 2) / (dist * tan);
+        const png = await picture(s, { plan: true, accent: true, target, dist, focus: picked, width: W, height: H });
+        /* the legend: what is new, in the plan's strong orange (balconies by their count, the rest by name) */
+        const legend = "Nytt: " + (fresh.length ? fresh.slice(0, 4).map(x => x.kind === "balconies" && x.count ? `${x.count} balkonger mot ${(x.facades || []).map(y => y.bearing + "°").join(" og ") || "fasaden"}` : x.name).join("; ") : ok.slice(0, 3).map(e => e.name || e.kind).join("; ")) + ".";
+        const sid = newId();
         const numbers = (a.numbers || []).slice(0, 8).map(n => ({ label: String(n.label).slice(0, 30), value: String(n.value).slice(0, 40) }));
-        sketches.set(sid, { person: who, png, t: Date.now() });
-        notify?.(who, "sketch", { type: "sketch", id: sid, title: String(a.title).slice(0, 100), numbers, url: `api/skisse/${sid}.png`, frame: { centre: [target[0], target[1]], k }, size: [W, H], at: new Date().toISOString() });
+        const ev = { type: "sketch", id: sid, title: String(a.title).slice(0, 100), legend, numbers, url: `api/skisse/${sid}.png`, frame: { centre: [target[0], target[1]], k }, size: [W, H], at: new Date().toISOString() };
+        sketchSave(sid, { ...ev, person: who }, png); notify?.(who, "sketch", ev);
         return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: `Skissen «${a.title}» er vist for personen i samtalen, med «Bygg det». Ingenting er lagret.${bad.length ? ` Ikke tegnet: ${bad.map(b => `nr. ${b.n} (${b.error})`).join("; ")}.` : ""} Si i én kort linje hva du foreslår og vent: «Bygg det: ${a.title}» betyr at du sender de samme endringene til try_change.` }], structuredContent: { shown: true, sketch: sid, drawn: ok.length, not_drawn: bad } } };
       } },
     { name: "show_draft", tgt: "read", title: "Se et utkast eller en versjon", ro: true, schema: S({ target: TARGET, draft: OLD }),
@@ -855,7 +868,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
     setNotifier: f => { notify = f; },
     /* GET /api/skisse/<id>.png: a plan Anton showed this person */
-    handleSketch: (req, res, rest, person) => { const m = /^([A-Za-z0-9_-]{8})\.png$/.exec(rest), k = m && sketches.get(m[1]);
+    handleSketch: (req, res, rest, person) => { const m = /^([A-Za-z0-9_-]{8})\.png$/.exec(rest), k = m && sketchMeta(m[1]);
       if (!k || !person || k.person !== person) { res.writeHead(404, { ...SECURITY, "content-type": "application/json" }); return res.end(JSON.stringify({ error: "Finnes ikke." })); }
-      res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(k.png); } };
+      res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(readFileSync(join(SK, m[1] + ".png"))); },
+    /* GET /api/skisser: the plans shown to this person lately, oldest first, for the page to show again after a reload */
+    handleSketches: (req, res, person) => { res.writeHead(person ? 200 : 401, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(person ? { sketches: sketchesOf(person) } : { error: "signed_out" })); } };
 }

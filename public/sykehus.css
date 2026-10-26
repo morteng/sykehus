@@ -406,23 +406,34 @@ header .gj .ab-ic[aria-pressed=true] { background: var(--accent-panel); color: v
    and what does not fit goes to a second row */
 @media (max-width: 599px) { .vt { right: calc(40px + var(--tap) + var(--sp-2)); flex-wrap: wrap; } }
 
-/* U3635: a plan Anton shows before he builds (renderkit's sketch.js; the app owns the looks) */
+/* U3635: a plan Anton shows before he builds (renderkit's sketch.js; the app owns the looks; buttons are the page's own, laser.css) */
 .sk { margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
 .sk figcaption { font-weight: 600; }
-.sk-stage { position: relative; border: 1px solid var(--accent-panel-edge); border-radius: 8px; overflow: hidden; background: #fff; line-height: 0; }
+.sk-stage { position: relative; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #fff; line-height: 0; }
 .sk-stage img, .sk-stage canvas { width: 100%; height: auto; display: block; }
 .sk-stage canvas { position: absolute; inset: 0; }
-.sk-nums { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(7em, 1fr)); gap: var(--sp-2); }
-.sk-nums div { background: var(--accent-panel); border-radius: 8px; padding: 6px 10px; }
-.sk-nums dt { font-size: var(--fs-sm, .8em); color: var(--muted); } .sk-nums dd { margin: 0; font-weight: 600; }
-.sk-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.sk-tools button, .sk-act button { min-height: var(--tap); padding: 0 var(--sp-3); }
-.sk-tools button[aria-pressed=true] { background: var(--accent-panel); border-color: var(--accent-panel-edge); font-weight: 600; }
-.sk-dot { width: var(--tap); padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
-.sk-dot i { width: 22px; height: 22px; border-radius: 50%; display: block; }
+.sk-legend { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--muted); }
+.sk-legend i { width: 14px; height: 14px; border-radius: 3px; background: #ff7a00; flex: none; }
+.sk-nums { margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.sk-nums div { background: var(--accent-panel); border-radius: var(--radius); padding: 4px 12px; }
+.sk-nums dt { font-size: var(--fs-xs); color: var(--muted); } .sk-nums dd { margin: 0; font-weight: 600; }
+.sk-tools { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sk { --sk-b: 36px; }
+.sk.sk-large { --sk-b: var(--tap); }
+.sk-tools button.icon { width: var(--sk-b); height: var(--sk-b); padding: 0; display: inline-grid; place-items: center; flex: none; }
+.sk-tools .i { width: 22px; height: 22px; }
+.sk-tools button[aria-pressed=true] { background: var(--accent-panel); border-color: var(--accent-panel-edge); }
+.sk-sw { display: inline-flex; gap: 0; margin: 0 2px; }
+.sk-dot { width: 28px; height: var(--sk-b); padding: 0; border: 0; background: none; display: inline-grid; place-items: center; }
+.sk-dot i { width: 20px; height: 20px; border-radius: 50%; display: block; outline: 2px solid transparent; outline-offset: 2px; }
+.sk-dot[aria-pressed=true] i { outline-color: var(--text); }
 .sk-pins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.sk-pins li { display: flex; gap: 8px; align-items: center; } .sk-pins b { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; justify-content: center; flex: none; font-size: .85em; }
+.sk-pins li { display: flex; gap: 8px; align-items: center; } .sk-pins b { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; justify-content: center; flex: none; font-size: var(--fs-xs); }
+.sk-pins input, .sk-feed { font: inherit; font-size: var(--fs-md); padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: inherit; box-sizing: border-box; }
 .sk-pins input { flex: 1; min-width: 0; min-height: var(--tap); }
-.sk-feed { width: 100%; box-sizing: border-box; font: inherit; }
+.sk-feed { width: 100%; resize: vertical; }
 .sk-act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.sk-act .pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.sk-act button { min-height: var(--tap); }
+.sk.sk-large { position: fixed; inset: 0; z-index: 60; background: var(--bg, var(--panel)); padding: var(--sp-3); overflow: auto; }
+.sk.sk-large .sk-stage { max-width: min(100%, calc((100vh - 280px) * 1.6)); margin: 0 auto; width: 100%; }
+body.sk-open { overflow: hidden; }
