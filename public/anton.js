@@ -12,6 +12,7 @@
    When Anton saves one of the person's versions the server says "steps": the page shows that version again, from the
    same place (after the reply is done, so nothing is cut off). */
 import { pick } from "./kit/pick.js";
+import { chatSheet, sheetShown } from "./kit/chat.js";   // U3657: the conversation over the pill, the kit's
 import { toolLine } from "./toolline.js";
 
 const $ = id => document.getElementById(id);
@@ -107,14 +108,21 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
     const seen = new Set();   // the turns the stream has shown taken
     const chatOpen = () => panel.tab === "chat" && panel.open();
-    const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; };
+    const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; sheet.toEnd(); };
+    /* U3657 (Morten 14:07Z): with the pill over the view and something said, the conversation shows above it, with «Ny samtale»; the tab's own
+       list and button are moved in, never copied (the kit's chat.js). On a phone it takes at most half the view. */
+    const sheet = chatSheet({ host: $("bstack"), log, actions: $("chat-top"), title: "Samtalen", foldLabel: "Skjul eldre meldinger", unfoldLabel: "Vis hele samtalen",
+      name: "Høyden på samtalen", hint: "Dra for å endre høyden (↑ ↓). Dobbeltklikk setter den tilbake", min: 120, maxShare: () => panel.phone ? 0.5 : 0.6,
+      viewport: () => $("view").clientHeight, key: "sykehus-samtalehoyde" });
+    $("bstack").prepend(sheet.el);
+    const syncSheet = () => { sheet.show(sheetShown(log.children.length, chatOpen())); showReply(); };
     /* the pill where the chat is: in the tab's bottom row while it shows, else at the bottom of the view */
     function placePill() {
       const open = chatOpen(), to = open ? $("chat-pill") : $("bstack");
       document.body.classList.toggle("pill-chat", open);
       if (form.parentElement !== to) { const f = document.activeElement === input; to.append(form); if (f) input.focus(); }
-      if (open) { unread = 0; toEnd(); }
-      showReply();
+      if (open) { unread = 0; }
+      syncSheet(); if (open) toEnd();
       words();
       panel.badge("chat", asking ? "!" : unread || 0);
     }
@@ -127,14 +135,14 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       const open = chatOpen();
       if (text != null) $("reply-body").textContent = text;
       $("reply-me").hidden = !ownMsg.textContent; $("reply-who").hidden = $("reply-body").hidden = !$("reply-body").textContent;
-      $("reply-card").hidden = open || (!$("reply-body").textContent && !ownMsg.textContent);
+      $("reply-card").hidden = open || sheet.open || (!$("reply-body").textContent && !ownMsg.textContent);
       $("reply").hidden = open || ($("reply-card").hidden && !$("reply-cards").children.length);
     }
     $("view").addEventListener("pointerdown", () => { $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); });   // the model first: touching it puts the reply away
     $("reply-card").onclick = () => panel.reveal("chat");
     /* «Ny samtale» stays for the signed-in person even when this page has drawn nothing: gulden-ai may hold a thread
        the history did not give back (21:23Z: not there on testperson's page) */
-    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = false; }
+    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = false; syncSheet(); }
     function line(cls, text, who, image, about) {
       const li = document.createElement("li"); li.className = "talk-item " + cls;
       if (who) li.append(Object.assign(document.createElement("span"), { className: "talk-who", textContent: who }));
