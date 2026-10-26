@@ -100,3 +100,8 @@ The test suite runs the same against a local server: `DOCS=<docs.sqlite> node --
 
 Claude: Settings → Connectors → Add custom connector → `https://sykehus.gulden.no/mcp`, no login. Adding it to
 Morten's or his father's account is their own act.
+
+## For people: drag with faint lines and typed numbers (U3878)
+
+- When you drag a new building or a corner of a lawn, pool or path, faint dashed lines show what it lines up with: the middle of a wall, square to a wall, along a building's own direction, the mirror of a corner («symmetri») or half way between two walls («lik avstand»). Let go where a line shows and it stays exactly there.
+- To set an exact number, press a digit while you drag (a building: «Lengde», «Bredde», «Retning» or «Flytt»; a corner: «Lengde»; an edge: «Flytt»), type it and press Enter. Esc drops what you typed. Hold Alt (Option) to turn all snapping off. On a touch screen use the two buttons that show while you drag: «Uten fest» and «Skriv mål».
