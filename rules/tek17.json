@@ -1,38 +1,298 @@
 {
-  "about": "U3678 slice 1: the building rules (TEK17, byggteknisk forskrift) that the settings of the parts and the step-free entrance can answer. Each rule says what it reads; a rule whose numbers the model does not hold is listed as «ikke målt», never as ok. «verify: true» marks a number or a § that was written from memory of the rule and has not been read against the text on lovdata.no / dibk.no: say so to the person, and do not call it a legal answer. «source: pm» is a number the plan gave.",
-  "rules": [
-    { "id": "trapp_stigningsforhold", "section": "§ 12-16", "topic": "Trapp", "reads": { "part": "stair", "params": ["height", "max_riser"], "also": "riser and tread (the part's own result when there is one, else the part's stair rule worked out from the settings)" },
-      "limit": { "min_mm": 600, "max_mm": 630 }, "source": "pm", "verify": false,
-      "no": "Stigningsforholdet i en trapp (2 × opptrinn + inntrinn) skal ligge mellom 600 og 630 mm." },
-    { "id": "trapp_opptrinn", "section": "§ 12-16", "topic": "Trapp", "reads": { "part": "stair", "params": ["height", "max_riser"] },
-      "limit": { "max_mm": 180 }, "verify": true,
-      "no": "Opptrinnet i en trapp skal ikke være høyere enn 180 mm." },
-    { "id": "trapp_bredde", "section": "§ 12-16", "topic": "Trapp", "reads": { "part": "stair", "params": ["width"] },
-      "limit": { "min_m": 0.9 }, "verify": true,
-      "no": "En trapp skal være minst 0,9 m bred (et publikumsbygg krever mer)." },
-    { "id": "trapp_handlist", "section": "§ 12-16", "topic": "Trapp", "reads": { "part": "stair", "params": ["height", "railing"] },
-      "limit": { "rise_over_m": 0.5 }, "verify": true,
-      "no": "En trapp som stiger mer enn 0,5 m skal ha håndløper." },
-    { "id": "rekkverk_hoyde", "section": "§ 12-17", "topic": "Rekkverk", "reads": { "part": "railing", "params": ["height", "ground"], "also": "the fall: the foot's kote minus the lowest terrain 1.5 m to either side" },
-      "limit": { "min_m": 1.0, "fall_over_m": 0.5, "min_m_high": 1.2, "high_fall_over_m": 12 }, "source": "pm", "verify": true, "verify_what": "the 1.2 m / 12 m step",
-      "no": "Rekkverk skal være minst 1,0 m høyt der fallet er over 0,5 m (1,2 m der fallet er over 12 m)." },
-    { "id": "balkong_rekkverk_hoyde", "section": "§ 12-17", "topic": "Balkong", "reads": { "part": "balcony", "params": ["railing_height", "ground", "depth"], "also": "the fall, as for a railing" },
-      "limit": { "min_m": 1.0, "fall_over_m": 0.5 }, "verify": true,
-      "no": "Rekkverket på en balkong skal være minst 1,0 m høyt der fallet er over 0,5 m." },
-    { "id": "balkong_rekkverk_balkonger", "section": "§ 12-17", "topic": "Balkong", "reads": { "kind": "balconies", "params": ["railing"] },
-      "limit": { "min_m": 1.0 }, "verify": true,
-      "no": "Rekkverket på balkongene skal være minst 1,0 m høyt. Høyden er ikke tegnet i modellen, bare materialet." },
-    { "id": "balkong_dorbredde", "section": "§ 12-13", "topic": "Dør", "reads": { "part": "balcony", "params": ["door", "door_width"] },
-      "limit": { "min_m": 0.9 }, "verify": true, "verify_what": "the § and the clear width (the part holds the leaf, not the clear opening)",
-      "no": "En dør ut til balkongen skal være minst 0,9 m bred (blad), så den gir 0,86 m fri bredde." },
-    { "id": "balkong_dorhoyde", "section": "§ 12-13", "topic": "Dør", "reads": { "part": "balcony", "params": ["door", "door_height"] },
-      "limit": { "min_m": 2.0 }, "verify": true,
-      "no": "En dør skal være minst 2,0 m høy." },
-    { "id": "rampe_stigning", "section": "§ 12-6", "also_cited_as": "§ 8-6 (design.js)", "topic": "Rampe", "reads": { "kind": "volume", "params": ["ground.entrance.rise", "ground.entrance.ramp_m"] },
-      "limit": { "max_slope": 0.05, "note": "1:20; pm's plan names 1:15 as the harder limit, 1:12 for a short ramp: not applied until read against the text" }, "source": "pm", "verify": true,
-      "no": "En rampe til trinnfri inngang skal ikke være brattere enn 1:20." },
-    { "id": "rampe_rekker_terrenget", "section": "§ 12-6", "topic": "Rampe", "reads": { "kind": "volume", "params": ["ground.entrance.ok"] },
-      "limit": { "ramp_max_m": 80 }, "verify": true,
-      "no": "En trinnfri inngang skal nå terrenget med en rampe; blir rampen for lang, trengs heis eller en annen inngang." }
-  ]
+ "about": "U3678: the building rules (TEK17, byggteknisk forskrift) that the settings of the parts and the step-free entrance can answer. Each rule says what it reads and carries `source`: the page on dibk.no it was read from, a quote of the text (checked 2026-10-26 against the page text) and the ledd. `verify: true` marks what is still not settled (see verify_what). The text gives different numbers for some uses (bolig, flere boenheter, universell utforming, byggverk for mange personer): each is kept in limit.alt. Not a legal answer.",
+ "rules": [
+  {
+   "id": "trapp_stigningsforhold",
+   "section": "§ 12-14",
+   "topic": "Trapp",
+   "reads": {
+    "part": "stair",
+    "params": [
+     "height",
+     "max_riser"
+    ],
+    "also": "riser and tread (the part's own result when there is one, else the part's stair rule worked out from the settings)"
+   },
+   "limit": {
+    "min_mm": 600,
+    "max_mm": 640
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-14",
+    "quote": "2 opptrinn + 1 inntrinn = 620 mm +/- 20 mm, målt langs ganglinjen",
+    "ref": "veiledning, preaksepterte ytelser til første ledd c og d: following it meets the rule; another solution may too (the forskrift itself gives no number)"
+   },
+   "no": "Trappen følger trappeformelen: 2 × opptrinn + inntrinn = 620 mm, pluss/minus 20 mm (600–640 mm)."
+  },
+  {
+   "id": "trapp_inntrinn",
+   "section": "§ 12-14",
+   "topic": "Trapp",
+   "reads": {
+    "part": "stair",
+    "params": [
+     "height",
+     "max_riser"
+    ],
+    "also": "the tread, as for the stair rule"
+   },
+   "limit": {
+    "min_mm": 250
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-14",
+    "quote": "Inntrinn i ganglinjen skal være minimum 0,25 m.",
+    "ref": "første ledd d"
+   },
+   "no": "Inntrinnet i en trapp skal være minst 250 mm i ganglinjen. (Teksten har ingen høyeste verdi for opptrinn, bare at alle opptrinn er like høye.)"
+  },
+  {
+   "id": "trapp_bredde",
+   "section": "§ 12-14",
+   "topic": "Trapp",
+   "reads": {
+    "part": "stair",
+    "params": [
+     "width"
+    ]
+   },
+   "limit": {
+    "min_m": 0.9,
+    "alt": [
+     {
+      "when": "hovedtrapp som betjener mer enn én boenhet",
+      "min_m": 1.1,
+      "ref": "annet ledd a"
+     },
+     {
+      "when": "byggverk med krav om universell utforming (hovedtrapp)",
+      "min_m": 1.2,
+      "ref": "tredje ledd a"
+     },
+     {
+      "when": "rett løp internt i en boenhet",
+      "min_m": 0.8,
+      "ref": "første ledd h"
+     }
+    ]
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-14",
+    "quote": "Trapper med rette løp skal ha bredde på trappeløpet på minimum 0,90 m",
+    "ref": "første ledd h; annet ledd a gives 1,10 m and tredje ledd a 1,20 m"
+   },
+   "no": "En trapp med rette løp skal være minst 0,90 m bred. En hovedtrapp til flere boenheter skal være minst 1,10 m, og i et byggverk med krav om universell utforming minst 1,20 m."
+  },
+  {
+   "id": "trapp_handlist",
+   "section": "§ 12-14",
+   "topic": "Trapp",
+   "reads": {
+    "part": "stair",
+    "params": [
+     "railing"
+    ]
+   },
+   "limit": {
+    "both_sides": true
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-14",
+    "quote": "Trappen skal ha sikker avgrensing og håndløper på begge sider.",
+    "ref": "første ledd a (amfi/tribune and driftstrapper are excepted, femte ledd)"
+   },
+   "no": "En trapp skal ha sikker avgrensing og håndløper på begge sider."
+  },
+  {
+   "id": "rekkverk_hoyde",
+   "section": "§ 12-15",
+   "topic": "Rekkverk",
+   "reads": {
+    "part": "railing",
+    "params": [
+     "height",
+     "ground"
+    ],
+    "also": "the fall: the foot's kote minus the lowest terrain 1.5 m to either side"
+   },
+   "limit": {
+    "min_m": 1.0,
+    "min_m_high": 1.2,
+    "high_fall_over_m": 10.0,
+    "other_means_under_m": 3.0
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-15",
+    "quote": "minimum 1,0 m der nivåforskjellen er inntil 10,0 m",
+    "ref": "tredje ledd a (minimum 1,2 m der nivåforskjellen er mer enn 10,0 m) og b; fjerde ledd: under 3,0 m kan sikres på annen måte"
+   },
+   "no": "Rekkverk ved balkong, terrasse og lignende skal være minst 1,0 m høyt, og minst 1,2 m der fallet er over 10 m. Et fall under 3,0 m kan sikres på annen forsvarlig måte enn med rekkverk."
+  },
+  {
+   "id": "balkong_rekkverk_hoyde",
+   "section": "§ 12-15",
+   "topic": "Balkong",
+   "reads": {
+    "part": "balcony",
+    "params": [
+     "railing_height",
+     "ground",
+     "depth"
+    ],
+    "also": "the fall, as for a railing"
+   },
+   "limit": {
+    "min_m": 1.0,
+    "min_m_high": 1.2,
+    "high_fall_over_m": 10.0,
+    "other_means_under_m": 3.0
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-15",
+    "quote": "minimum 1,0 m der nivåforskjellen er inntil 10,0 m",
+    "ref": "tredje ledd a (minimum 1,2 m der nivåforskjellen er mer enn 10,0 m) og b; fjerde ledd: under 3,0 m kan sikres på annen måte"
+   },
+   "no": "Rekkverket på en balkong skal være minst 1,0 m høyt, og minst 1,2 m der fallet er over 10 m."
+  },
+  {
+   "id": "balkong_rekkverk_balkonger",
+   "section": "§ 12-15",
+   "topic": "Balkong",
+   "reads": {
+    "kind": "balconies",
+    "params": [
+     "railing"
+    ]
+   },
+   "limit": {
+    "min_m": 1.0
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-15",
+    "quote": "minimum 1,0 m der nivåforskjellen er inntil 10,0 m",
+    "ref": "tredje ledd b"
+   },
+   "no": "Rekkverket på balkongene skal være minst 1,0 m høyt (1,2 m over 10 m fall). Høyden er ikke tegnet i modellen, bare materialet."
+  },
+  {
+   "id": "balkong_dorbredde",
+   "section": "§ 12-13",
+   "topic": "Dør",
+   "reads": {
+    "part": "balcony",
+    "params": [
+     "door",
+     "door_width"
+    ]
+   },
+   "limit": {
+    "min_m": 0.86,
+    "alt": [
+     {
+      "when": "byggverk beregnet for mange personer",
+      "min_m": 1.16,
+      "ref": "annet ledd a"
+     },
+     {
+      "when": "dør internt i en boenhet",
+      "min_m": 0.76,
+      "ref": "annet ledd b"
+     }
+    ]
+   },
+   "verify": true,
+   "verify_what": "the text is read (§ 12-13 annet ledd a: fri bredde); the part's door_width is taken as the clear opening, which the part does not say",
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-13",
+    "quote": "Inngangsdør og dører i kommunikasjonsveier skal ha fri bredde på minimum 0,86 m.",
+    "ref": "annet ledd a"
+   },
+   "no": "En dør ut til balkongen skal ha fri bredde på minst 0,86 m (1,16 m i et byggverk for mange personer; 0,76 m for en dør internt i en boenhet)."
+  },
+  {
+   "id": "balkong_dorhoyde",
+   "section": "§ 12-13",
+   "topic": "Dør",
+   "reads": {
+    "part": "balcony",
+    "params": [
+     "door",
+     "door_height"
+    ]
+   },
+   "limit": {
+    "min_m": 2.0
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/12/iii/12-13",
+    "quote": "Dører skal ha fri høyde på minimum 2,0 m.",
+    "ref": "annet ledd e"
+   },
+   "no": "En dør skal ha fri høyde på minst 2,0 m."
+  },
+  {
+   "id": "rampe_stigning",
+   "section": "§ 8-6",
+   "topic": "Rampe",
+   "reads": {
+    "kind": "volume",
+    "params": [
+     "ground.entrance.rise",
+     "ground.entrance.ramp_m"
+    ]
+   },
+   "limit": {
+    "max_slope": 0.06666666666666667,
+    "max_slope_short": 0.08333333333333333,
+    "short_m": 5.0,
+    "steep_terrain_slope": 0.1,
+    "alt": [
+     {
+      "when": "bygning med boenhet (ikke universell utforming)",
+      "ref": "§ 8-5 første ledd: samme 1:15 og 1:12 inntil 5,0 m"
+     },
+     {
+      "when": "rampe inne i eller ved byggverket",
+      "ref": "§ 12-16 annet ledd: 1:15, og 1:12 for strekninger under 3,0 m"
+     }
+    ]
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/8/8-6",
+    "quote": "ha stigning som ikke er brattere enn 1:15",
+    "ref": "§ 8-6 første ledd b: «unntatt for strekninger inntil 5,0 m» 1:12; annet ledd: 1:10 where the terrain is too steep (gangatkomst til byggverk med krav om universell utforming)"
+   },
+   "no": "Gangatkomsten skal være trinnfri med stigning ikke brattere enn 1:15 (1:12 på strekninger inntil 5,0 m). Der terrenget er for bratt, er 1:10 høyeste stigning for byggverk med universell utforming."
+  },
+  {
+   "id": "atkomst_trinnfri",
+   "section": "§ 8-6",
+   "topic": "Rampe",
+   "reads": {
+    "kind": "volume",
+    "params": [
+     "ground.entrance.ok"
+    ]
+   },
+   "limit": {
+    "app_ramp": "1:20, at most 80 m"
+   },
+   "verify": false,
+   "source": {
+    "url": "https://dibk.no/regelverk/byggteknisk-forskrift-tek17/8/8-6",
+    "quote": "Gangatkomster til byggverk med krav om universell utforming skal a) være trinnfrie",
+    "ref": "første ledd a; § 8-5 første ledd for bygning med boenhet"
+   },
+   "no": "Gangatkomsten skal være trinnfri. Appen legger en rampe 1:20 på høyst 80 m; når den ikke når terrenget, må du velge heis, en annen inngang eller en annen kote. Loven tillater 1:15, så dette er ikke i seg selv et brudd."
+  }
+ ]
 }
