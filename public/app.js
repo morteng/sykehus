@@ -675,7 +675,7 @@ function showNew(a) {
       : a.shape === "bim" && a.bim?.sha
       /* a construction (U3570): Anton's script made it; its own IFC (an IfcBuilding with its storey and parts) */
       ? `<p class="src">Bygget av Antons skript (${Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). <a href="api/bim/${a.bim.sha}/model.ifc" download>Last ned IFC</a></p>`
-      : `<p class="src">Satt opp i forslaget; ikke i IFC-fila ennå.</p>`), { kind: "new", id: a.id, label: a.name });
+      : `<p class="src">Satt opp i forslaget; med i IFC-fila som et eget bygg.</p>`), { kind: "new", id: a.id, label: a.name });
 }
 /* an undo names the change it takes out (expect), so a page that is behind (another tab, Anton) takes out nothing it
    did not show (pm 22:08Z: an undo in a second tab took out Morten's three newest changes); then the page is shown
@@ -699,7 +699,7 @@ function ifcLink() {
   if (!draft || draft.missing) return;
   const a = document.querySelector("header a.ab-ic[href*='ifc']"), q = versionId ? `versjon=${encodeURIComponent(versionId)}${nokkel ? `&nokkel=${encodeURIComponent(nokkel)}` : ""}` : `utkast=${encodeURIComponent(draftId)}`;
   a.href = `api/ifc?${q}`; a.removeAttribute("download");
-  a.title = "Last ned modellen med endringene (IFC): det som er revet er tatt ut. Det som er bygget nytt er ikke med i fila ennå."; a.setAttribute("aria-label", "Last ned modellen med endringene");
+  a.title = "Last ned modellen med endringene (IFC): det som er revet er tatt ut, og det som er bygget nytt er med (terrenget som planeres er ikke)."; a.setAttribute("aria-label", "Last ned modellen med endringene");
 }
 ifcLink();
 

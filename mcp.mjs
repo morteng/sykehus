@@ -12,6 +12,7 @@ import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
+import { withAdded } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { fitOf, surfaceFit, groundText, padFit, lotText } from "./public/design.js";
 import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
@@ -699,7 +700,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     } catch (e) { return send(res, e.tool ? 400 : 500, { error: e.tool ? e.message : "Noe gikk galt." }); }
   }
   /* GET /api/ifc?utkast=<id> | ?versjon=<id>&nokkel=: the model as IFC without the wings the after tears down
-     (ifcfilter.mjs); the before's file is read once, each answer kept until the draft or version changes */
+     (ifcfilter.mjs), with what it builds and the wings it renames (ifcadd.mjs); the before's file is read once, each answer kept until the draft or version changes */
   let base = null; const ifcs = new Map();
   function handleIfc(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
@@ -715,7 +716,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
       const gone = (site.wings || []).filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
       base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
-      body = Buffer.from(withoutBuildings(base, gone).text, "utf8");
+      body = Buffer.from(withAdded(withoutBuildings(base, gone).text, base, m.site, site).text, "utf8");
       if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
     }
     const file = `gamle-drammen-sykehus-${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;

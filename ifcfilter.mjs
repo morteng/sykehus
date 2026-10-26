@@ -1,7 +1,7 @@
 /* The IFC of a draft or a version (U3542): the export of the before (public/data/sykehus.ifc, tools/ifc.py) without
    the wings the after tears down. ifc.py writes an IfcBuilding per wing, named as the wing; a wing goes when every
-   building of it is gone (a wing torn down in part stays whole in the file, and says so in the page). What the after
-   builds (volumes, balconies, the ground) is not in the file: that needs ifc.py's build() on the server.
+   building of it is gone (each wing is one building in site.json, so a wing goes whole). What the after builds is
+   written in by ifcadd.mjs (U3556); the ground it planes is not in the file.
 
    The file is STEP, one entity a line (#n=IFCX(...);). Taking a wing out: its IfcBuilding and everything under it,
    down the aggregates, the containment, the openings and what fills them; then each relation that pointed at them is
