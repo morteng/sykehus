@@ -42,12 +42,12 @@ test("a new building from the page (U3556): storeys, facts, reshaped, and torn d
   const vol = { kind: "volume", id: "nAbc123", name: "Nybygg", shape: "box", from: [-40, -70], to: [-10, -70], width: 12, storeys: 4, material: "concrete", use: "Boliger" };
   const c = checkEdit(site, floors, vol); assert.equal(c.height, 12.8); assert.equal(c.storeys, 4);
   let m = applyEdits(site, floors, [c]); const a = m.site.added.find(x => x.id === "nAbc123");
-  assert.equal(a.use, "Boliger"); assert.equal(a.footprint_m2, 360); assert.equal(a.top_kote - a.base_kote, 12.8);
+  assert.equal(a.use, "Boliger"); assert.equal(a.footprint_m2, 360); assert.equal(Math.round((a.top_kote - a.base_kote) * 10) / 10, 12.8);
   assert.equal(checkEdit(m.site, m.floors, { ...vol }).id, "nAbc1232");   // its id taken: a free one, not a refusal (pm 23:31Z)
   assert.equal(checkEdit(site, floors, { ...vol, id: "takhage1" }).id, "ntakhage1");
   const r = checkEdit(m.site, m.floors, { kind: "reshape", id: "nAbc123", name: "Bolighuset", storeys: 6, from: [-40, -60], to: [-10, -60] });
   m = applyEdits(site, floors, [c, r]); const b = m.site.added.find(x => x.id === "nAbc123");
-  assert.equal(b.name, "Bolighuset"); assert.equal(b.top_kote - b.base_kote, 19.2); assert.deepEqual(b.from, [-40, -60]);
+  assert.equal(b.name, "Bolighuset"); assert.equal(Math.round((b.top_kote - b.base_kote) * 10) / 10, 19.2); assert.deepEqual(b.from, [-40, -60]);
   assert.throws(() => checkEdit(m.site, m.floors, { kind: "reshape", id: "nNope0000", name: "x" }), /Fant ikke/);
   const d = checkEdit(m.site, m.floors, { kind: "demolish", building: "nAbc123" });
   m = applyEdits(site, floors, [c, r, d]); assert.equal((m.site.added || []).length, 0);
@@ -83,4 +83,16 @@ test("a new building gets a pad (U3566): level at its foot, slopes 1:2, cut and 
   assert.equal(undone.site.terrain.z, site.terrain.z, "undone: the before's grid");
   assert.deepEqual(site.terrain.z, before, "the before is never written");
   assert.match(groundText(g), /planeres på kote/);
+});
+
+/* U3566 (f): on a slope the foot goes where what is dug out fills the rest, not on the lowest ground */
+test("a new building's foot balances its pad's cut and fill; a kote asked is kept", () => {
+  const v = { kind: "volume", id: "nBal", name: "Hus", shape: "box", from: [50, 40], to: [70, 40], width: 12, height: 6 };
+  const a = applyEdits(site, floors, add([], v)).site.added[0], g = a.ground;
+  assert.ok(Math.abs(g.cut_m3 - g.fill_m3) <= 0.2 * Math.max(g.cut_m3, g.fill_m3), `balanced: ${g.cut_m3} out, ${g.fill_m3} in`);
+  const low = Math.min(...[[50, 34], [70, 34], [50, 46], [70, 46], [60, 40]].map(p => groundAt(site, p)));
+  assert.ok(a.base_kote > low + 0.5, "over the lowest ground");
+  assert.equal(g.balanced, true); assert.match(groundText(g), /det som graves ut fyller resten/);
+  const l = applyEdits(site, floors, add([], { ...v, base_kote: Math.round(low * 10) / 10 })).site.added[0];
+  assert.equal(l.base_kote, Math.round(low * 10) / 10, "a kote asked is the kote"); assert.ok(l.ground.cut_m3 > 3 * g.cut_m3, `on the lowest it digs: ${l.ground.cut_m3} m³`);
 });

@@ -243,7 +243,25 @@ export function baseOf(site, e) {
     const at = (u, v) => [from[0] + d[0] * u + n[0] * (v - 0.5) * W, from[1] + d[1] * u + n[1] * (v - 0.5) * W], ks = [0, 0.25, 0.5, 0.75, 1];
     return Math.max(...ks.flatMap(u => ks.map(v => groundAt(site, at(u, v))))) + 0.05;
   }
-  return (e.on ? roofUnder(site, e) : null) ?? e.base_kote ?? Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
+  const lowest = () => Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
+  const roof = e.on ? roofUnder(site, e) : null;
+  if (roof != null) return roof;
+  if (e.base_kote != null) return e.base_kote;
+  /* U3566 (f): a new building of its own shape stands where its pad's cut and fill are the same (what is dug out
+     fills the rest), not on the lowest ground, which dug it deep into a slope; a construction or a file brought in
+     keeps the lowest, as its IFC was made there */
+  return e.shape && e.shape !== "bim" && site.terrain?.z ? balancedFoot(site, e, lowest()) : lowest();
+}
+/* the kote between the lowest and the highest ground under the pad where its cut and its fill (slopes and all) are
+   the same, to 10 cm (the kote the card shows); the lowest when the ground is flat */
+function balancedFoot(site, e, lo) {
+  const { from, to, width: W } = e, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L, d[0] / L], ks = [0, 0.25, 0.5, 0.75, 1];
+  const hu = 0.5 + PAD_M / L, at = (u, v) => [from[0] + d[0] * (0.5 + (u - 0.5) * 2 * hu) + n[0] * (v - 0.5) * (W + 2 * PAD_M), from[1] + d[1] * (0.5 + (u - 0.5) * 2 * hu) + n[1] * (v - 0.5) * (W + 2 * PAD_M)];
+  let a = lo, b = Math.max(lo, ...ks.flatMap(u => ks.map(v => groundAt(site, at(u, v)))));
+  if (b - a < 0.05) return lo;
+  const net = k => { const g = padGround(site, e, k, false); return g ? g.cut - g.fill : 0; };
+  while (b - a > 0.02) { const m = (a + b) / 2; if (net(m) > 0) a = m; else b = m; }
+  return Math.round((a + b) / 2 * 10) / 10;
 }
 function volumeParts(site, e) {
   const { from, to, width: W, height: H } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
@@ -276,10 +294,12 @@ function volumeParts(site, e) {
    it. Its numbers on the building: ground { kote, cut_m3, fill_m3, max_cut, max_fill, sides { N, Ø, S, V: { cut, fill } }
    the deepest at each side (m), wall: the side a retaining wall would go, when the cut there is deeper than WALL_M }.
    Not a roof's (on): that one has no ground. Follow-ups (U3566): the fall away from the house, pads that meet, slopes
-   onto roads, paths, pools and trees, the plot line, a step-free entrance, the foundation, balance and geotechnics. */
+   onto roads, paths, pools and trees, the plot line, a step-free entrance, the foundation and geotechnics. Its foot,
+   unless a kote is asked: where the cut and the fill are the same (balancedFoot, U3566 f), balanced: true. */
 /* PAD_FAR: a foot set more than this over or under the ground (base_kote) stands on its own, on posts or in a pit: no pad */
 const PAD_M = 1, SLOPE = 2, WALL_M = 1.5, PAD_FAR = 3;
-function padGround(site, a, base) {
+/* write false: only the numbers, the grid left as it is (balancedFoot tries koter with it) */
+function padGround(site, a, base, write = true) {
   const T = site.terrain; if (!T?.z) return null;
   const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, u = [d[0] / L, d[1] / L], c = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2];
   const hu = L / 2 + PAD_M, hv = a.width / 2 + PAD_M, R = Math.hypot(hu, hv) + 40, cell = T.res * T.res;
@@ -293,13 +313,14 @@ function padGround(site, a, base) {
     const du = Math.max(0, Math.abs(x * u[0] + y * u[1]) - hu), dv = Math.max(0, Math.abs(-x * u[1] + y * u[0]) - hv), dist = Math.hypot(du, dv);
     const z = z0 > base ? Math.min(z0, base + dist / SLOPE) : Math.max(z0, base - dist / SLOPE);
     if (Math.abs(z - z0) < 0.005) continue;
-    T.z[i] = z;
+    if (write) T.z[i] = z;
     const dz = z0 - z, side = Math.abs(x) > Math.abs(y) ? (x > 0 ? "Ø" : "V") : (y > 0 ? "N" : "S");
     if (dz > 0) { cut += dz * cell; sides[side].cut = Math.max(sides[side].cut, dz); } else { fill -= dz * cell; sides[side].fill = Math.max(sides[side].fill, -dz); }
   }
   const r2 = v => Math.round(v * 100) / 100, max = k => Math.max(...Object.values(sides).map(s => s[k]));
   for (const s of Object.values(sides)) { s.cut = r2(s.cut); s.fill = r2(s.fill); }
   const deep = Object.entries(sides).filter(([, s]) => s.cut > WALL_M).sort((p, q) => q[1].cut - p[1].cut)[0];
+  if (!write) return { cut, fill };
   return { kote: r2(base), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
 }
 
@@ -310,7 +331,7 @@ export function groundText(g) {
   const most = k => Object.entries(g.sides).filter(([, s]) => s[k] >= 0.2).sort((p, q) => q[1][k] - p[1][k])[0];
   const c = most("cut"), f = most("fill"), bits = [];
   if (c) bits.push(`graves ut ${m1(c[1].cut)} m mot ${SIDE_NO[c[0]]}`); if (f) bits.push(`fylles opp ${m1(f[1].fill)} m mot ${SIDE_NO[f[0]]}`);
-  return `Tomta planeres på kote +${m1(g.kote)}, 1 m ut fra bygget, med skråning 1:${SLOPE} til terrenget${bits.length ? ": " + bits.join(", ") : ""}. Utgraving ${g.cut_m3.toLocaleString("nb-NO")} m³, fylling ${g.fill_m3.toLocaleString("nb-NO")} m³.`
+  return `Tomta planeres på kote +${m1(g.kote)}${g.balanced ? ", der det som graves ut fyller resten" : ""}, 1 m ut fra bygget, med skråning 1:${SLOPE} til terrenget${bits.length ? ": " + bits.join(", ") : ""}. Utgraving ${g.cut_m3.toLocaleString("nb-NO")} m³, fylling ${g.fill_m3.toLocaleString("nb-NO")} m³.`
     + (g.wall ? ` Skjæringen mot ${SIDE_NO[g.wall]} er ${m1(g.sides[g.wall].cut)} m dyp: en støttemur der tar mindre plass enn skråningen.` : "");
 }
 
@@ -334,10 +355,12 @@ export function applyDesign(site, floors, edits) {
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
-  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e)]);
+  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan ? baseOf(site, { ...e, base_kote: undefined }) : null]);
   if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
-  for (const [id, e, { parts, base }] of feet) {
-    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = e.on == null && !e.bim?.plan && Math.abs(base - baseOf(site, { ...e, base_kote: undefined })) <= PAD_FAR ? padGround(site, e, base) : null;
+  for (const [id, e, { parts, base }, free] of feet) {
+    /* free: where it would stand of itself, on the ground as it was before any pad */
+    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base) : null;
+    if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
       footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
