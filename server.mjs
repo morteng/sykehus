@@ -89,7 +89,7 @@ const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
 /* the person's open pages, as Anton's tools need them: the version the pill has open (assistant.mjs sets it with each
    turn) and a way to move those pages to a view (show_building); one object, filled in by both */
 const pages = { open: new Map(), show: () => false };
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages, ways: ms => streets.ways(ms) });
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
 const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 const streets = createStreets({ site, SECURITY });
 

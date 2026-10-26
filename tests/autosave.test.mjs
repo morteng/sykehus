@@ -61,6 +61,10 @@ test("«Ny kopi» is the next one worked on; «Del» opens it to the link, signe
   const s = await post({ share: c.j.version }, lars); assert.equal(s.j.sharing, "lenke");
   const k = new URL(s.j.link).searchParams.get("nokkel");
   assert.equal((await fetch(`${O}/api/versjon/${c.j.version}?nokkel=${k}`)).status, 200);
+  /* «Gjør privat»: «Del» taken back by its owner only; the link then shows nothing */
+  assert.equal((await post({ unshare: c.j.version })).status, 400);
+  const u = await post({ unshare: c.j.version }, lars); assert.equal(u.j.sharing, "privat");
+  assert.equal((await fetch(`${O}/api/versjon/${c.j.version}?nokkel=${k}`)).status, 404);
 });
 
 test("«Nytt forslag» starts empty from the before and is the one worked on; its title is set in place", async () => {

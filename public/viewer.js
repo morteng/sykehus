@@ -594,7 +594,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
 
   /* ---------- camera: orbit around a point, or straight down for the plan ---------- */
   const lotC = site.lot.ring.reduce((a, p) => [a[0] + p[0] / site.lot.ring.length, a[1] + p[1] / site.lot.ring.length], [0, 0]);
-  const O = { x: lotC[0], y: lotC[1], h: ground(...lotC) - base + 15, yaw: 0, pitch: 0.62, dist: 380 };   // from the south, north up, as a drawing is read
+  const O = { x: lotC[0], y: lotC[1], h: ground(...lotC) - base + 15, yaw: 0, pitch: 0.62, dist: 380, eye: false };   // from the south, north up, as a drawing is read
+  /* U3527: a person's eye (eye): the camera stands on the ground dist metres from the centre, toward yaw, EYE_M over the
+     ground there, and looks at the centre through a wider lens; turning walks round it, the wheel walks to and from it */
+  const EYE_M = 1.7, FOV = 40, FOV_EYE = 55;
   function place() {
     const t = new THREE.Vector3(O.x, O.h, -O.y), cp = Math.cos(O.pitch);
     if (mode === "section") {
@@ -615,6 +618,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       O.x = Math.max(T.x0 + mx, Math.min(T.x0 + T.w * T.res - mx, O.x)); O.y = Math.max(T.y1 - T.h * T.res + my, Math.min(T.y1 - my, O.y));
       t.x = O.x; t.z = -O.y;
       const tg = ground(O.x, O.y) - base + 1; if (O.h < tg) { O.h = tg; t.y = tg; }
+      const fov = O.eye ? FOV_EYE : FOV; if (persp.fov !== fov) { persp.fov = fov; persp.updateProjectionMatrix(); }
+      if (O.eye) {
+        const ex = t.x + O.dist * Math.sin(O.yaw), ez = t.z + O.dist * Math.cos(O.yaw);
+        camera.position.set(ex, ground(ex, -ez) - base + EYE_M, ez); camera.lookAt(t);
+        if (rimFor) rimGround();
+        dirty = true; onView(view()); return;
+      }
       let cp = Math.cos(O.pitch), ex = t.x + O.dist * cp * Math.sin(O.yaw), ez = t.z + O.dist * cp * Math.cos(O.yaw);
       const eg = ground(ex, -ez) - base + 3;
       if (t.y + O.dist * Math.sin(O.pitch) < eg) {
@@ -652,7 +662,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a picture taken during a move is the one the move goes to */
   function land() { const g = going; if (g) { hand(); putState(g); } }
   /* what the page shows around the picture: the north arrow's turn, and in the plan the metres per screen pixel */
-  function view() { return { mode, floor, storey, only, section: section && { wing: section.wing, kind: section.kind }, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode !== "3d" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
+  function view() { return { mode, eye: mode === "3d" && O.eye, floor, storey, only, section: section && { wing: section.wing, kind: section.kind }, north: mode === "plan" ? 0 : O.yaw, mPerPx: mode !== "3d" ? O.dist * 0.72 / (container.clientHeight || 400) : null }; }
   /* the plan reads as a drawing: even light, no cast shadows */
   function setMode(m) {
     if (section && m !== "section") endSection();
@@ -916,16 +926,19 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     bands(on) { if (groundRims.visible !== on) { groundRims.visible = on; dirty = true; } },
     setSun, select, setGone, setTerrain, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
-    home() { setStorey(null); glide(home); },
+    home() { setStorey(null); O.eye = false; glide(home); },
     /* the view as it opened, the storey left as it is */
-    reset() { hand(); glide(home); },
+    reset() { hand(); O.eye = false; glide(home); },
     /* a pose set during a move starts from where the move goes (the chat app sets a storey, a wing, then the camera) */
     pose(p) { if (p) { land(); hand(); Object.assign(O, p); place(); } const g = going; return g ? { ...O, x: g[0], y: g[1], h: g[2], yaw: g[3], pitch: g[4], dist: Math.exp(g[5]) } : { ...O }; },
     /* to a building; cam: where to look from as well (yaw, pitch, dist), in the same move */
-    focus(id, cam = {}) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); hand(); glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2), ...cam }); },
+    focus(id, cam = {}) { const b = site.buildings.find(x => x.id === id); if (!b) return; const c = b.ring.reduce((a, p) => [a[0] + p[0] / b.ring.length, a[1] + p[1] / b.ring.length], [0, 0]); hand(); const { eye, ...to } = cam; if (eye != null) O.eye = !!eye; glide({ x: c[0], y: c[1], h: (b.base + (b.top ?? b.base + 10)) / 2 - base, dist: Math.max(90, Math.sqrt(b.area_m2) * 3.2), ...to }); },
     /* the camera moved, from where it is (Anton's «vis meg det fra fugleperspektiv»): yaw, pitch, dist, x, y, h */
-    look(cam, ms) { hand(); glide(cam, ms); },
+    look(cam, ms) { hand(); const { eye, ...to } = cam; if (eye != null) O.eye = !!eye; glide(to, ms); },
+    /* a person's eye, or the orbit again, from where the view is */
+    eye(on) { hand(); land(); O.eye = !!on; if (on && O.dist > 300) O.dist = 160; place(); },
     get labels() { return tags; },
+    get base() { return base; },   // world height 0: a kote less this is a height in the scene
     setNames(on) { names = !!on; dirty = true; }, mark,   // the names and kote over the picture, for a printed sheet
     /* for tools drawn over the model (trace.js): add and take away things, a site point under the pointer at a
        kote, and where a site point at a kote is on the screen */

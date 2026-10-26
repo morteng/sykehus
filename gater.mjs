@@ -32,7 +32,32 @@ export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKE
       return { name: `${NAME(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
     }).filter(w => w.ring.length > 2);
   }
+  /* U3527: the named streets and places around (OpenStreetMap's name), each as its points on the site, roads marked:
+     where a shot «fra Dronninggata» stands. From the same answer the page draws; the last made are kept */
+  let places = null, placesOf = null;
+  function namedPlaces(osm) {
+    const by = new Map();
+    for (const f of osm.features || []) {
+      const n = f.properties?.name, g = f.geometry; if (!n || !g) continue;
+      const lines = g.type === "LineString" ? [g.coordinates] : g.type === "Polygon" ? [g.coordinates[0]] : g.type === "MultiLineString" ? g.coordinates : [];
+      const o = by.get(n) || by.set(n, { name: n, pts: [], road: false }).get(n);
+      if (f.properties.highway && !/^(footway|path|steps|cycleway|service)$/.test(f.properties.highway)) o.road = true;
+      for (const l of lines) for (let i = 0; i + 1 < l.length; i++) {
+        const a = toUtm(l[i]), b = toUtm(l[i + 1]), k = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 5));
+        for (let j = 0; j < k; j++) o.pts.push([a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k]);
+      }
+    }
+    return [...by.values()].filter(o => o.pts.length);
+  }
   return {
+    async places(ms = 3000) {
+      const made = get("streets").then(a => {
+        if (!a) return places || []; if (placesOf === a) return places;
+        try { places = namedPlaces(JSON.parse(a.toString("utf8"))); placesOf = a; } catch (e) { console.warn("gater places:", e.message); }
+        return places || [];
+      });
+      return Promise.race([made, new Promise(ok => setTimeout(() => ok(places || []), ms).unref?.())]);
+    },
     async ways(ms = 3000) {
       const made = Promise.all([get("streets"), get("nvdb")]).then(([a, b]) => {
         if (!a || !b) return ways || []; if (waysOf === a) return ways;

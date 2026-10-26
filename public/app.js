@@ -91,11 +91,15 @@ const viewer = createViewer({
   },
 });
 /* the after's live part over the viewer's model: what is torn down hidden, the new buildings drawn, the names as edited */
-function paint() {
-  viewer.setTerrain(site.terrain?.z); viewer.setGone((site.demolished || []).map(d => d.id)); viewer.setAdded(site.added || []); viewer.setLandscape(site.landscape || []); viewer.setTrees(site.trees || []); viewer.setLevels(site.wings || []); viewer.setRooms(floors);
-  viewer.relabel(new Map(site.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
-  dispatchEvent(new CustomEvent("sykehus:painted"));   // the build tools take the new building's new shapes
+function paint(s = site, f = floors) {
+  showingBefore = s !== site;
+  viewer.setTerrain(s.terrain?.z); viewer.setGone((s.demolished || []).map(d => d.id)); viewer.setAdded(s.added || []); viewer.setLandscape(s.landscape || []); viewer.setTrees(s.trees || []); viewer.setLevels(s.wings || []); viewer.setRooms(f);
+  viewer.relabel(new Map(s.buildings.filter(b => b.own && b.name).map(b => [b.id, b.name.replace(/ \(.*\)$/, "")])));
+  if (!showingBefore) dispatchEvent(new CustomEvent("sykehus:painted"));   // the build tools take the new building's new shapes
 }
+/* U3527: the before painted in place for a shot's «før», the after again for its «etter» or anything else */
+let showingBefore = false;
+const paintEra = era => { if (era === "før") { if (!showingBefore) paint(site0, floors0); } else if (showingBefore) paint(); };
 let placing = null;   // a tap on the ground goes here instead of picking (set by «Nytt bygg» and «Flytt»)
 paint();
 /* the model is up: the first load's «Laster» goes (pm 21:20Z: a grey map and an empty panel for some seconds, no sign) */
@@ -160,7 +164,7 @@ function plainSource(f) {
 function setMode(m) {
   viewer.setMode(m); pressMode();
 }
-function pressMode() { const m = viewer.view().mode; $("m3d").setAttribute("aria-pressed", String(m === "3d")); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; document.body.classList.toggle("plan", m !== "3d"); }
+function pressMode() { const m = viewer.view().mode, eye = viewer.view().eye; $("m3d").setAttribute("aria-pressed", String(m === "3d" && !eye)); $("meye").setAttribute("aria-pressed", String(!!eye)); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; document.body.classList.toggle("plan", m !== "3d"); }
 /* the plan or the section as a sheet to print: the picture with its names, a title block with what it is, a scale
    bar and the scale it prints at on A4 across, north, and the drawings it is made from */
 async function printSheet() {
@@ -208,7 +212,8 @@ function section(b, kind, drawn = null) {
 let names = false; try { names = localStorage.getItem("sykehus-navn-valgt") === "på"; } catch { }
 function setNames(on, keep = true) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); if (keep) try { localStorage.setItem("sykehus-navn-valgt", on ? "på" : "av"); } catch { } }
 setNames(names, false); $("names").onclick = () => setNames(!names);
-$("m3d").onclick = () => setMode("3d"); $("mplan").onclick = () => setMode("plan");
+$("m3d").onclick = () => { setMode("3d"); viewer.eye(false); pressMode(); }; $("mplan").onclick = () => setMode("plan");
+$("meye").onclick = () => { setMode("3d"); viewer.eye(true); pressMode(); };
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5); $("zhome").onclick = () => viewer.reset();
 /* the keys: + and − zoom, 0 the view as it opened (⌂), ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
    card and the picks away */
@@ -321,7 +326,8 @@ const GROUPS = [
   { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell"].includes(e.kind), tip: "Ta det ut igjen" },
   { k: "note", name: "Notater", of: () => true, tip: "Ta notatet ut igjen" },
 ];
-const PAGE_WHY = /^(revet|endret|satt opp|fjernet) på siden$/;
+/* the reasons that say nothing a reader needs: the page's own, and Anton's when it only says the person asked (pm 26.10) */
+const PAGE_WHY = /^((revet|endret|satt opp|fjernet) på siden|(personens|brukerens|eierens) (ønske|forespørsel)|på (personens )?(ønske|forespørsel)|etter ønske)\.?$/i;
 const clock = t => t ? new Date(t).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }) : "";
 function drawDraft() {
   drawWhere();
@@ -333,7 +339,7 @@ function drawDraft() {
   const status = mine() ? `lagret ${clock(draft.updated)} · ${SHARED[draft.sharing] || ""}`
     : draft.version ? `${esc(draft.owner)} sitt · ${SHARED[draft.sharing] || ""} · sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}`
     : ownDraft() ? `lagret på denne maskinen et døgn${me.person ? "" : " · logg inn for å beholde det"}` : "delt med lenke · det du endrer her, blir ditt eget";
-  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button>${me.person ? `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>${mine() ? `<button type="button" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button>` : ""}` : `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>`}` : "";
+  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button>${mine() && draft.sharing === "lenke" ? `<button type="button" data-priv title="Lenken virker ikke lenger; bare du ser forslaget">Gjør privat</button>` : ""}${me.person ? `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>${mine() ? `<button type="button" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button>` : ""}` : `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>`}` : "";
   /* the groups, each row its edit's number (1-based, as undo takes it), the newest last */
   const rowsOf = GROUPS.map(g => ({ g, rows: [] }));
   (draft.edits || []).forEach((e, i) => rowsOf.find(x => x.g.of(e)).rows.push([e, i + 1]));
@@ -346,6 +352,10 @@ function drawDraft() {
   for (const b of R.querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
   R.querySelector("[data-last]")?.addEventListener("click", () => undo(n));
   R.querySelector("[data-del]")?.addEventListener("click", share);
+  R.querySelector("[data-priv]")?.addEventListener("click", async () => {   // «Del» undone: the link stops working
+    const j = await change({ unshare: versionId }); if (j.error) return toast(`Fikk ikke gjort det privat: ${j.error}`);
+    draft.sharing = j.sharing; drawDraft(); toast("Forslaget er privat igjen. Lenken virker ikke lenger.", { label: "Angre", run: share });
+  });
   R.querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); nameIt(); toast(`Ny kopi: «${j.title}». Gi den et navn, eller jobb videre: endringene går inn i den.`); });
   R.querySelector("[data-ny]")?.addEventListener("click", fresh);
   const t = $("drTitle");
@@ -404,7 +414,7 @@ $("where").onclick = () => panel.reveal("changes");
    list on the server (saved.js) */
 const canSave = () => mine() || (ownDraft() && !!draft && !draft.missing);
 function viewNow() {
-  const p = viewer.pose(), v = viewer.view(), s = { x: p.x, y: p.y, h: p.h, yaw: p.yaw, pitch: p.pitch, dist: p.dist, mode: v.mode };
+  const p = viewer.pose(), v = viewer.view(), s = { x: p.x, y: p.y, h: p.h, yaw: p.yaw, pitch: p.pitch, dist: p.dist, mode: v.mode, ...(v.eye ? { cam: "eye" } : {}), ...(names ? { names: true } : {}) };
   if (v.mode !== "section" && storeyOn) s.storey = storeyOn;
   if (v.mode === "section" && v.section) Object.assign(s, { wing: v.section.wing, section: v.section.kind, building: site.buildings.find(b => b.wing === v.section.wing)?.id,
     ...(v.section.kind === "fasade" && side ? { side } : {}), ...(sheet ? { drawn: sheet.id } : {}) });
@@ -418,6 +428,8 @@ function drawViews() {
     ? `<button type="button" class="ic" data-ren title="Gi nytt navn" aria-label="Gi «${esc(w.name)}» nytt navn">✎</button><button type="button" class="ic" data-del title="Ta bort" aria-label="Ta bort «${esc(w.name)}»">×</button>` : ""}</li>`).join("")
     : `<li class="none">Ingen lagrede visninger ennå.</li>`;
   $("viewSave").hidden = !edit;
+  $("viewsSeries").hidden = !list.length && !edit; $("seriesPlay").hidden = !list.length; $("seriesMake").hidden = !edit;
+  $("seriesPlay").textContent = list.some(w => w.state?.series) ? "Vis bildeserie" : "Vis visningene etter hverandre";
   if (edit && !$("viewName").value) $("viewName").placeholder = freeName(list);
 }
 function viewsOpen(on) { $("viewsPop").hidden = !on; $("viewsBtn").setAttribute("aria-expanded", String(on)); if (on) drawViews(); }
@@ -428,7 +440,7 @@ async function viewsDo(body) {
 $("viewsBtn").onclick = () => viewsOpen($("viewsPop").hidden);
 $("viewsList").onclick = async e => {
   const li = e.target.closest("li[data-id]"); if (!li) return; const w = (draft.views || []).find(x => x.id === li.dataset.id); if (!w) return;
-  if (e.target.closest(".go")) showView({ ...w.state, glide: 900 });
+  if (e.target.closest(".go")) { if (series) shotEnd(); showView({ ...w.state, glide: 900 }); }
   else if (e.target.closest("[data-del]")) { if (await viewsDo({ view: "remove", id: w.id })) toast(`«${w.name}» er tatt bort.`, { label: "Angre", run: () => viewsDo({ view: "add", name: w.name, state: w.state }) }); }
   else if (e.target.closest("[data-ren]")) {   // the name becomes a field in place; Enter keeps it, Esc leaves it
     const go = li.querySelector(".go"), f = Object.assign(document.createElement("input"), { value: w.name, maxLength: 60, className: "ren" }); f.setAttribute("aria-label", "Nytt navn");
@@ -441,6 +453,33 @@ $("viewSave").onsubmit = async e => {
   e.preventDefault(); const name = $("viewName").value.trim() || $("viewName").placeholder;
   const j = await viewsDo({ view: "add", name, state: viewNow() }); if (j) { $("viewName").value = ""; drawViews(); toast(`Visningen er lagret som «${(j.views.find(w => w.id === j.saved) || {}).name || name}».`); }
 };
+/* «Bildeserie» (U3527): the series of shots Anton put together (make_shots, or «Lag bildeserie» here), or every saved
+   view when there is none, one at a time with its caption; a pair's «før» is the before painted in place, and the one
+   button there turns it to «etter» and back. A move of one's own leaves the caption up; ×, Esc or another view ends it */
+let series = null;
+const seriesOf = () => { const l = draft && !draft.missing ? draft.views || [] : [], s = l.filter(w => w.state?.series); return s.length ? s : l; };
+function shotShow(i) {
+  const l = seriesOf(); if (!l.length) return shotEnd();
+  series = { i: (i + l.length) % l.length, n: l.length }; const w = l[series.i], st = w.state || {};
+  showView({ ...st, glide: 1100 });
+  $("shotTitle").textContent = `${series.i + 1}/${l.length} · ${w.name.replace(/^\d+ /, "")}`; $("shotCap").textContent = st.caption || "";
+  const e = $("shotEra"); e.hidden = !st.era; if (st.era) { e.textContent = st.era === "før" ? "Vis etter" : "Vis før"; e.dataset.era = st.era; }
+  $("shot").hidden = false; document.body.classList.add("shooting");
+}
+function shotEnd() { series = null; $("shot").hidden = true; document.body.classList.remove("shooting"); paintEra(null); }
+$("shotPrev").onclick = () => shotShow(series.i - 1); $("shotNext").onclick = () => shotShow(series.i + 1); $("shotEnd").onclick = shotEnd;
+$("shotEra").onclick = () => { const e = $("shotEra"), to = e.dataset.era === "før" ? "etter" : "før"; paintEra(to); e.dataset.era = to; e.textContent = to === "før" ? "Vis etter" : "Vis før"; };
+$("seriesPlay").onclick = () => { viewsOpen(false); shotShow(0); };
+$("seriesMake").onclick = async () => {
+  const b = $("seriesMake"); b.disabled = true; b.textContent = "Setter sammen …";
+  const j = await change({ ...where(), shots: true }); b.disabled = false; b.textContent = "Lag bildeserie";
+  if (!j || j.error) return toast(`Fikk ikke laget bildeserien${j?.error ? `: ${j.error}` : "."}`);
+  draft.views = j.views; drawViews(); viewsOpen(false); shotShow(0);
+};
+addEventListener("keydown", e => {
+  if (!series || e.target.closest?.("input, textarea")) return;
+  if (e.key === "ArrowRight") shotShow(series.i + 1); else if (e.key === "ArrowLeft") shotShow(series.i - 1); else if (e.key === "Escape") shotEnd();
+});
 addEventListener("keydown", e => { if (e.key === "Escape" && !$("viewsPop").hidden) viewsOpen(false); });
 document.addEventListener("pointerdown", e => { if (!$("viewsPop").hidden && !e.target.closest("#views")) viewsOpen(false); });
 drawViews();
@@ -455,7 +494,7 @@ async function share() {
 }
 function describe(e) {   // by the wings as they were, since a wing torn down is gone from site.wings
   const wings = site0.wings || [], w = wings.find(x => x.id === e.wing)?.name || e.wing;
-  const why = e.why ? ` (${e.why})` : "";
+  const why = e.why && !PAGE_WHY.test(e.why) ? ` (${e.why})` : "";
   if (e.kind === "level") return `${w}, ${e.storey}: kote ${kote(e.kote)}${why}`;
   if (e.kind === "wing") return `${w}, ${{ name: "navn", use: "bruk", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
   if (e.kind === "room") return `${e.storey}, ${e.room}: ${Object.entries(e.set).map(([k, v]) => `${{ name: "navn", use: "bruk", area_m2: "areal" }[k] || k} ${k === "area_m2" ? v + " m²" : v}`).join(", ")}${why}`;
@@ -741,12 +780,16 @@ function showView(v) {
     if (v.section === "fasade") return facade(b, v.side || "S");
     const d = v.drawn && drawnSections.find(x => x.id === v.drawn); return d ? section(b, d.kind, d) : section(b, v.section === "lengde" ? "lengde" : "tverr");
   }
+  paintEra(v.era); if (v.names != null) setNames(!!v.names, false);
   if (v.mode === "plan" || v.mode === "3d") setMode(v.mode); else if (viewer.view().mode === "section") setMode("3d");
   if (v.storey) pickStorey(v.storey); else if (storeyOn) pickStorey(null);
   const cam = {}; for (const k of ["x", "y", "h", "yaw", "pitch", "dist"]) if (v[k] != null) cam[k] = v[k];
+  if (v.kote != null && cam.h == null) cam.h = v.kote - viewer.base;   // the server says where in kote (shots.mjs)
+  if (v.mode !== "plan") cam.eye = v.cam === "eye";
   if (cam.yaw != null) { const y0 = viewer.pose().yaw, T = 2 * Math.PI; cam.yaw = y0 + ((((cam.yaw - y0) % T) + T + Math.PI) % T - Math.PI); }   // turned the short way round
   if (b && cam.x == null) { valg.clear(); valg.pick(b.id, {}); showInfo(b); viewer.focus(b.id, cam); }
   else if (Object.keys(cam).length) viewer.look(cam, v.glide);
+  pressMode();
 }
 import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */

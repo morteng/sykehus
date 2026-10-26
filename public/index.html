@@ -24,6 +24,7 @@
       <button type="button" class="views-btn" id="viewsBtn" aria-expanded="false" aria-controls="viewsPop" title="Lagrede visninger: gå til en, eller lagre den du ser nå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Visninger</span></button>
       <div class="views-pop" id="viewsPop" hidden>
         <ul id="viewsList"></ul>
+        <div class="views-series" id="viewsSeries" hidden><button type="button" id="seriesPlay">Vis bildeserie</button><button type="button" id="seriesMake" title="Anton setter sammen 4–6 bilder som forklarer forslaget: oversikt, nye bygg fra gata, før og etter, plan">Lag bildeserie</button></div>
         <form id="viewSave" class="views-save"><input id="viewName" maxlength="60" aria-label="Navn på visningen du ser nå" autocomplete="off"><button type="submit">Lagre denne</button></form>
       </div>
     </div>
@@ -36,10 +37,11 @@
 <main id="main">
   <div class="stage" id="stage">
     <div id="view"></div>
+    <div class="shot" id="shot" hidden role="region" aria-label="Bildeserie"><button type="button" class="ic" id="shotPrev" aria-label="Forrige bilde">‹</button><div class="shot-t"><b id="shotTitle"></b><span id="shotCap"></span></div><button type="button" class="era" id="shotEra" hidden></button><button type="button" class="ic" id="shotNext" aria-label="Neste bilde">›</button><button type="button" class="ic" id="shotEnd" aria-label="Lukk bildeserien">×</button></div>
     <div class="loading" id="loading" role="status"><span class="spin" aria-hidden="true"></span>Laster modellen av sykehuset …</div>
     <div class="levels" id="levels"></div>
     <div class="vt">
-      <span class="seg2" role="group" aria-label="Visning"><button type="button" id="m3d" aria-pressed="true">3D</button><button type="button" id="mplan" aria-pressed="false">Plan</button></span>
+      <span class="seg2" role="group" aria-label="Visning"><button type="button" id="m3d" aria-pressed="true">3D</button><button type="button" id="meye" aria-pressed="false" title="Som en som står på bakken: øyet 1,7 m over terrenget. Dra for å gå rundt, rull for å gå nærmere">Gateplan</button><button type="button" id="mplan" aria-pressed="false">Plan</button></span>
       <button type="button" class="tgl" id="names" aria-pressed="false" title="Vis eller skjul navnene på fløyene og rommene (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10l4 5-4 5H4z"/></svg>Navn</button>
       <button type="button" class="tgl" id="mnew" aria-pressed="false" title="Sett et nytt bygg på tomta: trykk der det skal stå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>Nytt bygg</button>
       <span class="imp"><button type="button" class="tgl" id="mimp" aria-pressed="false" aria-expanded="false" aria-controls="impPop" title="Sett en modell fra en produsent på tomta (et drivhus, et vindu: IFC, STEP, glTF, OBJ, STL), eller en plantegning (DXF, DWG): oppgi kilden og lisensen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>Hent fil</button>
@@ -117,6 +119,6 @@
 <div id="sheet"></div>
 <!-- ?v: once, past what browsers held from before the edge sent no-cache (2026-10-25) -->
 <script src="early.js" defer></script>
-<script type="module" src="app.js?v=20261026l"></script>
+<script type="module" src="app.js?v=20261026m"></script>
 </body>
 </html>
