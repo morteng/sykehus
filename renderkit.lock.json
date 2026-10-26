@@ -1,5 +1,5 @@
 {
-  "kits": "1d6a77c78009089c9d109233ce118ce132e62ee4",
+  "kits": "2eeb7e89360979847d14dc6b072381d13525693c",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -81,6 +81,7 @@
     "thumb-water.webp": "8d2601f9d4d454c178992a40edb9eb32b8e7d7e9",
     "thumb-concrete.webp": "5741b565ec0d678ce86476a27e094801f9518cc7",
     "thumb-wood.webp": "9f2a2319430e396a95fa1f088f4736a2f87516c6",
-    "areaclip.js": "eb6f5d2cb4e82e0e573bf40e8611c9e3c2e6ce83"
+    "areaclip.js": "eb6f5d2cb4e82e0e573bf40e8611c9e3c2e6ce83",
+    "frame.js": "b299a6e856e92fa583c87bf7d19e90ec2d847062"
   }
 }

@@ -130,3 +130,14 @@ test("U3620: the texts Anton reads send a stair down from a terrace to the stair
   const part = JSON.stringify(tc.inputSchema);
   assert.match(part, /A stair that goes DOWN .* is the stair part too: .*put from in the garden and to at the terrace edge.*params\.height as the drop.*do not write a script for it/);
 });
+
+test("U3831: a greenhouse put on Høyblokka's roof by guess is set along the building and inside its edge, and the result says so; align is in the schema", async () => {
+  const tools = (await rpc("tools/list")).tools, sch = n => tools.find(t => t.name === n).inputSchema;
+  const props = n => sch("try_change").properties.edits.items.anyOf.find(k => k.properties.kind.const === n || k.properties.kind.enum?.[0] === n).properties;
+  for (const k of ["volume", "part", "construction", "reshape"]) assert.ok(props(k).align?.enum?.includes("building"), `${k} takes align`);
+  assert.ok(props("part").on, "a part can say which roof it stands on");
+  const t = (await call("try_change", { edits: [{ kind: "volume", id: "ndrivhus", name: "Drivhus", shape: "gable", material: "glass", on: "Sentralblokka", from: [4, 6], to: [20, 30], width: 6, height: 4 }], include_screenshot: false })).data;
+  assert.equal(t.rejected.length, 0, JSON.stringify(t.rejected)); assert.match(t.added[0].on_roof, /På taket: snudd .*byggets egen akse/);
+  const f = (await call("try_change", { edits: [{ kind: "reshape", id: "ndrivhus", align: "free", from: [4, 6], to: [20, 30] }, { kind: "reshape", id: "ndrivhus", align: "building" }], include_screenshot: false, draft: t.draft })).data;
+  assert.equal(f.rejected.length, 0, JSON.stringify(f.rejected)); assert.equal(f.added[0].on_roof, undefined, "free: nothing is set right"); assert.match(f.added[1].on_roof, /På taket/);
+});
