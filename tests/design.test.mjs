@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
-import { groundAt, groundText } from "../public/design.js";
+import { groundAt, groundText, padFit } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -138,4 +138,16 @@ test("pads that meet: the one laid first is kept, and both say the step between 
   assert.equal(b.ground.meets?.[0]?.id, a.id); assert.equal(a.ground.meets?.[0]?.id, b.id, "said on both");
   assert.ok(Math.abs(a.ground.meets[0].step + b.ground.meets[0].step) < 0.011, "the same step, seen from each");
   assert.match(groundText(b.ground), /Platået møter platået til Hus A/);
+});
+
+/* U3566 (d): a slope that reaches a path, trees or a road */
+test("a pad's slope stops at a path (a wall there), counts the trees it cuts or buries, and finds the roads it reaches", () => {
+  const ed = add(add([], { kind: "path", line: [[45, 30], [75, 30]], width: 2, name: "Gangveien" }), { kind: "volume", id: "nHusA", name: "Hus A", shape: "box", from: [50, 40], to: [70, 40], width: 12, height: 6 });
+  const m = applyEdits(site, floors, ed), a = m.site.added[0];
+  assert.equal(groundAt(m.site, [60, 30]), groundAt(site, [60, 30]), "the path keeps its ground");
+  assert.equal(a.ground.paths?.[0]?.name, "Gangveien"); assert.match(groundText(a.ground), /Skråningen når Gangveien: stien beholder sin høyde, og en mur på/);
+  const f = padFit(m.site, [{ name: "Konggata", ring: [[40, 52], [80, 52], [80, 60], [40, 60]] }, { name: "langt unna", ring: [[300, 300], [310, 300], [310, 310]] }]);
+  assert.deepEqual(f[0].slopes_onto.map(w => w.way), ["Konggata"]); assert.match(f[0].say, /når Konggata/);
+  const t = applyEdits(site, floors, add([], { kind: "volume", id: "nTre", name: "T", shape: "box", from: [-10, -100], to: [10, -100], width: 12, height: 6 })).site.added[0];
+  assert.ok(t.ground.trees?.count >= 1, "trees where the ground moves"); assert.match(groundText(t.ground), /må felles, eller rotsonen sikres/);
 });

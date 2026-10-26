@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlink
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
-import { fitOf, surfaceFit, groundText } from "./public/design.js";
+import { fitOf, surfaceFit, groundText, padFit } from "./public/design.js";
 import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
@@ -341,7 +341,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             d.edits.push(c); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
-        const fit = [...fitOf(m.site), ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit(m.site, ways ? await ways() : []) : [])];
+        /* and the slopes of a new building's pad onto those ways (U3566 d) */
+        const wayRings = ways && ((m.site.landscape || []).some(l => l.kind === "surface") || (m.site.added || []).some(a => a.ground?.reach_m)) ? await ways() : [];
+        const fit = [...fitOf(m.site), ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit(m.site, wayRings) : []), ...padFit(m.site, wayRings)];
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
         let out;
