@@ -703,17 +703,18 @@ function aim(on, hint, text) {
   if (on) toast(text || (hint === "ny" ? "Trykk på bakken der det nye bygget skal stå." : "Trykk der bygget skal stå."), { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
 }
 /* U3671: Anton asks for a place (ask_point, mcp.mjs): the plan, framed near its hint, one tap sets a pin, and the point goes back as the
-   person's next message: plain words first, then the figures Anton's tools read (metres east and north, as in try_change) */
+   person's next message: plain words for the person, and the point (metres east and north on the site) to Anton out of view */
 async function askPoint(q) {
   const { dropPin, clearPin } = await import("./pin.js?v=1"); clearPin(viewer);
   setMode("plan"); if (storeyOn) pickStorey(null);
   if (Number.isFinite(q.x) && Number.isFinite(q.y)) viewer.look({ x: q.x, y: q.y, dist: q.dist || 90, yaw: 0 }, 600);
   aim(([x, y, k]) => {
     aim(null); $("toast")?.remove(); dropPin(viewer, [x, y, k ?? 0]);
-    for (const ms of [0, 150, 500, 1000]) setTimeout(() => { viewer.select(null); valg.clear(); if (ms === 500) { viewer.look({ x, y, dist: q.dist || 140 }, 300); if (innerWidth > 700) $("tab-chat")?.click(); } }, ms);   // on a phone the chat sheet would cover the pin   // the tap that set the pin picks nothing, and the plan stays where it was
     const near = site.buildings.map(b => [b, Math.min(...b.ring.map(p => Math.hypot(p[0] - x, p[1] - y)))]).sort((a, b) => a[1] - b[1])[0];
     const where = near && near[1] < 30 ? `, ${Math.round(near[1])} m fra ${nameOf(near[0].wing || near[0].id)}` : "";
-    document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text: `Her: nålen står på planen${where}.\nNål satt: x=${x.toFixed(1)}, y=${y.toFixed(1)} (meter på tomta, som i try_change).` } }));
+    document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text: `Her: nålen står på planen${where}.`, point: { x, y } } }));   // the figures go to Anton only (assistant.mjs)
+    const phone = innerWidth <= 700, aimY = phone ? y - 0.25 * (q.dist || 140) * 0.72 : y;   // on a phone the pin goes in the top part, above the conversation box
+    for (const ms of [0, 150, 500, 1000]) setTimeout(() => { viewer.select(null); valg.clear(); shut(); if (ms === 500) { viewer.look({ x, y: aimY, dist: q.dist || 140 }, 300); if (!phone) $("tab-chat")?.click(); } }, ms);   // the tap that set the pin picks nothing and shows no card
   }, "punkt", `${String(q.question || "Hvor?").trim()} Trykk på planen.`);
 }
 $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(async ([x, y]) => {

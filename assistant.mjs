@@ -6,7 +6,7 @@
 
      GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
      GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
-     POST /api/anton             {text, version?, drawing?, selection?}  a message; it waits its turn (5 waiting at most). drawing
+     POST /api/anton             {text, version?, drawing?, selection?, point?{x,y}}  a message; it waits its turn (5 waiting at most). drawing
                                  (tegn.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
                                  camera, mode, size}, passed on as it is
      POST /api/anton/godkjenn    {approval_id, decision: "accept"|"reject"}
@@ -53,6 +53,9 @@ function selectionOf(s) {
   return items.length ? { items, ids: items.map(i => i.id), summary: String(s.summary ?? items.map(i => i.label).join(" · ")).slice(0, 300) } : null;
 }
 
+/* a point the page sends with a message (U3671: the pin Anton asked for): metres east and north on the site, shown to Anton only */
+function pointOf(p) { return p && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.abs(p.x) < 5000 && Math.abs(p.y) < 5000 ? { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : null; }
+const HIDDEN = /\\n\(Nål: [^)]*\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
 export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch }) {
   const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
   const door = login.base + prefix, ready = login.anton;
@@ -131,7 +134,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
-        : { person, session: session(person), message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+        : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
         if (line.type === "ping" || !["text", "tool", "approval", "qr", "done", "error"].includes(line.type)) return;
@@ -173,7 +176,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       let drawing = null;
       if (b?.drawing != null) { try { drawing = drawingOf(b.drawing); } catch (e) { return send(res, 400, { error: e.message }); } }
       const selection = selectionOf(b?.selection);
-      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection };
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection, point: pointOf(b?.point) };
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
       /* the wing or building picked when it was sent: a facade asked for with no wing named is that one's (mcp.mjs viewOf) */
       if (pages) { pages.picked ??= new Map(); const p = selection?.items.find(i => i.kind === "wing" || i.kind === "building"); if (p) pages.picked.set(me.person, p.id); else pages.picked.delete(me.person); }
@@ -218,7 +221,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   async function history(res, me) {
     const [st, j] = await call("/history", null, { person: me.person, session: session(me.person) }, me.device);
     if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
-    const items = Array.isArray(j.items) ? j.items : Array.isArray(j) ? j : [];
+    const items = JSON.parse(JSON.stringify(Array.isArray(j.items) ? j.items : Array.isArray(j) ? j : []).replace(HIDDEN, ""));
     if (st === 200) watchJobs(me.person, me.device);   // a job that finished while no page was open, or before a restart of this server
     return send(res, st === 200 ? 200 : 502, { items: items.slice(-50), queue: queueView(thread(me.person)), ...(st === 200 ? {} : { error: codeOf(j, "unavailable") }) });
   }

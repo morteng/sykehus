@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 
-const door = createServer((q, r) => { q.resume(); q.on("end", () => r.writeHead(200, { "content-type": "application/json" }).end("{}")); });
+const seen = [];
+const door = createServer((q, r) => { let b = ""; q.on("data", c => b += c); q.on("end", () => { if (q.url.includes("/chat")) seen.push(JSON.parse(b)); r.writeHead(200, { "content-type": "application/json" }).end(q.url.includes("/history") ? JSON.stringify({ items: [{ role: "user", text: "Her: nålen står på planen.\n(Nål: x=1, y=2 meter på tomta, som try_change tar dem.)" }] }) : "{}"); }); });
 await new Promise(ok => door.listen(0, ok));
 const dir = mkdtempSync(join(tmpdir(), "ask-")), secret = "proxy-secret-for-tests-0123456789", PORT = 8000 + Math.floor(Math.random() * 900), O = `http://localhost:${PORT}`;
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, SYKEHUS_COOKIE_SECRET: "cookie-secret-for-tests-0123456789abcdef", SYKEHUS_ASSISTANT_URL: `http://127.0.0.1:${door.address().port}`, SYKEHUS_ASSISTANT_TOKEN: "door-token-0123456789" }, stdio: ["ignore", "pipe", "inherit"] });
@@ -56,4 +57,15 @@ test("about_ground: a wing and a side, a point, the terrain's kote round it, wha
   const h = await rpc("tools/call", { name: "about_ground", arguments: { x: cx, y: cy, draft } }); assert.ok(!h.isError, text(h));
   assert.equal(h.structuredContent.ground_laid.length, 1); assert.equal(h.structuredContent.ground_laid[0].covers_the_place, true); assert.equal(h.structuredContent.ground_laid[0].surface, "grass");
   assert.equal((await rpc("tools/call", { name: "about_ground", arguments: {} })).isError, true);
+});
+
+test("a pin's point goes to Anton as a note and never to the person: not in the shown message, not in the history", async () => {
+  const got = []; const res = await fetch(O + "/api/anton/strom", { headers: H, signal: ac.signal }), rd = res.body.getReader(), dec = new TextDecoder(); let buf = "";
+  (async () => { for (;;) { const { value, done } = await rd.read().catch(() => ({ done: true })); if (done) return; buf += dec.decode(value); } })();
+  const r = await fetch(O + "/api/anton", { method: "POST", headers: { "content-type": "application/json", ...H }, body: JSON.stringify({ text: "Her: nålen står på planen, 13 m fra Sentralblokka.", point: { x: -12.64, y: 1.6 } }) }); assert.equal(r.status, 202);
+  await new Promise(ok => setTimeout(ok, 500));
+  assert.equal(seen.at(-1).message, "Her: nålen står på planen, 13 m fra Sentralblokka.\n(Nål: x=-12.6, y=1.6 meter på tomta, som try_change tar dem.)", "Anton gets the figures");
+  const shown = [...buf.matchAll(/event: message\ndata: (.*)\n/g)].map(m => JSON.parse(m[1]).text); assert.deepEqual(shown, ["Her: nålen står på planen, 13 m fra Sentralblokka."]); assert.ok(!/try_change|Nål:/.test(buf.split("event: message")[1] || ""), "the person's stream has no figures");
+  const h = await (await fetch(O + "/api/anton/historikk", { headers: H })).json(); assert.equal(h.items[0].text, "Her: nålen står på planen.");
+  await fetch(O + "/api/anton", { method: "POST", headers: { "content-type": "application/json", ...H }, body: JSON.stringify({ text: "hei", point: { x: "a", y: 1 } }) }); await new Promise(ok => setTimeout(ok, 300)); assert.equal(seen.at(-1).message, "hei", "a bad point is dropped");
 });

@@ -159,12 +159,12 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
     input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
     /* «Nytt forslag» (nytt-forslag.js) hands over its first turn here: the text goes in as if typed, then is sent */
-    document.addEventListener("sykehus:anton-say", e => { if (!e.detail?.text) return; input.value = e.detail.text; input.oninput(); sendIt(); });
+    document.addEventListener("sykehus:anton-say", e => { if (e.detail?.text) sendIt({ text: e.detail.text, ...(e.detail.point ? { point: e.detail.point } : {}) }); });
     form.onsubmit = e => { e.preventDefault(); if (running && !input.value.trim()) json("api/anton/stopp"); else sendIt(); };
     async function sendIt(drawn) {
       const text = drawn ? drawn.text : input.value.trim(); if (!text) return false;
       const sel = valg.forMessage();
-      const r = await json("api/anton", { text, version: version(), ...(drawn ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
+      const r = await json("api/anton", { text, version: version(), ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return false; }
       if (!drawn) { input.value = ""; input.oninput(); }
