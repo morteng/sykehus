@@ -463,3 +463,13 @@ header .gj .ab-ic[aria-pressed=true] { background: var(--accent-panel); color: v
 .sk.sk-large { position: fixed; inset: 0; z-index: 60; background: var(--bg, var(--panel)); padding: var(--sp-3); overflow: auto; }
 .sk.sk-large .sk-stage { max-width: min(100%, calc((100vh - 280px) * 1.6)); margin: 0 auto; width: 100%; }
 body.sk-open { overflow: hidden; }
+
+/* U3657: the conversation over the pill (the kit's .g-chat, kit/chat.js): the tab's own list and button moved in */
+.bstack .g-chat { overflow: visible; }
+.bstack .g-chat:not([style*="height"]) { max-height: min(46vh, 420px); }
+.g-chat-body { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.g-chat-body .talk-log { max-height: none; overflow: visible; border-top: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.g-chat-body .talk-log > li { flex: none; }
+.g-chat-acts .chat-top { margin: 0; }
+body.m.sheet-open .bstack .g-chat, body.m.fonts-open .bstack .g-chat { display: none; }
+body.tegner .g-chat { visibility: hidden; }

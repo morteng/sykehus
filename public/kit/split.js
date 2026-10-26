@@ -25,8 +25,10 @@ export function saveWidth(storage, key, w) {
 }
 export function split(opts) {
     const { panel } = opts, doc = panel.ownerDocument, win = doc.defaultView;
-    const min = opts.min ?? 300, share = opts.maxShare ?? 0.6, step = opts.step ?? 16, key = opts.key ?? "g-split-width", prop = opts.prop ?? "--split-w", start = (opts.edge ?? "start") === "start";
-    const vw = opts.viewport ?? (() => win.innerWidth), on = opts.enabled ?? (() => true);
+    const min = opts.min ?? 300, step = opts.step ?? 16, key = opts.key ?? "g-split-width", prop = opts.prop ?? "--split-w", start = (opts.edge ?? "start") === "start", ys = opts.axis === "y";
+    const shareOf = () => typeof opts.maxShare === "function" ? opts.maxShare() : opts.maxShare ?? 0.6;
+    const vw = opts.viewport ?? (() => ys ? win.innerHeight : win.innerWidth), on = opts.enabled ?? (() => true);
+    const dim = ys ? "height" : "width";
     const store = opts.storage !== undefined ? opts.storage : (() => { try {
         return win.localStorage;
     }
@@ -34,9 +36,9 @@ export function split(opts) {
         return null;
     } })();
     const el = doc.createElement("div");
-    el.className = `g-split ${start ? "start" : "end"}`;
+    el.className = `g-split ${start ? "start" : "end"}${ys ? " y" : ""}`;
     el.setAttribute("role", "separator");
-    el.setAttribute("aria-orientation", "vertical");
+    el.setAttribute("aria-orientation", ys ? "horizontal" : "vertical");
     el.tabIndex = 0;
     el.setAttribute("aria-valuemin", String(min));
     if (opts.name)
@@ -44,29 +46,30 @@ export function split(opts) {
     if (opts.title)
         el.title = opts.title;
     panel.append(el);
-    const now = () => Math.round(panel.getBoundingClientRect().width);
+    const now = () => Math.round(panel.getBoundingClientRect()[dim]);
     function set(w) {
         if (!on() || w == null) {
             panel.style.removeProperty(prop);
-            panel.style.removeProperty("width");
+            panel.style.removeProperty(dim);
             el.removeAttribute("aria-valuenow");
             el.hidden = !on();
             return null;
         }
-        const c = clampWidth(w, vw(), min, share);
+        const c = clampWidth(w, vw(), min, shareOf());
         panel.style.setProperty(prop, `${c}px`);
-        panel.style.width = `${c}px`;
+        panel.style[dim] = `${c}px`;
         el.setAttribute("aria-valuenow", String(c));
         el.hidden = false;
         return c;
     }
-    const refresh = () => { set(on() ? readWidth(store, key, vw(), min, share) : null); };
+    const refresh = () => { set(on() ? readWidth(store, key, vw(), min, shareOf()) : null); };
     const done = (w) => { saveWidth(store, key, w); opts.onChange?.(w); };
-    let dragging = false;
+    let dragging = false, raw = Infinity;
     el.addEventListener("pointerdown", (e) => {
         if (!on() || e.button)
             return;
         dragging = true;
+        raw = Infinity;
         el.setPointerCapture?.(e.pointerId);
         el.classList.add("sizing");
         doc.body.classList.add("g-sizing");
@@ -76,14 +79,25 @@ export function split(opts) {
         if (!dragging)
             return;
         const r = panel.getBoundingClientRect();
-        set(start ? r.right - e.clientX : e.clientX - r.left);
+        raw = ys ? (start ? r.bottom - e.clientY : e.clientY - r.top) : (start ? r.right - e.clientX : e.clientX - r.left);
+        set(raw);
     });
-    const end = () => { if (!dragging)
-        return; dragging = false; el.classList.remove("sizing"); doc.body.classList.remove("g-sizing"); done(now()); };
+    const end = () => {
+        if (!dragging)
+            return;
+        dragging = false;
+        el.classList.remove("sizing");
+        doc.body.classList.remove("g-sizing");
+        if (opts.foldBelow != null && raw < min - opts.foldBelow) {
+            opts.onFold?.();
+            return;
+        }
+        done(now());
+    };
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
     el.addEventListener("keydown", (e) => {
-        const d = { ArrowLeft: start ? step : -step, ArrowRight: start ? -step : step }[e.key];
+        const d = (ys ? { ArrowUp: start ? step : -step, ArrowDown: start ? -step : step } : { ArrowLeft: start ? step : -step, ArrowRight: start ? -step : step })[e.key];
         if (!d || !on())
             return;
         e.preventDefault();
