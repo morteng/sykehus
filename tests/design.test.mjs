@@ -249,7 +249,7 @@ test("U3831: a greenhouse 5° off and sticking out at one end of the roof is set
 });
 
 test("U3831: a greenhouse wider than the roof is made narrower, one that is fine is left where it is", () => {
-  const w = checkEdit(site, floors, glass({ width: 30 })); assert.ok(w.width < rf.width && w.width > 5, `width ${w.width} of the slab's ${rf.width.toFixed(1)}`);
+  const w = checkEdit(site, floors, glass({ width: 30 })); assert.ok(w.width < 30 && w.width > 5, `width ${w.width}, made narrower than the 30 asked`);
   const ok = skew(0, 0, 0), c = checkEdit(site, floors, glass({ ...ok })), mid = v => [(v.from[0] + v.to[0]) / 2, (v.from[1] + v.to[1]) / 2];
   assert.ok(Math.hypot(...mid(c).map((x, i) => x - mid(ok)[i])) < 0.02, "a placement already along the axis and inside is not moved");
 });
@@ -269,4 +269,32 @@ test("U3831: reshape align building turns a skew greenhouse that stands free alo
   const moved = add(ed, { kind: "reshape", id: "ndrivhus", from: [rf.c[0] + 1, rf.c[1] - 12], to: [rf.c[0] + 3, rf.c[1] + 12] });   // a move by guess is set right again
   const w = applyEdits(site, floors, moved).site.added.find(x => x.id === "ndrivhus");
   for (const p of corners(w)) assert.ok(inRing(p, hoy));
+});
+
+/* U3831b (pm's Chrome read 2026-10-26 20:23Z): Sentralblokka's roof is 60 small blocks on 3 levels; a greenhouse that covers most
+   of it is fitted to the whole roof (the level it stands on and the one step below), not to the one block under its middle:
+   it keeps its size and is only turned and shifted */
+test("U3831b: a greenhouse 80 x 18 m on the roof of many blocks keeps its size and is turned and shifted, not shrunk", async () => {
+  const { fitInRing } = await import("../public/renderkit/frame.js"), { alignOnRoof, roofRoom, roofBlock } = await import("../public/design.js");
+  const bld = site.buildings.find(b => b.wing === "sentralblokka"), F = ringFrame(bld.blocks.filter(k => k.top > 73).flatMap(k => k.p)) /* the tall middle of the roof */, a = (F.angle + 3) * Math.PI / 180, u = [Math.cos(a), Math.sin(a)];
+  const mid = [F.c[0] + F.v[0] * 1, F.c[1] + F.v[1] * 1], set = { ...glass({ id: "ndrivhus", width: 18, on: "sentralblokka" }), from: mid.map((x, i) => x - u[i] * 40), to: mid.map((x, i) => x + u[i] * 40) };   // 80 m long, 3° off
+  const one = roofBlock(site, set), room = roofRoom(site, set);
+  assert.ok(room.rings.length > 20 && room.rings.length > 1, `the roof is ${room.rings.length} blocks`);
+  assert.ok(room.rings.some(r => r === one.p), "the block under the middle is one of them");
+  assert.equal(fitInRing(one.p, { c: mid, length: 80, width: 18 }).shrunk, true, "control: the old fit, to the one block under the middle, shrinks it");
+  const f = alignOnRoof(site, set);
+  assert.equal(f.shrunk, false); assert.equal(f.fits, true); assert.equal(f.width, 18); assert.ok(Math.abs(Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1]) - 80) < 0.05, "still 80 m");
+  assert.ok(Math.abs(f.turned_deg) > 1 && Math.abs(f.turned_deg) < 6, `turned ${f.turned_deg}`);
+  const c = checkEdit(site, floors, set);
+  assert.ok(Math.abs(Math.hypot(c.to[0] - c.from[0], c.to[1] - c.from[1]) - 80) < 0.05 && c.width === 18, "the checked edit keeps its size");
+  for (const p of corners(c)) assert.ok(room.rings.some(r => inRing(p, r)), `corner ${p} on the roof`);
+  const { alignSay, alignDelta } = await import("../public/design.js"), say = alignSay(alignDelta(site, set, c));
+  assert.match(say, /^På taket: snudd 2,9\d° til byggets egen akse/); assert.doesNotMatch(say, /mindre/, "a cm of rounding is not said as a shrink");
+});
+
+test("U3831b: a volume set align free keeps that on the model, so a later move leaves it where it is put", () => {
+  const ed = add([], glass({ id: "ndrivhus", align: "free" })), v = applyEdits(site, floors, ed).site.added.find(x => x.id === "ndrivhus");
+  assert.equal(v.align, "free");
+  const w = applyEdits(site, floors, add(ed, { kind: "reshape", id: "ndrivhus", height: 5 })).site.added.find(x => x.id === "ndrivhus");
+  assert.deepEqual([w.from, w.to], [v.from, v.to], "a free volume is not turned by a later reshape");
 });

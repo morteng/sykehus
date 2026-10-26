@@ -229,18 +229,25 @@ export function roofBlock(site, e) {
   for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && inRing(m, k.p) && (!hit || k.top > hit.top)) hit = k;
   return hit;
 }
+/* U3831b: the whole roof at that level, not one block of it: every block of the wing whose top is the chosen block's or up to one
+   storey step (3,5 m) below it is one roof, however many small blocks it is cut in (a higher one is a room standing on it, not roof). { rings: the blocks' outlines, pts: all their points, for the axis } */
+export function roofRoom(site, e) {
+  const h = roofBlock(site, e); if (!h) return null;
+  const rings = []; for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && k.top <= h.top + 0.3 && k.top >= h.top - 3.5) rings.push(k.p);
+  return { top: h.top, rings, pts: rings.flat() };
+}
 /* the roof a volume set on a wing stands on: the highest of that wing's blocks (or outlines) under its middle */
 export function roofUnder(site, e) { return roofBlock(site, e)?.top ?? null; }
 
 /* U3831: a volume on a roof is set along that building's own axis (the minimum-area rectangle of the roof outline it
    stands on, renderkit/frame.js), its middle where it was asked, moved the least that keeps it inside the roof edge, and
-   made narrower or shorter (not a construction: its size is its script's) only when the roof is. Anton's from and to
+   made narrower or shorter (not a construction: its size is its script's) only when the roof is (the roof is the whole of that level, roofRoom). Anton's from and to
    were guesses a few degrees and a few metres off; align "free" keeps them as they are. Returns the same volume's
    { from, to, width } and what was done, or null when there is no roof under its middle. */
 export function alignOnRoof(site, e) {
-  const b = roofBlock(site, e); if (!b) return null;
+  const b = roofRoom(site, e); if (!b) return null;
   const mid = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2], d0 = [e.to[0] - e.from[0], e.to[1] - e.from[1]], L0 = Math.hypot(...d0) || 1;
-  const r = fitInRing(b.p, { c: mid, length: L0, width: e.width, shrink: e.shape !== "bim" }), sg = r.u[0] * d0[0] + r.u[1] * d0[1] >= 0 ? 1 : -1, u = [r.u[0] * sg, r.u[1] * sg];
+  const r = fitInRing(b.pts, { within: b.rings, c: mid, length: L0, width: e.width, shrink: e.shape !== "bim" }), sg = r.u[0] * d0[0] + r.u[1] * d0[1] >= 0 ? 1 : -1, u = [r.u[0] * sg, r.u[1] * sg];
   const rd = v => Math.round(v * 100) / 100, was = (Math.atan2(d0[1], d0[0]) * 180 / Math.PI + 360) % 360, now = (Math.atan2(u[1], u[0]) * 180 / Math.PI + 360) % 360;
   let turn = ((now - was + 540) % 360) - 180; if (turn > 90) turn -= 180; else if (turn < -90) turn += 180;
   return { from: [rd(r.c[0] - u[0] * r.length / 2), rd(r.c[1] - u[1] * r.length / 2)], to: [rd(r.c[0] + u[0] * r.length / 2), rd(r.c[1] + u[1] * r.length / 2)], width: rd(r.width),
@@ -251,7 +258,7 @@ export function alignDelta(site, before, after) {
   const L = v => Math.hypot(v.to[0] - v.from[0], v.to[1] - v.from[1]), ang = v => Math.atan2(v.to[1] - v.from[1], v.to[0] - v.from[0]) * 180 / Math.PI, mid = v => [(v.from[0] + v.to[0]) / 2, (v.from[1] + v.to[1]) / 2], rd = x => Math.round(x * 100) / 100;
   let turn = ((ang(after) - ang(before) + 540) % 360) - 180; if (turn > 90) turn -= 180; else if (turn < -90) turn += 180;
   const chk = alignOnRoof(site, { ...after, on: after.on ?? before.on });
-  return { turned_deg: rd(turn), moved_m: rd(Math.hypot(...mid(after).map((x, i) => x - mid(before)[i]))), shrunk: L(after) < L(before) - 0.01 || after.width < before.width - 0.01, fits: chk ? chk.fits : true };
+  return { turned_deg: rd(turn), moved_m: rd(Math.hypot(...mid(after).map((x, i) => x - mid(before)[i]))), shrunk: L(after) < L(before) - 0.1 || after.width < before.width - 0.1, fits: chk ? chk.fits : true };
 }
 /* what alignOnRoof did, in words for Anton to pass on (null when it changed nothing worth saying) */
 export function alignSay(f) {
@@ -633,7 +640,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep, guard, lot) : null, near = lotOf(site, e);
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   /* a meeting is said on both: the one laid first learns of the one that met it */
   for (const a of added) for (const m of a.ground?.meets || []) {
