@@ -795,7 +795,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const typing = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
   function walkStep(now) {
     if (!held.size || !(mode === "3d" && O.eye)) { held.clear(); walkT = 0; return; }
-    const dt = walkT ? Math.min(0.1, (now - walkT) / 1000) : 1 / 60; walkT = now;
+    const dt = walkT ? Math.min(0.25, (now - walkT) / 1000) : 1 / 60; walkT = now;
     let f = 0, r = 0; for (const k of held) { f += WALK[k][0]; r += WALK[k][1]; }
     const v = (fast ? 18 : 6) * dt, n = Math.hypot(f, r) || 1;
     if (f || r) { eyeWalk(f / n * v, r / n * v); place(); }
@@ -819,7 +819,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const x = h.point.x, y = -h.point.z;
     if (x < T.x0 || x > T.x0 + T.w * T.res || y > T.y1 || y < T.y1 - T.h * T.res) return { ok: false, at: [x, y], why: "Utenfor modellen: slipp på bakken." };
     if (h.point.y - (ground(x, y) - base) > 1.2) return { ok: false, at: [x, y], why: "Ikke på et tak eller i et tre: slipp på bakken, en vei eller en plen." };
-    return { ok: true, at: [x, y] };
+    /* on a road: the way it runs there, to look along it, as one stands in a street (not at the wall beside it) */
+    let o = h.object; while (o && !o.userData?.road) o = o.parent;
+    const l = o?.userData.road.line; let along = null;
+    if (l?.length > 1) { let best = 1e9; for (let i = 0; i + 1 < l.length; i++) { const [ax, ay] = l[i], [bx, by] = l[i + 1], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (L * L))), d = Math.hypot(x - ax - t * dx, y - ay - t * dy); if (d < best) { best = d; along = [dx / L, dy / L]; } } }
+    return { ok: true, at: [x, y], ...(along ? { along } : {}) };
   }
   const standRing = new THREE.Mesh(new THREE.RingGeometry(0.75, 1, 40), new THREE.MeshBasicMaterial({ color: "#2e9d5b", depthTest: false, transparent: true, side: THREE.DoubleSide }));
   standRing.rotation.x = -Math.PI / 2; standRing.renderOrder = 16; standRing.visible = false; standRing.userData.standRing = true; scene.add(standRing);
@@ -829,7 +833,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   /* to Gateplan standing there: the same eye as «Gateplan» (place(), eyeTo), looking level, the way the view looked
      (in the plan: north) */
-  function standAt(at, yaw = mode === "plan" ? 0 : O.yaw) {
+  function standAt(at, along = null) {
+    let yaw = mode === "plan" ? 0 : O.yaw;
+    /* along a road: whichever of its two ways is nearer the way the view looked; looking (-sin yaw, cos yaw) */
+    if (along) { const f = [-Math.sin(yaw), Math.cos(yaw)], s = along[0] * f[0] + along[1] * f[1] < 0 ? -1 : 1; yaw = Math.atan2(-along[0] * s, along[1] * s); }
     hand(); land(); ringAt(null);
     if (mode !== "3d") setMode("3d");
     O.eye = true; O.dist = 40; eyeTo(at[0], at[1], yaw, 0); place();

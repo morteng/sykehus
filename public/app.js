@@ -225,7 +225,7 @@ $("meye").onclick = () => { setMode("3d"); viewer.eye(true); pressMode(); eyeSay
    «Gateplan»; a press without a drag (a finger, the keyboard) waits for a tap on the spot */
 {
   const peg = $("peg"), say = r => toast(r.why);
-  const go = r => { if (!r.ok) return say(r); viewer.standAt(r.at); pressMode(); eyeSay(); };
+  const go = r => { if (!r.ok) return say(r); viewer.standAt(r.at, r.along); pressMode(); eyeSay(); };
   let drag = null;
   peg.addEventListener("pointerdown", e => {
     if (e.button) return; e.preventDefault(); peg.setPointerCapture(e.pointerId);

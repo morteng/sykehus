@@ -55,7 +55,7 @@ export async function addStreets({ viewer, site, api = STREETS_API }) {
     const h = byId.get(w.id); if (!h) continue;
     const line = w.pts ? w.pts.map(F.toUtm).filter(([x, y]) => F.cellAt(x, y) >= 0) : null, ring = w.ring ? w.ring.map(F.toUtm) : line?.length > 1 ? pathRing(line, w.width || 2) : null;
     if (!ring?.length) continue;
-    h.userData = { id: w.id, ring, lift: 0.1, road: { id: w.id, name: w.name, what: wayKind(w), width: w.ring ? null : w.width, length_m: line ? Math.round(len(line) * 10) / 10 : null, ring, src: w.src } };
+    h.userData = { id: w.id, ring, lift: 0.1, road: { id: w.id, name: w.name, what: wayKind(w), width: w.ring ? null : w.width, length_m: line ? Math.round(len(line) * 10) / 10 : null, ring, line, src: w.src } };
     h.traverse(o => { o.userData.id = w.id; });
   }
   viewer.add(g);
