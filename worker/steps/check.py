@@ -3,7 +3,7 @@ is, measured, and the job's expect held against it. Lengths in mm for STEP, BREP
 them), metres for IFC.
 
   STEP / BREP / FCStd (FreeCAD): its parts by name (a STEP's product names, an FCStd's labels), each with solids,
-        valid, closed, volume, area, size and box; the parts that overlap, with by how much; gaps between parts named
+        valid, closed, volume, area, size and box, and matrix (4×4 row-major, mm: its placement in the file); the parts that overlap, with by how much; gaps between parts named
         in expect
   STL:  triangles, size and box, watertight (every edge in two triangles), volume
   IFC:  its schema and the count of each class, buildings, storeys
@@ -49,9 +49,10 @@ def box_of(bb):
     return {"box": [r3(bb.XMin), r3(bb.YMin), r3(bb.ZMin), r3(bb.XMax), r3(bb.YMax), r3(bb.ZMax)], "size": [r3(bb.XLength), r3(bb.YLength), r3(bb.ZLength)]}
 
 
-def shape_facts(sh):
+def shape_facts(sh, matrix=False):
     solids = sh.Solids
-    return {"solids": len(solids), "valid": bool(sh.isValid()), "closed": all(s.isClosed() for s in solids) if solids else False,
+    M = sh.Placement.toMatrix()
+    return {**({"matrix": [[r3(M.A11), r3(M.A12), r3(M.A13), r3(M.A14)], [r3(M.A21), r3(M.A22), r3(M.A23), r3(M.A24)], [r3(M.A31), r3(M.A32), r3(M.A33), r3(M.A34)], [0, 0, 0, 1]]} if matrix else {}),"solids": len(solids), "valid": bool(sh.isValid()), "closed": all(s.isClosed() for s in solids) if solids else False,
             "volume": r3(sum(s.Volume for s in solids)), "area": r3(sh.Area), **box_of(sh.BoundBox)}
 
 
@@ -76,7 +77,8 @@ def cad(path):
                 continue
             if any(getattr(p, "Shape", None) is not None and p.TypeId not in ("App::Part", "App::DocumentObjectGroup") for p in o.InList):
                 continue   # used by another shape (a feature in a body, a boolean's input): that one is the part
-            parts.append((o.Label, sh))
+            g = sh.copy(); g.Placement = o.getGlobalPlacement()   # where it is in the file, inside its assemblies
+            parts.append((o.Label, g))
         if not parts:   # a STEP with no names: its solids as they are
             sh = Part.Shape(); sh.read(str(path)); parts = [(f"solid {i + 1}", s) for i, s in enumerate(sh.Solids)]
     names, seen = [], {}
@@ -84,7 +86,7 @@ def cad(path):
         seen[n] = seen.get(n, 0) + 1; names.append(n if seen[n] == 1 else f"{n} {seen[n]}")
     shapes = dict(zip(names, (s for _, s in parts)))
     allsh = Part.makeCompound(list(shapes.values()))
-    facts = {"kind": ext[1:], **shape_facts(allsh), "parts": [{"name": n, **shape_facts(s)} for n, s in shapes.items()]}
+    facts = {"kind": ext[1:], **shape_facts(allsh), "parts": [{"name": n, **shape_facts(s, True)} for n, s in shapes.items()]}
     over = []
     ks = list(shapes)[:40]
     for i in range(len(ks)):

@@ -5,8 +5,9 @@ what it made. One container on the stack's internal network; shared by sykehus (
   POST /blobs           the bytes of a file (a STEP, a KiCad part, an image) → {sha256, bytes}; kept a week
   GET  /blobs/<sha256>  the bytes
   POST /jobs[?wait=S]   {script, params?, inputs?: {name: sha256}, files?: {name: base64}, then?: ["mesh", "glb",
-                        "check"], expect?: {...}, caps?: {s, mem_mb}}
-                        → 202 {id} or, with wait, the job when it is done (up to S seconds)
+                        "check"], mesh?: {linear_mm, angular_deg}, expect?: {...}, caps?: {s, mem_mb}, key?}
+                        → 202 {id} or, with wait, the job when it is done (up to S seconds). key (or the
+                        Idempotency-Key header): the same key within the hour is the same job, not a second run
   GET  /jobs/<id>       {id, state: queued|running|done|failed|refused, result, outputs: [{name, sha256, bytes, url}],
                         files: {name: url}, check, errors: [{code, line, message}], log, seconds}
   GET  /jobs/<id>/files/<name>   the bytes (also at /blobs/<sha256>, as long as the blob is kept)
@@ -16,7 +17,9 @@ A job: script.py and params.json (and the files) in an empty folder; `python scr
 (--unshare-all: no network; the image read-only; only the job folder writable; an empty /proc; no environment; rlimits on CPU time,
 memory, processes and file size; a wall clock). Its result is the last line of its output that is a JSON object.
 then: built-in steps of this image on what it made (trusted code, run the same way): mesh writes mesh.json from the
-IFC (triangles by class, for a viewer), glb a glTF of it, check a report on every file it made (check.json, and the
+IFC (triangles by class, for a viewer) and, in the FreeCAD image, each STEP / BREP / FCStd (the inputs too) as one
+mesh per part at mesh's tolerance (<stem>.<n>.stl, <stem>.glb, <stem>.parts.json with each part's placement); glb a
+glTF of the IFC; check a report on every file it made (check.json, and the
 job's check): solids, valid, closed, volume, box, the solids that overlap (STEP, BREP, FCStd with FreeCAD; STL; IFC),
 and each of expect's numbers against what was measured, so an app knows without opening the files whether the part
 is what was asked. A job whose check fails is still done: check.ok is false and check.failed says which. Errors carry a stable code and English words, for an app to
@@ -117,6 +120,8 @@ def run_job(j):
         else:
             if j.get("expect") is not None:
                 (work / ".expect.json").write_text(json.dumps(j["expect"]))
+            if j.get("mesh") is not None:
+                (work / ".mesh.json").write_text(json.dumps(j["mesh"]))
             for step in j.get("then") or []:
                 shutil.copy(HERE / "steps" / f"{step}.py", work / f".step-{step}.py")
                 q = subprocess.run(sandboxed([sys.executable, "-I", f".step-{step}.py"], work, caps), cwd=work, capture_output=True, text=True, timeout=caps["s"] + 30)
@@ -232,9 +237,21 @@ class H(BaseHTTPRequestHandler):
             a = json.loads(self.rfile.read(n))
             assert isinstance(a.get("script"), str) and a["script"].strip()
             assert all(s in STEPS for s in a.get("then") or [])
+            mesh = a.get("mesh") or {}
+            assert isinstance(mesh, dict) and set(mesh) <= {"linear_mm", "angular_deg"} and 0.001 <= float(mesh.get("linear_mm", 0.1)) <= 10 and 1 <= float(mesh.get("angular_deg", 15)) <= 90
+            key = a.get("key") or self.headers.get("Idempotency-Key")
+            assert key is None or (isinstance(key, str) and 0 < len(key) <= 120)
             assert all(re.fullmatch(r"[A-Za-z0-9._-]{1,80}", k) and not k.startswith(".") and re.fullmatch(r"[0-9a-f]{64}", str(v)) for k, v in (a.get("inputs") or {}).items())
         except Exception:
-            return self.send(400, {"errors": [{"code": "bad_request", "message": "A job is JSON with a script (text), inputs as {name: sha256}, and then from " + ", ".join(STEPS) + "."}]})
+            return self.send(400, {"errors": [{"code": "bad_request", "message": "A job is JSON with a script (text), inputs as {name: sha256}, then from " + ", ".join(STEPS) + ", mesh as {linear_mm 0.001-10, angular_deg 1-90}, key a string."}]})
+        wait = re.search(r"(?:^|&)wait=(\d+)", q)
+        with lock:
+            again = next((x for x in jobs.values() if key and x.get("key") == key), None)
+        if again:   # the same key: the job it started, done or still running
+            if wait:
+                again["done"].wait(min(int(wait.group(1)), 900))
+                return self.send(200, view(again))
+            return self.send(202, {"id": again["id"]})
         missing = [k for k, v in (a.get("inputs") or {}).items() if not (BLOBS / v).is_file()]
         if missing:
             return self.send(400, {"errors": [{"code": "missing_input", "message": "Not here (POST them to /blobs first): " + ", ".join(missing), "names": missing}]})
@@ -248,11 +265,10 @@ class H(BaseHTTPRequestHandler):
         for name, sha in (a.get("inputs") or {}).items():
             shutil.copyfile(BLOBS / sha, work / name); os.utime(BLOBS / sha); inputs.append(name)
         os.chmod(work, 0o777)
-        j = {"id": jid, "t": time.time(), "state": "queued", "then": a.get("then"), "caps": a.get("caps"), "expect": a.get("expect"), "inputs": inputs, "done": threading.Event()}
+        j = {"id": jid, "t": time.time(), "state": "queued", "then": a.get("then"), "caps": a.get("caps"), "expect": a.get("expect"), "mesh": a.get("mesh"), "key": key, "inputs": inputs, "done": threading.Event()}
         with lock:
             jobs[jid] = j
         threading.Thread(target=run_job, args=(j,), daemon=True).start()
-        wait = re.search(r"(?:^|&)wait=(\d+)", q)
         if wait:
             j["done"].wait(min(int(wait.group(1)), 900))
             return self.send(200, view(j))
