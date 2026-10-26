@@ -21,6 +21,7 @@ import { texturedMaterial, worldUV, skyEnvironment } from "./renderkit/materials
 import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
+import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
@@ -48,6 +49,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   scene.add(sunL, sunL.target);
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide, ...o });
 
+  /* the area is the terrain's grid: what stands or runs past its edge (a road, a neighbour's wing) is cut there and the cut is
+     filled in one solid colour per material, as hagekart cuts at the lot (renderkit/areaclip.js, U3818). The ground gets a wall of
+     earth round its edge so it does not end as a sheet. ?nocut switches it off. */
+  const E = 0.02;   // the terrain's own edge and its earth wall stand on the rectangle: a hair out, or float noise drops their fragments
+  const clip = createAreaClip({ rect: [T.x0 + T.res / 2 - E, -T.y1 + T.res / 2 - E, T.x0 + (T.w - 0.5) * T.res + E, -(T.y1 - (T.h - 0.5) * T.res) + E], THREE });
+  clip.on = !new URLSearchParams(location.search).has("nocut"); clip.watch(scene);
+
   /* ---------- terrain ---------- */
   let terrainGeo = null;
   /* the after's grid (design.js: the pads under new buildings), its heights written into the drawn terrain in place */
@@ -71,6 +79,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     gi.crossOrigin = "anonymous";   // in the chat app the page is on the host's origin: without it the canvas is tainted and the picture back fails
     gi.src = new URL("./tex-grass.jpg", import.meta.url).href;
     const m = new THREE.Mesh(g, mat("#ffffff", { map: grass })); m.receiveShadow = true; scene.add(m);
+    const sk = gridSkirt({ w: T.w, h: T.h, at: (c, r) => [T.x0 + (c + 0.5) * T.res, (T.z[r * T.w + c] ?? base) - base - 0.05, -(T.y1 - (r + 0.5) * T.res)], bottom: -5 });
+    const skg = new THREE.BufferGeometry(); skg.setAttribute("position", new THREE.BufferAttribute(sk.position, 3)); skg.setIndex(new THREE.BufferAttribute(sk.index, 1)); scene.add(new THREE.Mesh(skg, new THREE.MeshBasicMaterial({ color: "#8a7a62", side: THREE.DoubleSide })));
     const lot = site.lot.ring.map(p => P(p, ground(...p) + 0.25));
     scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lot), new THREE.LineDashedMaterial({ color: C.lot, dashSize: 2, gapSize: 1.2 })).computeLineDistances());
   }
