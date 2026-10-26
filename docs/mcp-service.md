@@ -70,9 +70,12 @@ sykehus-mcp only the paths in its `@sykehusoauth` list, so a path this server st
 `/favicon.ico` and `/apple-touch-icon*.png` did on 2026-10-26) answers 404 from the edge until it is added there and
 caddy-public is restarted. Say so with the deploy.
 
-Constructions (U3570) need `SYKEHUS_WORKER` (the worker on the internal network `sykehus-jobs`, e.g.
-`http://sykehus-worker:8070`; see `worker/`, its AppArmor and seccomp profiles and `worker/selftest.py`); without it a
-construction is refused in plain words and the rest works. Their files are kept in `SYKEHUS_VERSIONS_DIR/bim/`.
+Constructions (U3570) and files brought in (U3571, `/api/import`) need `SYKEHUS_WORKER` or `GULDEN_WORKER` (the worker
+on the internal network, `http://gulden-worker:8070`; it is its own repo, github.com/morteng/gulden-worker, with its
+AppArmor and seccomp profiles and selftest). STEP is read by the FreeCAD image: `SYKEHUS_WORKER_FREECAD` or
+`GULDEN_WORKER_FREECAD` (`http://gulden-worker-freecad:8070`). Without them a construction or a file is refused in plain
+words and the rest works. Their files are kept in `SYKEHUS_VERSIONS_DIR/bim/`. `/api/import` takes up to 100 MB: the
+edge's body limit for that path must allow it.
 
 The chat app runs in the chat host's sandboxed frame on the host's own origin, and loads `mcp-app.js`, the viewer,
 `data/*` and the textures from this site as a module script: those must carry `Access-Control-Allow-Origin: *`

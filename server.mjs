@@ -30,7 +30,7 @@ import { createLogin } from "./login.mjs";
 import { createAssistant } from "./assistant.mjs";
 import { createStreets } from "./gater.mjs";
 import { createWishes } from "./wishes.mjs";
-import { importIfc, MAX_IMPORT } from "./bim.mjs";
+import { importFile, MAX_IMPORT } from "./bim.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
@@ -66,7 +66,7 @@ function readBytes(req, max) {
   });
 }
 /* POST /api/import?filename=: a file brought in (U3571), signed in, at most 100 MB, one at a time per person; kept by
-   its sha (bim.mjs importIfc), then placed with the edit kind import */
+   its sha (bim.mjs importFile: IFC, STEP, glTF, OBJ, STL), then placed with the edit kind import */
 const importing = new Set();
 async function handleImport(req, res) {
   const json = (n, o) => res.writeHead(n, { ...SECURITY, "content-type": "application/json; charset=utf-8" }).end(JSON.stringify(o));
@@ -77,7 +77,8 @@ async function handleImport(req, res) {
   importing.add(who);
   try {
     const bytes = await readBytes(req, MAX_IMPORT);
-    return json(200, await importIfc(bytes, { filename: new URL(req.url, "http://x").searchParams.get("filename"), by: who }));
+    const q = new URL(req.url, "http://x").searchParams;
+    return json(200, await importFile(bytes, { filename: q.get("filename"), unit: q.get("unit"), up: q.get("up"), by: who }));
   } catch (e) { return json(e.big ? 413 : e.tool ? 400 : 500, { error: e.big ? "Fila er større enn 100 MB." : e.tool ? e.message : "Noe gikk galt." }); }
   finally { importing.delete(who); }
 }

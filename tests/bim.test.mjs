@@ -1,5 +1,5 @@
 /* Constructions (U3570): a «bim» volume in design.js, and bim.mjs's prepare against a worker that answers as the real
-   one does (worker/service.py), so no Python is needed here.
+   one does (gulden-worker's service.py), so no Python is needed here.
    node --test tests/bim.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -48,7 +48,7 @@ test("bimPlace: the box's middle to the middle of from → to, x along it, the f
   assert.deepEqual(at([5, 0, 9]).map(v => Math.round(v * 1000) / 1000), [0, 10, 106], "x runs north when from → to does");
 });
 
-/* a worker as worker/service.py answers: a job done with mesh.json and model.ifc, or failed with a code */
+/* a worker as gulden-worker's service.py answers: a job done with mesh.json and model.ifc, or failed with a code */
 function fakeWorker(answer) {
   const seen = [];
   const srv = createServer((req, res) => {
@@ -101,7 +101,7 @@ test("prepare: the worker's failure in plain words, with the script's line", asy
 });
 
 /* a file brought in (U3571): the bytes to the worker's /blobs, a steps-only job meshes it, kept by its sha */
-test("importIfc and prepare: an uploaded IFC is read once, kept by its sha, and stands like a construction", async () => {
+test("importFile and prepare: an uploaded IFC is read once, kept by its sha, and stands like a construction", async () => {
   const { createHash } = await import("node:crypto");
   const ifc = Buffer.from("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"), sha = createHash("sha256").update(ifc).digest("hex");
   const seen = [], MESH = { box: { min: [1000, 2000, 5], max: [1006, 2003, 8.5] }, unit: { length: "millimetre", to_m: 0.001 }, classes: { IfcWindow: 1 }, buildings: 0, storeys: 0, triangles: 1,
@@ -109,18 +109,24 @@ test("importIfc and prepare: an uploaded IFC is read once, kept by its sha, and 
   const srv = createServer((req, res) => { const b = []; req.on("data", c => b.push(c)); req.on("end", () => {
     const body = Buffer.concat(b); seen.push([req.method, req.url.split("?")[0]]);
     if (req.url === "/blobs") return res.end(JSON.stringify({ sha256: createHash("sha256").update(body).digest("hex"), bytes: body.length }));
-    if (req.url.startsWith("/jobs?")) { const j = JSON.parse(body); seen.push(j); return res.end(JSON.stringify({ state: "done", files: { "mesh.json": "/jobs/y/files/mesh.json" } })); }
+    if (req.url.startsWith("/jobs?")) { const j = JSON.parse(body); seen.push(j); return res.end(JSON.stringify({ state: "done", files: { "mesh.json": "/jobs/y/files/mesh.json",
+      ...(j.then.includes("import") ? { "model.ifc": "/jobs/y/files/model.ifc", "model.glb": "/jobs/y/files/model.glb", "import.json": "/jobs/y/files/import.json" } : {}) } })); }
+    if (req.url.endsWith("/import.json")) return res.end(JSON.stringify({ format: "obj", unit: seen.findLast(x => x.params)?.params.unit, unit_from: "person", up: "y", parts: 1 }));
+    if (req.url.endsWith("/model.ifc")) return res.end("ISO-10303-21;");
+    if (req.url.endsWith("/model.glb")) return res.end("glTF");
     res.end(JSON.stringify(MESH));
   }); });
   await new Promise(r => srv.listen(0, "127.0.0.1", r));
   process.env.SYKEHUS_WORKER = `http://127.0.0.1:${srv.address().port}`;
   try {
-    const { importIfc, prepare, slim } = await import("../bim.mjs");
-    await assert.rejects(importIfc(Buffer.from("solid x\nendsolid\n")), /ikke en IFC-fil/);
-    const r = await importIfc(ifc, { filename: "Vindu «A».ifc", by: "p1" });
+    const { importFile, prepare, slim } = await import("../bim.mjs");
+    await assert.rejects(importFile(Buffer.from("solid x\nendsolid\n"), { filename: "x.dwg" }), /DXF og DWG/);
+    await assert.rejects(importFile(Buffer.from("v 0 0 0\n"), { filename: "x.obj" }), /enhet/);
+    await assert.rejects(importFile(Buffer.from("x"), { filename: "x.skp" }), /SketchUp/);
+    const r = await importFile(ifc, { filename: "Vindu «A».ifc", by: "p1" });
     assert.equal(r.file, sha); assert.deepEqual(r.size_m, [6, 3, 3.5]); assert.equal(r.unit.length, "millimetre"); assert.equal(r.filename, "Vindu «A».ifc");
     const job = seen.find(x => x.inputs); assert.deepEqual(job, { inputs: { "model.ifc": sha }, then: ["mesh"] });
-    const n0 = seen.length; await importIfc(ifc); assert.equal(seen.length, n0, "the same bytes: kept, not read again");
+    const n0 = seen.length; await importFile(ifc); assert.equal(seen.length, n0, "the same bytes: kept, not read again");
     await assert.rejects(prepare({ kind: "import", file: sha, from: [0, -80], to: [6, -80] }, site), /lisensen/);
     const p = await prepare({ kind: "import", file: sha, from: [0, -80], to: [6, -80], licence: "Fri bruk fra produsenten", source: "https://example.com/vindu" }, site), { _ran, ...v } = p;
     assert.equal(v.kind, "volume"); assert.equal(v.shape, "bim"); assert.equal(v.material, "glass"); assert.equal(v.name, "Vindu «A»");
@@ -134,5 +140,16 @@ test("importIfc and prepare: an uploaded IFC is read once, kept by its sha, and 
     const kept = await prepare({ ...v, bim: { ...v.bim, box: { min: [0, 0, 0], max: [1, 1, 1] } } }, site);
     assert.deepEqual(kept.bim.box, MESH.box, "a kept import's box is the file's, not what was sent");
     await assert.rejects(prepare({ kind: "import", file: "c".repeat(64), from: [0, -80], to: [6, -80], licence: "x" }, site), /finnes ikke/);
+    /* an OBJ: its unit said by the person, made an IFC by the worker's import step; another unit is another thing */
+    const obj = Buffer.from("o Kube\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+    const o1 = await importFile(obj, { filename: "Kube.obj", unit: "cm" }), j1 = seen.findLast(x => x.inputs);
+    assert.deepEqual(j1.then, ["import", "mesh"]); assert.deepEqual(j1.params, { unit: "cm" }); assert.deepEqual(Object.keys(j1.inputs), ["Kube.obj"]);
+    assert.equal(o1.format, "obj"); assert.deepEqual(o1.unit, { length: "centimetre", from: "person" });
+    const o2 = await importFile(obj, { filename: "Kube.obj", unit: "mm" }); assert.notEqual(o2.file, o1.file);
+    const again = await importFile(obj, { filename: "Kube.obj", unit: "cm" }); assert.equal(again.file, o1.file); assert.deepEqual(again.unit, o1.unit, "kept, with its unit");
+    const po = await prepare({ kind: "import", file: o1.file, from: [0, -80], to: [6, -80], licence: "CC0" }, site);
+    assert.equal(po.bim.format, "obj"); assert.equal(po.name, "Kube");
+    delete process.env.SYKEHUS_WORKER_FREECAD; delete process.env.GULDEN_WORKER_FREECAD;
+    await assert.rejects(importFile(Buffer.from("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\n"), { filename: "a.step" }), /FreeCAD-arbeideren/);
   } finally { srv.close(); }
 });

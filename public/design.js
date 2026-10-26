@@ -59,7 +59,7 @@ function bimOf(b) {
     if (!/^[0-9a-f]{64}$/.test(String(b.file)) || b.sha !== b.file) throw new Error("Fila er ikke lastet opp ennå: serveren leser den først");
     const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Fila har ingen form");
     const t = (v, n) => v == null ? undefined : String(v).slice(0, n);
-    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
+    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(/^(step|glb|gltf|obj|stl)$/.test(b.format || "") ? { format: b.format } : {}), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
   }
   if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
   if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");

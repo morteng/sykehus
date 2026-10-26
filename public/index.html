@@ -42,9 +42,10 @@
       <span class="seg2" role="group" aria-label="Visning"><button type="button" id="m3d" aria-pressed="true">3D</button><button type="button" id="mplan" aria-pressed="false">Plan</button></span>
       <button type="button" class="tgl" id="names" aria-pressed="false" title="Vis eller skjul navnene på fløyene og rommene (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10l4 5-4 5H4z"/></svg>Navn</button>
       <button type="button" class="tgl" id="mnew" aria-pressed="false" title="Sett et nytt bygg på tomta: trykk der det skal stå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M12 11v6M9 14h6"/></svg>Nytt bygg</button>
-      <span class="imp"><button type="button" class="tgl" id="mimp" aria-pressed="false" aria-expanded="false" aria-controls="impPop" title="Sett en IFC-fil fra en produsent på tomta (et drivhus, et vindu): oppgi kilden og lisensen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>Hent fil</button>
+      <span class="imp"><button type="button" class="tgl" id="mimp" aria-pressed="false" aria-expanded="false" aria-controls="impPop" title="Sett en modell fra en produsent på tomta (et drivhus, et vindu: IFC, STEP, glTF, OBJ, STL): oppgi kilden og lisensen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/></svg>Hent fil</button>
         <form class="imp-pop" id="impPop" hidden>
-          <label>IFC-fil (høyst 100 MB)<input type="file" id="impFile" accept=".ifc" required></label>
+          <label>Fil: IFC, STEP, glTF, OBJ eller STL (høyst 100 MB)<input type="file" id="impFile" accept=".ifc,.step,.stp,.glb,.gltf,.obj,.stl" required></label>
+          <label id="impUnitL" hidden>Tegnet i (fila sier det ikke)<select id="impUnit"><option value="">Velg enhet</option><option value="m">meter</option><option value="cm">centimeter</option><option value="mm">millimeter</option><option value="in">tommer</option><option value="ft">fot</option></select></label>
           <label>Hvor er den fra?<input id="impSrc" maxlength="300" placeholder="Produsentens side, lenke" autocomplete="off"></label>
           <label>Lisens<input id="impLic" maxlength="120" list="impLics" required placeholder="Det produsenten sier om bruk" autocomplete="off"></label>
           <datalist id="impLics"><option value="Fri bruk fra produsenten"><option value="CC BY 4.0"><option value="CC0"><option value="Ukjent"></datalist>
@@ -116,6 +117,6 @@
 <div id="sheet"></div>
 <!-- ?v: once, past what browsers held from before the edge sent no-cache (2026-10-25) -->
 <script src="early.js" defer></script>
-<script type="module" src="app.js?v=20261026f"></script>
+<script type="module" src="app.js?v=20261026g"></script>
 </body>
 </html>

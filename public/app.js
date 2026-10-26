@@ -561,27 +561,31 @@ $("mimp").onclick = () => {
   if (!me.person) return toast("Logg inn for å hente inn filer: de lagres i ditt forslag.");
   impOpen(impPop.hidden);
 };
+/* OBJ and STL say no unit: the person picks it before it goes */
+const bare = f => /\.(obj|stl)$/i.test(f?.name || "");
+$("impFile").onchange = () => { $("impUnitL").hidden = !bare($("impFile").files?.[0]); };
 impPop.onsubmit = async ev => {
   ev.preventDefault();
-  const f = $("impFile").files?.[0], licence = $("impLic").value.trim(), source = $("impSrc").value.trim();
+  const f = $("impFile").files?.[0], licence = $("impLic").value.trim(), source = $("impSrc").value.trim(), unit = $("impUnit").value;
   if (!f || !licence) return;
+  if (bare(f) && !unit) return impSay("Velg enheten fila er tegnet i: den sier det ikke selv.");
   if (f.size > 100 * 1024 * 1024) return impSay("Fila er større enn 100 MB.");
   $("impGo").disabled = true; impSay(`Leser ${f.name} …`);
   let j;
-  try { j = await fetch(`api/import?filename=${encodeURIComponent(f.name)}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: f }).then(r => r.json()); }
+  try { j = await fetch(`api/import?filename=${encodeURIComponent(f.name)}${bare(f) ? `&unit=${unit}` : ""}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: f }).then(r => r.json()); }
   catch { j = { error: "Fikk ikke sendt fila." }; }
   finally { $("impGo").disabled = false; }
   if (j.error) return impSay(j.error);
   impOpen(false);
   const [lx, ly, lz] = j.size_m || [10, 10, 5], m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   aim(async ([x, y]) => {
-    aim(null); $("toast")?.remove(); const [dx, dy] = along(), h = Math.max(0.5, lx / 2), id = newId(), name = f.name.replace(/\.ifc$/i, "").slice(0, 80);
+    aim(null); $("toast")?.remove(); const [dx, dy] = along(), h = Math.max(0.5, lx / 2), id = newId(), name = f.name.replace(/\.[a-z0-9]{2,5}$/i, "").slice(0, 80);
     const r = await edit([{ kind: "import", id, name, file: j.file, licence, ...(source ? { source } : {}), from: [x - dx * h, y - dy * h], to: [x + dx * h, y + dy * h], why: "hentet inn på siden" }], "Fikk ikke satt den på tomta");
     if (!r) return;
     valg.clear(); valg.add({ kind: "new", id, label: name }); const a = site.added.find(q => q.id === id); if (a) showNew(a);
     toast(`${name} er satt på tomta.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
   });
-  toast(`${f.name}: ${m1(lx)} × ${m1(ly)} m, ${m1(lz)} m høy${j.unit?.length && j.unit.length !== "metre" ? ` (fila er i ${{ millimetre: "millimeter", centimetre: "centimeter", decimetre: "desimeter", foot: "fot", inch: "tommer" }[j.unit.length] || j.unit.length}, gjort om)` : ""}. Trykk der den skal stå.`, { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
+  toast(`${f.name}: ${m1(lx)} × ${m1(ly)} m, ${m1(lz)} m høy${j.unit?.length && j.unit.length !== "metre" && j.unit.from !== "person" ? ` (fila er i ${{ millimetre: "millimeter", centimetre: "centimeter", decimetre: "desimeter", foot: "fot", inch: "tommer" }[j.unit.length] || j.unit.length}, gjort om)` : ""}. Trykk der den skal stå.`, { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
 };
 /* by: how the build tools made it (renderkit build.js), in its why, so a change no one meant says where it came from */
 const BY = { drag: "dratt", click: "med «Flytt»", keys: "med tastene", wheel: "med Shift og hjulet" };
@@ -662,7 +666,7 @@ function showNew(a) {
     (a.ground ? `<p class="note">${esc(groundText(a.ground))}</p>` : "") +
     (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + (a.shape === "bim" && a.bim?.file
       /* a file brought in (U3571): where it came from and its licence, as said when it came; the file as it came */
-      ? `<p class="src">Innhentet fil «${esc(a.bim.filename || "modell.ifc")}» (${Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). Kilde: ${/^https?:\/\//.test(a.bim.source || "") ? `<a href="${esc(a.bim.source)}" target="_blank" rel="noopener noreferrer">${esc(a.bim.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a>` : esc(a.bim.source || "ikke oppgitt")}. Lisens: ${esc(a.bim.licence || "ukjent")}. <a href="api/bim/${a.bim.file}/model.ifc" download>Last ned IFC</a></p>`
+      ? `<p class="src">Innhentet fil «${esc(a.bim.filename || "modell.ifc")}»${a.bim.format ? `, gjort om til IFC` : ""} (${a.bim.format ? `${Object.values(a.bim.classes || {}).reduce((x, y) => x + y, 0)} deler` : Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). Kilde: ${/^https?:\/\//.test(a.bim.source || "") ? `<a href="${esc(a.bim.source)}" target="_blank" rel="noopener noreferrer">${esc(a.bim.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a>` : esc(a.bim.source || "ikke oppgitt")}. Lisens: ${esc(a.bim.licence || "ukjent")}. <a href="api/bim/${a.bim.file}/model.ifc" download>Last ned IFC</a></p>`
       : a.shape === "bim" && a.bim?.sha
       /* a construction (U3570): Anton's script made it; its own IFC (an IfcBuilding with its storey and parts) */
       ? `<p class="src">Bygget av Antons skript (${Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). <a href="api/bim/${a.bim.sha}/model.ifc" download>Last ned IFC</a></p>`
