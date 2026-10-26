@@ -107,7 +107,7 @@ createServer(async (req, res) => {
     // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;
     if (path === "/api/endring") return mcp.handleChange(req, res);
-    if (path === "/api/ifc") return mcp.handleIfc(req, res);
+    if (path === "/api/ifc") return await mcp.handleIfc(req, res);
     if (path === "/api/import") return await handleImport(req, res);
     if (await gjengi?.route(req, res, path, url)) return;
     if (path === "/api/skisser") return mcp.handleSketches(req, res, login.personOf(req));
