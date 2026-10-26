@@ -274,7 +274,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         const glass = p.material === "window_glass", M = MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};
         let g = new THREE.BufferGeometry(), m;
         g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1));
-        if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.7 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
+        if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.3 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
         else m = mat(M.colour, { ...M.look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // the library's look; flat: the file carries no normals, and every face is plane
         g.computeBoundingSphere();
         const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass && p.material !== "steel"; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
