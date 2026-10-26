@@ -17,7 +17,7 @@ import { ease } from "./renderkit/camera.js";
 import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
 import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
 import { texturedMaterial, worldUV } from "./renderkit/materials-three.js";
-import { BAY, STOREY, WINDOWS, kindOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
+import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
@@ -156,13 +156,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     return { box, pane, glass, done, g, mx, my };
   }
   function facade(kind) {
-    const c = FACADE[kind], { box, glass, done, g, mx, my } = painter(BAY, STOREY, 102.4, c);
-    box(0, 0, 2.5, 3.5, c.concrete, 235, 0);
+    const st = stepOf(site, kind), c = FACADE[kind], { box, glass, done, g, mx, my } = painter(BAY, st, 102.4, c);   // st: the storey's own height (bays.js rowsOf)
+    box(0, 0, 2.5, st, c.concrete, 235, 0);
     if (kind === "tower") {
-      box(1.1, 0, 2.5, 3.5, c.reveal, 235, 1);                                       // the slot
+      box(1.1, 0, 2.5, st, c.reveal, 235, 1);                                       // the slot
       for (const w of WINDOWS.tower) glass(...w);                                    // the pair of windows
-      box(0.55, 0, 0.565, 3.5, "rgba(60,58,62,.55)", null, 0.5);                     // the pier's joint
-      box(0, 3.47, 1.1, 3.5, "rgba(60,58,62,.45)", null, 0.5);                       // the storey's joint
+      box(0.55, 0, 0.565, st, "rgba(60,58,62,.55)", null, 0.5);                     // the pier's joint
+      box(0, st - 0.03, 1.1, st, "rgba(60,58,62,.45)", null, 0.5);                       // the storey's joint
     } else {
       for (const x of [0, 1.25]) box(x, 0, x + 0.015, 3.5, "rgba(70,60,50,.55)", null, 0.5);   // panel joints
       box(0, 1.15, 2.5, 2.3, c.frame, 150, 0.6);                                     // the ribbon of windows
@@ -209,6 +209,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a wall on the line of a drawn facade (within 1.6 m of it, so a stair tower standing out of it counts) wears
      that facade, stretched once along the line; the other walls the bays */
   function blocksMesh(b, tex) {
+    const { step, org } = rowsOf(kindOf(b), (site.wings || []).find(w => w.id === b.wing), b.base);   // the rows of windows, from a floor of the wing's own
     const pos = [], uv = [], roof = [], b0 = b.base - 0.5, z1 = Math.max(b.top, ...(b.walls || []).map(w => w[5])) + 0.1;
     const faces = (site.facades || []).filter(f => f.building === (b.wing ?? b.id)).map(f => {
       const L = Math.hypot(f.to[0] - f.from[0], f.to[1] - f.from[1]); return { f, L, d: [(f.to[0] - f.from[0]) / L, (f.to[1] - f.from[1]) / L], pos: [], uv: [] };
@@ -219,7 +220,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const A = P([ax, ay], bot), B = P([bx, by], bot), Cc = P([bx, by], top), D = P([ax, ay], top);
       const F = faces.find(F => { const [ua, na] = onLine(F, [ax, ay]), [ub, nb] = onLine(F, [bx, by]); return Math.abs((bx - ax) * F.d[1] - (by - ay) * F.d[0]) / len < 0.05 && na < 1.6 && nb < 1.6 && Math.min(ua, ub) > -0.3 && Math.max(ua, ub) < F.L + 0.3; });
       const [P0, T0] = F ? [F.pos, F.uv] : [pos, uv];
-      const [u0, u1, v0, v1] = F ? [onLine(F, [ax, ay])[0] / F.L, onLine(F, [bx, by])[0] / F.L, (bot - b0) / (z1 - b0), (top - b0) / (z1 - b0)] : [along, along + len / BAY, (bot - b.base) / STOREY, (top - b.base) / STOREY];
+      const [u0, u1, v0, v1] = F ? [onLine(F, [ax, ay])[0] / F.L, onLine(F, [bx, by])[0] / F.L, (bot - b0) / (z1 - b0), (top - b0) / (z1 - b0)] : [along, along + len / BAY, (bot - org) / step, (top - org) / step];
       P0.push(A.x, A.y, A.z, B.x, B.y, B.z, Cc.x, Cc.y, Cc.z, A.x, A.y, A.z, Cc.x, Cc.y, Cc.z, D.x, D.y, D.z);
       T0.push(u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1);
     }
