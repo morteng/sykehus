@@ -153,6 +153,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
     input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
+    /* «Nytt forslag» (nytt-forslag.js) hands over its first turn here: the text goes in as if typed, then is sent */
+    document.addEventListener("sykehus:anton-say", e => { if (!e.detail?.text) return; input.value = e.detail.text; input.oninput(); sendIt(); });
     form.onsubmit = e => { e.preventDefault(); if (running && !input.value.trim()) json("api/anton/stopp"); else sendIt(); };
     async function sendIt(drawn) {
       const text = drawn ? drawn.text : input.value.trim(); if (!text) return false;

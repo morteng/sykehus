@@ -909,7 +909,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (a.copy || a.fresh) {   // «Ny kopi»: a second alternative from this one; «Nytt forslag»: one from the before. It becomes the one worked on
           /* named after its source, «Ny fasade (kopi)», or «Nytt forslag» (Morten 21:19Z: «Min etter 3 is not a good title»); renamed in the card */
           const from = a.copy ? ownVersion(String(a.copy), req) : null, taken = new Set(versions.list({ owner: me, viewer: me }).map(x => x.title));
-          const stem = from ? `${from.title.replace(/ \(kopi( \d+)?\)$/, "")} (kopi` : "Nytt forslag", name = k => from ? `${stem}${k > 1 ? ` ${k}` : ""})` : `${stem}${k > 1 ? ` ${k}` : ""}`;
+          const own = typeof a.title === "string" ? a.title.replace(/\s+/g, " ").trim().slice(0, 100) : "",   // «Nytt forslag» (U3667): the name typed in the dialog; empty keeps the plain one
+            stem = own || (from ? `${from.title.replace(/ \(kopi( \d+)?\)$/, "")} (kopi` : "Nytt forslag"), name = k => from && !own ? `${stem}${k > 1 ? ` ${k}` : ""})` : `${stem}${k > 1 ? ` ${k}` : ""}`;
           let k = 1; while (taken.has(name(k))) k++;
           const v = versions.create(me, name(k).slice(0, 120), from ? structuredClone(from.edits) : []);
           for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
