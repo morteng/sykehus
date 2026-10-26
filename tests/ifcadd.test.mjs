@@ -25,7 +25,7 @@ test("GlobalIds are 22 characters of IFC's alphabet, the same for the same key; 
 test("the after's IFC: a new building with its storeys and body, a pyramid, balconies on their wing, a wing renamed, one torn down", () => {
   let ed = add([], { kind: "volume", id: "nKontor", name: "Kontorbygg", shape: "box", from: [-46, -62], to: [-16, -62], width: 14, height: 12.8, storeys: 4, use: "kontor", why: "test" });
   ed = add(ed, { kind: "volume", id: "nPyr", name: "Drivhus", shape: "pyramid", from: [20, -90], to: [32, -90], width: 10, height: 7, material: "glass" });
-  ed = add(ed, { kind: "balconies", wing: "Sentralblokka", side: "S", bay: 3.6, gap: 1.2 });
+  ed = add(ed, { kind: "balconies", wing: "Sentralblokka", face: 210, bay: 3.6, gap: 1.2 });
   ed = add(ed, { kind: "wing", wing: "Midtfløy", field: "name", value: "Midtfløyen (bevares)", why: "test" });
   ed = add(ed, { kind: "demolish", building: "Østfløy" });
   const { text, counts } = ifcOf(ed), p = parseIfc(text);

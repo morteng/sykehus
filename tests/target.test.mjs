@@ -51,7 +51,7 @@ test("try_change: a version id in draft goes into that version, saved (the 21:05
 test("try_change names a missing field, per kind", async () => {
   const r = (await call("try_change", { edits: [{ kind: "balconies", why: "x" }, { kind: "volume", shape: "box", why: "x" }, { kind: "taket" }, { kind: "demolish", building: "Østfløy", side: "N" }], include_screenshot: false })).structuredContent;
   assert.equal(r.added.length, 0);
-  assert.match(r.rejected[0].error, /balconies mangler wing, side/); assert.match(r.rejected[1].error, /volume mangler from, to, width/);
+  assert.match(r.rejected[0].error, /balconies mangler wing \(/);   // side or face (U3615): neither required alone assert.match(r.rejected[1].error, /volume mangler from, to, width/);
   assert.match(r.rejected[2].error, /kind «taket» finnes ikke/); assert.match(r.rejected[3].error, /demolish tar ikke side/);
 });
 
@@ -118,7 +118,7 @@ test("show_building: «NØ» as the log had it (pm 21:41Z ×3), and every other 
 });
 
 test("try_change and look draw a picture with balconies in the after (22:09Z: «look: Cannot read properties of undefined (reading '0')»)", async () => {
-  const r = await call("try_change", { target: D, edits: [{ kind: "balconies", wing: "Sentralblokka", side: "S", why: "test" }, { kind: "volume", name: "Paviljong", shape: "box", from: [-60, -80], to: [-45, -80], width: 8, height: 4, why: "test" }] }, {});
+  const r = await call("try_change", { target: D, edits: [{ kind: "balconies", wing: "Sentralblokka", face: 210, why: "test" }, { kind: "volume", name: "Paviljong", shape: "box", from: [-60, -80], to: [-45, -80], width: 8, height: 4, why: "test" }] }, {});
   assert.ok(!r.isError, text(r)); assert.ok(r.content.some(c => c.type === "image"), "the picture is there");
   const l = await call("look", { target: D, focus: "Sentralblokka", from_direction: "S" }, {}); assert.ok(!l.isError, text(l)); assert.equal(l.content[0].type, "image");
 });

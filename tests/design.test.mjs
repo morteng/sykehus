@@ -19,8 +19,8 @@ test("demolish alle and keep Sentralblokka", () => {
   assert.ok(m.floors.reduce((a, f) => a + f.rooms.length, 0) < floors.reduce((a, f) => a + f.rooms.length, 0), "the rooms in what is gone go with it");
 });
 
-test("balconies on the south facades, in bays", () => {
-  const m = applyEdits(site, floors, add([], { kind: "balconies", wing: "Sentralblokka", side: "S", bay: 3.6, gap: 1.2 }));
+test("balconies on the south end (face 210°: «S» alone is asked, U3615), in bays", () => {
+  const m = applyEdits(site, floors, add([], { kind: "balconies", wing: "Sentralblokka", face: 210, bay: 3.6, gap: 1.2 }));
   const b = m.site.added[0];
   assert.equal(b.kind, "balconies"); assert.ok(b.count > 10);
   for (const p of b.parts.filter(p => p.role === "slab")) assert.ok(Math.abs(Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]) - 3.6) < 0.01);
@@ -165,7 +165,7 @@ test("the lot line: the slope stops there and the ground outside stays (a wall),
 });
 
 test("U3628: a balcony that would stand inside the low wing in front is not made, and the result says how many and why", () => {
-  const e = { kind: "balconies", wing: "sentralblokka", side: "Ø", depth: 1.5, railing: "glass", from_storey: "2. etasje", bay: 4, gap: 0.6 };
+  const e = { kind: "balconies", wing: "sentralblokka", side: "Ø", depth: 1.5, railing: "glass", from_storey: "2. etasje", bay: 4, gap: 0.6 };   // as vHKH-fbTh has it (made before U3615)
   const b = applyEdits(site, floors, [e]).site.added[0], at = k => b.parts.filter(p => p.role === "slab" && p.profile[3][1] === k).length;
   assert.deepEqual([at(20.28), at(24.24), at(28.01)], [10, 10, 21], "storeys 2 and 3 lose the bays over the side wing; storey 4 is over its roof");
   assert.deepEqual(b.skipped, [{ by: "Sentralblokka, sidebygg", count: 22 }]);
@@ -180,12 +180,23 @@ test("U3624: one balcony per window: centred on the window bays the facade is dr
   assert.deepEqual(windowsOn("tower", [0, 0, 10, 0]), [[1.16, 2.49], [3.66, 4.99], [6.16, 7.49], [8.66, 9.99]]);
   assert.deepEqual(windowsOn("tower", [1, 0, 11, 0]), [[0.16, 1.49], [2.66, 3.99], [5.16, 6.49], [7.66, 8.99]], "counted from the line's origin, not the wall's end");
   assert.equal(BAY, 2.5); assert.equal(WINDOWS.tower.length, 2);
-  const e = checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", side: "Ø", windows: true, depth: 1.5, from_storey: "5" });
+  const e = checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 120, windows: true, depth: 1.5, from_storey: "5" });
   const a = applyEdits(site, floors, [e]).site.added[0], slabs = a.parts.filter(p => p.role === "slab");
   const w = Math.hypot(slabs[0].axis[1][0] - slabs[0].axis[0][0], slabs[0].axis[1][1] - slabs[0].axis[0][1]);
   assert.ok(Math.abs(w - (2.49 - 1.16 + 0.6)) < 0.01, `as wide as the windows and 0,3 m each side (${w})`);
   const c = q => [(q.axis[0][0] + q.axis[1][0]) / 2, (q.axis[0][1] + q.axis[1][1]) / 2];
   assert.ok(Math.abs(Math.hypot(c(slabs[1])[0] - c(slabs[0])[0], c(slabs[1])[1] - c(slabs[0])[1]) - BAY) < 0.01, "the next one a bay along");
   assert.equal(a.window_bays, 38); assert.match(a.window_say, /^Én balkong per vindu: 38 vindusakser \(hver 2,5 m\) mot Ø, 380 balkonger i alt\.$/);
-  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", side: "Ø", windows: true, bay: 3 }), /høyst 2,4 m/);
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 120, windows: true, bay: 3 }), /høyst 2,4 m/);
+});
+
+test("U3614/U3615: «sør» on the turned Sentralblokka is refused with both faces named; face picks one, and the result says each facade used", () => {
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", side: "S" }),
+    /^Error: Sentralblokka står skjevt: mot sør vender fasaden mot 210° \(30° fra sør, 31 m lang\) og fasaden mot 120° \(60° fra sør, 165 m lang\)\. Si hvilken med face: 210 eller 120/);
+  const e = checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 210, from_storey: "2", to_storey: "14", depth: 1.5, bay: 4 });
+  assert.equal(e.side, "S"); assert.equal(e.face, 210);
+  const a = applyEdits(site, floors, [e]).site.added[0];
+  assert.deepEqual(a.facades.map(f => [f.bearing, f.length_m, f.storeys, f.count]), [[210, 31, 13, 38]]);
+  assert.equal(a.facade_say, "Balkonger på fasaden mot 210° (31 m): 2–3 per etasje på 13 etasjer, 38 i alt.");
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 170 }), /ingen fasade som vender 170°\. Fasadene vender 120° \(165 m\), 300° \(154 m\), 30° \(44 m\), 210° \(31 m\)/);
 });
