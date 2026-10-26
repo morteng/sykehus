@@ -72,7 +72,7 @@ export function checkEdit(site, floors, e) {
     }
     default: {
       const d = checkDesign(site, e, str); if (d) return d;
-      throw new Error(`Ukjent slags endring «${e.kind}»: level, wing, room, note, demolish, restore, balconies, volume eller reshape`);
+      throw new Error(`Ukjent slags endring «${e.kind}»: level, wing, room, note, demolish, restore, balconies, volume, paint, terrain eller reshape`);
     }
   }
 }
