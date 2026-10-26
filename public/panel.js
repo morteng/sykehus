@@ -4,6 +4,7 @@
    the #grab drag), here without Fab's design state; the rules are Fab's laser.css as-is.
 
    onChange(tab) runs after each change of tab, fold or sheet height, so the pill can go where the chat is. */
+import { split } from "./kit/split.js";
 const $ = id => document.getElementById(id);
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { } } };
 
@@ -64,6 +65,11 @@ export function createPanel({ start = null, onChange = () => {} } = {}) {
       $("grab").addEventListener("click", ev => ev.stopImmediatePropagation(), { once: true, capture: true });
     });
   }
+  /* the width of the panel on a wide screen (U3653): the kit's handle (kit/split.js) on its left edge, remembered per browser; the 3D
+     view follows through its own size observer, as it does when the panel folds. A phone's sheet has none. */
+  const grip = split({ panel: side, edge: "start", min: 300, maxShare: 0.6, step: 16, key: "sykehus-panelbredde", prop: "--side-w", name: "Panelets bredde",
+    title: "Dra for å endre bredden på panelet (← →). Dobbeltklikk setter den tilbake", enabled: () => !phone.matches, onChange: () => onChange(tab) });
+  phone.addEventListener("change", () => grip.refresh());
   const t0 = start ?? store.get("sykehus-fane") ?? "chat";
   show(t0, { quiet: true });
   return { show, reveal, badge, open, fold, get tab() { return tab; }, get phone() { return phone.matches; }, peek(html) { $("peekhead").innerHTML = html; } };

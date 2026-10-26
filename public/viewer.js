@@ -13,6 +13,7 @@
    The plan view looks straight down, north up, without perspective, so a scale bar holds. */
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
+import { fovFor, ratio } from "./renderkit/photo.js";
 import { ease } from "./renderkit/camera.js";
 import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
 import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
@@ -1027,6 +1028,32 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     sunL.intensity = s.elevation > 0 ? 2.2 : 0.15; dirty = true; return s;
   }
 
+  /* the camera for one picture (snapshot): two-point views (øyehøyde, froskeperspektiv) look level and the frame is
+     shifted up the lens (the projection's offset), not tilted, so verticals stay vertical; fugleperspektiv looks down 30-45°;
+     aksonometri and fasade are parallel projections (30° turned, and square on) */
+  function shotCamera(shot, asp) {
+    const t = new THREE.Vector3(O.x, O.h, -O.y), vp = shot.viewpoint;
+    if (mode === "section" && vp === "fasade") {   // a drawn facade or section: already square on; its frame in the picture's shape
+      const c = ortho.clone(), half = (ortho.top - ortho.bottom) / 2; Object.assign(c, { left: -half * asp, right: half * asp, top: half, bottom: -half }); c.updateProjectionMatrix(); return c;
+    }
+    const parallel = (yaw, pitch, half) => {
+      const c = new THREE.OrthographicCamera(-half * asp, half * asp, half, -half, 1, 4000), cp = Math.cos(pitch);
+      c.position.set(t.x + 1500 * cp * Math.sin(yaw), t.y + 1500 * Math.sin(pitch), t.z + 1500 * cp * Math.cos(yaw)); c.up.set(0, 1, 0); c.lookAt(t); return c;
+    };
+    if (vp === "aksonometri") return parallel(Math.PI / 6, mode === "plan" ? 0.62 : 0.52, O.dist * 0.36);
+    if (vp === "fasade") return parallel(Math.round(O.yaw / (Math.PI / 2)) * Math.PI / 2, 0, O.dist * 0.3);
+    const fov = fovFor(shot.mm, [asp, 1]), c = new THREE.PerspectiveCamera(fov, asp, 1, 4000);
+    if (vp === "øyehøyde" || vp === "froskeperspektiv") {
+      const d = Math.min(O.dist, vp === "froskeperspektiv" ? 160 : 220), ex = t.x + d * Math.sin(O.yaw), ez = t.z + d * Math.cos(O.yaw), ey = ground(ex, -ez) - base + (shot.eye || 1.6);
+      c.position.set(ex, ey, ez); c.lookAt(t.x, ey, t.z); c.updateMatrixWorld();   // level: no tilt
+      const shift = Math.max(-0.95, Math.min(0.95, Math.tan(Math.atan((t.y - ey) / d)) / Math.tan(fov * Math.PI / 360)));
+      c.projectionMatrix.elements[9] = shift; c.projectionMatrixInverse.copy(c.projectionMatrix).invert();   // the target at the middle of the frame, by a shift of the lens
+      return c;
+    }
+    const pitch = Math.max(0.52, Math.min(0.79, O.pitch)), cp = Math.cos(pitch);
+    c.position.set(t.x + O.dist * cp * Math.sin(O.yaw), t.y + O.dist * Math.sin(pitch), t.z + O.dist * cp * Math.cos(O.yaw)); c.lookAt(t); return c;
+  }
+
   /* ---------- drawing ---------- */
   function size() { const w = container.clientWidth || 600, h = container.clientHeight || 400; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); place(); }
   new ResizeObserver(size).observe(container); size(); place();
@@ -1111,6 +1138,17 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     kit() { return { THREE, scene, camera: () => camera, el, P, ground, groupOf, redraw: () => { dirty = true; } }; },
     /* where a site point at a kote is on the screen, and whether it is in front of the camera */
     project(p, kote) { const v = P(p, kote).project(camera); return [(v.x + 1) / 2 * container.clientWidth, (1 - v.y) / 2 * container.clientHeight, v.z <= 1]; },
-    snapshot() { land(); renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); },
+    /* a picture of the view (JPEG). With a shot (renderkit photo.js shotOf: viewpoint, lens, aspect, eye height) the picture is
+       taken by a camera of its own, built from the view's place and direction, in the shot's picture shape; the live camera and
+       the canvas are as they were after (U3652) */
+    snapshot(shot) {
+      land();
+      if (!shot) { renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); }
+      const [aw, ah] = ratio(shot.aspect), asp = aw / ah, LONG = 1280, W = aw >= ah ? LONG : Math.round(LONG * asp), H = aw >= ah ? Math.round(LONG / asp) : LONG;
+      const sc = shotCamera(shot, asp);
+      renderer.setSize(W, H, false); renderer.render(scene, sc);
+      const url = renderer.domElement.toDataURL("image/jpeg", 0.85);
+      size(); dirty = true; return url;
+    },
   };
 }

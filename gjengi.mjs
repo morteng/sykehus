@@ -19,6 +19,8 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { lightLine } from "./public/renderkit/sunpick.js";
+import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/renderkit/photo.js";
 
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
@@ -31,12 +33,12 @@ const PROMPT = "This image is a view of a 3D model of a site in Bragernes, Dramm
   + "Where the model ends, keep the background as plain sky or the same flat ground that is there; do not invent a landscape, a skyline or a town behind it. "
   + "Materials: the existing hospital wings in concrete, brick and render; new buildings in the material their colour suggests; asphalt, kerbs, grass. "
   + "Planting: trees and shrubs only where the model has trees or green areas. People: a few small pedestrians on the paths and pavements. "
-  + "Natural daylight, a Norwegian summer day, no text or labels.";
+  + "No text or labels.";   // the light is said apart, from the view's sun (lightLine)
 const WISH = " The person also asks for this; it may change only materials, light, people and planting, never the geometry: ";
 
 export function createRenderings({ SECURITY = {}, readJson, login, versions, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
   key = process.env.SYKEHUS_OPENROUTER_API_KEY || "", model = process.env.SYKEHUS_RENDER_MODEL || "google/gemini-3.1-flash-image", cap = +(process.env.SYKEHUS_RENDER_CAP_USD || 20),
-  size = process.env.SYKEHUS_RENDER_SIZE || "1K", fetchImpl = fetch, now = () => new Date() } = {}) {
+  size = process.env.SYKEHUS_RENDER_SIZE || DEFAULT_SIZE, fetchImpl = fetch, now = () => new Date() } = {}) {
   if (!dir) return null;
   mkdirSync(dir, { recursive: true });
   const idx = join(dir, "index.json");
@@ -51,18 +53,20 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
   /* what the next picture costs, before it is made: the dearest of the last five this model made (OpenRouter's own
      figures), else its listed price for a picture of about 1 300 tokens out and in; rounded up to the cent */
   let listed = null, listedAt = 0;
-  async function listPrice() {
-    if (listed != null && Date.now() - listedAt < 864e5) return listed;
-    try {
-      const j = await (await fetchImpl("https://openrouter.ai/api/v1/models?output_modalities=image", { signal: AbortSignal.timeout(10000) })).json();
-      const p = (j.data || []).find(m => m.id === model)?.pricing || {};
-      listed = 1300 * (+p.image_output || +p.completion || 0) + 1300 * (+p.image || +p.prompt || 0) + 300 * (+p.prompt || 0); listedAt = Date.now();
-    } catch { listed ??= 0.1; }
-    return listed;
+  async function listPrice(sz) {   // the model's listed price for a picture of this size; the pricing read once a day
+    if (listed == null || Date.now() - listedAt >= 864e5) {
+      try {
+        const j = await (await fetchImpl("https://openrouter.ai/api/v1/models?output_modalities=image", { signal: AbortSignal.timeout(10000) })).json();
+        listed = (j.data || []).find(m => m.id === model)?.pricing || {}; listedAt = Date.now();
+      } catch { listed ??= null; }
+    }
+    if (!listed) return 0.1 * SIZES[sz].tokens / SIZES["1K"].tokens;
+    const p = listed; return SIZES[sz].tokens * (+p.image_output || +p.completion || 0) + 1300 * (+p.image || +p.prompt || 0) + 300 * (+p.prompt || 0);
   }
-  async function estimate() {
-    const last = all.filter(r => r.model === model && r.cost_usd > 0).slice(-5).map(r => r.cost_usd);
-    const e = last.length ? Math.max(...last) : await listPrice();
+  async function estimate(sz = size) {
+    sz = SIZES[sz] ? sz : size;
+    const last = all.filter(r => r.model === model && (r.size || "1K") === sz && r.cost_usd > 0).slice(-5).map(r => r.cost_usd);
+    const e = last.length ? Math.max(...last) : await listPrice(sz);
     return Math.ceil(Math.max(e, 0.01) * 100) / 100;
   }
   const money = v => Math.round(v * 100) / 100;
@@ -74,26 +78,29 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     return null;
   }
   const pub = r => ({ id: r.id, at: r.at, by: r.by, fav: !!r.fav, wish: r.wish || null, cost_usd: r.cost_usd, url: `api/gjengi/${r.id}.${r.ext}`, download: `api/gjengi/${r.id}.${r.ext}?last-ned` });
-  const state = async who => ({ signed_in: !!who, on: !!key, model, estimate_usd: await estimate(), month_usd: money(spent()), cap_usd: cap, left_usd: money(Math.max(0, cap - spent() - onWay())) });
+  const state = async who => ({ signed_in: !!who, on: !!key, model, estimate_usd: await estimate(), default_size: size, sizes: await Promise.all(Object.entries(SIZES).map(async ([id, z]) => ({ id, name: z.no, estimate_usd: await estimate(id) }))), month_usd: money(spent()), cap_usd: cap, left_usd: money(Math.max(0, cap - spent() - onWay())) });
 
   async function make(body, who) {
     const shot = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image || ""));
     if (!shot) throw Object.assign(new Error("Bildet av visningen mangler."), { status: 400 });
     const bytes = Buffer.from(shot[2], "base64"); if (bytes.length < 1024 || bytes.length > MAX_IN) throw Object.assign(new Error("Bildet av visningen er for lite eller for stort."), { status: 400 });
     const wish = body.wish == null ? "" : String(body.wish).trim().slice(0, 300);
-    const est = await estimate();
+    const sz = SIZES[body.size] ? body.size : size, est = await estimate(sz);
     /* the cap, before anything is sent: the month, what is on its way, and this one */
     if (spent() + onWay() + est > cap + 1e-9) throw Object.assign(new Error(`Månedens grense for bilder er nådd: $${money(spent()).toFixed(2)} av $${cap.toFixed(2)} er brukt${onWay() ? `, og $${money(onWay()).toFixed(2)} er under arbeid` : ""}. Et nytt bilde koster omtrent $${est.toFixed(2)}. Grensen går tilbake den 1. neste måned.`), { status: 402 });
     if (body.shown_usd != null && est > +body.shown_usd + 0.005) throw Object.assign(new Error(`Prisen er endret: et bilde koster nå omtrent $${est.toFixed(2)}. Se over og prøv igjen.`), { status: 409, estimate_usd: est });
     /* the aspect nearest the view's (a JPEG's or PNG's size from its header) */
     const dim = shot[1] === "png" ? [bytes.readUInt32BE(16), bytes.readUInt32BE(20)] : jpegSize(bytes);
-    const ar = dim ? ASPECTS.map(([k, r]) => [k, Math.abs(Math.log(dim[0] / dim[1] / r))]).sort((a, b) => a[1] - b[1])[0][0] : "16:9";
+    const near = dim ? ASPECTS.map(([k, r]) => [k, Math.abs(Math.log(dim[0] / dim[1] / r))]).sort((a, b) => a[1] - b[1])[0][0] : "16:9";
+    /* the camera (renderkit photo.js): the viewpoint and look the page took the picture with, said to the model in one line; the shape asked for is the picture's */
+    const cam = VIEWPOINTS[body.viewpoint] ? shotOf({ viewpoint: body.viewpoint, look: body.look, lens: body.lens, eyeh: body.eyeh }) : null;
+    const ar = cam && ASPECTS.some(([k]) => k === cam.aspect) ? cam.aspect : near;
     const google = model.startsWith("google/");
     pending.set(who, est);
     try {
       const r = await fetchImpl(URL_, { method: "POST", signal: AbortSignal.timeout(120000), headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "http-referer": "https://sykehus.gulden.no", "x-title": "Sykehustomta" },
-        body: JSON.stringify({ model, modalities: google ? ["image", "text"] : ["image"], provider: ROUTING, usage: { include: true }, image_config: { aspect_ratio: ar, image_size: size },
-          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + (wish ? WISH + wish : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
+        body: JSON.stringify({ model, modalities: google ? ["image", "text"] : ["image"], provider: ROUTING, usage: { include: true }, image_config: { aspect_ratio: ar, image_size: sz },
+          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + " " + lightLine(body) + (cam ? " Camera and look (these override the light and materials wording above where they differ; the geometry stays): " + promptLine(cam) : "") + (wish ? WISH + wish : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
       const j = await r.json().catch(() => ({}));
       const cost = Number.isFinite(+j.usage?.cost) ? +j.usage.cost : null;
       const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url || "";
@@ -106,9 +113,9 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
       }
       const ext = pic[1] === "jpeg" ? "jpg" : pic[1], id = newId(), out = Buffer.from(pic[2], "base64");
       writeFileSync(join(dir, `${id}.${ext}`), out);
-      const rec = { id, at: now().toISOString(), by: who, work: body.work, model, ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: j.provider || null };
+      const rec = { id, at: now().toISOString(), by: who, work: body.work, model, size: sz, ...(cam ? { viewpoint: cam.viewpoint, look: cam.look } : {}), ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: j.provider || null };
       all.push(rec); save();
-      console.log(`gjengi ${id} ${body.work} ${who} $${(cost ?? est).toFixed(4)}${cost == null ? " (estimert)" : ""} ${j.provider || ""} ${ar} ${out.length} B`);
+      console.log(`gjengi ${id} ${body.work} ${who} $${(cost ?? est).toFixed(4)}${cost == null ? " (estimert)" : ""} ${j.provider || ""} ${ar} ${sz} ${cam ? cam.viewpoint + "/" + cam.look : ""} ${out.length} B`);
       return rec;
     } finally { pending.delete(who); }
   }

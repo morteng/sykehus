@@ -2,14 +2,9 @@
    newest change back, Shift-Cmd-Z, Ctrl-Shift-Z or Ctrl-Y puts it back. In a text field the keys are the browser's own.
    The changes taken back are kept here, in this page only; a new change, or the page shown again after another
    tab's or Anton's, empties them. */
-export function keyAct(e) {
-  if (e.defaultPrevented || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return null;
-  const k = String(e.key).toLowerCase(), mod = e.metaKey || e.ctrlKey;
-  if (!mod) return k === "backspace" || k === "delete" ? "delete" : null;
-  if (k === "z") return e.shiftKey ? "redo" : "undo";
-  if (k === "y" && e.ctrlKey && !e.metaKey && !e.shiftKey) return "redo";
-  return null;
-}
+import { editKey } from "./kit/keys.js";
+/* the key map is the kit's (editKey); the redo stack below is this page's */
+export const keyAct = editKey;
 
 /* deps: edits() the draft's changes now (null when there is no draft of one's own), undo(n, expect) true when it went
    through, put(edit) re-adds one change, true when it went through, say(text), name(edit), riv() the card's act, true

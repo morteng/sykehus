@@ -92,7 +92,7 @@ g-collection{display:block}
 g-item{position:relative;display:block;color:var(--text)}
 g-item[hidden]{display:none}
 .g-title{color:var(--text);font-weight:600;text-decoration:none;overflow-wrap:anywhere}
-.g-title::after{content:"";position:absolute;inset:0;z-index:0}
+a.g-title::after{content:"";position:absolute;inset:0;z-index:0}
 .g-pic{overflow:hidden;background:var(--tile-ground)}
 .g-pic img{display:block;width:100%;height:100%;object-fit:cover}
 .g-pic--contain img{object-fit:contain}
@@ -113,6 +113,14 @@ g-item[hidden]{display:none}
   background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;text-decoration:none;white-space:nowrap;cursor:pointer}
 .g-new:hover{filter:brightness(1.08)}
 .g-new:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+.g-meta[data-num],.g-head>[data-num]{text-align:right;font-variant-numeric:tabular-nums}
+.g-act{position:relative;z-index:1;display:flex;justify-content:flex-end;min-width:0}
+.g-act__do{display:inline-flex;align-items:center;min-height:var(--control-h);padding:0 var(--sp-3);border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--panel-2);color:var(--text);font:inherit;font-size:var(--fs-sm);text-decoration:none;white-space:nowrap;cursor:pointer}
+.g-act__do:hover{border-color:var(--border-strong)}
+.g-act__do[data-tone="pri"]{border-color:var(--accent);background:var(--accent);color:var(--on-accent);font-weight:600}
+.g-act__do:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+.g-act:empty{display:none}
 .g-meta,.g-when{color:var(--muted);font-size:var(--fs-sm);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .g-group{grid-column:1/-1;margin:var(--sp-3) 0 0;font-size:var(--fs-sm);font-weight:600;color:var(--muted);text-transform:var(--label-transform);letter-spacing:var(--label-tracking)}
 .g-head{display:none}
@@ -133,6 +141,8 @@ g-collection[data-view="cards"] .g-meta[data-card]{display:block;flex:0 0 100%}
 g-collection[data-view="cards"] .g-meta[data-card]:empty{display:none}
 g-collection[data-view="cards"] .g-when{flex:1 1 auto}
 g-collection[data-view="cards"] .g-more{margin-left:auto}
+g-collection[data-view="cards"] .g-act{flex:0 0 100%;justify-content:flex-start;flex-wrap:wrap;gap:var(--sp-2)}
+g-collection[data-view="cards"] .g-act__do{max-width:100%;white-space:normal;padding-block:var(--sp-1)}      /* a long label wraps inside the card, a second action goes under it */
 
 /* list */
 g-collection[data-view="list"] .g-head,g-collection[data-view="list"] g-item{display:grid;grid-template-columns:var(--g-cols-wide);align-items:center;gap:0 var(--sp-3)}
@@ -144,6 +154,8 @@ g-collection[data-view="list"] .g-pic{width:3rem;aspect-ratio:var(--card-ratio);
 g-collection[data-view="list"] .g-tile__text{display:none}
 g-collection[data-view="list"] .g-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 g-collection[data-view="list"] .g-more{min-width:0}
+g-collection[data-view="list"] .g-act{flex-wrap:wrap;gap:var(--sp-1)}
+g-collection[data-view="list"] .g-act__do{max-width:100%;white-space:normal;padding-block:var(--sp-1)}      /* every row's action column is one width (each row is its own grid), a long label wraps in it */
 
 @media (min-width: 64rem) and (max-width: 89.99rem) {
   g-collection[data-view="list"] .g-head,g-collection[data-view="list"] g-item{grid-template-columns:var(--g-cols-desktop)}
@@ -164,12 +176,13 @@ g-collection[data-view="list"] .g-more{min-width:0}
   g-collection[data-view="list"] .g-status{grid-column:3}
   g-collection[data-view="list"] .g-when{grid-column:2}
   g-collection[data-view="list"] .g-more{grid-column:3}
+  g-collection[data-view="list"] .g-act{grid-column:2 / -1;justify-content:flex-start}
   .g-empty{border:0;padding:var(--sp-4) 0}
 }
 /* a touch target is at least 44 CSS px (WCAG 2.5.5) even when the root size makes --tap a little less */
 @media (hover: none), (pointer: coarse) {
   .g-icon-button,.g-search__clear{min-width:max(var(--tap), 44px);min-height:max(var(--tap), 44px)}
-  .g-seg>a,.g-seg>button,.g-search input,.g-sort select,.g-menu button,.g-new{min-height:max(var(--tap), 44px)}
+  .g-seg>a,.g-seg>button,.g-search input,.g-sort select,.g-menu button,.g-new,.g-act__do{min-height:max(var(--tap), 44px)}
 }
 @media (prefers-reduced-motion: reduce) {
   [class^="g-"], [class*=" g-"], g-collection, g-item { transition: none; animation: none; }
@@ -185,3 +198,12 @@ g-collection[data-view="list"] .g-more{min-width:0}
 :root[data-device="tv"] .g-search,:root[data-device="tv"] .g-view{display:none}
 :root[data-device="tv"] .g-icon-button{min-width:max(var(--tap), 44px);min-height:max(var(--tap), 44px)}
 :root[data-device="tv"] .g-title:focus-visible{outline-color:var(--focus-loud)}
+/* .g-split: a panel's resize handle (split.ts) */
+.g-split{position:absolute;top:0;bottom:0;width:9px;cursor:col-resize;z-index:5;touch-action:none}
+.g-split.start{left:-4px}
+.g-split.end{right:-4px}
+.g-split::after{content:"";position:absolute;left:3px;top:50%;width:3px;height:36px;margin-top:-18px;border-radius:2px;background:var(--border);opacity:0;transition:opacity .15s}
+.g-split:hover::after,.g-split:focus-visible::after,.g-split.sizing::after{opacity:1;background:var(--accent)}
+.g-split:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.g-split[hidden]{display:none}
+body.g-sizing{user-select:none;cursor:col-resize}
