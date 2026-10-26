@@ -22,6 +22,7 @@ import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, 
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc } from "./bim.mjs";
+import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
 import { createSiteFacts } from "./sitefacts.mjs";
 import { readPart } from "./partmerge.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
@@ -479,6 +480,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             }
             d.edits.push(c); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (replaced) ok[ok.length - 1] = { ...ok[ok.length - 1], replaced }; if (placed) ok[ok.length - 1] = { ...ok[ok.length - 1], placed }; if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
+        /* U3678: the building rules held against what this call put in (a part's own measures come with it) */
+        const was = new Set(ok.length ? applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site.added?.map(x => x.id) : []);
+        const tried = new Set([...(m.site.added || []).map(x => x.id).filter(id => id && !was.has(id)), ...ok.filter(e => e.kind === "reshape" && e.id).map(e => e.id)]);
+        const checks = tried.size ? checkRules(m.site, { ids: tried, printed: Object.fromEntries((m.site.added || []).filter(x => tried.has(x.id)).map(x => [x.id, ok.find(e => e.worker?.printed && e.name === x.name)?.worker.printed]).filter(([, p]) => p)) }) : [];
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
         /* and the slopes of a new building's pad onto those ways (U3566 d) */
         const wayRings = ways && ((m.site.landscape || []).some(l => l.kind === "surface") || (m.site.added || []).some(a => a.ground?.reach_m)) ? (await ways()).filter(w => !(m.site.roads_removed || []).some(r => r.id === w.id)) : [];   // a removed road section is no way (U3543)
@@ -486,9 +491,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
         let out;
-        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...named, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: true }; }
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...named, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: true }; }
         else { d.t = Date.now(); keepDraft(d);
-          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), saved: false,
+          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
         if (a.include_screenshot === false || !ok.length) return out;
         /* the picture of what it made (the FreeCAD MCP's pattern): aimed at the last new or changed building, else the whole site */
@@ -658,6 +663,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
         try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link }); return { sent: true, wish: w.id, status: w.status, receipt: "Sendt. Morten ser det.", see_them: `${originOf(req)}/ (Ønsker)` }; }
         catch (e) { throw toolErr(e.message); } } },
+    { name: "check_design", tgt: "read", title: "Sjekk mot byggereglene", ro: true, schema: S({ target: TARGET, draft: OLD }),
+      description: "Holds the after (a version or draft) against the building rules (TEK17, rules/tek17.json) that its parts and its step-free entrance can answer (U3678): a stair's rise and tread (2 × opptrinn + inntrinn), its width and handrail, a railing's or balcony's railing height where there is a fall, a balcony door's size, a ramp's slope. Each row: the rule, its §, the thing it is about, status (ok, brudd, or ikke målt), the value, the limit and a plain sentence. «ikke målt» is never ok: the model does not hold that number. A row with verify: true is a rule or number not yet read against the law text: say «etter min lesning av TEK17» and that it is to be confirmed, never that the design is approved. Nothing is changed. Only what the rules can measure is listed: a clean list is not a building permit.",
+      run: async (a, req) => { const m = model(a.draft, req), rows = checkRules(m.site); return { checks: rows, ...checkSummary(rows), counted: rows.length, note: rows.length ? "Dette er en lesing av forslaget mot de reglene appen kan måle (TEK17), ikke en godkjenning. «verify» betyr at regelen ikke er lest mot lovteksten ennå." : "Forslaget har ingen deler eller rampe som reglene kan måle ennå (trapp, rekkverk, balkong med dør, trinnfri inngang)." }; } },
     { name: "list_parts", title: "Ferdige deler", ro: true, schema: S({}),
       description: "The ready-made BIM parts the worker builds (U3620): each one's name, what it is, its settings with default and limits, and the IFC it makes (property sets, quantities, materials). Look here FIRST when the person asks for a swimming pool basin, a stair, a railing, a balcony or a greenhouse (a polygon of 3–8 sides, or a geodesic dome): place one with try_change kind part, before you write any geometry or script. An outdoor stair, also one down from a terrace to the garden, is the stair part: from = its foot in the garden, to = towards the terrace, params.height = the drop (see each part's example).",
       run: async () => { const ps = await listParts(); return { parts: Object.entries(ps).map(([id, v]) => ({ part: id, name: v.no, what: v.say, engine: v.engine, makes: v.classes, settings: v.params })), use: "try_change kind part: part, from, to, params (the settings you want; the others take their defaults)", examples: { stair: "A stair down from a terrace 1.2 m over the garden: {kind: \"part\", part: \"stair\", from: <its foot in the garden>, to: <towards the terrace edge>, params: {height: 1.2, width: 1.2}}. The flight climbs from `from` to `to`: its foot stands on the ground at from, its top is `height` higher. Do not write a script for a stair." } }; } },
@@ -813,7 +821,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     read_document: O({ id: { type: ["string", "number"] }, title: "string", pages: "array", next_page: { type: ["number", "null"] } }),
     list_documents: O({ documents: "array" }),
     try_change: O({ added: { type: "array", description: "The changes that went in, as checked" }, rejected: { type: "array", description: "{index, error} for each refused" }, ids: { type: "object", description: "An asked id that was taken: the id each got" },
-      changes_in_draft: "number", after: "object", fit: "array", saved: "boolean", note: "string", ...TARGET_OUT }, "What went in and what was refused, and where"),
+      changes_in_draft: "number", after: "object", fit: "array", checks: { type: "array", description: "The building rules (TEK17) held against what this call put in: {rule, section, thing, status: ok | brudd | ikke målt, value, limit, said}. Say a «brudd» to the person" }, saved: "boolean", note: "string", ...TARGET_OUT }, "What went in and what was refused, and where"),
+    check_design: O({ checks: { type: "array", description: "{rule, section, thing, status: ok | brudd | ikke målt, ok, value, limit, said, verify?}" }, ok: "number", brudd: "number", "ikke_målt": "number", counted: "number", note: "string" }, "The building rules held against the after"),
     show_building: O({ app: "string", view: "object", saved_view: "object" }),
     make_shots: O({ shots: { type: "array", description: "{name, caption, camera} in the order shown" }, note: "string", ...TARGET_OUT }),
   };
