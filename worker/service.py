@@ -59,7 +59,8 @@ def sandboxed(cmd, work, caps):
     """the command under bubblewrap with rlimits; or, in DEV, as it is (the rlimits still). /proc is an empty tmpfs:
     Docker's masked /proc refuses a new proc mount, and the container's own (which the ro-bind of / would bring in)
     would show the service's processes, and through /proc/<pid>/root its files; the pid namespace is still the job's"""
-    lim = ["prlimit", f"--cpu={caps['s']}", f"--as={caps['mem_mb'] << 20}", "--nproc=256", f"--fsize={MAX_OUT}", "--"]
+    # the CPU cap soft, so the job gets SIGXCPU at it (time_limit), and SIGKILL 5 s on
+    lim = ["prlimit", f"--cpu={caps['s']}:{caps['s'] + 5}", f"--as={caps['mem_mb'] << 20}", "--nproc=256", f"--fsize={MAX_OUT}", "--"]
     if DEV:
         return lim + cmd if shutil.which("prlimit") else cmd
     return ["bwrap", "--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL",
@@ -70,14 +71,19 @@ def sandboxed(cmd, work, caps):
             "--"] + lim + cmd
 
 
-def classify(log, code, timed_out):
-    """what went wrong, as a code and a line for the script's own fault"""
+def classify(log, code, timed_out, seconds=0, cap=CAPS["s"]):
+    """what went wrong, as a code and a line for the script's own fault. Killed by a signal: SIGXCPU (24) is the CPU
+    cap; SIGKILL at or past the cap is the CPU cap's hard end, before it the memory cap (or the kernel's OOM)"""
+    if code in (-24, 152) or (code in (-9, 137) and seconds >= cap - 0.5):
+        timed_out = True
     if timed_out:
         return [{"code": "time_limit", "message": "The script ran out of time."}]
     if re.search(r"Network is unreachable|Temporary failure in name resolution|Name or service not known|getaddrinfo failed", log):
         return [{"code": "network_refused", "message": "The script tried to reach the network; there is none here."}]
     if re.search(r"Read-only file system|Permission denied: '/(?!work)", log):
         return [{"code": "file_refused", "message": "The script tried to write outside its own folder; only its folder can be written."}]
+    if re.search(r"File too large", log):
+        return [{"code": "too_big", "message": "The script wrote a file larger than 64 MB."}]
     if re.search(r"MemoryError|std::bad_alloc|Cannot allocate memory", log) or code in (-9, 137):
         return [{"code": "memory_limit", "message": "The script used more memory than it may."}]
     tb = re.findall(r'File "(?:[^"]*/)?script\.py", line (\d+)', log)
@@ -115,7 +121,7 @@ def run_job(j):
         except ValueError:
             j["result"] = None
         if code != 0 or late:
-            j["errors"] = classify(log, code, late)
+            j["errors"] = classify(log, code, late, time.time() - t0, caps["s"])
             j["state"] = "refused" if j["errors"][0]["code"] in ("network_refused", "file_refused", "time_limit", "memory_limit") else "failed"
         else:
             if j.get("expect") is not None:

@@ -71,7 +71,7 @@ else:
     for k in ("pid1", "service_root"):
         say(k, str(r.get(k, "")).startswith("refused"), r.get(k))
     say("kill_parent", r.get("kill_parent") in ("GOT 0", "GOT 1") or str(r.get("kill_parent")).startswith("refused"), r.get("kill_parent"))   # its parent is bwrap's, pid 0/1 in its own namespace
-    say("env", set(r.get("env", [])) <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE"}, r.get("env"))
+    say("env", set(r.get("env", [])) <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE", "PWD"}   # the sandbox's own; PWD from bwrap's --chdir, LC_CTYPE from Python's locale coercion, r.get("env"))
 
 j = job("x = bytearray(6 << 30)\n")
 say("memory", (j.get("errors") or [{}])[0].get("code") == "memory_limit", (j.get("state"), j.get("errors")))
@@ -80,7 +80,7 @@ say("time", (j.get("errors") or [{}])[0].get("code") == "time_limit", (j.get("st
 j = job("import os\nn = 0\ntry:\n    while n < 2000:\n        if os.fork() == 0:\n            import time; time.sleep(5); os._exit(0)\n        n += 1\nexcept OSError as e:\n    print('{\"forks\": %d}' % n)\n")
 say("processes", (j.get("result") or {}).get("forks", 9999) < 300, (j.get("state"), j.get("result")))
 j = job("open('big', 'wb').write(b'0' * (100 << 20))\n")
-say("file_size", j.get("state") != "done", (j.get("state"), (j.get("errors") or [{}])[0].get("code")))
+say("file_size", (j.get("errors") or [{}])[0].get("code") == "too_big", (j.get("state"), (j.get("errors") or [{}])[0].get("code")))
 j = job("import json\nopen('out.txt', 'w').write('hei')\nprint(json.dumps({'ok': 1}))\n")
 say("control", j.get("state") == "done" and [o["name"] for o in j.get("outputs", [])] == ["out.txt"], (j.get("state"), j.get("outputs")))
 # the engines work with an empty /proc: an IFC through the mesh step; FreeCAD's STEP through check, where there is FreeCAD
