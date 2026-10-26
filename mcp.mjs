@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { fitOf, surfaceFit } from "./public/design.js";
+import { prepare, slim, withMeshes, handleBim } from "./bim.mjs";   // U3570: constructions a script builds, in the worker
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
@@ -212,8 +213,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       on: { type: "string", description: "A wing (id or name) whose roof it stands on: its foot is that roof's kote under its middle (a roof garden, a greenhouse on a roof)" },
       base_kote: { type: "number", description: "Its foot's kote; default the lowest ground under it (leave out with on)" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "glass = a greenhouse" },
       id: { type: "string", description: "Optional, to name it later: any short name. The server makes it a valid free id (n and 4-12 letters/digits), so it may come back changed: use the id in the result's added" }, ...FACTS }, ["from", "to", "width"]),
+    K("construction", "A construction built by a Python script you write (U3570): a glass pyramid, a pavilion, a frame, a greenhouse with its members, glass, slab and door, as BIM. The script runs in a worker: Python 3.12, IfcOpenShell 0.8 (ifcopenshell.api, ifcopenshell.geom), numpy; no FreeCAD, no network, only its own folder, 300 s. It must: read its parameters, P = {**defaults, **json.load(open('params.json'))} (the server adds ground, the kote under its middle: put its foot at z = P['ground']); build IFC4 in metres (ifcopenshell.api.run('unit.assign_unit', f, length={'is_metric': True, 'raw': 'METERS'}): with no arguments it sets millimetres, and raw IfcCartesianPoints are then read as mm; call the API as ifcopenshell.api.run('root.create_entity', f, ...), or import each submodule you use, ifcopenshell.api.root) with IfcProject > IfcSite > IfcBuilding (named as it) > IfcBuildingStorey containing every element (IfcMember, IfcPlate, IfcSlab, IfcDoor, IfcColumn, IfcBeam ..., each with a Body representation in metres), centred on (0, 0) on plan with its length along x; put the named parameters in a property set on the IfcBuilding; write model.ifc; print one JSON line of what it counted. from -> to place its middle and turn its x axis (their length does not matter: its size is the script's). The result says what it made (bim.classes, bim.box, the printed line) or the error with its line: check it against what was asked and fix the script once if it is wrong. Later changes: reshape with id and params (the script runs again), or from/to to move and turn it.", { name: { type: "string" }, from: PT, to: PT, script: { type: "string", description: "The whole Python script" },
+      params: { type: "object", additionalProperties: { type: "number" }, description: "Its named parameters, e.g. {base: 30, top: 28, module: 3, profile: 0.1}; numbers only" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "For the card; default glass when it has glass" },
+      id: { type: "string", description: "Optional, to name it later (it may come back changed: use the id in added)" }, ...FACTS }, ["name", "from", "to", "script"]),
     K("reshape", "Change a new building (rename, re-fact, move or resize it), or a surface, path or planting by its id (flate-1, sti-2 from show_draft's after.ground, tre-1 from after.plantings): its name, surface, ring; a path's line and width; a planting's height and crown", { id: { type: "string", description: "Its id, from show_draft's after.built, after.ground or fit" }, name: { type: "string" }, from: PT, to: PT, width: { type: "number" }, height: { type: "number" },
-      surface: { type: "string", description: "a surface's or path's material, as surface and path take" }, crown: { type: "number", description: "a planting: m wide" }, ring: POINTS, line: POINTS, plants: { type: "array", items: { type: "string" }, maxItems: 30 }, ...FACTS }, ["id"]),
+      surface: { type: "string", description: "a surface's or path's material, as surface and path take" }, crown: { type: "number", description: "a planting: m wide" }, ring: POINTS, line: POINTS, plants: { type: "array", items: { type: "string" }, maxItems: 30 },
+      params: { type: "object", additionalProperties: { type: "number" }, description: "A construction's parameters to change (the others stay); its script runs again" }, ...FACTS }, ["id"]),
     K("surface", "A surface on the ground: a lawn, a bed, a square, and water = a pool, a pond or a basin", { ring: POINTS, surface: { type: "string", enum: ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"] }, name: { type: "string" }, plants: { type: "array", items: { type: "string" }, maxItems: 30, description: "hagekart ids or Latin names, for a bed" } }, ["ring", "surface"]),
     K("path", "A path", { line: POINTS, width: { type: "number", description: "m, default 2" }, surface: { type: "string", enum: ["gravel", "paving", "asphalt", "wood"] }, name: { type: "string" } }, ["line"]),
     K("trees", "Trees planted (hagekart's species; check_species first: banned species are refused)", { species: { type: "string" }, points: POINTS, line: POINTS, spacing: { type: "number", description: "m along line, default 8" }, height: { type: "number" }, crown: { type: "number", description: "m wide" } }, ["species"]),
@@ -222,7 +227,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* what a draft builds and takes away, without the geometry: for the agent to report back */
   const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
     demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
-    built: (m.site.added || []).map(({ parts, ...a }) => a),
+    built: (m.site.added || []).map(({ parts, ...a }) => slim(a)),
     ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g), planted: m.site.planted, plantings: (m.site.plantings || []).map(({ why, ...g }) => g), trees_felled: m.site.felled } : {}) } : null;
   const isVid = id => /^v.{8}$/.test(String(id ?? ""));
   /* the version the person has open on the website (assistant.mjs pages.open), else their work; none signed out */
@@ -251,7 +256,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   function fieldsOf(e) {
     const k = EDIT.anyOf.find(x => x.properties.kind.const === e?.kind);
     if (!k) return `kind «${e?.kind}» finnes ikke; kind er en av ${EDIT.anyOf.map(x => x.properties.kind.const).join(", ")}`;
-    const miss = k.required.filter(f => e[f] == null || e[f] === ""), extra = Object.keys(e).filter(f => !(f in k.properties));
+    const miss = k.required.filter(f => e[f] == null || e[f] === ""), extra = Object.keys(e).filter(f => !(f in k.properties) && !(f === "bim" && (e.kind === "volume" || e.kind === "reshape")));   // bim: a construction as kept (bim.mjs prepare makes it again)
     if (miss.length) return `${e.kind} mangler ${miss.join(", ")} (${e.kind} tar ${Object.keys(k.properties).filter(f => f !== "kind").join(", ")})`;
     if (extra.length) return `${e.kind} tar ikke ${extra.join(", ")} (${e.kind} tar ${Object.keys(k.properties).filter(f => f !== "kind").join(", ")})`;
     return null;
@@ -260,6 +265,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* a picture of a model (render.mjs) and what it shows, in words */
   const hospital = (() => { const ps = site.buildings.filter(b => b.own).flatMap(b => b.ring); return [ps.reduce((s, p) => s + p[0], 0) / ps.length, ps.reduce((s, p) => s + p[1], 0) / ps.length, 25]; })();
   async function look(s, a = {}) {
+    s = withMeshes(s);   // a construction's triangles, from what the worker made
     const name = VIEWS[a.view_name] ? a.view_name : "isometrisk", v = { ...VIEWS[name] }, f = a.focus ? aimAt(s, a.focus) : null;
     if (a.focus && !f) throw toolErr(`Fant ikke «${a.focus}» å se på: en fløy, en bygnings id eller et nytt bygg (id eller navn).`);
     if (a.from_direction != null) { v.from = dirDeg(a.from_direction); if (v.plan) delete v.plan; v.tilt ??= 30; }
@@ -316,12 +322,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
-        for (const [i, e] of a.edits.entries()) { try { const f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), c = checkEdit(m.site, m.floors, e); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
+        /* a later change in the same call to a new building that got another id goes to the id it got */
+        for (const [i, e0] of a.edits.entries()) { try { const e = e0?.kind !== "volume" && e0?.id != null && ids[e0.id] ? { ...e0, id: ids[e0.id] } : e0, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await prepare(e, m.site), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
             /* a new building that differs only in the id it was given is the same one sent again */
             const bare = x => JSON.stringify(x.kind === "volume" ? { ...x, id: undefined } : x);
             const same = d.edits.findIndex(x => bare(x) === bare(c)); if (same >= 0) throw new Error(`Finnes allerede som endring nr. ${same + 1}; den står, send bare det nye`);
-            d.edits.push(c); ok.push(c); if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
+            d.edits.push(c); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys } } : slim(c)); if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
         const fit = [...fitOf(m.site), ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit(m.site, ways ? await ways() : []) : [])];
@@ -651,5 +658,5 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { handleMcp, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, TOOLS };
+  return { handleMcp, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS };
 }

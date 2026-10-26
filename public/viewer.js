@@ -14,6 +14,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
 import { ease } from "./renderkit/camera.js";
+import { bimPlace } from "./design.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
@@ -286,9 +287,31 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     if (selected && !meshes.has(selected) && !addedGroups.has(selected)) selected = null;
     dirty = true;
   }
+  /* a construction's triangles by IFC class (U3570: what the worker made from its script, mesh.json), once per sha */
+  const meshCache = new Map(), CLASS_MAT = { IfcMember: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass", IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood" };
+  const meshOf = sha => { if (!meshCache.has(sha)) meshCache.set(sha, fetch(`api/bim/${sha}/mesh.json`).then(r => r.ok ? r.json() : null).catch(() => null)); return meshCache.get(sha); };
+  function drawBim(a, grp) {
+    /* till it comes: its box, faint, so it stands, is picked and has its handles */
+    const box = new THREE.Mesh(new THREE.BoxGeometry(Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), a.height, a.width), ADDED.glass.clone());
+    const c = P([(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2], a.base_kote + a.height / 2); box.position.copy(c); box.rotation.y = Math.atan2(a.to[1] - a.from[1], a.to[0] - a.from[0]); grp.add(box);
+    meshOf(a.bim.sha).then(m => {
+      if (!m || addedGroups.get(a.id) !== grp) return;
+      grp.remove(box); box.geometry.dispose();
+      const at = bimPlace(a, a.base_kote);
+      for (const p of m.parts) {
+        const pos = new Float32Array(p.pos.length);
+        for (let i = 0; i < p.pos.length; i += 3) { const q = at([p.pos[i], p.pos[i + 1], p.pos[i + 2]]), v = P(q, q[2]); pos[i] = v.x; pos[i + 1] = v.y; pos[i + 2] = v.z; }
+        const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setIndex(p.idx); g.computeVertexNormals();
+        const k = CLASS_MAT[p.cls] || "concrete", mesh = new THREE.Mesh(g, ADDED[k].clone()); mesh.material.side = THREE.DoubleSide;
+        mesh.castShadow = k !== "glass"; mesh.receiveShadow = true; mesh.userData.id = a.id; grp.add(mesh);
+      }
+      dirty = true;
+    });
+  }
   function drawAdded(a) {
     const grp = new THREE.Group();
-    for (const p of a.parts) {
+    if (a.shape === "bim" && a.bim) drawBim(a, grp);
+    for (const p of a.shape === "bim" ? [] : a.parts) {
       if (p.tris) {   // a pyramid: its faces as they are (design.js)
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(p.tris.flat().flatMap(q => { const v = P(q, q[2]); return [v.x, v.y, v.z]; }), 3)); g.computeVertexNormals();
         const m = (ADDED[p.mat] || ADDED.concrete).clone(); m.side = THREE.DoubleSide;

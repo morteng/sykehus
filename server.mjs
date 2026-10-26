@@ -73,7 +73,8 @@ createServer(async (req, res) => {
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path)) return;
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;
     if (path === "/api/endring") return mcp.handleChange(req, res);
-    if (path === "/api/ifc") return mcp.handleIfc(req, res);   // the cookie lets its owner see their own private versions
+    if (path === "/api/ifc") return mcp.handleIfc(req, res);
+    if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha   // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
     if (path === "/api/versjoner") return mcp.handleVersions(req, res);

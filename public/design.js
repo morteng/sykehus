@@ -16,7 +16,10 @@
         it, kept flush on high_side (the back; left or right walking from -> to). on: a wing (its id or name) whose roof
         it stands on, so its foot is that roof's kote under its middle (a roof garden, a greenhouse on a roof). Optional: id (n and 4–12 letters or digits; the page gives one, so later changes can name it),
         storeys (1–30; the height then defaults to 3,2 m a storey), use, built, note: the facts its card shows.
-   { kind: "reshape", id, name?, use?, built?, note?, storeys?, from?, to?, width?, height?, why? }   (U3556)
+        bim (U3570): a construction a script made (IfcOpenShell, in the worker): bim { script, params, sha, box, classes }
+        is filled in by the server after the worker ran the script (mcp.mjs); from -> to only places and turns it (its
+        middle and direction), its length, width and height are its box's.
+   { kind: "reshape", id, name?, use?, built?, note?, storeys?, from?, to?, width?, height?, bim?, why? }   (U3556)
         changes a new building made by a volume: renames it, sets its facts, moves or resizes it (from, to, width),
         or makes it taller (storeys, height). A demolish naming its id takes it away again.
 
@@ -33,7 +36,7 @@ export { fitOf, surfaceFit, groundAt };
 
 export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];
-export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces"];
+export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
 /* a new building's id: the one asked for when it has the form (n and 4–12 letters or digits) and is free; else one made
@@ -48,6 +51,27 @@ export function freeId(asked, site) {
   let id = "n" + core;
   for (let k = 2; taken.has(id); k++) id = "n" + core.slice(0, 12 - String(k).length) + k;
   return id;
+}
+/* a construction's script and what it made, as the server filled it in: checked for form here (the server ran it) */
+function bimOf(b) {
+  if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
+  if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");
+  const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !Number.isFinite(+v)) throw new Error(`Parameteren «${k}» må ha et navn av bokstaver og et tall`); params[k] = +v; }
+  if (Object.keys(params).length > 30) throw new Error("Høyst 30 parametre");
+  const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Konstruksjonen har ingen form");
+  return { script: b.script, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}) };
+}
+/* where a construction's own points go on the site: its box's middle on plan to the middle of from -> to, its x along
+   from -> to, its foot (the box's bottom) at base. local [x, y, z] → [east, north, kote] */
+export function bimPlace(e, base) {
+  const { min, max } = e.bim.box, bc = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2], c = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2];
+  const a = Math.atan2(e.to[1] - e.from[1], e.to[0] - e.from[0]), k = Math.cos(a), s = Math.sin(a);
+  return ([x, y, z]) => { const u = x - bc[0], v = y - bc[1]; return [c[0] + u * k - v * s, c[1] + u * s + v * k, base + z - min[2]]; };
+}
+/* from -> to as long as the box and through the same middle and direction; width and height the box's */
+function bimBody(from, to, box) {
+  const L = Math.max(1, box.max[0] - box.min[0]), c = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], d = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1, u = [(to[0] - from[0]) / d, (to[1] - from[1]) / d], r = v => Math.round(v * 100) / 100;
+  return { from: [r(c[0] - u[0] * L / 2), r(c[1] - u[1] * L / 2)], to: [r(c[0] + u[0] * L / 2), r(c[1] + u[1] * L / 2)], width: r(Math.max(1, box.max[1] - box.min[1])), height: r(Math.max(1, box.max[2] - box.min[2])) };
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
@@ -97,8 +121,16 @@ export function checkDesign(site, e, str) {
       if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
       if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");
       const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]); if (L < 1 || L > 250) throw new Error("Lengden må være mellom 1 og 250 m");
-      if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
-      if (e.height != null) out.height = num(e.height, 1, 80, "Høyden");
+      if (a.shape === "bim") {
+        /* a construction's size is its script's: its parameters change it (the server runs it again and sends bim) */
+        if (e.bim != null) out.bim = bimOf(e.bim);
+        if (e.params != null && e.bim == null) throw new Error("Parametrene kjøres av serveren: send reshape med params gjennom try_change");
+        if (e.width != null && Math.abs(+e.width - a.width) > 0.05 || e.height != null && Math.abs(+e.height - a.height) > 0.05 || e.storeys != null) throw new Error(`${a.name} får størrelsen fra skriptet: endre parametrene (${Object.keys(a.bim?.params || {}).join(", ") || "params"}) i stedet for bredde og høyde`);
+        if (out.from || out.to || out.bim) Object.assign(out, bimBody(out.from || a.from, out.to || a.to, (out.bim || a.bim).box));
+      } else {
+        if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
+        if (e.height != null) out.height = num(e.height, 1, 80, "Høyden");
+      }
       if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
       return Object.assign(out, w_);
     }
@@ -121,6 +153,7 @@ export function checkDesign(site, e, str) {
       if (L < 1 || L > 250) throw new Error("Fra from til to må være mellom 1 og 250 m");
       const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
       if (out.id) out.id = freeId(out.id, site);
+      if (shape === "bim") { out.bim = bimOf(e.bim); Object.assign(out, bimBody(from, to, out.bim.box), w_); return out; }
       out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), 1, 80, "Høyden"); Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }
@@ -198,6 +231,8 @@ export function baseOf(site, e) {
 function volumeParts(site, e) {
   const { from, to, width: W, height: H } = e, h = W / 2, d = [to[0] - from[0], to[1] - from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L];
   const z = baseOf(site, e);
+  /* a construction: its mesh by its sha (the viewer fetches it, the server's picture reads it), placed by bimPlace */
+  if (e.shape === "bim") return { parts: [{ axis: [from, to], mesh: e.bim.sha, mat: e.material, role: "volume" }], base: z };
   if (e.shape === "pyramid") {
     const top = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2, z + H];
     const q = [[from[0] - n[0] * h, from[1] - n[1] * h], [to[0] - n[0] * h, to[1] - n[1] * h], [to[0] + n[0] * h, to[1] + n[1] * h], [from[0] + n[0] * h, from[1] + n[1] * h]].map(p => [...p, z]);
@@ -239,7 +274,7 @@ export function applyDesign(site, floors, edits) {
   for (const [id, e] of vols) {
     const { parts, base } = volumeParts(site, e), L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]);
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));

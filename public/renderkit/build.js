@@ -112,7 +112,8 @@ export function snapBody(s, others, { grid = 1, step = 15, tol = 1.2, reach = 40
    app's world), ground(e, n) → kote, others(id) → [{ id, name, ring }], lot (a ring or null), storey (m, a storey's
    height), redraw(), onCommit(id, body, how, by) → false when refused (or a promise of it); by is drag, click («Flytt»), keys or wheel, onBusy(on) (the picker stands
    aside), baseFor(body) → the kote its foot will stand at there (optional; else where it stands now)
-   attach(item) shows the handles for item { id, from, to, width, height, base, group (its Object3D) }; move(item)
+   attach(item) shows the handles for item { id, from, to, width, height, base, group (its Object3D), fixed? (its size is
+   not the hand's, a construction's parameters make it: only the ring, and the body to move) }; move(item)
    starts a move with no button held («Flytt»): the ghost follows, a click places. */
 export function createBuild({ THREE, el, host = el.parentElement, scene, camera, P, ground, others, lot = null, storey = 3.2, redraw, onCommit, onBusy = () => {}, baseFor = null }) {
   const G = new THREE.Group(); G.renderOrder = 20; scene.add(G); G.visible = false;
@@ -172,7 +173,7 @@ export function createBuild({ THREE, el, host = el.parentElement, scene, camera,
     H.turn.position.copy(at([s.c[0] + u[0] * R, s.c[1] + u[1] * R], b + 0.3));
     const cam = camera(), k = cam.isOrthographicCamera ? (cam.top - cam.bottom) / cam.zoom / el.clientHeight * 7 : null;
     for (const m of [...H.ends, ...H.sides, H.top, H.turn]) m.scale.setScalar(k ?? m.position.distanceTo(cam.position) / el.clientHeight * 7 * 2 * Math.tan(rad(cam.fov / 2)));
-    const showAll = !op || op.kind === "move"; for (const m of all) m.visible = showAll || m.userData.h[0] === { end: "end", side: "side", top: "top", ring: "ring" }[op.kind];
+    const showAll = !op || op.kind === "move"; for (const m of all) m.visible = (showAll || m.userData.h[0] === { end: "end", side: "side", top: "top", ring: "ring" }[op.kind]) && !(item.fixed && m.userData.h[0] !== "ring");
   }
 
   /* the ghost: the thing's own shapes in green or red, moved, turned and stretched from where it stood */

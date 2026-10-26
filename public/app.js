@@ -520,7 +520,10 @@ async function edit(mine_, failed) {
   try {
     /* on someone else's draft or version, one's own starts from what is shown: its live part first (the rest of it,
        if any, is Anton's, and goes with «Ny kopi» or through him) */
-    const from = draft && !draft.missing && !mine() && !ownDraft() ? draft.edits.filter(LIVE) : [];
+    /* each new building with the id it has where it is shown (design.js numbers those sent with none, volum-1, -2 …), so
+       the change made to it here still finds it in one's own (the server says when it had to give another) */
+    let nv = 0; const shownId = e => e.kind === "volume" && e.id == null ? { ...e, id: `volum-${++nv}` } : (e.kind === "volume" && nv++, e);
+    const from = draft && !draft.missing && !mine() && !ownDraft() ? draft.edits.map(shownId).filter(LIVE) : [];
     const edits = [...from, ...mine_];
     let j = await change({ ...where(), edits });
     if (j.error && !draftId && kept) { kept = null; j = await change({ edits }); }   // the kept draft is past its day
@@ -589,10 +592,12 @@ async function saveFacts(item, v) {
     const nC = [v.east !== "" && Number.isFinite(+v.east) && Math.abs(+v.east - c0[0]) > 0.05 ? +v.east : c0[0], v.north !== "" && Number.isFinite(+v.north) && Math.abs(+v.north - c0[1]) > 0.05 ? +v.north : c0[1]];
     if (nL !== L || nA !== ang0 || nC[0] !== c0[0] || nC[1] !== c0[1]) { const r = (90 - nA) * Math.PI / 180, u = [Math.cos(r), Math.sin(r)], h = nL / 2; set.from = [nC[0] - u[0] * h, nC[1] - u[1] * h]; set.to = [nC[0] + u[0] * h, nC[1] + u[1] * h]; }
     if (v.width && Math.abs(+v.width - a.width) > 0.05) set.width = +v.width;
+    /* a construction's parameters (U3570): those changed go to its script again, in the same one change */
+    if (a.shape === "bim") { const p = {}; for (const [k, x] of Object.entries(a.bim?.params || {})) { const n = v[`p_${k}`]; if (n != null && n !== "" && Number.isFinite(+n) && +n !== x) p[k] = +n; } if (Object.keys(p).length) set.params = p; }
     if (!Object.keys(set).length) return;
     for (const k of ["from", "to"]) if (set[k]) set[k] = set[k].map(q => Math.round(q * 100) / 100);
     /* the building goes there at once (pm 23:58Z: never back to where it was before it moves); back if refused */
-    const undoPreview = build.item?.id === item.id && (set.from || set.width || set.storeys) ? build.preview({ from: set.from || a.from, to: set.to || a.to, width: set.width ?? a.width, height: set.storeys ? set.storeys * 3.2 : a.top_kote - a.base_kote }) : null;
+    const undoPreview = build.item?.id === item.id && !set.params && (set.from || set.width || set.storeys) ? build.preview({ from: set.from || a.from, to: set.to || a.to, width: set.width ?? a.width, height: set.storeys ? set.storeys * 3.2 : a.top_kote - a.base_kote }) : null;
     const ok = await reshape(item.id, set, `${set.name || a.name} er endret`); if (!ok) undoPreview?.(); return ok;
   }
   const w = wings.find(x => x.id === item.id), ed = [];
@@ -622,7 +627,10 @@ function showNew(a) {
   const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   card(esc(a.name), "Nytt bygg i forslaget", rows([...(a.use ? [["Bruk", esc(a.use)]] : []), ...(a.storeys ? [["Etasjer", String(a.storeys)]] : []), ...(a.built ? [["Bygget", esc(a.built)]] : []),
     ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`]]) +
-    (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + `<p class="src">Satt opp i forslaget; ikke i IFC-fila ennå.</p>`, { kind: "new", id: a.id, label: a.name });
+    (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + (a.shape === "bim" && a.bim?.sha
+      /* a construction (U3570): Anton's script made it; its own IFC (an IfcBuilding with its storey and parts) */
+      ? `<p class="src">Bygget av Antons skript (${Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). <a href="api/bim/${a.bim.sha}/model.ifc" download>Last ned IFC</a></p>`
+      : `<p class="src">Satt opp i forslaget; ikke i IFC-fila ennå.</p>`), { kind: "new", id: a.id, label: a.name });
 }
 /* an undo names the change it takes out (expect), so a page that is behind (another tab, Anton) takes out nothing it
    did not show (pm 22:08Z: an undo in a second tab took out Morten's three newest changes); then the page is shown
@@ -663,7 +671,7 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261025h").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+import("./float.js?v=20261026a").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: a => { syncBuild(); build.move(); }, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
@@ -741,6 +749,7 @@ const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K
   baseFor: body => { const a = (site.added || []).find(x => x.id === build.item?.id); if (!a) return build.item?.base ?? 0; const e0 = draft?.edits?.find(x => x.kind === "volume" && x.id === a.id); return baseOf(site, { ...a, ...body, base_kote: e0?.base_kote }); },
   onCommit: (id, body, how, by) => {
     const a = (site.added || []).find(x => x.id === id); if (!a) return;
+    if (a.shape === "bim" && how !== "move" && how !== "ring") return false;   // its size is its parameters' («Endre»)
     const set = { from: body.from, to: body.to };
     if (Math.abs(body.width - a.width) > 0.01) set.width = body.width;
     if (how === "top") { if (a.storeys) set.storeys = Math.max(1, Math.round(body.height / 3.2)); else set.height = body.height; }
@@ -765,7 +774,7 @@ function syncBuild() {
   const i = valg.items.length === 1 && valg.items[0].kind === "new" ? valg.items[0] : null, a = i && (site.added || []).find(x => x.id === i.id && x.kind === "volume");
   const g = a && K.groupOf(a.id);
   if (!a || !g || viewer.view().mode === "section") { if (build.item) build.detach(); return; }
-  build.attach({ id: a.id, from: a.from, to: a.to, width: a.width, height: a.top_kote - a.base_kote, base: a.base_kote, group: g });
+  build.attach({ id: a.id, from: a.from, to: a.to, width: a.width, height: a.top_kote - a.base_kote, base: a.base_kote, group: g, fixed: a.shape === "bim" });
 }
 addEventListener("sykehus:valg", syncBuild); addEventListener("sykehus:painted", syncBuild);
 viewer.follow(() => build.frame());
