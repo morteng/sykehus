@@ -5,20 +5,29 @@
    is not on the page (Anton's pill signed out, «Visninger» with no proposal) is passed over. It offers itself once, on
    the first visit; «?» in the bar starts it again. */
 
-const SEEN = "sykehus-omvisning", SEEN_IN = "sykehus-omvisning-inn";
-/* U3658 (Morten 14:09Z «visitors get simpler onboarding tour than when they log in»): two lists from one engine. A visitor
-   (signed out) gets a short one that ends on «Logg inn»; a signed-in person the full one. Each step says since which
-   version of the full tour it is there (VERSION 2: the keys, the sun, «Gjengi», «Mal», the conversation over the pill, the
-   panel's width, deleting saved proposals), so a person who saw the full tour at version 1 gets only the newer steps, once.
-   Marks in storage: SEEN is «sett» (the one tour there was before: the full list, version 1) or «gjest» (the visitor list);
-   SEEN_IN the version of the full list seen. */
+import { createTour as kitTour, whichTour, writeCookie, readCookie } from "./kit/tour.js";   // the engine, the rule and the cookie are the kit's (U3658)
+
+/* U3658 (Morten 14:09Z «visitors get simpler onboarding tour than when they log in», 14:24Z «the guide popup should set a
+   cookie to not show again if it has been x-ed once»): two lists from one engine. A visitor (signed out) gets a short
+   one that ends on «Logg inn»; a signed-in person the full one. Each step says since which version of the full tour it is
+   there (VERSION 2: the keys, the sun, «Gjengi», «Mal», the conversation over the pill, the panel's width, deleting
+   saved proposals), so a person who saw the full tour at version 1 gets only the newer steps, once. Closing with the ×
+   (or Esc) is remembered and it does not open by itself again. Kept in first-party cookies, and for a signed-in person on
+   the person too (guide.mjs), so it holds on every device. Visitor and signed-in have their own keys:
+     guide_seen=1      the visitor tour was seen or closed
+     guide_in=<n>      the version of the full tour seen;  guide_x=1  the full tour was closed with the ×
+   The one mark before (localStorage «sykehus-omvisning» = «sett», the one tour there was: version 1) still counts. */
 export const VERSION = 2;
-/** Which tour a person gets and whether it offers itself: kind «gjest», «full» or «nytt» (the steps since the version seen). */
-export function tourFor({ signedIn, seen = null, seenIn = null }) {
-  if (!signedIn) return { kind: "gjest", due: !seen };
-  const inn = Number.isFinite(+seenIn) && seenIn !== null ? +seenIn : seen === "sett" ? 1 : 0;
-  return inn >= VERSION ? { kind: "full", due: false } : inn === 0 ? { kind: "full", due: true } : { kind: "nytt", due: true, since: inn };
+const LEGACY = "sykehus-omvisning";
+const legacy = () => { try { return localStorage.getItem(LEGACY); } catch { return null; } };
+/** The marks the browser holds, and (signed in) the person's own from the server, as whichTour takes them. */
+export function marks(server = null, doc = document) {
+  const inn = Math.max(parseInt(readCookie(doc, "guide_in"), 10) || 0, server?.seenIn || 0, legacy() === "sett" ? 1 : 0);
+  return { seen: readCookie(doc, "guide_seen") != null || legacy() != null, seenIn: inn || null, dismissed: readCookie(doc, "guide_x") != null || !!server?.dismissed };
 }
+/** Which tour a person gets and whether it offers itself: kind «gjest», «full» or «nytt» (the steps since the version seen). */
+export const tourFor = ({ signedIn, seen = false, seenIn = null, dismissed = false }) => whichTour({ signedIn, seen, seenIn, dismissed, version: VERSION });
+
 const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
 
 /* the steps: el, the part (a selector, or a function giving the element; none: the card in the middle); before, what
@@ -65,71 +74,21 @@ export function listFor(kind, h, since = 0) {
 }
 
 export function createTour(h) {
-  let at = -1, list = [], plan = [], root = null, hole = null, card = null;
-  const read = k => { try { return localStorage.getItem(k); } catch { return null; } };
-  const now = () => tourFor({ signedIn: !!h.signedIn?.(), seen: read(SEEN), seenIn: read(SEEN_IN) });
-  let kind = "full";
-  const keep = () => { try { if (kind === "gjest") { if (!localStorage.getItem(SEEN)) localStorage.setItem(SEEN, "gjest"); } else localStorage.setItem(SEEN_IN, String(VERSION)); } catch { } };
-  const elOf = s => !s.el ? null : typeof s.el === "function" ? s.el() : document.querySelector(s.el);
-  function build() {
-    root = document.createElement("div"); root.className = "tour"; root.innerHTML = `<div class="tour-hole"></div>
-      <div class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-describedby="tourText">
-        <div class="tour-top"><span class="tour-n" id="tourN"></span><button type="button" class="tour-x" id="tourX" aria-label="Avslutt omvisningen" title="Avslutt (Esc)">×</button></div>
-        <h2 id="tourTitle"></h2><p id="tourText"></p>
-        <div class="tour-acts"><button type="button" id="tourBack">Tilbake</button><button type="button" class="go" id="tourNext">Neste</button></div>
-      </div>`;
-    document.body.append(root); hole = root.querySelector(".tour-hole"); card = root.querySelector(".tour-card");
-    root.querySelector("#tourX").onclick = end; root.querySelector("#tourBack").onclick = () => go(at - 1, -1); root.querySelector("#tourNext").onclick = () => go(at + 1, 1);
-    root.addEventListener("pointerdown", e => { if (!e.target.closest(".tour-card")) e.preventDefault(); });
-    addEventListener("resize", place); addEventListener("keydown", key, true);
-  }
-  function key(e) {
-    if (at < 0) return;
-    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); end(); }
-    else if (e.key === "ArrowRight") { e.preventDefault(); go(at + 1, 1); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); go(at - 1, -1); }
-  }
-  /* the light on the part, the card beside it where there is room: under, over, right of, left of, else in the middle */
-  function place() {
-    if (at < 0) return;
-    const el = elOf(list[at]), W = innerWidth, H = innerHeight, cw = Math.min(340, W - 24), pad = 6;
-    card.style.width = cw + "px";
-    const ch = card.offsetHeight;
-    if (!el) { hole.style.cssText = `left:${W / 2}px;top:${H / 2}px;width:0;height:0`; card.style.left = (W - cw) / 2 + "px"; card.style.top = Math.max(12, (H - ch) / 2) + "px"; return; }
-    const r = el.getBoundingClientRect(), x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(W - 8, r.right + pad) - x, hh = Math.min(H - 8, r.bottom + pad) - y;
-    hole.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${hh}px`;
-    const clampX = v => Math.max(12, Math.min(W - cw - 12, v)), clampY = v => Math.max(12, Math.min(H - ch - 12, v));
-    const big = w * hh > W * H * 0.4;   // the whole model: the card over it, low in the middle
-    let left, top;
-    if (big) { left = (W - cw) / 2; top = H - ch - 96; }
-    else if (y + hh + 12 + ch < H) { left = clampX(x); top = y + hh + 12; }
-    else if (y - 12 - ch > 0) { left = clampX(x); top = y - 12 - ch; }
-    else if (x + w + 12 + cw < W) { left = x + w + 12; top = clampY(y); }
-    else if (x - 12 - cw > 0) { left = x - 12 - cw; top = clampY(y); }
-    else { left = (W - cw) / 2; top = (H - ch) / 2; }
-    card.style.left = clampX(left) + "px"; card.style.top = clampY(top) + "px";
-  }
-  async function go(i, dir = 1) {
-    if (i >= list.length) return end(true);
-    if (i < 0) return;
-    const s = list[i];
-    try { await s.before?.(); } catch { }
-    await new Promise(ok => requestAnimationFrame(() => requestAnimationFrame(ok)));
-    if (s.el && !visible(elOf(s))) return go(i + dir, dir);   // not on the page now: the next one
-    at = i;
-    if (!plan.includes(i)) plan = [...plan, i].sort((a, b) => a - b);
-    root.querySelector("#tourN").textContent = `${plan.indexOf(i) + 1} av ${plan.length}`;
-    root.querySelector("#tourTitle").textContent = s.title; root.querySelector("#tourText").textContent = s.text;
-    root.querySelector("#tourBack").hidden = i === 0;
-    root.querySelector("#tourNext").textContent = i === list.length - 1 ? "Ferdig" : "Neste";
-    root.hidden = false; place(); root.querySelector("#tourNext").focus({ preventScroll: true });
-  }
-  function end() { at = -1; if (root) root.hidden = true; keep(); h.done?.(); }
+  let server = null;   // the person's own marks (guide.mjs), once read
+  const now = () => { const t = tourFor({ signedIn: !!h.signedIn?.(), ...marks(server) }); return { ...t, manual: t.kind === "gjest" ? "gjest" : "full" }; };
+  const tour = kitTour({
+    list: kind => listFor(kind, h, now().since || 0), now,
+    words: { count: (n, m) => `${n} av ${m}`, back: "Tilbake", next: "Neste", done: "Ferdig", close: "Lukk guiden", closeTitle: "Lukk guiden (Esc). Den åpner ikke av seg selv igjen" },
+    onSeen: (kind, how) => {
+      if (kind === "gjest") writeCookie(document, "guide_seen", "1");
+      else { writeCookie(document, "guide_in", String(VERSION)); if (how === "x") writeCookie(document, "guide_x", "1"); }
+      if (h.signedIn?.()) fetch("api/guide", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(kind === "gjest" ? {} : { seenIn: VERSION, dismissed: how === "x" }) }).catch(() => { });
+    },
+    onEnd: () => h.done?.(),
+  });
   return {
-    /* the count is made once: the steps whose part is on the page now, or that put it there first (before) */
-    start(auto = false) { const t = now(); kind = auto || t.kind === "gjest" ? t.kind : "full"; list = listFor(kind, h, t.since || 0); plan = list.map((s, k) => k).filter(k => !list[k].el || list[k].before || visible(elOf(list[k]))); if (!root) build(); go(0); },
-    end, get on() { return at >= 0; },
-    /* the first visit: once, the page ready */
-    get due() { return now().due; },
+    ...tour,
+    /* a signed-in person's marks come from the server first (another device may have closed it), then it offers itself */
+    async ready() { if (h.signedIn?.()) { try { const r = await fetch("api/guide"); if (r.ok) server = await r.json(); } catch { } } return tour.due; },
   };
 }
