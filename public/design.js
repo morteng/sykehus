@@ -36,6 +36,7 @@ import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road sec
 import { batterZ, balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
 import { BAY, windowsOn, kindOf } from "./bays.js";   // the window bays (U3624)
+import { ringFrame, fitInRing } from "./renderkit/frame.js";   // a building's own frame (U3831)
 import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
@@ -96,10 +97,14 @@ export function bimBody(from, to, box) {
 }
 /* where a new building's foot stands: on a wing's roof (on), at a kote (base_kote), else on the ground under it */
 function footOf(site, e, out, num) {
+  if (e.align != null && !["building", "free"].includes(String(e.align))) throw new Error("align er building (langs byggets egen akse, på taket) eller free (from og to som de står)");
+  if (String(e.align) === "building" && e.on == null) throw new Error("align building gjelder et bygg på et tak: si hvilken fløy med on");
   if (e.on != null) {
     const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k);
     if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
     out.on = w.id; if (roofUnder(site, out) == null) throw new Error(`Midten av ${out.name} står ikke på taket til ${w.name}: flytt from og to så midten er innenfor fløyen`);
+    if (e.align != null) out.align = String(e.align);
+    if (out.align !== "free") { const f = alignOnRoof(site, out); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width }); }   // U3831
   } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
   return out;
 }
@@ -168,6 +173,11 @@ export function checkDesign(site, e, str) {
         if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
         if (e.height != null) out.height = num(e.height, 1, 80, "Høyden");
       }
+      /* U3831: re-align one on a roof: align building turns it to the building's axis and keeps it inside the roof; a move or a resize does the same unless it is free */
+      if (e.align != null) { if (!["building", "free"].includes(String(e.align))) throw new Error("align er building (langs byggets egen akse, på taket) eller free"); if (String(e.align) === "building" && !a.on) throw new Error(`${a.name} står ikke på et tak: align building gjelder bare et bygg med on`); out.align = String(e.align); }
+      if (a.on && (out.align ?? a.align) !== "free" && (out.align === "building" || out.from || out.to || e.width != null)) {
+        const f = alignOnRoof(site, { ...a, ...out, on: a.on }); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width });
+      }
       if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
       return Object.assign(out, w_);
     }
@@ -213,11 +223,42 @@ export function checkDesign(site, e, str) {
   return checkLandscape(site, e, str);
 }
 
+/* the roof block a volume set on a wing stands on: the highest of that wing's blocks (or outlines) under its middle, { p, top } */
+export function roofBlock(site, e) {
+  const m = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2]; let hit = null;
+  for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && inRing(m, k.p) && (!hit || k.top > hit.top)) hit = k;
+  return hit;
+}
 /* the roof a volume set on a wing stands on: the highest of that wing's blocks (or outlines) under its middle */
-export function roofUnder(site, e) {
-  const m = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2]; let top = null;
-  for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && inRing(m, k.p)) top = Math.max(top ?? -Infinity, k.top);
-  return top;
+export function roofUnder(site, e) { return roofBlock(site, e)?.top ?? null; }
+
+/* U3831: a volume on a roof is set along that building's own axis (the minimum-area rectangle of the roof outline it
+   stands on, renderkit/frame.js), its middle where it was asked, moved the least that keeps it inside the roof edge, and
+   made narrower or shorter (not a construction: its size is its script's) only when the roof is. Anton's from and to
+   were guesses a few degrees and a few metres off; align "free" keeps them as they are. Returns the same volume's
+   { from, to, width } and what was done, or null when there is no roof under its middle. */
+export function alignOnRoof(site, e) {
+  const b = roofBlock(site, e); if (!b) return null;
+  const mid = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2], d0 = [e.to[0] - e.from[0], e.to[1] - e.from[1]], L0 = Math.hypot(...d0) || 1;
+  const r = fitInRing(b.p, { c: mid, length: L0, width: e.width, shrink: e.shape !== "bim" }), sg = r.u[0] * d0[0] + r.u[1] * d0[1] >= 0 ? 1 : -1, u = [r.u[0] * sg, r.u[1] * sg];
+  const rd = v => Math.round(v * 100) / 100, was = (Math.atan2(d0[1], d0[0]) * 180 / Math.PI + 360) % 360, now = (Math.atan2(u[1], u[0]) * 180 / Math.PI + 360) % 360;
+  let turn = ((now - was + 540) % 360) - 180; if (turn > 90) turn -= 180; else if (turn < -90) turn += 180;
+  return { from: [rd(r.c[0] - u[0] * r.length / 2), rd(r.c[1] - u[1] * r.length / 2)], to: [rd(r.c[0] + u[0] * r.length / 2), rd(r.c[1] + u[1] * r.length / 2)], width: rd(r.width),
+    turned_deg: rd(turn), moved_m: rd(r.shifted_m), shrunk: r.shrunk, fits: r.fits, axis_deg: rd(r.angle) };
+}
+/* what changed between a volume as asked and as checked (both { from, to, width }), as alignOnRoof's numbers */
+export function alignDelta(site, before, after) {
+  const L = v => Math.hypot(v.to[0] - v.from[0], v.to[1] - v.from[1]), ang = v => Math.atan2(v.to[1] - v.from[1], v.to[0] - v.from[0]) * 180 / Math.PI, mid = v => [(v.from[0] + v.to[0]) / 2, (v.from[1] + v.to[1]) / 2], rd = x => Math.round(x * 100) / 100;
+  let turn = ((ang(after) - ang(before) + 540) % 360) - 180; if (turn > 90) turn -= 180; else if (turn < -90) turn += 180;
+  const chk = alignOnRoof(site, { ...after, on: after.on ?? before.on });
+  return { turned_deg: rd(turn), moved_m: rd(Math.hypot(...mid(after).map((x, i) => x - mid(before)[i]))), shrunk: L(after) < L(before) - 0.01 || after.width < before.width - 0.01, fits: chk ? chk.fits : true };
+}
+/* what alignOnRoof did, in words for Anton to pass on (null when it changed nothing worth saying) */
+export function alignSay(f) {
+  if (!f) return null;
+  const bits = [Math.abs(f.turned_deg) >= 0.5 && `snudd ${String(Math.abs(f.turned_deg)).replace(".", ",")}° til byggets egen akse`, f.moved_m >= 0.1 && `flyttet ${String(f.moved_m).replace(".", ",")} m inn på taket`, f.shrunk && "gjort mindre så det står innenfor takkanten"].filter(Boolean);
+  if (!f.fits) bits.push("får ikke plass innenfor takkanten (taket er for lite): gjør det mindre eller velg align free");
+  return bits.length ? `På taket: ${bits.join(", ")}.` : null;
 }
 
 /* balconies: every outline wall of the wing that faces the side, at each storey it stands over. U3628: a balcony

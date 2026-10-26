@@ -4,6 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
+import { ringFrame } from "../public/renderkit/frame.js";
+import { inRing } from "../public/renderkit/fit.js";
 import { BALCONY_DEPTH, groundAt, groundText, padFit, lotText, windowBays, balconyFaces } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
@@ -227,4 +229,44 @@ test("balconies come out 1.5 m deep unless a depth is asked (U3780: the area pla
   assert.equal(BALCONY_DEPTH, 1.5);
   const a = depth({}); assert.equal(a.depth, 1.5, "the edit as stored");
   assert.equal(depth({ depth: 2.2 }).depth, 2.2, "a depth asked is kept");
+});
+
+/* U3831 (Morten 2026-10-26: «drivhuset står skjevt på taket»): a volume on a roof is set along the building's own axis
+   and kept inside the roof edge; align free keeps what was asked; reshape align building puts a skew one right */
+const hoy = site.buildings.find(b => b.wing === "sentralblokka").blocks.find(k => k.top === 69.91).p;   // the long slab of Høyblokka's roof
+const rf = ringFrame(hoy), corners = v => { const d = [v.to[0] - v.from[0], v.to[1] - v.from[1]], L = Math.hypot(...d), n = [-d[1] / L, d[0] / L], h = v.width / 2; return [v.from, v.to].flatMap(q => [h, -h].map(s => [q[0] + n[0] * s, q[1] + n[1] * s])); };
+const skew = (deg, along, across = 0) => { const a = (rf.angle + deg) * Math.PI / 180, u = [Math.cos(a), Math.sin(a)], c = [rf.c[0] + rf.u[0] * along + rf.v[0] * across, rf.c[1] + rf.u[1] * along + rf.v[1] * across]; return { from: c.map((x, i) => x - u[i] * 12), to: c.map((x, i) => x + u[i] * 12) }; };
+const glass = (extra = {}) => ({ kind: "volume", name: "Drivhus", shape: "gable", material: "glass", width: 6, height: 4, on: "Sentralblokka", ...skew(5, 44, 1), ...extra });
+
+test("U3831: a greenhouse 5° off and sticking out at one end of the roof is set along the building's axis and inside the roof", () => {
+  const raw = glass(), out = [corners({ ...raw })].flat();
+  assert.ok(out.some(p => !inRing(p, hoy)), "the control: as asked, it sticks out past the roof edge");
+  const c = checkEdit(site, floors, raw), dir = Math.atan2(c.to[1] - c.from[1], c.to[0] - c.from[0]) * 180 / Math.PI;
+  assert.ok(Math.abs(((dir - rf.angle) % 180 + 180) % 180) < 0.1 || Math.abs(((dir - rf.angle) % 180 + 180) % 180 - 180) < 0.1, `along the axis ${rf.angle.toFixed(2)}, got ${dir.toFixed(2)}`);
+  for (const p of corners(c)) assert.ok(inRing(p, hoy), `corner ${p} on the roof`);
+  assert.equal(c.width, 6); assert.equal(Math.round(Math.hypot(c.to[0] - c.from[0], c.to[1] - c.from[1])), 24);
+  assert.equal(c.align, undefined, "nothing odd is kept on the edit");
+});
+
+test("U3831: a greenhouse wider than the roof is made narrower, one that is fine is left where it is", () => {
+  const w = checkEdit(site, floors, glass({ width: 30 })); assert.ok(w.width < rf.width && w.width > 5, `width ${w.width} of the slab's ${rf.width.toFixed(1)}`);
+  const ok = skew(0, 0, 0), c = checkEdit(site, floors, glass({ ...ok })), mid = v => [(v.from[0] + v.to[0]) / 2, (v.from[1] + v.to[1]) / 2];
+  assert.ok(Math.hypot(...mid(c).map((x, i) => x - mid(ok)[i])) < 0.02, "a placement already along the axis and inside is not moved");
+});
+
+test("U3831: align free keeps from and to as they are", () => {
+  const raw = glass({ align: "free" }), c = checkEdit(site, floors, raw);
+  assert.deepEqual([c.from, c.to], [raw.from.map(v => Math.round(v * 100) / 100), raw.to.map(v => Math.round(v * 100) / 100)]); assert.equal(c.align, "free");
+  assert.throws(() => checkEdit(site, floors, { ...glass(), on: undefined, base_kote: 20, align: "building" }), /gjelder et bygg på et tak/);
+});
+
+test("U3831: reshape align building turns a skew greenhouse that stands free along the building, and a move keeps it so", () => {
+  const ed = add(add([], glass({ id: "ndrivhus", align: "free" })), { kind: "reshape", id: "ndrivhus", align: "building" });
+  const v = applyEdits(site, floors, ed).site.added.find(x => x.id === "ndrivhus");
+  for (const p of corners(v)) assert.ok(inRing(p, hoy), `corner ${p} on the roof`);
+  const dir = Math.atan2(v.to[1] - v.from[1], v.to[0] - v.from[0]) * 180 / Math.PI;
+  assert.ok(Math.abs((((dir - rf.angle) % 180) + 180) % 180) < 0.1 || Math.abs((((dir - rf.angle) % 180) + 180) % 180 - 180) < 0.1);
+  const moved = add(ed, { kind: "reshape", id: "ndrivhus", from: [rf.c[0] + 1, rf.c[1] - 12], to: [rf.c[0] + 3, rf.c[1] + 12] });   // a move by guess is set right again
+  const w = applyEdits(site, floors, moved).site.added.find(x => x.id === "ndrivhus");
+  for (const p of corners(w)) assert.ok(inRing(p, hoy));
 });

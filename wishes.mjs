@@ -2,12 +2,13 @@
    From the connector (send_wish, after the agent asked «Skal jeg sende dette som et ønske?») or the page's «Ønsker».
 
    One JSON file a wish in SYKEHUS_VERSIONS_DIR/_wishes/, written whole and renamed, as versions.mjs does:
-     { id: "w…", person, at (UTC ISO), text, tried, version, link, status: "ny" | "sett" | "laget" | "nei", note? }
+     { id: "w…", person, at (UTC ISO), text, tried, version, link, picture?, status: "ny" | "sett" | "laget" | "nei", note? }
    A person sees their own; the admins (SYKEHUS_ADMINS, default "morten") see all and set the status; pm reads all
    with SYKEHUS_ADMIN_TOKEN. When SYKEHUS_WISH_WEBHOOK is set, each new wish is POSTed there as JSON (pm wires it to
    Morten's notices); a failed POST is logged, the wish is kept anyway.
 
      GET  /api/onsker          your own, or all for an admin ({wishes, admin})
+     GET  /api/onsker/<id>.png the picture kept with a wish (U3832: send_wish and the feedback dialog attach one), its person's or an admin's
      POST /api/onsker          {text, tried?, version?}  a new wish, from the page
      POST /api/onsker/<id>     {status, note?}  an admin's answer */
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync } from "node:fs";
@@ -26,9 +27,9 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
   const write = w => { const p = join(home, w.id + ".json"), t = p + ".tmp"; writeFileSync(t, JSON.stringify(w)); renameSync(t, p); };
   const admins = new Set((process.env.SYKEHUS_ADMINS ?? "morten").split(",").map(s => s.trim()).filter(Boolean));
   const isAdmin = p => !!p && admins.has(p);
-  const out = w => ({ id: w.id, person: w.person, at: w.at, text: w.text, tried: w.tried || null, version: w.version || null, link: w.link || null, status: w.status, note: w.note || null });
+  const out = w => ({ id: w.id, person: w.person, at: w.at, text: w.text, tried: w.tried || null, version: w.version || null, link: w.link || null, picture: w.picture ? `/api/onsker/${w.id}.png` : null, status: w.status, note: w.note || null });
 
-  function add(person, { text, tried, version, link }) {
+  function add(person, { text, tried, version, link, png = null }) {
     const t = String(text ?? "").trim(); if (t.length < 3) throw new Error("Skriv hva du ønsker deg.");
     if (t.length > 4000) throw new Error("Høyst 4000 tegn.");
     const day = new Date().toISOString().slice(0, 10), k = person + day, n = (sent.get(k) || 0) + 1;
@@ -36,6 +37,7 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     sent.set(k, n); for (const key of sent.keys()) if (!key.endsWith(day)) sent.delete(key);
     const w = { id: "w" + randomBytes(8).toString("base64url").slice(0, 10), person, at: new Date().toISOString(), text: t, tried: tried ? String(tried).trim().slice(0, 2000) : "",
       version: version ? String(version).slice(0, 20) : "", link: link ? String(link).slice(0, 300) : "", status: "ny" };
+    if (png) { try { writeFileSync(join(home, w.id + ".png"), png); w.picture = true; } catch (e) { console.error("wish picture:", e.message); } }   // before the wish is written, so the flag is kept
     write(w); all.set(w.id, w);
     const hook = process.env.SYKEHUS_WISH_WEBHOOK;
     if (hook) fetchImpl(hook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "sykehus_wish", ...out(w) }), signal: AbortSignal.timeout(5000) })
@@ -64,8 +66,7 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     if (q.length >= 10) return [429, { code: "limit", retry_at: new Date(q[0] + 3600e3 + 1000).toISOString() }];
     q.push(now); hour.set(person, q);
     const ctx = [b.page && `side ${String(b.page).slice(0, 200)}`, b.tab && `fane ${String(b.tab).slice(0, 40)}`, png && "med bilde"].filter(Boolean).join(", ");
-    const w = add(person, { text: `[${KIND_NO[kind]}] ${text}`, tried: ctx, version: b.version });
-    if (png) { try { writeFileSync(join(home, w.id + ".png"), png); } catch (e) { console.error("feedback picture:", e.message); } }
+    const w = add(person, { text: `[${KIND_NO[kind]}] ${text}`, tried: ctx, version: b.version, png });
     return [200, { id: w.id }];
   }
   async function route(req, res, path) {
@@ -80,6 +81,13 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     if (path !== "/api/onsker" && !path.startsWith("/api/onsker/")) return false;
     const me = personOf(req)?.person ?? null, admin = token(req) || isAdmin(me);
     if (req.method === "GET" && path === "/api/onsker") { if (!me && !admin) send(res, 401, { error: "Logg inn for å se ønskene dine." }); else send(res, 200, { wishes: admin ? every() : mine(me), admin, you: me }); return true; }
+    const pic = req.method === "GET" && /^\/api\/onsker\/(w[A-Za-z0-9_-]{10})\.png$/.exec(path);
+    if (pic) {
+      const w = all.get(pic[1]);
+      if (!w || !w.picture || !(admin || (me && w.person === me))) { send(res, 404, { error: "Fant ikke bildet." }); return true; }
+      try { const png = readFileSync(join(home, w.id + ".png")); res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(png); } catch { send(res, 404, { error: "Fant ikke bildet." }); }
+      return true;
+    }
     if (req.method !== "POST") { send(res, 405, { error: "GET eller POST" }); return true; }
     if (req.headers.origin && (() => { try { return new URL(req.headers.origin).host !== req.headers.host; } catch { return true; } })()) { send(res, 403, { error: "Feil opphav" }); return true; }
     let b; try { b = await readJson(req, 20000); } catch { send(res, 400, { error: "Uleselig" }); return true; }
