@@ -355,6 +355,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       worldUV(m.geometry, tile, "x", "z"); const old = m.material; m.material = material; old.dispose(); dirty = true; }).catch(() => {}); };
   /* drawn again in place when the after changes (setLandscape, 21:07Z «when i edit the whole page reloads»: a pool is a surface) */
   const groundMeshes = [];
+  /* a draped surface's corners share one normal (each triangle had its own, and a picture on it showed every one, U3618) */
+  function smoothNormals(geo) {
+    const p = geo.attributes.position, nr = geo.attributes.normal, sum = new Map(), key = i => `${Math.round(p.getX(i) * 100)},${Math.round(p.getZ(i) * 100)}`;
+    for (let i = 0; i < p.count; i++) { const k = key(i), v = sum.get(k) || sum.set(k, [0, 0, 0]).get(k); v[0] += nr.getX(i); v[1] += nr.getY(i); v[2] += nr.getZ(i); }
+    for (let i = 0; i < p.count; i++) { const v = sum.get(key(i)), l = Math.hypot(...v) || 1; nr.setXYZ(i, v[0] / l, v[1] / l, v[2] / l); }
+    nr.needsUpdate = true;
+  }
   function setLandscape(list) {
     for (const m of [...groundMeshes.splice(0), ...gradeMeshes.splice(0)]) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
     drawLandscape(list); drawGrading(gradingNow); if (rimFor) rimGround(true); dirty = true;
@@ -415,7 +422,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       else { const k = mid(c, a); split(a, b, k, d + 1); split(k, b, c, d + 1); }
     };
     for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
-    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); smoothNormals(geo);
     /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
     const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = g.level; scene.add(m); pictured(m, g.surface); groundMeshes.push(m);
   } }

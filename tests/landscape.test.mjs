@@ -38,3 +38,9 @@ test("felling takes today's trees inside the ring", () => {
   const s = after([{ kind: "fell", ring: [[x - 1, y - 1], [x + 1, y - 1], [x + 1, y + 1], [x - 1, y + 1]] }]);
   assert.ok(s.felled >= 1); assert.equal(s.trees.length, n - s.felled);
 });
+
+test("a path is as wide as its width at its ends too (the last point's mitre made it three widths wide)", async () => {
+  const { pathRing } = await import("../public/landscape.js");
+  assert.deepEqual(pathRing([[40, 76], [76, 76]], 2.5), [[40, 77.25], [76, 77.25], [76, 74.75], [40, 74.75]]);
+  assert.deepEqual(pathRing([[0, 0], [10, 0], [10, 10]], 2), [[0, 1], [9, 1], [9, 10], [11, 10], [11, -1], [0, -1]]);
+});

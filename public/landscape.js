@@ -166,7 +166,8 @@ export function pathRing(line, width) {
   for (let i = 0; i < line.length; i++) {
     const dir = j => { const a = line[Math.max(0, j)], b = line[Math.min(line.length - 1, j + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
     const d0 = dir(i - 1), d1 = dir(i), m = [d0[0] + d1[0], d0[1] + d1[1]], ml = Math.hypot(...m) || 1, t = [m[0] / ml, m[1] / ml];
-    const n = [-t[1], t[0]], k = Math.min(3, 1 / Math.max(0.33, n[0] * -d1[1] + n[1] * d1[0]));
+    /* the mitre against a side that has a length: at the last point the next side is none (it made every path's end three widths wide) */
+    const s = d1[0] || d1[1] ? d1 : d0, n = [-t[1], t[0]], k = Math.min(3, 1 / Math.max(0.33, n[0] * -s[1] + n[1] * s[0]));
     L.push([line[i][0] + n[0] * h * k, line[i][1] + n[1] * h * k]); R.push([line[i][0] - n[0] * h * k, line[i][1] - n[1] * h * k]);
   }
   return [...L, ...R.reverse()];
