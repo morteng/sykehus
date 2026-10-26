@@ -567,3 +567,7 @@ body.m .pf-x { top: 8px; left: 50%; }
 .np-card { white-space: normal; min-width: 0; line-height: 1.2; justify-content: flex-start; padding: var(--sp-2) var(--sp-1); }
 .np-acts { position: sticky; bottom: 0; background: var(--panel); padding-top: var(--sp-2); }
 .np-acts .dr-p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+/* U3670: a try's small picture on its row in the chat: a tap flies the camera back there */
+.talk-item .try-thumb { display: block; margin-top: 6px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; overflow: hidden; line-height: 0; }
+.talk-item .try-thumb img { display: block; width: 168px; max-width: 100%; height: auto; }
+.talk-item .try-thumb:hover, .talk-item .try-thumb:focus-visible { border-color: var(--accent); }

@@ -14,6 +14,7 @@
 import { pick } from "./kit/pick.js";
 import { chatSheet, sheetShown } from "./kit/chat.js";   // U3657: the conversation over the pill, the kit's
 import { toolLine } from "./toolline.js";
+import { announces, matcher, isTry } from "./livetries.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -29,7 +30,7 @@ const json = (url, body) => fetch(url, { method: "POST", headers: { "content-typ
 
 /* version(): the version the page has open now (a «Riv» can make one after the page loaded); refresh(): that version
    again, in place where it can be (app.js); showView(view): the page to a view Anton's show_building chose */
-export async function start({ viewer, version, refresh, showView, panel, valg }) {
+export async function start({ viewer, version, refresh, showView, panel, valg, tries = null }) {
   /* back from a redraw: the camera where it was */
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
   /* the tour counts the steps whose part is on the page when it opens: it waits for this (U3669: «1 av 4» at first, «1 av 5» from «?», for the «Logg inn» button came after) */
@@ -240,7 +241,15 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
       b.textContent += t.delta || ""; if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
     });
-    on("tool", t => { if (t.label) line("tool", toolLine(t)); step = stepOf(t.key); state(); });
+    /* U3670: each try shows in the 3D view as a ghost at once and as a small picture on its row; a tap on it takes the camera back there */
+    const tryRows = matcher((el, t) => {
+      const li = el.closest("li"); if (!li || li.querySelector(".try-thumb")) return;
+      const b = document.createElement("button"); b.type = "button"; b.className = "try-thumb"; b.title = "Gå tilbake til dette synet"; b.setAttribute("aria-label", "Gå tilbake til dette synet");
+      const img = document.createElement("img"); img.src = t.thumb; img.alt = "Slik så det ut da Anton prøvde endringen"; b.append(img); b.onclick = () => tries?.back(t.pose); li.append(b); toEnd();
+    });
+    let liveChain = Promise.resolve();
+    const liveTry = () => { liveChain = liveChain.then(async () => { const r = await tries.run().catch(() => null); if (r) tryRows.thumb(r); else redraw = true; }); };
+    on("tool", t => { if (t.label) { const el = line("tool", toolLine(t)); if (isTry(t.key)) tryRows.row(el); } step = stepOf(t.key); state(); });
     /* U3635: a plan Anton shows before he builds (propose_sketch): the picture to mark up (renderkit's sketch.js), «Bygg det»
        says so to Anton, the feedback goes as the drawing (the picture with the marks, strokes in metres) and the pins in words */
     async function sketchCard(s) {
@@ -262,6 +271,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
     on("done", () => {
+      liveChain.then(() => { tries?.end(); tryRows.reset(); });
       if (redraw) { redraw = false; refresh(); }
       /* the reply came while this page was not listening (a reload mid-turn): the card takes it from the history
          (21:23Z: the section turn's answer was in the thread, the card empty) */
@@ -271,7 +281,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       }).catch(() => {});
     });
     /* Anton saved a version: the one open is shown again (in place when it can be), another gets a link */
-    on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === version()) { if (running) redraw = true; else refresh(); } else if (!told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
+    on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === version()) { if (running) { if (tries) liveTry(); else redraw = true; } else refresh(); } else if (announces(s) && !told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
     /* «vis meg»: show_building through the pill moves this page (mcp.mjs, assistant.mjs pages.show) */
     on("show", v => { if (/^v.{8}$/.test(v.draft || "")) { v = { ...v, version: v.draft }; delete v.draft; }   // a version's id is a version (21:05Z)
       if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}${v.key ? `&nokkel=${encodeURIComponent(v.key)}` : ""}`); } else showView(v); });

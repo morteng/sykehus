@@ -327,7 +327,20 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     for (const g of addedGroups.values()) { scene.remove(g); g.traverse(o => o.geometry?.dispose()); }
     addedGroups.clear();
     for (const a of list || []) drawAdded(a);
+    applyGhost();
     if (selected && !meshes.has(selected) && !addedGroups.has(selected)) selected = null;
+    dirty = true;
+  }
+  /* U3670: what Anton is trying while he works: those new parts drawn see-through (their materials cloned, the solid ones kept to put back);
+     the ids are re-applied when the parts are drawn again (setAdded) and empty at the end of the turn */
+  let ghostIds = new Set();
+  const ghostOf = m => { const c = m.clone(); c.transparent = true; c.opacity = 0.5; c.depthWrite = false; return c; };
+  function applyGhost() {
+    for (const [id, g] of addedGroups) g.traverse(o => {
+      if (!o.isMesh) return;
+      if (ghostIds.has(id) && !o.userData.solid) { o.userData.solid = o.material; o.material = Array.isArray(o.material) ? o.material.map(ghostOf) : ghostOf(o.material); }
+      else if (!ghostIds.has(id) && o.userData.solid) { o.material = o.userData.solid; delete o.userData.solid; }
+    });
     dirty = true;
   }
   /* a construction's triangles by IFC class (U3570: what the worker made from its script, mesh.json), once per sha */
@@ -1130,6 +1143,12 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
     setSun, select, setGone, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
+    /* the parts drawn see-through (ids of new parts), or none; and a small picture of the view as it is (free: the canvas, no server) */
+    ghost(ids) { ghostIds = new Set(ids || []); applyGhost(); },
+    thumb(w = 168) {
+      renderer.render(scene, camera); const src = renderer.domElement, h = Math.round(w * src.height / Math.max(1, src.width)), c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(src, 0, 0, w, h); return c.toDataURL("image/jpeg", 0.7);
+    },
     /* photo mode: the view's vertical field of view (degrees), or null for its own; the frame over the view is drawn for it (renderkit photoframe.js) */
     lens(fov) { lensFov = Number.isFinite(fov) ? fov : null; place(); },
     home() { setStorey(null); O.eye = false; glide(home); },
