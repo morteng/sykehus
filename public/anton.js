@@ -13,6 +13,7 @@
    same place (after the reply is done, so nothing is cut off). */
 import { pick } from "./kit/pick.js";
 import { follow } from "./kit/follow.js";
+import { burst } from "./kit/effects.js";
 import { toolLine } from "./toolline.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
@@ -265,7 +266,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty();
       const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
       createSketch({ host: li, image: s.url, frame: s.frame, title: s.title, legend: s.legend, numbers: s.numbers,
-        onBuild: async () => { const b = li.querySelector(".sk-build"); b.disabled = true; if (await sendIt({ text: `Bygg det: ${s.title}` })) { li.querySelector(".sk-say").textContent = "Sendt til Anton."; fetch(`api/skisse/${s.id}/sendt`, { method: "POST" }).catch(() => { }); } else b.disabled = false; },
+        onBuild: async () => { const b = li.querySelector(".sk-build"); b.disabled = true; const r0 = b.getBoundingClientRect(); if (await sendIt({ text: `Bygg det: ${s.title}` })) { burst(r0.left + r0.width / 2, r0.top + r0.height / 2, { kind: "leaves" });   // U3884: the click is the person's own
+           li.querySelector(".sk-say").textContent = "Sendt til Anton."; fetch(`api/skisse/${s.id}/sendt`, { method: "POST" }).catch(() => { }); } else b.disabled = false; },
         onSend: async ({ text, drawing }) => {
           const pins = drawing.pins.map(p => `Nål ${p.n} (øst ${m1(p.at[0])}, nord ${m1(p.at[1])} m)${p.note ? `: ${p.note}` : ""}`);
           const { pins: _p, ...draw } = drawing;

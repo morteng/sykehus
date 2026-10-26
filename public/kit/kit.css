@@ -284,3 +284,30 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-fb-acts button{min-height:var(--tap);padding:0 var(--sp-4);font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer}
 .g-fb-acts .g-fb-send{color:var(--on-accent);background:var(--accent);border-color:var(--accent)}
 .g-fb-acts .g-fb-send:disabled{opacity:.5;cursor:default}
+/* ---- typein (typein.ts): the number box beside the cursor while a drag runs; the host is positioned */
+.g-typein{position:absolute;z-index:3;display:flex;flex-direction:column;gap:var(--sp-1);padding:var(--sp-1) var(--sp-2);
+  border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);box-shadow:var(--shadow-sm);
+  font-variant-numeric:tabular-nums;pointer-events:none}
+.g-typein[hidden]{display:none}
+.g-typein:focus-within,.g-typein[data-pin]{pointer-events:auto}
+.g-typein__row{display:flex;align-items:center;gap:var(--sp-2)}
+.g-typein__name{color:var(--muted);min-width:3.5em}
+.g-typein__in{width:5em;height:calc(var(--control-h) * .8);padding:0 var(--sp-2);border:1px solid var(--border);border-radius:var(--radius-xs);
+  background:var(--sunken);color:var(--text);font:inherit;text-align:right}
+.g-typein__in:focus{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off);background:var(--panel)}
+.g-typein__in[aria-invalid="true"]{border-color:var(--danger)}
+.g-typein__unit{color:var(--muted);min-width:1.5em}
+@media (hover: none), (pointer: coarse) { .g-typein__in{height:max(var(--tap), 44px)} }
+
+/* ---- effects (effects.ts): leaves for a win, dust for a removal; one layer, pointer-events none, off for reduced motion */
+.g-fx-layer{position:fixed;left:0;top:0;width:0;height:0;overflow:visible;z-index:var(--z-alert);pointer-events:none}
+.g-fx-layer>span{position:fixed;display:block;pointer-events:none;background:var(--g-fx-c,var(--accent));will-change:transform,opacity}
+.g-fx-leaf{width:12px;height:7px;border-radius:7px 0;animation:g-fx-leaf .9s var(--ease) forwards}
+.g-fx-dust{width:9px;height:9px;border-radius:50%;animation:g-fx-dust .8s ease-out forwards}
+.g-fx-spark{width:5px;height:5px;border-radius:50%;animation:g-fx-leaf .6s ease-out forwards}
+.g-fx-pop{animation:g-fx-pop .35s var(--ease)}
+.g-fx-rise{animation:g-fx-rise .3s var(--ease)}
+@keyframes g-fx-leaf{from{transform:translate(-50%,-50%) scale(var(--g-fx-s,1));opacity:1}55%{opacity:1}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) rotate(var(--g-fx-rot)) scale(var(--g-fx-s,1));opacity:0}}
+@keyframes g-fx-dust{from{transform:translate(-50%,-50%) scale(.6);opacity:.9}45%{opacity:.75}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) scale(calc(var(--g-fx-s,1) * 1.7));opacity:0}}
+@keyframes g-fx-pop{from{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}to{transform:none;opacity:1}}
+@keyframes g-fx-rise{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}

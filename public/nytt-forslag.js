@@ -55,6 +55,7 @@ export function startNew(o) {
       st.busy = true; f.querySelector("#npGo").disabled = true; err.hidden = true;
       const bad = await o.create({ ...(copy ? { copy } : {}), ...(name ? { title: name } : {}), ...(wish.trim() ? { wish: wish.trim().slice(0, 2000) } : {}) });   // kept with the version (U3786): the person's words only
       if (bad) { st.busy = false; f.querySelector("#npGo").disabled = false; err.textContent = bad; err.hidden = false; return; }
+      if (o.fx) o.fx(f.querySelector("#npGo"));   // U3884: leaves at «Start», the person's own act
       m.close(); o.say(firstTurn({ name, card: st.card, wish, from: copy ? sel.selectedOptions[0].textContent.replace(/^Kopi av «|»$/g, "") : null }));
     };
     f.querySelector("#npName").focus();
