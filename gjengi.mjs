@@ -24,10 +24,15 @@ const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
 const ASPECTS = [["1:1", 1], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
 const ID = /^[a-z0-9]{16}$/, MAX_IN = 6 * 1024 * 1024;
-const PROMPT = "Turn this 3D massing view of a site in Bragernes, Drammen, Norway into a photorealistic architectural rendering. "
-  + "Keep exactly the camera, the composition, every building's footprint, shape, height and position, the roads and the terrain; add nothing that is not in the view and remove nothing. "
-  + "Give the plain model surfaces believable materials: the existing hospital wings in their concrete, brick and render, new buildings in the material their colour suggests, asphalt, kerbs, grass and trees as they would be. "
-  + "Natural daylight, a Norwegian town in summer, no people in focus, no text or labels.";
+/* The view is the only geometry the model gets (U3526: the first prompt let it invent hills and houses behind the site) */
+const PROMPT = "This image is a view of a 3D model of a site in Bragernes, Drammen, Norway. It is the only geometry: make it a photorealistic architectural rendering of exactly this view. "
+  + "Keep every building, road and terrain line exactly; change only materials, light, people and planting. "
+  + "Same camera, same framing, every outline and edge in the same place. Add no building, house, hill, mountain, wall, road or other structure, and remove none. "
+  + "Where the model ends, keep the background as plain sky or the same flat ground that is there; do not invent a landscape, a skyline or a town behind it. "
+  + "Materials: the existing hospital wings in concrete, brick and render; new buildings in the material their colour suggests; asphalt, kerbs, grass. "
+  + "Planting: trees and shrubs only where the model has trees or green areas. People: a few small pedestrians on the paths and pavements. "
+  + "Natural daylight, a Norwegian summer day, no text or labels.";
+const WISH = " The person also asks for this; it may change only materials, light, people and planting, never the geometry: ";
 
 export function createRenderings({ SECURITY = {}, readJson, login, versions, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
   key = process.env.SYKEHUS_OPENROUTER_API_KEY || "", model = process.env.SYKEHUS_RENDER_MODEL || "google/gemini-3.1-flash-image", cap = +(process.env.SYKEHUS_RENDER_CAP_USD || 20),
@@ -88,7 +93,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     try {
       const r = await fetchImpl(URL_, { method: "POST", signal: AbortSignal.timeout(120000), headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "http-referer": "https://sykehus.gulden.no", "x-title": "Sykehustomta" },
         body: JSON.stringify({ model, modalities: google ? ["image", "text"] : ["image"], provider: ROUTING, usage: { include: true }, image_config: { aspect_ratio: ar, image_size: size },
-          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + (wish ? ` The person asks for: ${wish}` : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
+          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + (wish ? WISH + wish : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
       const j = await r.json().catch(() => ({}));
       const cost = Number.isFinite(+j.usage?.cost) ? +j.usage.cost : null;
       const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url || "";
