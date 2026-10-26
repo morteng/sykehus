@@ -200,7 +200,7 @@ want += [n for n in S.get("power_flags") or [] if n not in want and "power_out" 
 flags = [{"ref": f"#FLG{i + 1:02d}", "net": n} for i, n in enumerate(want)]
 if flags:
     libsyms["power:PWR_FLAG"] = [whole("power", "PWR_FLAG")[0], Q("power:PWR_FLAG")] + whole("power", "PWR_FLAG")[2:]
-loose = []
+loose, nc_net = [], {}
 for p in parts + [{"ref": f["ref"], "key": "power:PWR_FLAG", "value": "PWR_FLAG", "flag": f["net"], "pins": pins_of(libsyms["power:PWR_FLAG"]), "uuid": uid("flag", f["ref"])} for f in flags]:
     units = sorted({q["unit"] for q in p["pins"] if q["unit"] > 0}) or [1]
     for u in units:
@@ -227,8 +227,13 @@ for p in parts + [{"ref": f["ref"], "key": "power:PWR_FLAG", "value": "PWR_FLAG"
             net = p["flag"] if p.get("flag") else net_of.get((p["ref"], q["number"]))
             if net:
                 items.append(["label", Q(net), ["at", at[0], at[1], 0], ["effects", ["font", ["size", 1.27, 1.27]], ["justify", "left", "bottom"]], ["uuid", Q(uid("label", p["ref"], q["number"]))]])
-            elif q["type"] != "no_connect":
-                items.append(["no_connect", ["at", at[0], at[1]], ["uuid", Q(uid("nc", p["ref"], q["number"]))]]); loose.append(f"{p['ref']}:{q['name'] or q['number']}")
+            else:
+                if q["type"] != "no_connect":
+                    items.append(["no_connect", ["at", at[0], at[1]], ["uuid", Q(uid("nc", p["ref"], q["number"]))]])
+                loose.append(f"{p['ref']}:{q['name'] or q['number']}")
+                # the net the schematic gives a pin on nothing, which its pad must carry too (schematic parity)
+                if not p.get("flag"):
+                    nc_net[(p["ref"], q["number"])] = f"unconnected-({p['ref']}-{q['name']}-Pad{q['number']})" if q["name"] and q["name"] != "~" else f"unconnected-({p['ref']}-Pad{q['number']})"
 sch = ["kicad_sch", ["version", 20250114], ["generator", Q("eeschema")], ["generator_version", Q("9.0")], ["uuid", Q(ROOT)], ["paper", Q("A1")],
        ["lib_symbols"] + list(libsyms.values())] + items + [["sheet_instances", ["path", Q("/"), ["page", Q("1")]]], ["embedded_fonts", "no"]]
 (HERE / f"{NAME}.kicad_sch").write_text(dump(sch) + "\n")
@@ -245,6 +250,8 @@ else:
     b = pcbnew.CreateEmptyBoard()
     b.GetDesignSettings().SetBoardThickness(mm(float(S.get("board", {}).get("thickness", 1.6))))
     nets = {}
+    for k, n in nc_net.items():
+        ni = pcbnew.NETINFO_ITEM(b, n); b.Add(ni); nets[n] = ni
     for n in S["nets"]:
         # a local label's net is named with its sheet's path: /NAME on the root sheet (schematic parity)
         ni = pcbnew.NETINFO_ITEM(b, "/" + n); b.Add(ni); nets[n] = ni
@@ -264,7 +271,7 @@ else:
         fp.SetPosition(pcbnew.VECTOR2I(mm(p["at"][0]), mm(p["at"][1])))
         fp.SetOrientationDegrees(float(p.get("rot", 0)))
         for pad in fp.Pads():
-            n = net_of.get((p["ref"], pad.GetNumber()))
+            n = net_of.get((p["ref"], pad.GetNumber())) or nc_net.get((p["ref"], pad.GetNumber()))
             if n:
                 pad.SetNet(nets[n])
     if missing:

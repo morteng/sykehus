@@ -29,8 +29,9 @@
    "footprint": "RF_Module:ESP32-S2-MINI-1",
    "at": [
     111,
-    116
-   ]
+    110.25
+   ],
+   "rot": 0
   },
   {
    "ref": "U2",
@@ -38,9 +39,10 @@
    "symbol": "Battery_Management:MCP73831-2-OT",
    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
    "at": [
-    105,
-    128.5
-   ]
+    104,
+    123.4
+   ],
+   "rot": 0
   },
   {
    "ref": "U3",
@@ -48,17 +50,18 @@
    "symbol": "Regulator_Linear:AP2112K-3.3",
    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
    "at": [
-    110,
-    128.5
-   ]
+    111,
+    123.4
+   ],
+   "rot": 0
   },
   {
    "ref": "U4",
    "value": "AMC7135",
    "footprint": "Package_TO_SOT_SMD:SOT-89-3",
    "at": [
-    115.5,
-    128.5
+    117.5,
+    123.4
    ],
    "pins": [
     {
@@ -76,7 +79,8 @@
      "name": "VDD",
      "type": "input"
     }
-   ]
+   ],
+   "rot": 0
   },
   {
    "ref": "J1",
@@ -84,9 +88,10 @@
    "symbol": "Connector:USB_C_Receptacle_USB2.0_16P",
    "footprint": "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
    "at": [
-    111,
-    103.6
-   ]
+    107.0,
+    141.9
+   ],
+   "rot": 0
   },
   {
    "ref": "J2",
@@ -94,10 +99,10 @@
    "symbol": "Device:Battery_Cell",
    "footprint": "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal",
    "at": [
-    111,
-    143
+    118.5,
+    141.5
    ],
-   "rot": 180
+   "rot": 0
   },
   {
    "ref": "SW1",
@@ -105,9 +110,10 @@
    "symbol": "Switch:SW_Push",
    "footprint": "Button_Switch_SMD:SW_SPST_TL3342",
    "at": [
-    104,
-    136
-   ]
+    104.7,
+    133.8
+   ],
+   "rot": 0
   },
   {
    "ref": "SW2",
@@ -115,9 +121,10 @@
    "symbol": "Switch:SW_Push",
    "footprint": "Button_Switch_SMD:SW_SPST_TL3342",
    "at": [
-    118,
-    136
-   ]
+    117.3,
+    133.8
+   ],
+   "rot": 0
   },
   {
    "ref": "D1",
@@ -126,8 +133,9 @@
    "footprint": "LED_SMD:LED_Cree-XP",
    "at": [
     111,
-    136
-   ]
+    133.8
+   ],
+   "rot": 0
   },
   {
    "ref": "D2",
@@ -135,9 +143,10 @@
    "symbol": "Device:LED",
    "footprint": "LED_SMD:LED_0603_1608Metric",
    "at": [
-    111,
+    114,
     140
-   ]
+   ],
+   "rot": 0
   },
   {
    "ref": "R1",
@@ -145,9 +154,10 @@
    "symbol": "Device:R",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "at": [
-    105,
-    125.5
-   ]
+    102.2,
+    129.5
+   ],
+   "rot": 0
   },
   {
    "ref": "R2",
@@ -155,9 +165,10 @@
    "symbol": "Device:R",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "at": [
-    107.5,
-    125.5
-   ]
+    105.6,
+    129.5
+   ],
+   "rot": 0
   },
   {
    "ref": "R3",
@@ -165,9 +176,10 @@
    "symbol": "Device:R",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "at": [
-    110,
-    125.5
-   ]
+    109.0,
+    129.5
+   ],
+   "rot": 0
   },
   {
    "ref": "R4",
@@ -175,9 +187,10 @@
    "symbol": "Device:R",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "at": [
-    112.5,
-    125.5
-   ]
+    112.4,
+    129.5
+   ],
+   "rot": 0
   },
   {
    "ref": "R5",
@@ -185,9 +198,10 @@
    "symbol": "Device:R",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "at": [
-    115,
-    125.5
-   ]
+    115.8,
+    129.5
+   ],
+   "rot": 0
   },
   {
    "ref": "R6",
@@ -195,9 +209,10 @@
    "symbol": "Device:R",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "at": [
-    117.5,
-    125.5
-   ]
+    119.2,
+    129.5
+   ],
+   "rot": 0
   },
   {
    "ref": "C1",
@@ -205,9 +220,10 @@
    "symbol": "Device:C",
    "footprint": "Capacitor_SMD:C_0603_1608Metric",
    "at": [
-    105,
-    131.5
-   ]
+    102.2,
+    127
+   ],
+   "rot": 0
   },
   {
    "ref": "C2",
@@ -215,9 +231,10 @@
    "symbol": "Device:C",
    "footprint": "Capacitor_SMD:C_0603_1608Metric",
    "at": [
-    107.5,
-    131.5
-   ]
+    105.6,
+    127
+   ],
+   "rot": 0
   },
   {
    "ref": "C3",
@@ -225,9 +242,10 @@
    "symbol": "Device:C",
    "footprint": "Capacitor_SMD:C_0603_1608Metric",
    "at": [
-    110,
-    131.5
-   ]
+    109.0,
+    127
+   ],
+   "rot": 0
   },
   {
    "ref": "C4",
@@ -235,9 +253,10 @@
    "symbol": "Device:C",
    "footprint": "Capacitor_SMD:C_0603_1608Metric",
    "at": [
-    112.5,
-    131.5
-   ]
+    112.4,
+    127
+   ],
+   "rot": 0
   },
   {
    "ref": "C5",
@@ -245,9 +264,10 @@
    "symbol": "Device:C",
    "footprint": "Capacitor_SMD:C_0603_1608Metric",
    "at": [
-    115,
-    131.5
-   ]
+    115.8,
+    127
+   ],
+   "rot": 0
   },
   {
    "ref": "C6",
@@ -255,9 +275,10 @@
    "symbol": "Device:C",
    "footprint": "Capacitor_SMD:C_0603_1608Metric",
    "at": [
-    117.5,
-    131.5
-   ]
+    119.2,
+    127
+   ],
+   "rot": 0
   }
  ],
  "nets": {
@@ -361,5 +382,5 @@
   "GND",
   "VBAT"
  ],
- "note": "From pi-anton-fob's draft (anton-fob 436ea2f hardware/keychain-board), with library parts and fixes: D2 K only on GND (was on GND and STATUS2), LDO EN on VBAT (was on the module's EN), charger STAT on IO4 (IO43 is TXD0), USB on the module's USB_D+/USB_D- (IO20/IO19), AMC7135 3-pin SOT-89 with VDD from IO1 (PWM), the cell on a JST SH 2-pin. AMC7135 pin order (1 OUT, 2 GND, 3 VDD) to be checked against its datasheet."
+ "note": "From pi-anton-fob's draft (anton-fob 436ea2f hardware/keychain-board), with library parts and fixes: D2 K only on GND (was on GND and STATUS2), LDO EN on VBAT (was on the module's EN), charger STAT on IO4 (IO43 is TXD0), USB on the module's USB_D+/USB_D- (IO20/IO19), AMC7135 3-pin SOT-89 with VDD from IO1 (PWM), the cell on a JST SH 2-pin. AMC7135 pin order (1 OUT, 2 GND, 3 VDD) to be checked against its datasheet. Placement (try 3): the module's antenna at the top edge (its keepout spans the board's width), the ICs, two rows of passives, the buttons and the torch, then USB-C with its mouth at the bottom edge, the cell's JST and the status LED; courtyards from the 9.0.9 footprints."
 }
