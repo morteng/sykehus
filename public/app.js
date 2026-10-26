@@ -428,7 +428,7 @@ function drawViews() {
     ? `<button type="button" class="ic" data-ren title="Gi nytt navn" aria-label="Gi «${esc(w.name)}» nytt navn">✎</button><button type="button" class="ic" data-del title="Ta bort" aria-label="Ta bort «${esc(w.name)}»">×</button>` : ""}</li>`).join("")
     : `<li class="none">Ingen lagrede visninger ennå.</li>`;
   $("viewSave").hidden = !edit;
-  $("viewsSeries").hidden = !list.length && !edit; $("seriesPlay").hidden = !list.length; $("seriesMake").hidden = !edit;
+  $("viewsSeries").hidden = !list.length && !edit; $("seriesPlay").hidden = !list.length; $("seriesPrint").hidden = !list.length; $("seriesMake").hidden = !edit;
   $("seriesPlay").textContent = list.some(w => w.state?.series) ? "Vis bildeserie" : "Vis visningene etter hverandre";
   if (edit && !$("viewName").value) $("viewName").placeholder = freeName(list);
 }
@@ -470,6 +470,26 @@ function shotEnd() { series = null; $("shot").hidden = true; document.body.class
 $("shotPrev").onclick = () => shotShow(series.i - 1); $("shotNext").onclick = () => shotShow(series.i + 1); $("shotEnd").onclick = shotEnd;
 $("shotEra").onclick = () => { const e = $("shotEra"), to = e.dataset.era === "før" ? "etter" : "før"; paintEra(to); e.dataset.era = to; e.textContent = to === "før" ? "Vis etter" : "Vis før"; };
 $("seriesPlay").onclick = () => { viewsOpen(false); shotShow(0); };
+/* the series on paper (U3527): each shot on its own A4 page across, the picture with its names over it, its number,
+   name and caption, and where it is from; the view the person had is put back after */
+const frames = n => new Promise(ok => { let c = 0; const f = () => (++c >= n ? ok() : requestAnimationFrame(f)); requestAnimationFrame(f); });
+async function printSeries() {
+  const l = seriesOf(); if (!l.length) return;
+  const el = $("view"), W = el.clientWidth, H = el.clientHeight, PX = 96 / 25.4, k = Math.min(277 * PX / W, 162 * PX / H), back = viewNow(), was = series?.i;
+  const title = draft?.version ? draft.title : "Utkast", pages = [];
+  for (const [i, w] of l.entries()) {
+    showView({ ...w.state, glide: 1 }); await frames(3);
+    const pic = new Image(); pic.src = viewer.snapshot(); await pic.decode(); await frames(1);
+    pages.push({ w, i, pic, names: viewer.labels.cloneNode(true) });
+  }
+  $("sheet").innerHTML = pages.map(({ w, i }) => `<section class="spage"><div class="pic" style="width:${(W * k).toFixed(1)}px;height:${(H * k).toFixed(1)}px"><div style="width:${W}px;height:${H}px;transform:scale(${k.toFixed(4)});transform-origin:0 0"></div></div>
+    <div class="block"><div style="flex:1"><h1>${esc(`${i + 1}/${l.length} · ${w.name.replace(/^\d+ /, "")}`)}</h1><p>${esc(w.state?.caption || "")}</p><p>Gamle Drammen sykehus, Dronninggata 28 · ${esc(title)} · ${w.state?.era === "før" ? "slik det står i dag" : "forslaget"} · utskrevet ${new Date().toLocaleDateString("nb-NO")} fra sykehus.gulden.no</p></div></div>
+    <div class="src">Tegnet fra arkivets tegninger, OpenStreetMap og Kartverkets laser; ikke målt på stedet. ${w.state?.cam === "eye" ? "Øyehøyde 1,7 m over terrenget." : w.state?.mode === "plan" ? "Plan, nord opp, uten målestokk." : "Perspektiv, uten målestokk."}</div></section>`).join("");
+  $("sheet").querySelectorAll(".pic > div").forEach((d, j) => { const { pic, names } = pages[j]; pic.style.cssText = "position:absolute;inset:0;width:100%;height:100%"; d.append(pic, names); });
+  print();
+  if (was != null) shotShow(was); else { paintEra(null); showView({ ...back, glide: 1 }); }
+}
+$("seriesPrint").onclick = () => { viewsOpen(false); printSeries(); };
 $("seriesMake").onclick = async () => {
   const b = $("seriesMake"); b.disabled = true; b.textContent = "Setter sammen …";
   const j = await change({ ...where(), shots: true }); b.disabled = false; b.textContent = "Lag bildeserie";

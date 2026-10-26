@@ -15,6 +15,7 @@ import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { planShots } from "./shots.mjs";   // U3527: a few good shots of a version
+import { groundAt } from "./public/renderkit/fit.js";
 import { fitOf, surfaceFit, groundText, padFit, lotText } from "./public/design.js";
 import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
@@ -299,6 +300,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* a picture of a model (render.mjs) and what it shows, in words */
   const hospital = (() => { const ps = site.buildings.filter(b => b.own).flatMap(b => b.ring); return [ps.reduce((s, p) => s + p[0], 0) / ps.length, ps.reduce((s, p) => s + p[1], 0) / ps.length, 25]; })();
   async function look(s, a = {}) {
+    if (a.saved) {   // a saved view, as the page shows it (U3527): its camera, its «før» on the before
+      const st = a.saved.state, png = await picture(withMeshes(st.era === "før" ? site : s), { ...viewOpts(st, s), width: a.width || 1024, height: a.height || 640 });
+      return { png, text: `Bildet: den lagrede visningen «${a.saved.name}»${st.caption ? ` (${st.caption.replace(/\.$/, "")})` : ""}${st.cam === "eye" ? "; i øyehøyde, men med smalere linse enn siden" : ""}. Nordpilen øverst til høyre.` };
+    }
     s = withMeshes(s);   // a construction's triangles, from what the worker made
     const name = VIEWS[a.view_name] ? a.view_name : "isometrisk", v = { ...VIEWS[name] }, f = a.focus ? aimAt(s, a.focus) : null;
     if (a.focus && !f) throw toolErr(`Fant ikke «${a.focus}» å se på: en fløy, en bygnings id eller et nytt bygg (id eller navn).`);
@@ -311,6 +316,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
     return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(v.tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, ${f.name} i oransje` : ""}. Nordpilen øverst til høyre.${pad ? " " + pad : ""}` };
   }
+  /* a saved view (the page's camera, saved.js) as the server's picture takes it (U3527): the orbit's yaw, pitch and
+     dist; the person's eye as a camera 1,7 m over the ground there looking at the centre (the picture's narrower lens);
+     the plan straight down. Its «før» is drawn on the before */
+  const viewOpts = (st, s) => {
+    const k = st.kote ?? (st.h != null ? st.h + Math.min(...s.terrain.z.filter(v => v != null)) : groundAt(s, [st.x ?? 0, st.y ?? 0]) + 6), target = [st.x ?? 0, st.y ?? 0, k];
+    if (st.mode === "plan") return { plan: true, target, dist: st.dist ?? 220 };
+    const from = ((((Math.PI - (st.yaw ?? 0)) * 180 / Math.PI) % 360) + 360) % 360, d = st.dist ?? 300;
+    if (st.cam === "eye") {
+      const at = [target[0] + Math.sin(from * Math.PI / 180) * d, target[1] + Math.cos(from * Math.PI / 180) * d], up = groundAt(s, at) + 1.7 - k;
+      return { target, from, tilt: Math.atan2(up, d) * 180 / Math.PI, dist: Math.hypot(d, up) };
+    }
+    return { target, from, tilt: (st.pitch ?? 0.6) * 180 / Math.PI, dist: d };
+  };
+  const shotPicture = (m, st, size = { width: 640, height: 400 }) => picture(withMeshes(st.era === "før" ? site : m.site), { ...viewOpts(st, m.site), ...size });
   const TOOLS = [
     { name: "about_site", tgt: "read", title: "Tomta og fløyene", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
@@ -387,12 +406,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
         return { ...(isV ? versionOut(versionOf(a.draft, req), o, req) : { draft: String(a.draft), link: draftUrl(o, a.draft) }), changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV, saved_views: viewsOut(viewsOf(a.draft, req)) }; } },
-    { name: "make_shots", tgt: "draft", title: "Lag en bildeserie", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD }),
+    { name: "make_shots", tgt: "draft", title: "Lag en bildeserie", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, pictures: { type: "boolean", description: "Leave out (true): each shot comes back as a small picture for you to look at" } }),
       description: "Puts together 4–6 good shots of the version or draft that also explain it (U3527): the whole from the air, each new building at eye level from the nearest named street, a torn-down wing before and after from the same place, and the plan, each with a caption. They are saved as its views (in place of the last series), and the page plays them as «Bildeserie» under Visninger, with Før/Etter on the pairs. For «lag noen gode bilder», «sett sammen en presentasjon», «vis forslaget for noen». Say what each shot shows.",
       run: async (a, req) => {
-        const { shots } = await makeShots(a.draft, req), o = originOf(req), isV = /^v.{8}$/.test(String(a.draft));
-        return { draft: String(a.draft), shots: shots.map(s => ({ name: s.name, caption: s.state.caption, camera: s.state.cam === "eye" ? "øyehøyde" : s.state.mode })), link: `${o}/${isV ? `?versjon=${a.draft}` : `?utkast=${a.draft}`}`,
-          note: "On the page: Visninger › Bildeserie plays them, one tap a shot." };
+        const { shots } = await makeShots(a.draft, req), o = originOf(req), isV = /^v.{8}$/.test(String(a.draft)), m = model(a.draft, req);
+        const out = { draft: String(a.draft), shots: shots.map(s => ({ name: s.name, caption: s.state.caption, camera: s.state.cam === "eye" ? "øyehøyde" : s.state.mode })), link: `${o}/${isV ? `?versjon=${a.draft}` : `?utkast=${a.draft}`}`,
+          note: "On the page: Visninger › Bildeserie plays them, one tap a shot; «Skriv ut» prints them, one A4 page each. Below, each shot as you see it (a narrower lens than the page's at eye level): say what each shows, and if one shows the wrong thing or nothing, say so and offer another (show_building save_as, or look saved_view to look again)." };
+        if (a.pictures === false) return out;
+        /* Anton looks at each shot before it says what they show (U3527): small pictures, one after another */
+        const content = [{ type: "text", text: JSON.stringify(out) }];
+        for (const s of shots) {
+          try { const png = await shotPicture(m, s.state); content.push({ type: "text", text: `${s.name}: ${s.state.caption}` }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }); }
+          catch (e) { content.push({ type: "text", text: `${s.name}: fikk ikke tegnet bildet (${e.message}).` }); }
+        }
+        return { _result: { content, structuredContent: out } };
       } },
     { name: "undo_change", tgt: "draft", title: "Angre en endring", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, n: { type: "integer", minimum: 1, description: "The change's number from show_draft" } }, ["n"]),
       description: "Takes one change out of a draft, or out of the person's own version, by its number from show_draft.",
@@ -466,10 +493,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "look", tgt: "read", title: "Se på modellen", ro: true, schema: S({ view_name: VIEW_NAME, focus: { type: "string", description: "A wing (id or name), a building id, or a new building's id or name: aimed at and picked out in orange" },
         from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees; overrides view_name's" },
         tilt_deg: { type: "number", minimum: 5, maximum: 85 }, distance_m: { type: "number", minimum: 30, maximum: 1200 },
+        saved_view: { type: "string", description: "A saved view by its name or id (show_draft's saved_views, or a shot make_shots made): the picture from its camera, its «før» on the before; the other view fields are not needed" },
         draft: DRAFT, width: { type: "integer", minimum: 320, maximum: 1280 }, height: { type: "integer", minimum: 240, maximum: 960 } }),
       description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With target: that version or draft; without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
       run: async (a, req) => {
         const who = userOf(req), open = who && versions ? versions.get(pages?.open.get(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
+        if (a.saved_view) { if (!id) throw toolErr("Ingen lagrede visninger: ingen versjon eller utkast er åpen."); try { a = { ...a, saved: findView(viewsOf(id, req), a.saved_view) }; } catch (e) { throw toolErr(e.message); } }
         let png, text; try { ({ png, text } = await look(m.site, a)); }
         catch (e) { if (e.tool) throw e; console.error("look:", e.message, "|", argsLine(a), "| added:", (m.site.added || []).map(x => x.kind).join(",")); throw toolErr(`Fikk ikke tegnet bildet (${e.message}). Prøv en annen visning, eller si fra til Morten.`); }
         return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: text + (id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.") }] } }; } },
@@ -554,6 +583,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     try_change: O({ added: { type: "array", description: "The changes that went in, as checked" }, rejected: { type: "array", description: "{index, error} for each refused" }, ids: { type: "object", description: "An asked id that was taken: the id each got" },
       changes_in_draft: "number", after: "object", fit: "array", saved: "boolean", note: "string", ...TARGET_OUT }, "What went in and what was refused, and where"),
     show_building: O({ app: "string", view: "object", saved_view: "object" }),
+    make_shots: O({ shots: { type: "array", description: "{name, caption, camera} in the order shown" }, note: "string", ...TARGET_OUT }),
   };
   /* the Gulden mark (gulden-ai's, Morten 00:35Z), served from here */
   const ICONS = o => [{ src: `${o}/icons/icon-192.png`, mimeType: "image/png", sizes: ["192x192"] }, { src: `${o}/icons/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] }];

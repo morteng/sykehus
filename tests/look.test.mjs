@@ -60,3 +60,18 @@ test("shapes: terraces step back, a volume on a roof stands on it, a floating on
   assert.throws(() => checkEdit(site, floors, { kind: "volume", shape: "box", on: "Østfløy", from: [-300, -300], to: [-290, -300], width: 4, height: 3 }), /står ikke på taket/);
   assert.throws(() => checkEdit(site, floors, { kind: "volume", shape: "terraces", steps: 5, step_depth: 5, from: [0, 0], to: [10, 0], width: 12, height: 10 }), /øverste uten bredde/);
 });
+
+/* U3527: the series Anton makes, looked at: a picture of each shot, and any saved one again by look saved_view; the
+   pair's «før» is drawn on the before, so it is not the «etter» picture */
+test("make_shots: each shot comes back as a picture with its caption; look saved_view draws one again", async () => {
+  const d = (await call("try_change", { edits: [pyramid, { kind: "demolish", building: "Østfløy" }] })).structuredContent.draft;
+  const r = await call("make_shots", { draft: d }), out = r.structuredContent, pngs = r.content.filter(isPng);
+  assert.deepEqual(out.shots.map(s => s.name.replace(/^\d+ /, "").split(":")[0].split(" fra ")[0]), ["Oversikt", "Drivhus", "Før", "Etter", "Plan"]);
+  assert.equal(pngs.length, out.shots.length, "one picture a shot");
+  assert.ok(r.content.some(c => c.type === "text" && /^2 Drivhus fra .*øyehøyde 1,7 m/.test(c.text)), "its caption by it");
+  assert.notEqual(pngs[2].data, pngs[3].data, "the before and the after differ");
+  const l = await call("look", { draft: d, saved_view: out.shots[1].name });
+  assert.ok(l.content.some(isPng)); assert.match(l.content.find(c => c.type === "text").text, /lagrede visningen «2 Drivhus fra [^»]+» \(Drivhus, .*\); i øyehøyde/);
+  assert.equal((await call("make_shots", { draft: d, pictures: false })).content.filter(isPng).length, 0, "without pictures when asked");
+  assert.match((await call("look", { draft: d, saved_view: "finnes ikke" })).content[0].text, /finnes ikke|Fant ikke|Ingen/i);
+});
