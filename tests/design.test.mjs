@@ -204,3 +204,11 @@ test("U3614/U3615: «sør» on the turned Sentralblokka is refused with both fac
   assert.equal(a.facade_say, "Balkonger på fasaden mot 210° (31 m): 2–3 per etasje på 13 etasjer, 38 i alt.");
   assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 170 }), /ingen fasade som vender 170°\. Fasadene vender 120° \(165 m\), 300° \(154 m\), 30° \(44 m\), 210° \(31 m\)/);
 });
+
+test("a whole facade asked with no width is one balcony per window axis, not one slab along all of it (U3690, pm 13:06Z)", () => {
+  const a = applyEdits(site, floors, add([], { kind: "balconies", wing: "Sentralblokka", face: 120 })).site.added[0], slabs = a.parts.filter(p => p.role === "slab");
+  assert.ok(slabs.length > 100, `one a window axis on every storey: ${slabs.length}`);
+  assert.ok(Math.max(...slabs.map(p => Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]))) < 3.5, "none is a long strip");
+  const wide = applyEdits(site, floors, add([], { kind: "balconies", wing: "Sentralblokka", face: 120, bay: 6, gap: 1 })).site.added[0].parts.filter(p => p.role === "slab");
+  assert.ok(Math.hypot(wide[0].axis[1][0] - wide[0].axis[0][0], wide[0].axis[1][1] - wide[0].axis[0][1]) > 5.9, "a width asked is kept");
+});
