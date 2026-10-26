@@ -14,6 +14,7 @@
 import { pick } from "./kit/pick.js";
 import { chatSheet, sheetShown } from "./kit/chat.js";   // U3657: the conversation over the pill, the kit's
 import { toolLine } from "./toolline.js";
+import { setMd } from "./md.js?v=20261027a";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
 const NEEDS_LOGIN = "Logg inn for å bygge og snakke med Anton";
 
@@ -96,9 +97,9 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
        dont see my chats … just antons replies»), which shows as soon as it is sent; a waiting question with them */
     const ownMsg = $("reply-me").firstChild;
     function said(text) { ownMsg.textContent = text; $("reply-body").textContent = ""; $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(); }
-    function showReply(text) {
+    function showReply(text, plain) {
       const open = chatOpen();
-      if (text != null) $("reply-body").textContent = text;
+      if (text != null) { if (plain) { $("reply-body").classList.remove("md"); $("reply-body").textContent = text; } else setMd($("reply-body"), text); }
       $("reply-me").hidden = !ownMsg.textContent; $("reply-who").hidden = $("reply-body").hidden = !$("reply-body").textContent;
       $("reply-card").hidden = open || sheet.open || (!$("reply-body").textContent && !ownMsg.textContent);
       $("reply").hidden = open || ($("reply-card").hidden && !$("reply-cards").children.length);
@@ -114,10 +115,10 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const b = document.createElement("div"); b.className = "talk-body";
       if (about) b.append(Object.assign(document.createElement("span"), { textContent: `Om ${about}`, className: "about" }));
       if (image) b.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "snap" }));
-      const t = document.createElement("span"); t.textContent = text; b.append(t); li.append(b);
+      const t = document.createElement(cls === "from-asst" ? "div" : "span"); if (cls === "from-asst") { t.raw = text; setMd(t, text); } else t.textContent = text; b.append(t); li.append(b);
       log.append(li); empty(); toEnd();
       /* a failed turn shows in the pill's card too, not only in the tab (pm 21:20Z: the pill showed nothing) */
-      if (cls === "err") { $("reply-card").classList.add("err"); $("reply-who").textContent = "Feil"; showReply(text); }
+      if (cls === "err") { $("reply-card").classList.add("err"); $("reply-who").textContent = "Feil"; showReply(text, true); }
       return t;
     }
     /* while a turn runs (U3564, Morten 22:01Z «the red stop button … should animate to indicate anton is working.
@@ -243,7 +244,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); said(m.text); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
-      b.textContent += t.delta || ""; if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
+      b.raw += t.delta || ""; setMd(b, b.raw); if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.raw); panel.badge("chat", asking ? "!" : unread);
     });
     /* U3670: each try shows in the 3D view as a ghost at once and as a small picture on its row; a tap on it takes the camera back there */
     const tryRows = matcher((el, t) => {
