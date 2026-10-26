@@ -539,7 +539,7 @@ body.anon .dock[data-tabs] { --tabs: 2; }
 .pf-stale { margin: 2px 0; color: var(--accent); font-weight: 600; font-size: var(--fs-sm); } .pf-spot-t { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--muted); }
 .pf-retake { border: 1px solid var(--accent-panel-edge); background: var(--accent-panel); border-radius: var(--radius); padding: var(--sp-2); margin: var(--sp-2) 0; } .pf-retake p { margin: 0 0 var(--sp-2); }
 /* in photo mode what the picture does not need steps aside: the storey rail, the view switch, the map's tools but the compass and the sun, the conversation, the bar's extras */
-body.photo .levels, body.photo .vt, body.photo .shot, body.photo #scale, body.photo #talk-form, body.photo .g-chat, body.photo #mfb, body.photo #tourBtn, body.photo #print, body.photo .nz .zoom2 > :not(#sunBtn) { display: none !important; }
+body.photo .levels, body.photo .vt, body.photo .shot, body.photo #scale, body.photo #talk-form, body.photo .g-chat, body.photo #mfb, body.photo #tourBtn, body.photo #print, body.photo .nz .zoom2 > :not(#sunBtn):not(#mtree) { display: none !important; }
 body.photo .nz .north { width: 40px; height: 40px; } body.photo .nz .north svg { width: 28px; height: 28px; }
 body.m .pf-box { width: 104px; height: 104px; top: 8px; left: 8px; bottom: auto; } body.m .pf-bar { bottom: 112px; } body.m .pf-bar .pf-row { flex-wrap: wrap; max-width: 100%; justify-content: center; padding: 0 8px; } body.m .pf-bar .pf-row button { flex: 0 0 auto; padding: 4px 8px; min-height: 30px; }
 #p-photo label { display: grid; gap: 4px; margin: var(--sp-2) 0; color: var(--muted); font-size: var(--fs-sm); } #p-photo label input { font: inherit; color: var(--text); padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
@@ -567,3 +567,7 @@ body.m .pf-x { top: 8px; left: 50%; }
 .np-card { white-space: normal; min-width: 0; line-height: 1.2; justify-content: flex-start; padding: var(--sp-2) var(--sp-1); }
 .np-acts { position: sticky; bottom: 0; background: var(--panel); padding-top: var(--sp-2); }
 .np-acts .dr-p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+/* U3676: the trees' switch in the tool column: full, simple or off */
+.nz .zoom2 #mtree svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; display: none; }
+.nz .zoom2 #mtree[data-mode="full"] .t-full, .nz .zoom2 #mtree[data-mode="simple"] .t-simple, .nz .zoom2 #mtree[data-mode="off"] .t-off { display: block; }
+.nz .zoom2 #mtree[data-mode="off"] { color: var(--muted); }
