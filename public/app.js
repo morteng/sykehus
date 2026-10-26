@@ -759,7 +759,7 @@ const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K
    and a turn ring, and paths by their points»): each drag one change, through reshape as the card's fields go */
 const SHAPED = { point: "fikk et punkt flyttet", edge: "fikk en kant flyttet", add: "fikk et nytt punkt", remove: "mistet et punkt", move: "flyttet", ring: "snudd" };
 const shapeEd = createShape({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K.scene, camera: K.camera, P: K.P, ground: K.ground, redraw: K.redraw,
-  onBusy: on => picker.pause(on),
+  onBusy: on => { picker.pause(on); viewer.bands(!on); },
   onCommit: (id, body, how, by) => { const g = (site.landscape || []).find(x => x.id === id); if (!g) return false; return reshape(id, body, `${groundName(g)} ${SHAPED[how] || "endret"}`, by); } });
 function syncShape() {
   if (shapeEd.busy) return;

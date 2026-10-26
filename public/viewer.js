@@ -902,6 +902,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   return {
     /* a renamed wing's name over its roof (the after's wing edits, in place) */
     relabel(names) { for (const t of wingTags) { const n = names.get(t.id); if (n && t.el.textContent !== n) { t.el.textContent = n; t.size = null; } } dirty = true; },
+    /* the yellow band round a picked surface or path, out of the way while its points are dragged */
+    bands(on) { if (groundRims.visible !== on) { groundRims.visible = on; dirty = true; } },
     setSun, select, setGone, setAdded, setLandscape, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     home() { setStorey(null); glide(home); },

@@ -4,7 +4,7 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap && rm -rf /var/lib/apt/lists/* \
  && pip install --no-cache-dir "ifcopenshell>=0.8.4,<0.9" lark numpy \
  && python -c "import ifcopenshell, ifcopenshell.api, ifcopenshell.geom; print(ifcopenshell.version)" \
- && useradd -u 1000 -m worker && mkdir /jobs && chown worker /jobs
+ && useradd -u 1000 -m worker && mkdir /jobs /work && chown worker /jobs
 COPY service.py /srv/worker/
 COPY steps /srv/worker/steps
 COPY selftest.py /srv/worker/
