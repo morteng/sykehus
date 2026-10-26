@@ -27,3 +27,11 @@ test("the page wires the kit's sheet with that key and takes the tab's list and 
   assert.match(a, /key: "sykehus-samtalehoyde"/);
   assert.match(a, /sheetShown\(log\.children\.length, chatOpen\(\)\)/);
 });
+
+test("U3787: «Ny samtale» says it starts a new one and that Anton can look up the old ones, in the button and in the tour", () => {
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8"), tour = readFileSync(new URL("../public/tour.js", import.meta.url), "utf8");
+  const b = /<button[^>]*id="talkNew"[^>]*>/.exec(html)?.[0] ?? "";
+  assert.ok(b.includes('title="Starter en ny samtale. Anton kan slå opp i de gamle når du viser til dem."'));
+  assert.ok(b.includes('aria-label="Ny samtale"'), "the name of the button is unchanged"); assert.ok(!/glemmer/.test(b + tour), "nothing says Anton forgets");
+  assert.ok(tour.includes("«Ny samtale» starter en ny samtale. Anton kan slå opp i de gamle når du viser til dem."));
+});
