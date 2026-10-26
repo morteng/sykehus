@@ -1,6 +1,8 @@
 """The high block as a GLB for the 3D page (U3656): the same model as the IFC, one source. tools/ifc.py builds the envelope wings
 (walls with their window openings, floor slabs, roof, the windows as glass); this reads the triangles back out of that model
-with IfcOpenShell and writes them as one mesh a material (concrete, glass), so the page draws what the IFC holds.
+with IfcOpenShell and writes them as one mesh a material (concrete, the windows' glazing, steel for a 50 mm frame ring round each
+pane), the names renderkit's materials.js CLASS_MAT gives, so the page draws what the IFC holds. The openings' own volumes are
+not written (they would fill the holes they cut).
 
   python -I tools/glb.py <site.json> <out.glb> [wing id ...]      (the wings of public/bimglb.js BIM; about 3 minutes)
 
@@ -15,20 +17,39 @@ import ifcopenshell, ifcopenshell.geom
 sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 import ifc
 
-GLASS = ("IfcWindow",)
+FRAME = 0.05   # a window's frame, m wide: a flat ring on each face of its box (the IFC has none)
 SKIP = ("IfcOpeningElement", "IfcSpace")   # an opening is the hole's own volume: drawn, it would fill the hole it cuts
+
+def classes():
+    return ifc.from_js('import { CLASS_MAT } from "ROOT/renderkit/materials.js"; console.log(JSON.stringify(CLASS_MAT));')
+
+def frame(v):
+    """a window box's frame: a flat ring FRAME wide round the pane on each of its two faces (8 vertices and 8 triangles a face), a
+    5 mm out so it does not fight the pane. The box's axes from its own corners: width along the longer horizontal spread."""
+    c = v.mean(0); h = v[:, :2] - c[:2]; w, ax = np.linalg.eigh(h.T @ h); u = np.array([ax[0, 1], ax[1, 1], 0.0]); n = np.array([-u[1], u[0], 0.0])
+    a, b, z = (v - c) @ u, (v - c) @ n, v[:, 2] - c[2]
+    a0, a1, b0, b1, z0, z1 = a.min(), a.max(), b.min() - 0.005, b.max() + 0.005, z.min(), z.max()
+    V, F = [], []
+    for bb in (b0, b1):
+        o = len(V)
+        for ia, iz in ((a0, z0), (a1, z0), (a1, z1), (a0, z1), (a0 + FRAME, z0 + FRAME), (a1 - FRAME, z0 + FRAME), (a1 - FRAME, z1 - FRAME), (a0 + FRAME, z1 - FRAME)):
+            V.append(c + ia * u + bb * n + np.array([0, 0, iz]))
+        F += [[o + i, o + (i + 1) % 4, o + 4 + i] for i in range(4)] + [[o + (i + 1) % 4, o + 4 + (i + 1) % 4, o + 4 + i] for i in range(4)]
+    return np.array(V), np.array(F, dtype=np.uint32).reshape(-1)
 
 def triangles(m):
     """{material key: (positions Nx3 float32 in glTF axes, indices uint32)} from the model's own geometry, openings cut"""
     s = ifcopenshell.geom.settings(); s.set("use-world-coords", True)
     it = ifcopenshell.geom.iterator(s, m, 4)
-    parts = {"concrete": [], "glass": []}
+    mats = classes()   # the library's say (renderkit materials.js CLASS_MAT): a window's glazing, a member's frame, the rest concrete
+    parts = {k: [] for k in sorted({"concrete", mats["IfcWindow"], mats["IfcMember"]})}
     if it.initialize():
         while True:
             sh = it.get(); g = sh.geometry
             v = np.array(g.verts, dtype=np.float64).reshape(-1, 3); f = np.array(g.faces, dtype=np.uint32).reshape(-1)
             cls = m.by_id(sh.id).is_a()
-            if len(f) and cls not in SKIP: parts["glass" if cls in GLASS else "concrete"].append((v, f))
+            if len(f) and cls not in SKIP: parts[mats["IfcWindow"] if cls == "IfcWindow" else "concrete"].append((v, f))
+            if len(f) and cls == "IfcWindow": parts[mats["IfcMember"]].append(frame(v))
             if not it.next(): break
     out = {}
     for k, ps in parts.items():

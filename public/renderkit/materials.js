@@ -24,9 +24,17 @@ export const MATERIALS = {
     density: 2400, density_from: "card", hatch: "concrete", texture: { set: "Concrete034", tile: [1.1, 1.1] }, look: { roughness: 0.9 }, category: "concrete",
   },
   glass: {
-    no: "Glass", en: "Glass", colour: "#4c6872", opaque: "#4c6872", kind: ["building"],   // blue-grey, dark enough to read on concrete and in plan (U3656); opaque: drawn without see-through (look.js)
+    no: "Glass", en: "Glass", colour: "#cfe6e2", opaque: "#a8d8cf", kind: ["building"],   // opaque: drawn without see-through (look.js)
     card: { uuid: "3e3a3e13-04a4-410e-8e36-bbd83ca66847", name: "Glass", file: "Standard/Glass/Glass-Generic.FCMat", author: "Przemo Firszt", license: "CC-BY-3.0", density: 2520, code: null },
-    density: 2520, density_from: "card", hatch: "glass", texture: null, look: { transparent: true, opacity: 0.92, roughness: 0.1, metalness: 0.4 }, category: "glass",
+    density: 2520, density_from: "card", hatch: "glass", texture: null, look: { transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.1, depthWrite: false }, category: "glass",
+  },
+  /* U3656: the glazing of a facade, seen from outside: the same glass (card), dark blue-grey and near-opaque so it reads in a wall,
+     smooth and half metal so the sky shows in it. `glass` stays see-through for a greenhouse or a conservatory. Not a building choice
+     (kind facade): a person asks for glass, the IFC window is drawn in this */
+  window_glass: {
+    no: "Vindusglass", en: "Window glass", colour: "#5f8398", opaque: "#5f8398", kind: ["facade"],
+    card: { uuid: "3e3a3e13-04a4-410e-8e36-bbd83ca66847", name: "Glass", file: "Standard/Glass/Glass-Generic.FCMat", author: "Przemo Firszt", license: "CC-BY-3.0", density: 2520, code: null },
+    density: 2520, density_from: "card", hatch: "glass", texture: null, look: { roughness: 0.03, metalness: 0.9, envMapIntensity: 2 }, category: "glass",
   },
   steel: {
     no: "Stål", en: "Steel", colour: "#8e9297", kind: ["building"],
@@ -86,7 +94,7 @@ export const HATCHES = {
 
 export const BUILDING = Object.keys(MATERIALS).filter(k => MATERIALS[k].kind.includes("building"));   // concrete, glass, steel, wood, brick
 /* the IFC classes a construction's parts come in, and the material each is drawn in when the part does not say */
-export const CLASS_MAT = { IfcMember: "steel", IfcAnnotation: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass",
+export const CLASS_MAT = { IfcMember: "steel", IfcAnnotation: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "window_glass", IfcCurtainWall: "glass",
   IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcStair: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood", IfcFurnishingElement: "wood" };
 
 export const materialOf = key => MATERIALS[key] || null;
