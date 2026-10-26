@@ -14,7 +14,7 @@
    mat: glass, concrete, steel, wood or brick.
 
    render(site, { target: [east, north, kote], from (degrees, 0 = the camera north of the target), tilt (degrees
-     above the ground), dist (m), plan (straight down, north up), focus: [ids picked out], width, height }) → PNG Buffer
+     above the ground), dist (m), plan (straight down, north up), focus: [ids picked out], accent (picked out in a filled strong orange, the rest toned down), width, height }) → PNG Buffer
    picture(site, opts): the same in a worker thread, one at a time → Promise<Buffer>
    aimAt(site, what): a wing (id or name), a building id, or an added one (id or name) → { name, ids, target, size } | null
    VIEWS: the named views (as FreeCAD's get_view): isometrisk, plan, N, Ø, S, V, NØ, SØ, SV, NV → { from, tilt } | { plan } */
@@ -53,7 +53,7 @@ function earcut(pts) {
 }
 
 /* the scene as triangles [[p, p, p], colour, focus?] and edges [p, p, colour, width] */
-function scene(site, focusIds) {
+function scene(site, focusIds, accent = false) {
   const tris = [], edges = [], t = site.terrain;
   const zAt = (x, y) => { const i = Math.max(0, Math.min(t.w - 1, Math.round((x - t.x0) / t.res))), j = Math.max(0, Math.min(t.h - 1, Math.round((t.y1 - y) / t.res))); return t.z[j * t.w + i] ?? 0; };
   const S = 2;   // every second terrain point: 4 m
@@ -79,7 +79,7 @@ function scene(site, focusIds) {
   for (const a of site.added || []) {
     const foc = focusIds.has(a.id);
     for (const p of a.parts || []) {
-      const ec = foc ? C.focus : C.edge, ew = foc ? 2.5 : 1;
+      const ec = foc ? C.focus : C.edge, ew = foc ? (accent ? 5 : 2.5) : 1;
       if (p.tris) { for (const t of p.tris) { tris.push([t, C[p.mat] || C.concrete, foc]); for (let k = 0; k < 3; k++) edges.push([t[k], t[(k + 1) % 3], ec, ew]); } continue; }
       const [[x0, y0], [x1, y1]] = p.axis, L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.01) continue;
       const d = [(x1 - x0) / L, (y1 - y0) / L], n = [-d[1], d[0]], col = C[p.mat] || C.concrete;
@@ -117,15 +117,16 @@ function camera({ target, from = 200, tilt = 35, dist = 300, plan = false, W, H,
 }
 
 /* draws the scene into an RGB buffer, twice the size, then halves it */
-export function render(site, { focus = [], from, tilt, dist, plan, target, width = 1024, height = 640 } = {}) {
+export function render(site, { focus = [], accent = false, from, tilt, dist, plan, target, width = 1024, height = 640 } = {}) {
   const W = width * 2, H = height * 2, rgb = new Uint8Array(W * H * 3), zb = new Float32Array(W * H).fill(Infinity);
   for (let i = 0; i < W * H; i++) rgb.set(C.sky, i * 3);
-  const focusIds = new Set(focus), { tris, edges } = scene(site, focusIds), cam = camera({ target, from, tilt, dist, plan, W, H });
+  const focusIds = new Set(focus), { tris, edges } = scene(site, focusIds, accent), cam = camera({ target, from, tilt, dist, plan, W, H });
   const toEye = cam.plan ? () => [0, 0, 1] : p => norm(sub(cam.eye, p));
   for (const [[a, b, c], col, foc] of tris) {
     const pa = cam.proj(a), pb = cam.proj(b), pc = cam.proj(c); if (!pa || !pb || !pc) continue;
     let n = norm(cross(sub(b, a), sub(c, a))); if (dot(n, toEye(a)) < 0) n = n.map(v => -v);
-    const lit = 0.58 + 0.42 * Math.max(0, dot(n, SUN)), tint = foc ? 0.82 : 1, shade = col.map((v, i) => Math.min(255, v * lit * tint + (foc ? C.focus[i] * 0.18 : 0)));
+    /* accent: what is picked out is filled in the strong orange, the rest toned down (a proposal's sketch, U3635) */
+    const lit = 0.58 + 0.42 * Math.max(0, dot(n, SUN)), tint = foc ? 0.82 : 1, base = accent ? (foc ? C.focus : col.map(v => v * 0.35 + 215 * 0.65)) : col, shade = base.map((v, i) => Math.min(255, v * lit * tint + (foc && !accent ? C.focus[i] * 0.18 : 0)));
     const x0 = Math.max(0, Math.floor(Math.min(pa[0], pb[0], pc[0]))), x1 = Math.min(W - 1, Math.ceil(Math.max(pa[0], pb[0], pc[0])));
     const y0 = Math.max(0, Math.floor(Math.min(pa[1], pb[1], pc[1]))), y1 = Math.min(H - 1, Math.ceil(Math.max(pa[1], pb[1], pc[1])));
     const area = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pb[1] - pa[1]) * (pc[0] - pa[0]); if (Math.abs(area) < 1e-9 || x0 > x1 || y0 > y1) continue;

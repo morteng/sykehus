@@ -235,17 +235,18 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       li.innerHTML = `<div class="talk-body">Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a></div>`; log.append(li); empty(); toEnd();
     }
 
+    const sketchShown = new Set();   // the plans on the page by id (a reload and the stream both bring one)
     // the history first, then live
     const fromHistory = () => fetch("api/anton/historikk").then(r => r.status === 401 ? signedOut() : r.json()).then(h => {
       if (!h) return null;
-      log.textContent = ""; replies.clear();
+      log.textContent = ""; replies.clear(); sketchShown.clear();
       for (const it of h.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
         else if (it.type === "tool") line("tool", toolLine(it));
         else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }
       empty(); return h;
-    }).catch(() => null);
+    }).then(async h => { if (h) await fetch("api/skisser").then(r => r.ok ? r.json() : null).then(j => (j?.sketches || []).reduce((p, x) => p.then(() => sketchCard(x)), Promise.resolve())).catch(() => {}); return h; }).catch(() => null);   // the plans Anton showed come back with the thread (U3635)
     fromHistory();
     const es = new EventSource("api/anton/strom");
     /* U3622 (10:39Z): the stream broke under a turn (the server restarted: ERR_HTTP2_PROTOCOL_ERROR), so its words and
@@ -268,6 +269,22 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       b.textContent += t.delta || ""; if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
     });
     on("tool", t => { if (t.label) line("tool", toolLine(t)); step = stepOf(t.key); state(); });
+    /* U3635: a plan Anton shows before he builds (propose_sketch): the picture to mark up (renderkit's sketch.js), «Bygg det»
+       says so to Anton, the feedback goes as the drawing (the picture with the marks, strokes in metres) and the pins in words */
+    async function sketchCard(s) {
+      if (sketchShown.has(s.id)) return; sketchShown.add(s.id);
+      const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty(); toEnd();
+      const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+      createSketch({ host: li, image: s.url, frame: s.frame, title: s.title, legend: s.legend, numbers: s.numbers,
+        onBuild: async () => { const b = li.querySelector(".sk-build"); b.disabled = true; if (await sendIt({ text: `Bygg det: ${s.title}` })) li.querySelector(".sk-say").textContent = "Sendt til Anton."; else b.disabled = false; },
+        onSend: async ({ text, drawing }) => {
+          const pins = drawing.pins.map(p => `Nål ${p.n} (øst ${m1(p.at[0])}, nord ${m1(p.at[1])} m)${p.note ? `: ${p.note}` : ""}`);
+          const { pins: _p, ...draw } = drawing;
+          return sendIt({ text: [`Tilbakemelding på skissen «${s.title}»${text ? `: ${text}` : "."}`, ...pins].join("\n"), drawing: { ...draw, camera: {}, mode: "plan", size: s.size } });
+        } });
+      toEnd();
+    }
+    on("sketch", sketchCard);
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));

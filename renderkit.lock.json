@@ -1,5 +1,5 @@
 {
-  "renderkit": "c9c0fc435b11b5df08e5fb311869514cece8ff26",
+  "renderkit": "359da41f1df8da93c9b0861c69401c80cc7467fe",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -19,7 +19,7 @@
     "streets3d.js": "c0c1d0d45521d8165faa03a151bec2e018faac44",
     "streetnorms.js": "4a0b1d3854c558731496e71362a7b9b55f3e31d7",
     "paths2d.js": "b7a0b55a629a25fb996a60b50d652faa722d90cc",
-    "look.js": "3b7b9731570245f14bd4608458ca66659dde5f98",
+    "look.js": "7a5c8a0d9906d62bee1f292a518e45c8ad8fc96b",
     "fit.js": "476f22c5a8d4032393e7fc33be5ae9037b990028",
     "views.js": "27feb79e202d7b15432b10a02bf539452c3e4fab",
     "select.js": "ccb48dbd13e700bca8fcc64d64ce18067d0391e5",
@@ -60,6 +60,7 @@
     "hatch-hatch45L.svg": "d3ae57a080f8487053e62d90ea707a71765802b6",
     "hatch-solid.svg": "1196ffcb2e0e37a11766f27319421a3e9ed99f21",
     "hatch-steel.svg": "b9ded695a08d1e38dc9a306eb655a55d38dbd570",
-    "hatch-wood.svg": "68d5bc8f5d43f963aa11b5e0ddba60acace139a5"
+    "hatch-wood.svg": "68d5bc8f5d43f963aa11b5e0ddba60acace139a5",
+    "sketch.js": "193547cb25ecdc2744a575230035df4c61df0477"
   }
 }
