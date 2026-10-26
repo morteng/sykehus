@@ -705,17 +705,24 @@ function aim(on, hint, text) {
 /* U3671: Anton asks for a place (ask_point, mcp.mjs): the plan, framed near its hint, one tap sets a pin, and the point goes back as the
    person's next message: plain words for the person, and the point (metres east and north on the site) to Anton out of view */
 async function askPoint(q) {
-  const { dropPin, clearPin } = await import("./pin.js?v=1"); clearPin(viewer);
+  const { dropPin, clearPin, pinDialog } = await import("./pin.js?v=3"); clearPin(viewer);
+  viewer.select(null); valg.clear(); shut(); if (placing) { aim(null); $("toast")?.remove(); }   // no building card stays open under the dialog
   setMode("plan"); if (storeyOn) pickStorey(null);
-  if (Number.isFinite(q.x) && Number.isFinite(q.y)) viewer.look({ x: q.x, y: q.y, dist: q.dist || 90, yaw: 0 }, 600);
-  aim(([x, y, k]) => {
-    aim(null); $("toast")?.remove(); dropPin(viewer, [x, y, k ?? 0]);
-    const near = site.buildings.map(b => [b, Math.min(...b.ring.map(p => Math.hypot(p[0] - x, p[1] - y)))]).sort((a, b) => a[1] - b[1])[0];
-    const where = near && near[1] < 30 ? `, ${Math.round(near[1])} m fra ${nameOf(near[0].wing || near[0].id)}` : "";
-    document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text: `Her: nålen står på planen${where}.`, point: { x, y } } }));   // the figures go to Anton only (assistant.mjs)
-    const phone = innerWidth <= 700, aimY = phone ? y - 0.25 * (q.dist || 140) * 0.72 : y;   // on a phone the pin goes in the top part, above the conversation box
-    for (const ms of [0, 150, 500, 1000]) setTimeout(() => { viewer.select(null); valg.clear(); shut(); if (ms === 500) { viewer.look({ x, y: aimY, dist: q.dist || 140 }, 300); if (!phone) $("tab-chat")?.click(); } }, ms);   // the tap that set the pin picks nothing and shows no card
-  }, "punkt", `${String(q.question || "Hvor?").trim()} Trykk på planen.`);
+  const question = String(q.question || "Hvor?").trim();
+  const dlg = pinDialog({ question, view: $("view"), stage: $("stage"), viewer, zoom: f => viewer.zoom(f),
+    cancel: () => { placing = null; clearPin(viewer); },   // nothing is sent
+    use: ([x, y, k]) => {
+      placing = null;
+      const near = site.buildings.map(b => [b, Math.min(...b.ring.map(p => Math.hypot(p[0] - x, p[1] - y)))]).sort((a, b) => a[1] - b[1])[0];
+      const where = near && near[1] < 30 ? `, ${Math.round(near[1])} m fra ${nameOf(near[0].wing || near[0].id)}` : "";
+      document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text: `Her: nålen står på planen${where}.`, point: { x, y } } }));   // the figures go to Anton only (assistant.mjs)
+      /* the pin is framed in the part the conversation does not cover: above it on a phone, left of the side panel on a desk */
+      const phone = innerWidth <= 700, d = q.dist || 140, mpp = d * 0.72 / (innerHeight || 800), shift = phone ? { x, y: y - 0.25 * d * 0.72 } : { x: x + mpp * 180, y };
+      setTimeout(() => { viewer.select(null); valg.clear(); shut(); viewer.look({ ...shift, dist: d }, 300); }, 200);
+    } });
+  placing = ([x, y, k]) => dlg.place([x, y, k ?? 0]);
+  dlg.open();
+  if (Number.isFinite(q.x) && Number.isFinite(q.y)) viewer.look({ x: q.x, y: q.y, dist: q.dist || 90, yaw: 0 }, 0);
 }
 $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(async ([x, y]) => {
   aim(null); const [dx, dy] = along(), L = 15, id = newId();

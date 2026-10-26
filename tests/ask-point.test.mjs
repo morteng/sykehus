@@ -69,3 +69,13 @@ test("a pin's point goes to Anton as a note and never to the person: not in the 
   const h = await (await fetch(O + "/api/anton/historikk", { headers: H })).json(); assert.equal(h.items[0].text, "Her: nålen står på planen.");
   await fetch(O + "/api/anton", { method: "POST", headers: { "content-type": "application/json", ...H }, body: JSON.stringify({ text: "hei", point: { x: "a", y: 1 } }) }); await new Promise(ok => setTimeout(ok, 300)); assert.equal(seen.at(-1).message, "hei", "a bad point is dropped");
 });
+
+test("the page answers ask_point through the pin dialog: one modal copy, the view moved in and back, cancel sends nothing, the message and hidden point as before", async () => {
+  const [app, pin] = await Promise.all([fetch(O + "/app.js", { headers: H }).then(r => r.text()), fetch(O + "/pin.js", { headers: H }).then(r => r.text())]);
+  assert.match(pin, /import \{ modal \} from "\.\/kit\/modal\.js"/, "the kit's modal, not a second one");
+  assert.match(pin, /o\.stage\.prepend\(o\.view\)[^]*m\.el\.remove\(\)[^]*at && sent \? o\.use\(at\) : o\.cancel\(\)/, "the view goes home, then only a sent pin is used");
+  const ask = app.slice(app.indexOf("async function askPoint"), app.indexOf('$("mnew").onclick'));
+  assert.match(ask, /cancel: \(\) => \{ placing = null; clearPin\(viewer\); \}/, "cancel sends nothing");
+  assert.match(ask, /viewer\.select\(null\); valg\.clear\(\); shut\(\)/, "a building card is closed when the dialog opens");
+  assert.match(ask, /detail: \{ text: `Her: nålen står på planen\$\{where\}\.`, point: \{ x, y \} \}/, "the visible text and the hidden point");
+});

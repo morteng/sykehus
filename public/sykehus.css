@@ -583,3 +583,16 @@ body.m .pf-x { top: 8px; left: 50%; }
 .nz .zoom2 #mtree svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; display: none; }
 .nz .zoom2 #mtree[data-mode="full"] .t-full, .nz .zoom2 #mtree[data-mode="simple"] .t-simple, .nz .zoom2 #mtree[data-mode="off"] .t-off { display: block; }
 .nz .zoom2 #mtree[data-mode="off"] { color: var(--muted); }
+/* U3683: the dialog Anton's question opens: the plan view moved into it, with its own zoom and the two answers under it */
+.pin-panel { width: min(980px, 100%); height: min(86vh, 760px); max-height: none; }
+.pin-panel .g-modal-body { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.pin-map { position: relative; flex: 1; min-height: 0; }
+#view.in-pin { position: absolute; inset: 0; }
+.pin-zoom { position: absolute; z-index: 2; top: 12px; right: 12px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-sm); }
+.pin-zoom button { width: 48px; height: 48px; padding: 0; border: 0; border-radius: 0; font-size: 24px; line-height: 1; background: var(--panel); color: var(--text); }
+.pin-zoom button + button { border-top: 1px solid var(--border); }
+.pin-bar { flex: none; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border); background: var(--panel); }
+.pin-hint { flex: 1; color: var(--muted); font-size: var(--fs-sm); }
+.pin-bar .dr-p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+.pin-bar .dr-p:disabled { opacity: .5; }
+@media (max-width: 47.99rem) { .pin-panel { width: 100%; height: 100%; } .pin-bar { flex-wrap: wrap; } .pin-hint { flex-basis: 100%; } .pin-bar button { flex: 1; } }
