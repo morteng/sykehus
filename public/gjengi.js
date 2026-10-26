@@ -4,7 +4,7 @@
    exactly what is sent. One big shutter says its price. The price is said before the picture is made, with what the month
    has used of the household's cap; the pictures of the open version or draft are listed under, and the places they were
    taken from (photospots.js) can be flown to for free and taken again for a press. */
-import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, lookFor, viewpointFor } from "./renderkit/photo.js";
+import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, lookFor, viewpointFor } from "./photo-set.js";
 import { LENSES, ASPECTS, frameRect, frameFov, viewFov, hFov, poseFromCam, frameSvg, frustumSvg } from "./renderkit/photoframe.js";
 import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO } from "./gjengi-no.js";
 import { spotOfView, flyTo, isStale, retakeBody, retake, total, whyNot, hasWork, NEEDS_WORK } from "./photospots.js";

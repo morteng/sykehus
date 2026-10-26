@@ -1,4 +1,4 @@
-/* A picture of a site for an agent to look at (sykehus U3557, Morten 2026-10-25 20:50Z «does anton on sykehus have
+/* A picture of a site for an agent to look at (sykehus U3557, Morten 2026-10-25 20:50Z «does the assistant on sykehus have
    camera tools to get views it wants of its own work … like fab has?»; one copy for every app, U3559): drawn in Node
    without a browser or a GPU, so a tool can hand it back as MCP image content. Massing only: the terrain, the lot
    line, the buildings as their blocks or rings, the new volumes in their material's colour, the trees as cones; some

@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { lightLine } from "./public/renderkit/sunpick.js";
-import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/renderkit/photo.js";
+import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/photo-set.js";
 
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };

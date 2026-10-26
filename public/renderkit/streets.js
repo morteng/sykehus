@@ -2,8 +2,7 @@
    into the path objects a plan uses and streets3d.js draws. No three.js, no DOM (fetch only for the load* calls). Moved from hagekart
    public/streets.js (U3530), where it had moved out of scene.js so detection can use them as known geometry before the 3D view exists.
    The app brings its projection: toUtm([lon, lat]) -> [x, y] metres and toLngLat back (hagekart and sykehus: EPSG:25833). A box is
-   [south, west, north, east] in degrees. base is where hagekart's API is: "" = the same origin (hagekart itself), else e.g.
-   "https://hagekart.gulden.no" (both routes send open CORS). */
+   [south, west, north, east] in degrees. base is where the street API is: "" = the same origin, else the origin of the app that serves it (both routes send open CORS). */
 import { pathRing } from "./paths2d.js";
 
 /* OSM roads, paths, pavements, fences and walls around the lot (server-cached) turned into the same path objects the plan uses, so the
