@@ -37,6 +37,13 @@ test("the after's IFC: a new building with its storeys and body, a pyramid, balc
   assert.deepEqual(names(p, "IFCBUILDINGSTOREY").filter(n => /^[1-4]\. etasje$/.test(n)).length >= 4, true);
   assert.ok([...p.ents.values()].some(e => e.type === "IFCTRIANGULATEDFACESET"), "the pyramid's faces");
   assert.ok(names(p, "IFCSLAB").filter(n => n === "Balkong").length > 10, "balconies");
+  /* U3620: a balcony is the balcony part's shape: an assembly of a slab and a railing, with property sets and quantities */
+  const asms = [...p.ents.values()].filter(e => e.type === "IFCELEMENTASSEMBLY" && /'Balkong'/.test(e.args)), kinds = t => [...p.ents.values()].filter(e => e.type === t);
+  assert.ok(asms.length > 10 && asms.length === names(p, "IFCSLAB").filter(n => n === "Balkong").length && names(p, "IFCRAILING").filter(n => n === "Rekkverk").length === asms.length, "one assembly, one slab and one railing a balcony");
+  assert.ok(kinds("IFCPROPERTYSET").some(e => /'Pset_SlabCommon'/.test(e.args)) && kinds("IFCPROPERTYSET").some(e => /'Pset_RailingCommon'/.test(e.args)), "property sets");
+  assert.ok(kinds("IFCELEMENTQUANTITY").some(e => /'Qto_SlabBaseQuantities'/.test(e.args)) && kinds("IFCQUANTITYAREA").some(e => /'GrossArea'/.test(e.args)) && kinds("IFCQUANTITYVOLUME").length > 10, "quantities");
+  assert.ok(kinds("IFCRELAGGREGATES").some(e => e.args.split("#").length === 4 + 0 && /\(#\d+,#\d+\)/.test(e.args)), "the assembly holds slab and railing");
+  assert.ok(kinds("IFCELEMENTASSEMBLYTYPE").length >= 1 && kinds("IFCELEMENTASSEMBLYTYPE").length < asms.length && kinds("IFCRELDEFINESBYTYPE").length === kinds("IFCELEMENTASSEMBLYTYPE").length, "one type a size, the balconies its occurrences");
   /* U3619: one IfcMaterial a material used, named by its FreeCAD card, each element in one */
   const mats = [...p.ents.values()].filter(e => e.type === "IFCMATERIAL" && /^'(Concrete|Glass|Steel-Generic|Wood|Brick|Soil)',/.test(e.args)).map(e => e.args);
   assert.ok(mats.includes("'Glass','Glass','glass'") && mats.includes("'Concrete','Betong','concrete'") && mats.includes("'Soil','Jord','earth'"), mats.join(" | "));

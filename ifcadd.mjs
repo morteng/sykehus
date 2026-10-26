@@ -69,6 +69,13 @@ export function addedLines(parsed, after, before) {
     const ps = put(`IFCPROPERTYSET('${gid(key + ":" + name)}',$,${stepStr(name)},$,(${vs.map(v => "#" + v).join(",")}))`);
     put(`IFCRELDEFINESBYPROPERTIES('${gid(key + ":" + name + ":rel")}',$,$,$,(${objs.map(o => "#" + o).join(",")}),#${ps})`);
   };
+  /* quantities (Qto_*): lengths, areas and volumes by name; the unit is the file's metre */
+  const qto = (key, objs, name, props) => {
+    const qs = Object.entries(props).filter(([, v]) => Number.isFinite(v)).map(([k, v]) => put(`IFCQUANTITY${/Area$/.test(k) ? "AREA" : /Volume$/.test(k) ? "VOLUME" : "LENGTH"}(${stepStr(k)},$,$,${num(Math.round(v * 1e4) / 1e4)},$)`));
+    if (!qs.length) return;
+    const q = put(`IFCELEMENTQUANTITY('${gid(key + ":" + name)}',$,${stepStr(name)},$,$,(${qs.map(v => "#" + v).join(",")}))`);
+    put(`IFCRELDEFINESBYPROPERTIES('${gid(key + ":" + name + ":rel")}',$,$,$,(${objs.map(o => "#" + o).join(",")}),#${q})`);
+  };
   /* one part's solid: its profile along its axis (left of the axis is +across), or a pyramid's triangles */
   const solid = p => {
     if (p.tris) {
@@ -108,17 +115,34 @@ export function addedLines(parsed, after, before) {
       counts.buildings++; counts.elements++;
     } else if (a.kind === "balconies") {
       const bid = A.building.get(wingName(a.wing)), sts = A.storeys.get(bid); if (!bid || !sts?.length || !(after.buildings || []).some(b => b.wing === a.wing)) continue;
-      const by = new Map();
-      a.parts.forEach((p, i) => {
-        if (!p.profile) return;
-        /* a slab is on the storey its top is the floor of; a railing on the one it stands on */
-        const ks = p.profile.map(q => q[1]), z = p.role === "railing" ? Math.min(...ks) : Math.max(...ks), st = sts.reduce((s, x) => x[1] <= z + 0.05 ? x : s, sts[0])[0];
-        const cls = p.role === "railing" ? "IFCRAILING" : "IFCSLAB", type = p.role === "railing" ? ".BALUSTRADE." : ".FLOOR.";
-        const el = put(`${cls}('${gid(`${key}:${i}`)}',$,${stepStr(p.role === "railing" ? "Rekkverk" : "Balkong")},$,$,#${placeAt(0)},#${shape([p])},$,${type})`);
-        (by.get(st) || by.set(st, []).get(st)).push(el); made(p.mat, el); counts.elements++;
+      /* U3620: each balcony is the balcony part's shape: an IfcElementAssembly «Balkong» of a slab and a railing (the glass
+         or steel along the edge and its two ends as one body), each with its material, property set and quantities */
+      const by = new Map(), all = [], groups = [], types = new Map();   // types: one IfcElementAssemblyType a distinct size, its balconies the occurrences
+      for (const p of a.parts) { if (!p.profile) continue; if (p.role === "slab") groups.push({ slab: p, rails: [] }); else groups.at(-1)?.rails.push(p); }
+      groups.forEach((g, i) => {
+        const z = Math.max(...g.slab.profile.map(q => q[1])), st = sts.reduce((s, x) => x[1] <= z + 0.05 ? x : s, sts[0])[0], k = `${key}:${i}`;
+        const [[x0, y0], [x1, y1]] = g.slab.axis, W = Math.hypot(x1 - x0, y1 - y0), D = Math.max(...g.slab.profile.map(q => q[0])), T = z - Math.min(...g.slab.profile.map(q => q[1]));
+        const slab = put(`IFCSLAB('${gid(k + ":slab")}',$,'Balkong',$,$,#${placeAt(0)},#${shape([g.slab])},$,.FLOOR.)`); made(g.slab.mat, slab); counts.elements++;
+        const els = [slab];
+        if (g.rails.length) {
+          const rail = put(`IFCRAILING('${gid(k + ":rail")}',$,'Rekkverk',$,$,#${placeAt(0)},#${shape(g.rails)},$,.BALUSTRADE.)`); made(g.rails[0].mat, rail); els.push(rail); counts.elements++;
+          const RL = g.rails.reduce((t, r) => t + Math.hypot(r.axis[1][0] - r.axis[0][0], r.axis[1][1] - r.axis[0][1]), 0);
+          pset(k + ":rail", [rail], "Pset_RailingCommon", { IsExternal: true, Reference: "Balkongrekkverk" });
+          qto(k + ":rail", [rail], "Qto_RailingBaseQuantities", { Length: RL });
+        }
+        pset(k + ":slab", [slab], "Pset_SlabCommon", { IsExternal: true, LoadBearing: true, Reference: "Balkongplate" });
+        qto(k + ":slab", [slab], "Qto_SlabBaseQuantities", { Length: W, Width: D, Depth: T, GrossArea: W * D, GrossVolume: W * D * T });
+        const asm = put(`IFCELEMENTASSEMBLY('${gid(k + ":asm")}',$,'Balkong',$,'Balkong',#${placeAt(0)},$,$,.SITE.,.USERDEFINED.)`);
+        put(`IFCRELAGGREGATES('${gid(k + ":agg")}',$,$,$,#${asm},(${els.map(e => "#" + e).join(",")}))`);
+        const tk = `${num(W)}x${num(D)}x${num(T)}`; (types.get(tk) || types.set(tk, { W, D, T, asms: [] }).get(tk)).asms.push(asm);
+        (by.get(st) || by.set(st, []).get(st)).push(asm); all.push(...els);
       });
       for (const [st, els] of by) contain(`${key}:${st}`, els, st);
-      const all = [...by.values()].flat(); if (all.length) pset(key, all, "Sykehustomta_Nytt", { Hvorfor: a.why, Status: "NEW" });
+      for (const [tk, t] of types) {
+        const ty = put(`IFCELEMENTASSEMBLYTYPE('${gid(`${key}:type:${tk}`)}',$,${stepStr(`Balkong ${String(Math.round(t.W * 10) / 10).replace(".", ",")} × ${String(Math.round(t.D * 10) / 10).replace(".", ",")} m`)},$,$,$,$,$,$,.USERDEFINED.)`);
+        put(`IFCRELDEFINESBYTYPE('${gid(`${key}:type:${tk}:rel`)}',$,$,$,(${t.asms.map(x => "#" + x).join(",")}),#${ty})`);
+      }
+      if (all.length) pset(key, all, "Sykehustomta_Nytt", { Hvorfor: a.why, Status: "NEW" });
     }
   }
   if (newBuildings.length) put(`IFCRELAGGREGATES('${gid("site:new")}',$,$,$,#${A.site},(${newBuildings.map(b => "#" + b).join(",")}))`);
