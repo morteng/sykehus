@@ -76,6 +76,9 @@ def sandboxed(cmd, work, caps):
             "--setenv", "HOME", "/tmp", "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin:/opt/conda/bin",
             "--setenv", "MPLCONFIGDIR", "/tmp", "--setenv", "QT_QPA_PLATFORM", "offscreen", "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
             *[x for k, v in os.environ.items() if k.startswith("KICAD") for x in ("--setenv", k, v)],
+            # an image whose binaries find their libraries at $ORIGIN (conda's): $ORIGIN needs /proc/self/exe, which the
+            # empty /proc has not, so the image names the folders (WORKER_LD_LIBRARY_PATH) and they are set outright
+            *(["--setenv", "LD_LIBRARY_PATH", os.environ["WORKER_LD_LIBRARY_PATH"]] if os.environ.get("WORKER_LD_LIBRARY_PATH") else []),
             "--"] + lim + cmd
 
 

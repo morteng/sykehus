@@ -74,7 +74,7 @@ else:
     say("kill_parent", r.get("kill_parent") in ("GOT 0", "GOT 1") or str(r.get("kill_parent")).startswith("refused"), r.get("kill_parent"))   # its parent is bwrap's, pid 0/1 in its own namespace
     # the sandbox's own names only: PWD from bwrap's --chdir, LC_CTYPE from Python's locale coercion, and the KiCad
     # image's KICAD*_DIR paths (where its libraries are; the service passes them in)
-    say("env", {e for e in r.get("env", []) if not re.fullmatch(r"KICAD\d*_[A-Z0-9]+_DIR", e)} <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE", "PWD"}, r.get("env"))
+    say("env", {e for e in r.get("env", []) if not re.fullmatch(r"KICAD\d*_[A-Z0-9]+_DIR", e)} <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE", "PWD", "LD_LIBRARY_PATH"}, r.get("env"))
 
 j = job("x = bytearray(6 << 30)\n")
 say("memory", (j.get("errors") or [{}])[0].get("code") == "memory_limit", (j.get("state"), j.get("errors")))
@@ -97,7 +97,10 @@ else:
     j = job(IFC, then=["mesh"])
     say("ifc_engine", j.get("state") == "done" and "mesh.json" in [o["name"] for o in j.get("outputs", [])], (j.get("state"), j.get("errors")))
 if ENGINE == "freecad":
-    j = job("import FreeCAD, Part, Import\nd = FreeCAD.newDocument('t'); o = d.addObject('Part::Feature', 'Box'); o.Shape = Part.makeBox(10, 20, 30); d.recompute(); Import.export([o], 'box.step')\n", then=["check"])
+    j = job("import FreeCAD, Part, Import\nd = FreeCAD.newDocument('t'); o = d.addObject('Part::Feature', 'Box'); o.Shape = Part.makeBox(10, 20, 30); d.recompute(); Import.export([o], 'box.step')\n", then=["check", "mesh"])
+    names = [o["name"] for o in j.get("outputs", [])]
     say("freecad_engine", j.get("state") == "done" and (j.get("check") or {}).get("files", {}).get("box.step", {}).get("size") == [10.0, 20.0, 30.0], (j.get("state"), j.get("errors"), str(j.get("log"))[-300:]))
+    # STEP to glTF (U3571: a bought part's model for Fab's viewer): the mesh step's glb and parts
+    say("step_to_glb", j.get("state") == "done" and {"box.glb", "box.parts.json"} <= set(names), names)
 print("all held" if ok_all else "A JOB GOT OUT")
 sys.exit(0 if ok_all else 1)
