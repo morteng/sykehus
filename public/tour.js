@@ -5,13 +5,26 @@
    is not on the page (Anton's pill signed out, «Visninger» with no proposal) is passed over. It offers itself once, on
    the first visit; «?» in the bar starts it again. */
 
-const SEEN = "sykehus-omvisning";
+const SEEN = "sykehus-omvisning", SEEN_IN = "sykehus-omvisning-inn";
+/* U3658 (Morten 14:09Z «visitors get simpler onboarding tour than when they log in»): two lists from one engine. A visitor
+   (signed out) gets a short one that ends on «Logg inn»; a signed-in person the full one. Each step says since which
+   version of the full tour it is there (VERSION 2: the keys, the sun, «Gjengi», «Mal», the conversation over the pill, the
+   panel's width, deleting saved proposals), so a person who saw the full tour at version 1 gets only the newer steps, once.
+   Marks in storage: SEEN is «sett» (the one tour there was before: the full list, version 1) or «gjest» (the visitor list);
+   SEEN_IN the version of the full list seen. */
+export const VERSION = 2;
+/** Which tour a person gets and whether it offers itself: kind «gjest», «full» or «nytt» (the steps since the version seen). */
+export function tourFor({ signedIn, seen = null, seenIn = null }) {
+  if (!signedIn) return { kind: "gjest", due: !seen };
+  const inn = Number.isFinite(+seenIn) && seenIn !== null ? +seenIn : seen === "sett" ? 1 : 0;
+  return inn >= VERSION ? { kind: "full", due: false } : inn === 0 ? { kind: "full", due: true } : { kind: "nytt", due: true, since: inn };
+}
 const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
 
 /* the steps: el, the part (a selector, or a function giving the element; none: the card in the middle); before, what
    the page does first (the view home, a building picked, the panel's tab) */
 export function steps(h) {
-  return [
+  const all = [
     { title: "Velkommen til Sykehustomta", text: "Her er Gamle Drammen sykehus slik det står i dag, bygget opp fra arkivets tegninger, laserdata og kart. Du kan se på alt, prøve endringer og lage ditt eget forslag til hvordan tomta kan bli. Omvisningen tar et par minutter.", before: () => h.home() },
     { el: "#view", title: "Modellen", text: "Dra med fingeren eller musa for å snu modellen. Rull, eller knip med to fingre, for å gå nærmere. Trykk på et bygg for å velge det." },
     { el: () => document.getElementById("m3d")?.parentElement, title: "Tre måter å se på", text: "3D er perspektiv fra luften. Gateplan er slik en som står på bakken ser det, med øyet 1,7 m over terrenget: dra for å se deg rundt, gå med W A S D eller piltastene, eller dra den lille mannen ved zoomknappene dit du vil stå. Plan er rett ovenfra, nord opp, med målestokk, og kan skrives ut." },
@@ -19,17 +32,44 @@ export function steps(h) {
     { el: "#names", title: "Navn", text: "Viser navnene på fløyene over modellen. Tasten N gjør det samme." },
     { el: () => h.phone() ? document.getElementById("tab-selected") : document.getElementById("p-selected"), title: "Et bygg", text: "Når du trykker på et bygg, kommer opplysningene om det her: byggeår, etasjer, konstruksjon og kote. Herfra kan du rive det, endre opplysningene eller spørre Anton om det. Alt kan angres.", before: () => h.pick() },
     { el: () => visible(document.getElementById("byggActs")) || !h.phone() ? document.getElementById("byggActs") : document.getElementById("tab-selected"), title: "Nytt bygg og Hent fil", text: "I «Bygg» setter du et nytt bygg på tomta: trykk «Nytt bygg» og så der det skal stå. «Hent fil» setter en modell fra en produsent på tomta. Du kan flytte det, snu det og endre høyde og etasjer. Tomta planeres rundt det, og du ser hvor mye som graves ut og fylles opp." , before: async () => { h.pick(); await new Promise(ok => requestAnimationFrame(ok)); document.getElementById("byggActs")?.scrollIntoView({ block: "center" }); } },
+    { since: 2, el: "#sunBtn", title: "Sola", text: "Velg dato og klokkeslett, så faller lyset og skyggen som de gjør da. Slik ser du hva et nytt bygg gjør med sola på nabohusene." },
+    { since: 2, el: "#mgj", title: "Gjengi", text: "Gjør det du ser nå til et realistisk bilde. Velg kamera, utseende og størrelse. Prisen står her før du bestiller, og bildet blir i listen under." },
     { el: () => visible(document.getElementById("talk-form")) ? document.getElementById("talk-form") : document.getElementById("tab-chat"), title: "Anton", text: "Anton er en assistent som kjenner tomta, tegningene og planene. Skriv eller snakk som til en kollega: «Riv Østfløy og sett et drivhus mot sør», «Hva sier reguleringsplanen om høyder?», «Vis meg fasaden mot Dronninggata». For å snakke med Anton må du være logget inn.", before: () => h.unpick() },
+    { since: 2, el: () => visible(document.querySelector(".g-chat")) ? document.querySelector(".g-chat") : document.getElementById("talk-form"), title: "Samtalen over feltet", text: "Når du har skrevet med Anton, står samtalen over feltet. Dra i kanten øverst for å gjøre den høyere eller lavere, eller trykk på pila for å bare se det siste svaret. «Ny samtale» tømmer den, så Anton glemmer det dere har snakket om og nytt arbeid starter rent." },
     { el: "#talkTegn", title: "Tegn", text: "Tegn med fingeren eller pennen rett på det du ser, en skisse eller en strek der noe skal stå, og send den til Anton, som gjør den om til en endring." },
     { el: () => h.phone() ? document.getElementById("tab-changes") : document.getElementById("p-changes"), title: "Forslaget ditt", text: "Alt du endrer lagres med en gang i ditt eget forslag. Her ser du endringene, og kan ta dem ut igjen én for én. Ingen andre ser forslaget før du trykker «Del», og «Gjør privat» tar det tilbake.", before: () => h.tab("changes") },
+    { since: 2, el: () => h.phone() ? null : document.querySelector("#right .g-split"), before: () => h.tab("changes"), title: "Bredden på panelet", text: "Dra i kanten til venstre for panelet for å gjøre det bredere eller smalere. Dobbeltklikk setter det tilbake." },
+    { since: 2, el: "#verSel", before: () => h.tab("changes"), title: "Slett lagrede forslag", text: "Trykk «Velg», merk forslagene du ikke trenger, og trykk «Slett valgte». De ligger en stund i papirkurven." },
     { el: "#viewsBtn", title: "Visninger og bildeserie", text: "Lagre det du ser som en visning du kan gå tilbake til. Anton kan også sette sammen en bildeserie som forklarer forslaget, med før og etter, som du kan vise eller skrive ut." },
+    { since: 2, el: "#mmal", title: "Mal", text: "Mal gress, belegg, bed eller grus på bakken: trykk langs der penselen skal gå. Angre tar det bort igjen." },
+    { since: 2, el: "#view", title: "Slett og angre med tastene", text: "Trykk Delete eller Backspace for å fjerne det du har valgt. Cmd-Z (Ctrl-Z) tar tilbake, og Shift-Cmd-Z (Ctrl-Y) gjør det igjen." },
     { el: "#tourBtn", title: "Det var alt", text: "Du finner omvisningen igjen her, når du vil. Lykke til med tomta!" },
   ];
+  return all;
+}
+/* the visitor's short list: the same words for the model, the views and the storeys, then the way in */
+export function visitorSteps(h) {
+  const s = steps(h), by = t => s.find(x => x.title === t);
+  return [
+    { ...by("Velkommen til Sykehustomta"), text: "Her er Gamle Drammen sykehus slik det står i dag, bygget opp fra arkivets tegninger, laserdata og kart. Du kan se på alt. Omvisningen tar et minutt." },
+    by("Modellen"), by("Tre måter å se på"), by("Etasjene"),
+    { el: () => document.getElementById("meBtn") || document.getElementById("me"), title: "Logg inn", text: "Logg inn for å snakke med Anton og lage ditt eget forslag til hvordan tomta kan bli." },
+  ];
+}
+/* the list for a kind: «nytt» is the intro and the steps newer than the version seen, then the end */
+export function listFor(kind, h, since = 0) {
+  if (kind === "gjest") return visitorSteps(h);
+  const s = steps(h);
+  if (kind === "full") return s;
+  return [{ title: "Nytt siden sist", text: "Her er det som er kommet til siden forrige gang du var her." }, ...s.filter(x => (x.since || 1) > since), s[s.length - 1]];
 }
 
 export function createTour(h) {
   let at = -1, list = [], plan = [], root = null, hole = null, card = null;
-  const keep = () => { try { localStorage.setItem(SEEN, "sett"); } catch { } };
+  const read = k => { try { return localStorage.getItem(k); } catch { return null; } };
+  const now = () => tourFor({ signedIn: !!h.signedIn?.(), seen: read(SEEN), seenIn: read(SEEN_IN) });
+  let kind = "full";
+  const keep = () => { try { if (kind === "gjest") { if (!localStorage.getItem(SEEN)) localStorage.setItem(SEEN, "gjest"); } else localStorage.setItem(SEEN_IN, String(VERSION)); } catch { } };
   const elOf = s => !s.el ? null : typeof s.el === "function" ? s.el() : document.querySelector(s.el);
   function build() {
     root = document.createElement("div"); root.className = "tour"; root.innerHTML = `<div class="tour-hole"></div>
@@ -87,9 +127,9 @@ export function createTour(h) {
   function end() { at = -1; if (root) root.hidden = true; keep(); h.done?.(); }
   return {
     /* the count is made once: the steps whose part is on the page now, or that put it there first (before) */
-    start() { list = steps(h); plan = list.map((s, k) => k).filter(k => !list[k].el || list[k].before || visible(elOf(list[k]))); if (!root) build(); go(0); },
+    start(auto = false) { const t = now(); kind = auto || t.kind === "gjest" ? t.kind : "full"; list = listFor(kind, h, t.since || 0); plan = list.map((s, k) => k).filter(k => !list[k].el || list[k].before || visible(elOf(list[k]))); if (!root) build(); go(0); },
     end, get on() { return at >= 0; },
     /* the first visit: once, the page ready */
-    get due() { try { return !localStorage.getItem(SEEN); } catch { return false; } },
+    get due() { return now().due; },
   };
 }

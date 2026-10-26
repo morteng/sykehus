@@ -990,10 +990,10 @@ import("./tour.js").then(({ createTour }) => {
   const tour = createTour({
     home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },
     pick: () => { if (!sb) return; valg.clear(); valg.pick(sb.id, {}); showInfo(sb); panel.reveal("selected"); },
-    unpick: () => valg.clear(), tab: t => panel.reveal(t), phone: () => panel.phone,
+    unpick: () => valg.clear(), tab: t => panel.reveal(t), phone: () => panel.phone, signedIn: () => !!me.person,
   });
   $("tourBtn").onclick = () => tour.start();
-  if (tour.due) setTimeout(() => { if (!document.querySelector(".tour:not([hidden])")) tour.start(); }, 1500);
+  if (tour.due) setTimeout(() => { if (!document.querySelector(".tour:not([hidden])")) tour.start(true); }, 1500);
 }).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261026g").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
