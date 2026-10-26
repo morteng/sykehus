@@ -5,6 +5,7 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
+import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026t";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
@@ -647,7 +648,13 @@ async function edit(mine_, failed, redoing = false) {
 }
 async function riv(targets, name, ground = false) {   // ground: a surface or a path, taken away (U3569)
   /* a target is an id, or { building, name } for a road section (U3543), whose name the server cannot look up */
-  const r = await edit(targets.map(t => ({ kind: "demolish", ...(typeof t === "string" ? { building: t } : t), why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet"); if (!r) return;
+  if (busy) return;
+  const send = () => edit(targets.map(t => ({ kind: "demolish", ...(typeof t === "string" ? { building: t } : t), why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet");
+  /* hidden at once (U3649, Morten 13:06Z: «it takes a long time from i press delete to object dissapears»); a ground
+     surface or path is not in the viewer's gone list, so it waits for the answer as before */
+  const r = ground ? await send() : await tearAtOnce({ targets, send, gone: () => (site.demolished || []).map(d => d.id), roads: () => (site.roads_removed || []).map(x => x.id),
+    setGone: ids => viewer.setGone(ids), setRoads: ids => streetsOn?.setRemoved(ids), clear: () => { valg.clear(); shut(); } });
+  if (!r) return;
   toast(`${name[0].toUpperCase() + name.slice(1)} er ${ground ? "fjernet" : "revet"} i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
 
