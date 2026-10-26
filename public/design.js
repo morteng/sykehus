@@ -38,7 +38,7 @@ import { BAY, windowsOn, kindOf } from "./bays.js";   // the window bays (U3624)
 import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
-import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360 } from "./renderkit/dirs.js";   // one copy of directions (DRY 5)
+import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360, dirDeg, dirWord } from "./renderkit/dirs.js";   // one copy of directions (DRY 5)
 import { BUILDING as MATERIALS } from "./renderkit/materials.js";   // glass, concrete, steel, wood, brick (U3618)
 import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
@@ -284,6 +284,34 @@ export function facadesOf(site, wing) {
   const m = new Map();
   for (const side of Object.keys(SIDES)) for (const { L, bearing } of facingWalls(site, wing, side)) { const k = faceKey(bearing); m.set(k, (m.get(k) || 0) + L); }
   return [...m].map(([bearing, L]) => ({ bearing, length_m: Math.round(L * 10) / 10 })).sort((a, b) => b.length_m - a.length_m);
+}
+/* U3783: a new part placed from a wing's real facade, not by eye. at: { wing, side: «sør»|«nord»|«øst»|«vest»|degrees,
+   gap_m, along?: «midt»|metres from the facade's left end seen from outside }; length (m along the facade) and width (m
+   out from it) are the part's footprint. Gives the middle line from -> to (parallel to the facade, the footprint's
+   near edge gap_m off the facade's plane, centred unless along says) and the receipt's words. Throws a Norwegian
+   sentence the person can read. */
+const fmt = v => String(Math.round(v * 10) / 10).replace(".", ",");
+const genitive = n => /[sxz]$/i.test(n) ? n : n + "s";
+export function placeBeside(site, w, at, length, width) {
+  const b = dirDeg(at.side); if (b == null) throw new Error(`side «${at.side}» er ikke en retning; bruk nord, sør, øst, vest, en mellomretning (sørøst) eller grader`);
+  const gap = Number(at.gap_m); if (!Number.isFinite(gap) || gap < 0 || gap > 100) throw new Error("gap_m er avstanden i meter fra fasaden, mellom 0 og 100");
+  if (!(length >= 1 && length <= 250)) throw new Error("length er lengden i meter langs fasaden, mellom 1 og 250");
+  if (!(width >= 1 && width <= 120)) throw new Error("width er dybden i meter ut fra fasaden, mellom 1 og 120");
+  const near = facadesOf(site, w.id).filter(f => f.length_m >= 6 && turn(f.bearing, b) <= 65).sort((x, y) => turn(x.bearing, b) - turn(y.bearing, b));
+  if (!near.length) throw new Error(`${w.name} har ingen fasade mot ${at.side}; fasadene vender ${facadesOf(site, w.id).filter(f => f.length_m >= 6).map(f => `${f.bearing}° (${dirWord(f.bearing)}, ${fmt(f.length_m)} m)`).join(", ")}`);
+  if (near.length > 1 && turn(near[1].bearing, b) - turn(near[0].bearing, b) < 15 && turn(near[1].bearing, near[0].bearing) > 20)   // two faces about as near: ask; else the nearest
+    throw new Error(`${w.name} står skjevt: mot ${at.side} vender ${near.slice(0, 2).map(f => `fasaden mot ${f.bearing}° (${fmt(f.length_m)} m lang)`).join(" og ")}. Si hvilken med side i grader, for eksempel side: ${near[0].bearing}`);
+  const face = near[0].bearing, walls = [...facingWalls(site, w.id, "N", face)];
+  const sn = walls.reduce((q, x) => [q[0] + x.n[0] * x.L, q[1] + x.n[1] * x.L], [0, 0]), sl = Math.hypot(...sn), n = [sn[0] / sl, sn[1] / sl], d = [n[1], -n[0]], dot = (p, v) => p[0] * v[0] + p[1] * v[1];   // d: along the facade with its left out
+  const ts = walls.flatMap(x => [x.a, x.bb]).map(p => dot(p, d)), t0 = Math.min(...ts), t1 = Math.max(...ts);
+  const plane = Math.max(...walls.flatMap(x => [x.a, x.bb]).map(p => dot(p, n)));   // the outermost wall: gap_m is the clearance from it
+  let c0;   // the footprint's start along the facade
+  if (at.along == null || at.along === "midt") c0 = (t0 + t1) / 2 - length / 2;
+  else { const m = Number(at.along); if (!Number.isFinite(m) || m < 0) throw new Error("along er «midt» eller meter fra fasadens venstre hjørne sett utenfra"); c0 = t0 + m; }
+  if (c0 < t0 - 0.01 || c0 + length > t1 + 0.01) throw new Error(`Det er ikke plass langs fasaden: den er ${fmt(t1 - t0)} m lang og delen er ${fmt(length)} m`);
+  const cn = plane + gap + width / 2, mid = (c0 + length / 2), at2 = (t, q) => [d[0] * t + n[0] * q, d[1] * t + n[1] * q];
+  const r = p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100];
+  return { from: r(at2(c0, cn)), to: r(at2(c0 + length, cn)), text: `${fmt(gap)} m fra ${genitive(w.name)} ${dirWord(face)}fasade (${face}°)`, face, mid };
 }
 const SIDE_DEG = Object.fromEntries(SIDE_KEYS.map(k => [k, bearingOf(SIDES[k])]));
 /* the facade a side means on this wing, or a refusal naming both when the wing stands turned so that two faces are
