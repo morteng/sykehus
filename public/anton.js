@@ -194,7 +194,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     /* a one-time sign-in link for another machine (U3539), as a QR to scan with it: big, on white, gone when it runs out */
     function qrCard(q) {
       const li = document.createElement("li"); li.className = "talk-item card qr";
-      li.innerHTML = `<div class="talk-body"><b>${esc(q.label)}</b></div><div class="qr-box"></div><div class="cnote">Pek kameraet på iPaden mot ruten, og trykk på lenken som kommer opp. Koden virker én gang, i ${q.minutes} minutter.</div>`;
+      li.innerHTML = `<div class="talk-body"><b>${esc(q.label)}</b></div><div class="qr-box"></div><div class="cnote">Pek kameraet på iPaden mot ruten, og trykk på lenken som kommer opp. Koden virker én gang, i ${q.minutes} minutter.</div>${/^\d{4}$/.test(q.code) ? `<div class="cnote qr-code">Eller skriv fire sifre i appen: <b>${q.code}</b>. Åpne appen, trykk «Logg inn» og skriv dem. Samme regel: én gang, ${q.minutes} minutter.</div>` : ""}`;
       import("./vendor/qrcode.js").then(({ default: qrcode }) => {
         const c = qrcode(0, "M"); c.addData(q.url); c.make();
         const n = c.getModuleCount(), q4 = n + 8, svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"), d = [];
@@ -204,7 +204,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
         li.querySelector(".qr-box").append(svg);
       });
       log.append(li); empty(); panel.reveal("chat"); toEnd();
-      setTimeout(() => { li.querySelector(".qr-box").replaceChildren(); li.querySelector(".cnote").textContent = "Koden er gått ut. Be Anton om en ny."; }, q.minutes * 60e3);
+      setTimeout(() => { li.querySelector(".qr-box").replaceChildren(); li.querySelectorAll(".cnote").forEach((n, i) => i ? n.remove() : n.textContent = "Koden er gått ut. Be Anton om en ny."); }, q.minutes * 60e3);
     }
     function goTo(id, title) {
       const li = document.createElement("li"); li.className = "talk-item tool";

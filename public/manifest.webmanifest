@@ -1,0 +1,15 @@
+{
+  "name": "Sykehustomta",
+  "short_name": "Sykehustomta",
+  "description": "Gamle Drammen sykehus i 3D og plan, etasje for etasje, fra arkivets tegninger",
+  "lang": "nb",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf9f4",
+  "theme_color": "#fbf9f4",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

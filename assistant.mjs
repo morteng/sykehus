@@ -140,7 +140,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
         if (line.type === "ping" || !["text", "tool", "approval", "qr", "done", "error"].includes(line.type)) return;
         if (line.type === "qr" && !QR.test(String(line.url))) return;
         const out = line.type === "error" ? { type: "error", code: codeOf(line, "internal") }
-          : line.type === "qr" ? { type: "qr", url: line.url, minutes: Math.min(15, Math.max(1, +line.minutes || 10)), label: String(line.label || "Skann med iPaden").slice(0, 60) } : { ...line };
+          : line.type === "qr" ? { type: "qr", url: line.url, minutes: Math.min(15, Math.max(1, +line.minutes || 10)), label: String(line.label || "Skann med iPaden").slice(0, 60), ...(/^\d{4}$/.test(String(line.code)) ? { code: String(line.code) } : {}) } : { ...line };
         out.reply_to = turn.id;
         if (line.type === "approval" && typeof line.id === "string") t.approvals.set(line.id, { summary: String(line.summary || "").slice(0, 300) });
         if (line.type === "tool" && line.key === "check_drawing") watchJobs(person, turn.device);

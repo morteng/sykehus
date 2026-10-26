@@ -26,7 +26,7 @@ const door = createServer((req, res) => {
       }
       if (b.job) { jobsNow = jobsNow.map(j => j.job === b.job ? { ...j, reported: true } : j);
         return res.end([{ type: "tool", key: "job_result", label: "Leste kontrollens funn", kind: "read", receipt: { line: "Kontrollen fant 1 avvik · 0,15 $", step: null } }, { type: "text", delta: "Fant ett avvik." }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n"); }
-      if (b.message === "QR") return res.end([{ type: "qr", url: "https://evil.example/inn#" + LINK, minutes: 10 }, { type: "qr", url: "https://sykehus.gulden.no/inn#" + LINK, minutes: 10, label: "Skann med iPaden" }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n");
+      if (b.message === "QR") return res.end([{ type: "qr", url: "https://evil.example/inn#" + LINK, minutes: 10 }, { type: "qr", url: "https://sykehus.gulden.no/inn#" + LINK, minutes: 10, label: "Skann med iPaden", code: "4821" }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n");
       res.write(JSON.stringify({ type: "text", delta: "Jeg river " }) + "\n");
       setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write", receipt: { line: "Revet: Vestfløy", step: 3 } }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
       return;
@@ -152,7 +152,7 @@ test("a qr line reaches the pages only when it points at this site's /inn/", asy
   await new Promise(ok => setTimeout(ok, 200));
   await post("/api/anton", { text: "QR" }, { cookie });
   const qr = (await got).filter(e => e.event === "qr");
-  assert.equal(qr.length, 1); assert.equal(qr[0].url, "https://sykehus.gulden.no/inn#" + LINK); assert.equal(qr[0].minutes, 10); assert.equal(qr[0].label, "Skann med iPaden");
+  assert.equal(qr.length, 1); assert.equal(qr[0].url, "https://sykehus.gulden.no/inn#" + LINK); assert.equal(qr[0].minutes, 10); assert.equal(qr[0].label, "Skann med iPaden"); assert.equal(qr[0].code, "4821");   // the typed code beside the QR (U3813): four digits only
 });
 
 test("a check runs in the background; when it is done Anton gets his own turn on it, with no message from the person (U3545)", async () => {
