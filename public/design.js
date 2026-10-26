@@ -408,8 +408,11 @@ function volumeParts(site, e) {
    unless a kote is asked: where the cut and the fill are the same (balancedFoot, U3566 f), balanced: true. */
 /* PAD_FAR: a foot set more than this over or under the ground (base_kote) stands on its own, on posts or in a pit: no pad */
 const PAD_M = 3, FALL = 1 / 50, WALL_M = 1.5, PAD_FAR = 3;
-/* U3566 (b), TEK17 § 8-6: a step-free entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn),
-   then a ramp at most 1:20 (RAMP) to the ground, 1.8 m wide (ENTRY_W), with a rest for every 0.6 m it rises; past
+/* U3566 (b), TEK17 § 8-6 (gangatkomst to a byggverk with universal design; § 8-5 for a building with homes): a step-free
+   entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn), then a ramp to the ground, 1.8 m wide
+   (ENTRY_W), with a rest for every 0.6 m it rises. The law's numbers are 1:15 (1:12 on up to 5 m), a rest of 1.6 m
+   (1.5 m in § 8-5) for every 1.0 m of rise, 1.8 m wide (1.4 m on up to 5 m; checks.mjs holds the law's); the app lays
+   a gentler 1:20 (RAMP) and a rest more often on purpose. Past
    RAMP_MAX m of ramp it is said to need a lift or another door */
 /* the balcony depth when none is asked: 1.5 m, the most the area plan lets a balcony stand out (Områdeplan Bragernes sentrum vest, bestemmelsene 07.01.26 pkt. 4.1.1 f; U3780). The worker's balcony part has the same default (parts.json) */
 export const BALCONY_DEPTH = 1.5;
