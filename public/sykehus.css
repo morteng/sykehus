@@ -580,6 +580,7 @@ body.m .pf-x { top: 8px; left: 50%; }
 .talk-item .try-thumb img { display: block; width: 168px; max-width: 100%; height: auto; }
 .talk-item .try-thumb:hover, .talk-item .try-thumb:focus-visible { border-color: var(--accent); }
 /* U3676: the trees' switch in the tool column: full, simple or off */
+.nz .zoom2 #mtree { display: grid; place-items: center; }   /* the one visible picture sits in the middle of the box, as the sun's does */
 .nz .zoom2 #mtree svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; display: none; }
 .nz .zoom2 #mtree[data-mode="full"] .t-full, .nz .zoom2 #mtree[data-mode="simple"] .t-simple, .nz .zoom2 #mtree[data-mode="off"] .t-off { display: block; }
 .nz .zoom2 #mtree[data-mode="off"] { color: var(--muted); }
