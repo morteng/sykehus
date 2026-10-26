@@ -21,7 +21,7 @@ const door = createServer((req, res) => {
       res.writeHead(200, { "content-type": "application/x-ndjson" });
       if (b.message === "QR") return res.end([{ type: "qr", url: "https://evil.example/inn#" + LINK, minutes: 10 }, { type: "qr", url: "https://sykehus.gulden.no/inn#" + LINK, minutes: 10, label: "Skann med iPaden" }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n");
       res.write(JSON.stringify({ type: "text", delta: "Jeg river " }) + "\n");
-      setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write" }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
+      setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write", receipt: { line: "Revet: Vestfløy", step: 3 } }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
       return;
     }
     if (req.url.startsWith("/internal/sykehus/history")) return res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ items: [{ type: "message", from: "lars", text: "hei" }] }));
@@ -105,6 +105,7 @@ test("a message is relayed as the person's turn and streamed back to their pages
   const ev = await got, { id } = await r.json();
   assert.deepEqual(ev.filter(e => e.event === "text").map(e => e.delta), ["Jeg river ", "Vestfløy."]);
   assert.ok(ev.filter(e => ["text", "tool", "done"].includes(e.event)).every(e => e.reply_to === id));
+  assert.deepEqual(ev.find(e => e.event === "tool").receipt, { line: "Revet: Vestfløy", step: 3 }, "the receipt reaches the page (U3647)");
   const body = seen.find(s => s.path === "/internal/sykehus/chat" && s.body.person === "lars").body;
   assert.equal(body.person, "lars"); assert.equal(body.session, "sykehus:lars"); assert.equal(body.device_id, undefined); assert.equal(seen.filter(x => x.path === "/internal/sykehus/chat").at(-1).device, "dev-1"); assert.equal(body.version.id, v.version);
   // the page's own list now has Lars's private version, with the key that opens it

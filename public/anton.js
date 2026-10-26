@@ -12,6 +12,7 @@
    When Anton saves one of the person's versions the server says "steps": the page shows that version again, from the
    same place (after the reply is done, so nothing is cut off). */
 import { pick } from "./kit/pick.js";
+import { toolLine } from "./toolline.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -240,7 +241,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       log.textContent = ""; replies.clear();
       for (const it of h.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
-        else if (it.type === "tool") line("tool", it.label);
+        else if (it.type === "tool") line("tool", toolLine(it));
         else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }
       empty(); return h;
@@ -266,7 +267,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
       b.textContent += t.delta || ""; if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
     });
-    on("tool", t => { if (t.label) line("tool", t.label); step = stepOf(t.key); state(); });
+    on("tool", t => { if (t.label) line("tool", toolLine(t)); step = stepOf(t.key); state(); });
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
