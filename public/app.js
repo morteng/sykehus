@@ -698,9 +698,23 @@ async function riv(targets, name, ground = false) {   // ground: a surface or a 
    sizes it, turns it a quarter, «Flytt» moves it to the next tap; «Riv» takes it away. Each is one change, with Angre. */
 const newId = () => "n" + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
 const along = () => { const a = viewer.view().north || 0; return [Math.cos(a), Math.sin(a)]; };   // screen right, east and north
-function aim(on, hint) {
+function aim(on, hint, text) {
   placing = on; $("mnew").setAttribute("aria-pressed", String(!!on && hint === "ny")); document.body.classList.toggle("placing", !!on);
-  if (on) toast(hint === "ny" ? "Trykk på bakken der det nye bygget skal stå." : "Trykk der bygget skal stå.", { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
+  if (on) toast(text || (hint === "ny" ? "Trykk på bakken der det nye bygget skal stå." : "Trykk der bygget skal stå."), { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
+}
+/* U3671: Anton asks for a place (ask_point, mcp.mjs): the plan, framed near its hint, one tap sets a pin, and the point goes back as the
+   person's next message: plain words first, then the figures Anton's tools read (metres east and north, as in try_change) */
+async function askPoint(q) {
+  const { dropPin, clearPin } = await import("./pin.js?v=1"); clearPin(viewer);
+  setMode("plan"); if (storeyOn) pickStorey(null);
+  if (Number.isFinite(q.x) && Number.isFinite(q.y)) viewer.look({ x: q.x, y: q.y, dist: q.dist || 90, yaw: 0 }, 600);
+  aim(([x, y, k]) => {
+    aim(null); $("toast")?.remove(); dropPin(viewer, [x, y, k ?? 0]);
+    for (const ms of [0, 150, 500, 1000]) setTimeout(() => { viewer.select(null); valg.clear(); if (ms === 500) { viewer.look({ x, y, dist: q.dist || 140 }, 300); if (innerWidth > 700) $("tab-chat")?.click(); } }, ms);   // on a phone the chat sheet would cover the pin   // the tap that set the pin picks nothing, and the plan stays where it was
+    const near = site.buildings.map(b => [b, Math.min(...b.ring.map(p => Math.hypot(p[0] - x, p[1] - y)))]).sort((a, b) => a[1] - b[1])[0];
+    const where = near && near[1] < 30 ? `, ${Math.round(near[1])} m fra ${nameOf(near[0].wing || near[0].id)}` : "";
+    document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text: `Her: nålen står på planen${where}.\nNål satt: x=${x.toFixed(1)}, y=${y.toFixed(1)} (meter på tomta, som i try_change).` } }));
+  }, "punkt", `${String(q.question || "Hvor?").trim()} Trykk på planen.`);
 }
 $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(async ([x, y]) => {
   aim(null); const [dx, dy] = along(), L = 15, id = newId();
@@ -1020,6 +1034,7 @@ const tries = {
 /* Anton's show_building through the pill, on this page in place (pm 21:20Z: «vis meg det fra fugleperspektiv» did
    not move the camera): a facade, a section, plan or 3D, a storey, a wing, and where the camera stands */
 function showView(v) {
+  if (v.ask_point) return askPoint(v.ask_point);   // Anton asked for a place (U3671)
   if (v.retake) return gjengiCtl?.proposal();   // Anton proposed new pictures from some photo spots: the Gjengi tab shows the card with the price (U3665)
   const b = v.building && site.buildings.find(x => x.id === v.building);
   if (v.mode === "section" && b) {

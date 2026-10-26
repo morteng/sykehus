@@ -40,6 +40,7 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "A new part stands off a wing by the wing's real facade, never by eye: a volume with at { wing, side, gap_m } and length (along the facade) and width (out from it), not from and to; about_wing facade_bearings says which way each facade faces. Say what the answer's placed says (the facade and the gap); never call the place an estimate. "
   + "For people: the page has a guided tour, under the «?» («Vis guiden») in the top bar (a short one for a visitor, ending on «Logg inn»; the full one once signed in, and the newer steps again after an update). Say so when someone asks how to get started or what the page can do. The «Tilbakemelding» button in the top bar sends Morten a problem, an idea or a question (with a picture of the page if asked) and lists what the person sent before; the panel has three tabs, Forslag, Bygg and Anton. "
   + "about_site also lists the named streets and places around the site (streets: Welhavens gate, Dronninggata …), the names show_building's from_place stands in. "
+  + "When a place is unclear (where a path goes, where a stair comes down, which side), do not ask in text: first find it with about_ground (the paths, roads, what is laid, the buildings and the terrain's kote round a place, from a wing and a side, a street or a point; take heights from the terrain, never ask the person for them), and only if it is still unclear ask_point, which shows the person the plan with a pin to set, and the pin comes back as their next message. "
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
   + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
   + "For people: the tree button in the tool column under the sun switches the trees and planted bushes between full, simple (plain shapes) and off (the ground stays); it is kept in the person's browser, and a Gjengi picture shows what is on. "
@@ -562,6 +563,70 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "The person's saved photo spots (Gjengi pictures keep where they were taken from: camera place, lens, picture shape, look, the light). Each: id, when, look, lens_mm, aspect, the version it was taken of, stale (true when the model has changed since: a new picture would differ) and price_usd for one new picture. Use before retake_photos.",
       run: async (a, req) => { const who = userOf(req); if (!who) throw toolErr("Bildestedene hører til en innlogget person."); if (!photos) return { spots: [], note: "Gjengi er ikke slått på her." };
         const price = await photos.estimate(); return { spots: photos.spotsOf(who).slice(0, 50).map(r => ({ id: r.id, at: r.at, look: r.spot.look, lens_mm: r.spot.mm, aspect: r.spot.aspect, version: r.spot.version, stale: photos.staleOf(r), price_usd: price })), price_usd: price }; } },
+    /* U3671: the ground round a place: Anton cannot see it, so it asks here (ways, what is laid on the ground, heights, what stands near) before it asks the person */
+    { name: "about_ground", tgt: "read", title: "Bakken rundt et sted", ro: true, schema: S({
+        target: TARGET, draft: OLD,
+        wing: { type: "string", description: "A wing (name or id): the place is beside it, on the side given by side" },
+        side: { type: "string", enum: ["N", "Ø", "S", "V"], description: "With wing: which side of it, seen on a map with north up («sør for Sentralblokka» is wing Sentralblokka, side S). Leave out for the wing's own surroundings" },
+        place: { type: "string", description: "A street or place by name (about_site lists them)" },
+        x: { type: "number", description: "A site point, metres east (as in try_change), with y" }, y: { type: "number", description: "Metres north" },
+        radius_m: { type: "number", minimum: 10, maximum: 80, description: "How far round the place to look (default 40)" },
+      }),
+      description: "What is on the ground round a place, so you can find it yourself instead of asking the person: the footpaths, roads and car parks there are (OpenStreetMap and NVDB, as the page draws them) with their kind, width and nearest point; what is laid on the ground in the version (lawn, gravel, paving and so on, also what the person painted), with the nearest point; the buildings close by; and the terrain's kote at the place and in eight directions (so the height drop between two points is read from the terrain, not asked). Name the place with wing and side, place, or x and y. The base map has no lawn polygons: open ground with nothing listed is grass or bare ground. Use this FIRST when the person names a place («sør for Sentralblokka», «gangveien ved Welhavens gate»); use ask_point only if it is still unclear. Take heights from here, not from the person.",
+      run: async (a, req) => {
+        const m = model(a.draft, req), S0 = m.site, R = Math.max(10, Math.min(80, Number(a.radius_m) || 40));
+        let c = null, said = "";
+        if (Number.isFinite(a.x) && Number.isFinite(a.y)) { c = [a.x, a.y]; said = "punktet du ga"; }
+        else if (a.wing) {
+          const w = wingOrErr(a.wing), rs = S0.buildings.filter(b => b.wing === w.id).flatMap(b => b.ring); if (!rs.length) throw toolErr(`${w.name} står ikke i dette forslaget.`);
+          const xs = rs.map(p => p[0]), ys = rs.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, off = 8;
+          c = a.side === "S" ? [cx, y0 - off] : a.side === "N" ? [cx, y1 + off] : a.side === "Ø" ? [x1 + off, cy] : a.side === "V" ? [x0 - off, cy] : [cx, cy];
+          said = a.side ? `${a.side === "S" ? "sør" : a.side === "N" ? "nord" : a.side === "Ø" ? "øst" : "vest"} for ${w.name} (8 m fra veggen)` : `rundt ${w.name}`;
+        } else if (a.place) {
+          const low = String(a.place).toLowerCase().trim(), all = places ? await places(3000) : [], p = all.find(x => x.name.toLowerCase() === low) || all.find(x => x.name.toLowerCase().includes(low));
+          if (!p) throw toolErr(`Fant ikke «${a.place}» blant gatene og stedene rundt tomta${all.length ? `: ${all.map(x => x.name).join(", ")}` : ""}.`);
+          c = p.pts.reduce((b, q) => Math.hypot(q[0] - S0.lot.ring[0][0], q[1] - S0.lot.ring[0][1]) < Math.hypot(b[0] - S0.lot.ring[0][0], b[1] - S0.lot.ring[0][1]) ? q : b); said = `${p.name} (punktet nærmest tomta)`;
+        } else throw toolErr("Si hvor: wing (med side), place, eller x og y.");
+        const r1 = v => Math.round(v * 10) / 10, kote = p => r1(groundAt(S0, p));
+        /* nearest point of a ring (or a line) to c, and its distance; 0 when c is inside a ring */
+        const nearest = (ring, closed = true) => { let best = { d: Infinity, p: null }; const n = ring.length;
+          for (let i = 0; i < (closed ? n : n - 1); i++) { const A = ring[i], B = ring[(i + 1) % n], dx = B[0] - A[0], dy = B[1] - A[1], L = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((c[0] - A[0]) * dx + (c[1] - A[1]) * dy) / L)), q = [A[0] + t * dx, A[1] + t * dy], d = Math.hypot(q[0] - c[0], q[1] - c[1]); if (d < best.d) best = { d, p: q }; }
+          return best; };
+        const inside = ring => { let o = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, yi] = ring[i], [xj, yj] = ring[j]; if ((yi > c[1]) !== (yj > c[1]) && c[0] < (xj - xi) * (c[1] - yi) / (yj - yi) + xi) o = !o; } return o; };
+        const pt = q => ({ x: r1(q[0]), y: r1(q[1]), kote: kote(q) });
+        const wl = ways ? (await ways()).filter(w => w.ring && !(S0.roads_removed || []).some(rr => rr.id === w.id)) : [];
+        const wayList = wl.map(w => ({ w, n: nearest(w.ring) })).filter(x => x.n.d <= R + 25).sort((p, q) => p.n.d - q.n.d).slice(0, 10).map(({ w, n }) => ({ id: w.id, what: w.name, distance_m: r1(n.d), nearest: pt(n.p), ...(n.d === 0 ? { on_it: true } : {}) }));
+        const surf = (S0.landscape || []).filter(l => l.kind === "surface" && l.ring?.length > 2).map(l => ({ l, n: nearest(l.ring), in: inside(l.ring) })).filter(x => x.in || x.n.d <= R).sort((p, q) => p.n.d - q.n.d).slice(0, 10)
+          .map(({ l, n, in: ins }) => ({ id: l.id, name: l.name, surface: l.surface, area_m2: l.area_m2, distance_m: ins ? 0 : r1(n.d), nearest: pt(n.p), ...(ins ? { covers_the_place: true } : {}) }));
+        const bl = S0.buildings.map(b => ({ b, n: nearest(b.ring) })).filter(x => x.n.d <= R).sort((p, q) => p.n.d - q.n.d).slice(0, 8).map(({ b, n }) => ({ name: b.name || b.id, wing: b.wing || null, distance_m: r1(n.d), nearest: pt(n.p), ...(b.base != null ? { base_kote: r1(b.base) } : {}) }));
+        const around = Array.from({ length: 8 }, (_, i) => { const th = i * Math.PI / 4, q = [c[0] + Math.sin(th) * R / 2, c[1] + Math.cos(th) * R / 2]; return { direction: ["N", "NØ", "Ø", "SØ", "S", "SV", "V", "NV"][i], distance_m: r1(R / 2), kote: kote(q) }; });
+        const trees = (S0.trees || []).filter(t => Math.hypot(t[0] - c[0], t[1] - c[1]) <= R).length;
+        return { place: said, center: pt(c), radius_m: R, ways: wayList, ground_laid: surf, buildings: bl, terrain_around: around, trees_within_radius: trees,
+          note: "Kote i meter over havet, fra terrengmodellen. Høydeforskjell mellom to punkter: forskjellen på koten deres. Veier og stier er kartlagt (OpenStreetMap/NVDB); plen finnes ikke som egen flate i grunnkartet." };
+      } },
+    /* U3671: a place Anton cannot know is asked for as a point: the page shows the plan, frames the hint and waits for a tap (app.js askPoint) */
+    { name: "ask_point", title: "Be om et punkt på planen", write: true, schema: S({
+        question: { type: "string", minLength: 3, maxLength: 200, description: "What the point is, as a short question to the person in their language: «Hvor skal trappen ned til?»" },
+        wing: { type: "string", description: "Frame the plan on this wing (name or id) when the place is near it" },
+        place: { type: "string", description: "Frame the plan on this street or place by name (about_site lists them) when the place is near it" },
+        x: { type: "number", description: "Frame the plan on this site point (metres east, as in try_change) with y" }, y: { type: "number", description: "Metres north of the site origin" },
+      }, ["question"]),
+      description: "Asks the person for a place by a pin: when a place is unclear (where a path goes, where a stair comes down, which side), use THIS instead of asking in plain text. The page switches to the plan, frames the area near wing, place or x/y, shows a hint bar with your question and waits for one tap. The result arrives as the person's next chat message: «Nål satt: x=123.4, y=-56.7 (meter på tomta, som i try_change) ...», plus the nearest street or building in words. It changes nothing on the site. Ask one thing per call; do not repeat the question in text, and wait for the answer before you go on. If the page is not open the result says so: then ask in plain text.",
+      run: async (a, req) => {
+        const who = userOf(req); if (!who) throw toolErr("Et punkt kan bare spørres etter fra en innlogget person med siden åpen.");
+        let at = null, dist = 140;
+        if (Number.isFinite(a.x) && Number.isFinite(a.y)) at = [a.x, a.y];
+        else if (a.wing) { const w = wingOrErr(a.wing), t = aimAt(site, w.id)?.target; if (t) at = [t[0], t[1]]; }
+        else if (a.place) {
+          const low = String(a.place).toLowerCase().trim(), all = places ? await places(3000) : [], p = all.find(x => x.name.toLowerCase() === low) || all.find(x => x.name.toLowerCase().includes(low));
+          if (!p) throw toolErr(`Fant ikke «${a.place}» blant gatene og stedene rundt tomta${all.length ? `: ${all.map(x => x.name).join(", ")}` : ""}.`);
+          at = p.pts[Math.floor(p.pts.length / 2)];
+        }
+        if (!at) { const r = site.lot.ring; at = [r.reduce((t, p) => t + p[0], 0) / r.length, r.reduce((t, p) => t + p[1], 0) / r.length]; dist = 160; }
+        const ask = { question: String(a.question).trim().slice(0, 200), x: Math.round(at[0] * 10) / 10, y: Math.round(at[1] * 10) / 10, dist };
+        const moved = pages?.show(who, { ask_point: ask });
+        return { asked: !!moved, ...ask, said: moved ? "Planen står åpen hos personen med en nål å sette. Svaret kommer som neste melding; vent på det." : "Siden er ikke åpen hos personen. Spør i vanlig tekst i stedet." };
+      } },
     { name: "retake_photos", title: "Lag nye bilder fra bildestedene", write: true, schema: S({ spots: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 10, description: "Ids from photo_spots: the places to take a new picture from, each with the same lens, shape, look and light" } }, ["spots"]),
       description: "Proposes new pictures from the person's saved photo spots with today's model. It makes NOTHING and costs nothing: a card with the count and the total price opens on the person's Gjengi tab (for example «3 bilder · ca. $0,36»), and only the person's press on «Lag bildene» makes them. Say the count and the total price from the answer, and that the person confirms on the card. Never claim a picture is made.",
       run: async (a, req) => { const who = userOf(req); if (!who) throw toolErr("Bildestedene hører til en innlogget person."); if (!photos) throw toolErr("Gjengi er ikke slått på her.");
