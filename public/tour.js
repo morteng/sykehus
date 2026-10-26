@@ -5,7 +5,7 @@
    is not on the page (Anton's pill signed out, «Visninger» with no proposal) is passed over. It offers itself once, on
    the first visit; «?» in the bar starts it again. */
 
-import { createTour as kitTour, whichTour, writeCookie, readCookie } from "./kit/tour.js";   // the engine, the rule and the cookie are the kit's (U3658)
+import { createGuide, tourList, whichTour, cookieStore } from "./kit/tour.js?v=u3811";   // the engine, the rule, the lists and the cookies are the kit's (U3658, U3811)
 
 /* U3658 (Morten 14:09Z «visitors get simpler onboarding tour than when they log in», 14:24Z «the guide popup should set a
    cookie to not show again if it has been x-ed once»): two lists from one engine. A visitor (signed out) gets a short
@@ -22,8 +22,9 @@ const LEGACY = "sykehus-omvisning";
 const legacy = () => { try { return localStorage.getItem(LEGACY); } catch { return null; } };
 /** The marks the browser holds, and (signed in) the person's own from the server, as whichTour takes them. */
 export function marks(server = null, doc = document) {
-  const inn = Math.max(parseInt(readCookie(doc, "guide_in"), 10) || 0, server?.seenIn || 0, legacy() === "sett" ? 1 : 0);
-  return { seen: readCookie(doc, "guide_seen") != null || legacy() != null, seenIn: inn || null, dismissed: readCookie(doc, "guide_x") != null || !!server?.dismissed };
+  const c = cookieStore(doc).read();
+  const inn = Math.max(c.seenIn || 0, server?.seenIn || 0, legacy() === "sett" ? 1 : 0);
+  return { seen: c.seen || legacy() != null, seenIn: inn || null, dismissed: c.dismissed || !!server?.dismissed };
 }
 /** Which tour a person gets and whether it offers itself: kind «gjest», «full» or «nytt» (the steps since the version seen). */
 export const tourFor = ({ signedIn, seen = false, seenIn = null, dismissed = false }) => whichTour({ signedIn, seen, seenIn, dismissed, version: VERSION });
@@ -69,27 +70,24 @@ export function visitorSteps(h) {
 /* the list for a kind: «nytt» is the intro and the steps newer than the version seen, then the end */
 export function listFor(kind, h, since = 0) {
   if (kind === "gjest") return visitorSteps(h);
-  const s = steps(h);
-  if (kind === "full") return s;
-  return [{ title: "Nytt siden sist", text: "Her er det som er kommet til siden forrige gang du var her." }, ...s.filter(x => (x.since || 1) > since), s[s.length - 1]];
+  return tourList(kind, { full: steps(h), since, intro: NYTT });
 }
+const NYTT = { title: "Nytt siden sist", text: "Her er det som er kommet til siden forrige gang du var her." };
 
 export function createTour(h) {
   let server = null;   // the person's own marks (guide.mjs), once read
-  const now = () => { const t = tourFor({ signedIn: !!h.signedIn?.(), ...marks(server) }); return { ...t, manual: t.kind === "gjest" ? "gjest" : "full" }; };
-  const tour = kitTour({
-    list: kind => listFor(kind, h, now().since || 0), now,
-    words: { count: (n, m) => `${n} av ${m}`, back: "Tilbake", next: "Neste", done: "Ferdig", close: "Lukk guiden", closeTitle: "Lukk guiden (Esc). Den åpner ikke av seg selv igjen" },
-    onSeen: (kind, how) => {
-      if (kind === "gjest") writeCookie(document, "guide_seen", "1");
-      else { writeCookie(document, "guide_in", String(VERSION)); if (how === "x") writeCookie(document, "guide_x", "1"); }
-      if (h.signedIn?.()) fetch("api/guide", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(kind === "gjest" ? {} : { seenIn: VERSION, dismissed: how === "x" }) }).catch(() => { });
+  const cookies = cookieStore(document);
+  const store = {   // the kit's store: the cookies and the one mark from before, and for a signed-in person the server first
+    read: () => marks(server),
+    write: (kind, how, version) => {
+      cookies.write(kind, how, version);
+      if (h.signedIn?.()) fetch("api/guide", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(kind === "gjest" ? {} : { seenIn: version, dismissed: how === "x" }) }).catch(() => { });
     },
+    async load() { const r = await fetch("api/guide"); if (r.ok) server = await r.json(); },
+  };
+  return createGuide({
+    version: VERSION, signedIn: () => !!h.signedIn?.(), full: () => steps(h), visitor: () => visitorSteps(h), intro: NYTT, store,
+    words: { count: (n, m) => `${n} av ${m}`, back: "Tilbake", next: "Neste", done: "Ferdig", close: "Lukk guiden", closeTitle: "Lukk guiden (Esc). Den åpner ikke av seg selv igjen" },
     onEnd: () => h.done?.(),
   });
-  return {
-    ...tour,
-    /* a signed-in person's marks come from the server first (another device may have closed it), then it offers itself */
-    async ready() { if (h.signedIn?.()) { try { const r = await fetch("api/guide"); if (r.ok) server = await r.json(); } catch { } } return tour.due; },
-  };
 }

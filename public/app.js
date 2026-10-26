@@ -1067,7 +1067,7 @@ try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeIt
 /* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Forslag" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
-import("./tour.js?v=20261027c").then(({ createTour }) => {
+import("./tour.js?v=20261027d").then(({ createTour }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");
   const tour = createTour({
     home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },

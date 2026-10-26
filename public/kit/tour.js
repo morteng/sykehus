@@ -31,6 +31,87 @@ export function readCookie(doc, name) {
     catch { /* cookies blocked */ }
     return null;
 }
+/** The steps of one kind of tour. «gjest»: the visitor list as given. «full»: every step. «nytt»: the intro, the steps with
+ *  since > the version seen, then the last step (the end). */
+export function tourList(kind, o) {
+    if (kind === "gjest" && o.visitor)
+        return o.visitor;
+    if (kind !== "nytt")
+        return o.full;
+    const since = o.since ?? 0;
+    return [{ ...o.intro }, ...o.full.filter(s => (s.since || 1) > since), o.full[o.full.length - 1]];
+}
+/** A browser store in localStorage (the default), as one JSON value under `key`. A blocked storage reads as nothing seen. */
+export function localStore(key = "g-tour", storage) {
+    const st = () => { try {
+        return storage ?? localStorage;
+    }
+    catch {
+        return null;
+    } };
+    const get = () => { try {
+        return JSON.parse(st()?.getItem(key) ?? "{}") || {};
+    }
+    catch {
+        return {};
+    } };
+    return {
+        read: () => { const m = get(); return { seen: !!m.seen, seenIn: m.seenIn || null, dismissed: !!m.dismissed }; },
+        write: (kind, how, version) => {
+            const m = get();
+            if (kind === "gjest")
+                m.seen = true;
+            else {
+                m.seenIn = version;
+                if (how === "x")
+                    m.dismissed = true;
+            }
+            try {
+                st()?.setItem(key, JSON.stringify(m));
+            }
+            catch { /* storage blocked */ }
+        },
+    };
+}
+/** A browser store in first-party cookies: `seen` for the visitor tour, `seenIn` (the version) and `dismissed` for the full one. */
+export function cookieStore(doc, names = { seen: "guide_seen", seenIn: "guide_in", dismissed: "guide_x" }) {
+    return {
+        read: () => ({ seen: readCookie(doc, names.seen) != null, seenIn: parseInt(readCookie(doc, names.seenIn) ?? "", 10) || null, dismissed: readCookie(doc, names.dismissed) != null }),
+        write: (kind, how, version) => {
+            if (kind === "gjest")
+                writeCookie(doc, names.seen, "1");
+            else {
+                writeCookie(doc, names.seenIn, String(version));
+                if (how === "x")
+                    writeCookie(doc, names.dismissed, "1");
+            }
+        },
+    };
+}
+/** The usual wiring: the marks from a store, whichTour, the three lists (visitor, full, what is new since version N), and the
+ *  store told when a tour is done or closed. */
+export function createGuide(o) {
+    const store = o.store ?? localStore();
+    const which = () => whichTour({ signedIn: !!o.signedIn(), ...store.read(), version: o.version });
+    const now = () => { const t = which(); return { ...t, manual: t.kind === "gjest" ? "gjest" : "full" }; };
+    const tour = createTour({
+        ...(o.doc ? { doc: o.doc } : {}), now, words: o.words, ...(o.onEnd ? { onEnd: o.onEnd } : {}),
+        list: kind => tourList(kind, { full: o.full(), ...(o.visitor ? { visitor: o.visitor() } : {}), since: which().since ?? 0, intro: o.intro }),
+        onSeen: (kind, how) => store.write(kind, how, o.version),
+    });
+    return {
+        ...tour,
+        which,
+        start: tour.start, end: tour.end,
+        get on() { return tour.on; }, get due() { return tour.due; },
+        async ready() { if (o.signedIn() && store.load) {
+            try {
+                await store.load();
+            }
+            catch { /* the browser's copy stands */ }
+        } return tour.due; },
+    };
+}
 export function createTour(o) {
     const doc = o.doc ?? document, win = doc.defaultView;
     let at = -1, kind = "", list = [], plan = [], root = null, hole, card;
