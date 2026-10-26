@@ -286,12 +286,24 @@ function faceFor(site, w, side) {
   return null;
 }
 
-/* U3624: the window bays a wing's facades have by the rule the picture is drawn with (bays.js), per side: how many
-   window groups along its walls (on one storey), and the bay; for about_wing, so Anton can say «én per vindu» */
+/* U3624: the window bays a wing's facades have by the rule the picture is drawn with (bays.js), per facade (pm 11:35Z:
+   per compass side, «Ø» summed two faces of a turned wing, 63, where a balcony edit on one face used 38): the bearing
+   balconies' face takes, its length, how many window groups along it (on one storey), and the bay; for about_wing */
+/* how many window bays balcony slabs stand on: one axis a bay, on every storey */
+const axesOf = slabs => new Set(slabs.map(p => p.axis.flat().map(v => Math.round(v * 10)).join())).size;
 export function windowBays(site, wing) {
-  const out = {};
-  for (const side of Object.keys(SIDES)) { let n = 0, kind = null; for (const { b, wall } of facingWalls(site, wing, side)) { kind ??= kindOf(b); n += windowsOn(kindOf(b), wall).length; } if (n) out[side] = { bays: n, bay_m: BAY, picture: kind === "tower" ? "par av vinduer i en nisje" : "vindusbånd" }; }
-  return out;
+  /* counted as balconies with windows: true would stand there (a wall too low for a storey above the ground floor, a
+     window too near the wall's end, or one a lower wing in front stands in, has none), so the number is the one a change
+     gets; kind: the picture's rule */
+  return facadesOf(site, wing).map(f => {
+    const e = { wing, side: "N", face: f.bearing, windows: true, depth: 1.8 }, bays = axesOf(balconyParts(site, e).filter(p => p.role === "slab"));
+    const b = site.buildings.find(x => x.wing === wing);
+    return bays ? { face: f.bearing, length_m: f.length_m, bays, bay_m: BAY, picture: b && kindOf(b) === "tower" ? "par av vinduer i en nisje" : "vindusbånd" } : null; }).filter(Boolean);
+}
+/* pm 11:35Z: the facades a balconies edit puts balconies on (bearings), so a later one on the same face replaces it */
+export function balconyFaces(site, e) {
+  const faces = new Map(); balconyParts(site, e, new Set(), new Map(), faces);
+  return [...faces.values()].filter(f => Object.keys(f.per_storey).length).map(f => f.bearing);
 }
 
 /* a volume's one part: its cross-section over the middle line */
@@ -523,9 +535,9 @@ export function applyDesign(site, floors, edits) {
       /* U3614: each facade used: which way it faces, how long, how many on each storey */
       const used = [...faces.values()].filter(f => Object.keys(f.per_storey).length).map(f => { const ks = Object.values(f.per_storey); return { bearing: f.bearing, length_m: round1(f.length_m), storeys: ks.length, per_storey: Math.min(...ks) === Math.max(...ks) ? ks[0] : `${Math.min(...ks)}–${Math.max(...ks)}`, count: ks.reduce((a, b) => a + b, 0) }; });
       const facadeSay = used.map(f => `fasaden mot ${f.bearing}° (${String(f.length_m).replace(".", ",")} m): ${f.per_storey} per etasje på ${f.storeys} etasjer, ${f.count} i alt`).join("; ");
-      const axes = new Set(slabs.map(p => p.axis.flat().map(v => Math.round(v * 10)).join())).size;   // the window bays used: one axis a bay, on every storey
-      added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${e.side}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
-        count: slabs.length, facades: used, facade_say: `Balkonger på ${facadeSay}.`, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) mot ${e.side}, ${slabs.length} balkonger i alt.` } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
+      const axes = axesOf(slabs);   // the window bays used: one axis a bay, on every storey
+      added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${used.length ? used.map(f => `${f.bearing}°`).join(" og ") : e.face != null ? `${e.face}°` : SIDE_WORD[e.side]}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
+        count: slabs.length, facades: used, facade_say: `Balkonger på ${facadeSay}.`, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) på fasaden mot ${used.map(f => `${f.bearing}°`).join(" og ")}, ${slabs.length} balkonger i alt.` } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */

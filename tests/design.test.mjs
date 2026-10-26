@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
-import { groundAt, groundText, padFit, lotText } from "../public/design.js";
+import { groundAt, groundText, padFit, lotText, windowBays, balconyFaces } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -186,7 +186,11 @@ test("U3624: one balcony per window: centred on the window bays the facade is dr
   assert.ok(Math.abs(w - (2.49 - 1.16 + 0.6)) < 0.01, `as wide as the windows and 0,3 m each side (${w})`);
   const c = q => [(q.axis[0][0] + q.axis[1][0]) / 2, (q.axis[0][1] + q.axis[1][1]) / 2];
   assert.ok(Math.abs(Math.hypot(c(slabs[1])[0] - c(slabs[0])[0], c(slabs[1])[1] - c(slabs[0])[1]) - BAY) < 0.01, "the next one a bay along");
-  assert.equal(a.window_bays, 38); assert.match(a.window_say, /^Én balkong per vindu: 38 vindusakser \(hver 2,5 m\) mot Ø, 380 balkonger i alt\.$/);
+  assert.equal(a.window_bays, 38); assert.match(a.window_say, /^Én balkong per vindu: 38 vindusakser \(hver 2,5 m\) på fasaden mot 120°, 380 balkonger i alt\.$/);
+  assert.equal(a.name, "Balkonger mot 120°, Sentralblokka", "named by the face it is on, not a compass side");
+  /* pm 11:35Z: about_wing's count per facade is the one the edit uses (per compass side, Ø summed two faces: 63) */
+  assert.equal(windowBays(site, "sentralblokka").find(f => f.face === 120).bays, 38);
+  assert.deepEqual(balconyFaces(site, e), [120]);
   assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 120, windows: true, bay: 3 }), /høyst 2,4 m/);
 });
 
