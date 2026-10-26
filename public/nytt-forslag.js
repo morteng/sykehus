@@ -27,13 +27,12 @@ export function firstTurn({ name = "", card = "blank", wish = "", from = null })
 
 /* o: signedIn() says whether a person is signed in, login() opens the sign-in, create({ copy, title }) makes the version
    and opens it (returns an error text or null), say(text) hands Anton its first turn, mine() lists one's own versions,
-   money() gives the month's figures ({ left_usd, cap_usd }) or null. */
+ */
 export function startNew(o) {
   const m = modal({ title: "Nytt forslag", closeLabel: "Lukk", className: "np-panel", onClose: () => { st.busy = false; } });
   const st = { card: "blank", busy: false };
   async function fill() {
-    const [mine, money] = await Promise.all([Promise.resolve(o.mine()).catch(() => []), Promise.resolve(o.money()).catch(() => null)]);
-    const month = money && Number.isFinite(money.left_usd) ? `Anton arbeider innenfor månedens ramme. Igjen denne måneden: $${money.left_usd.toFixed(2)}${Number.isFinite(money.cap_usd) ? ` av $${money.cap_usd.toFixed(2)}` : ""}.` : "Anton arbeider innenfor månedens ramme.";
+    const mine = await Promise.resolve(o.mine()).catch(() => []);
     m.body.innerHTML = `<form class="np" autocomplete="off">
       <label class="np-l" for="npFrom">Begynn fra</label>
       <select id="npFrom"><option value="">Slik det står i dag</option>${mine.map(v => `<option value="${esc(v.version)}">Kopi av «${esc(v.title)}»</option>`).join("")}</select>
@@ -43,7 +42,7 @@ export function startNew(o) {
       <div class="np-cards" role="group" aria-labelledby="npCl">${CARDS.map(c => `<button type="button" class="np-card" data-card="${c.id}" aria-pressed="${c.id === st.card}"><svg viewBox="0 0 24 24" aria-hidden="true">${c.icon}</svg>${esc(c.label)}</button>`).join("")}</div>
       <label class="np-l" for="npWish">Hva ønsker du? (kan stå tomt)</label>
       <textarea id="npWish" rows="2" maxlength="2000" placeholder="For eksempel: Behold høyblokka, og lag et grønt tun mot sør."></textarea>
-      <p class="np-s">${esc(month)}</p>
+      <p class="np-s">Anton arbeider innenfor månedens ramme.</p>
       <p class="np-s">Forslaget er privat til du deler det.</p>
       <p class="np-err" id="npErr" role="alert" hidden></p>
       <div class="np-acts"><button type="submit" class="dr-p" id="npGo">Start</button><button type="button" id="npNo">Avbryt</button></div></form>`;

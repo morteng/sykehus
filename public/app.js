@@ -444,7 +444,6 @@ function fresh() {
   nyttForslag ||= import("./nytt-forslag.js").then(({ startNew }) => startNew({
     signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et forslag."); $("meBtn")?.click(); },
     mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
-    money: () => fetch("api/gjengi").then(r => r.ok ? r.json() : null).catch(() => null),
     create: async o => { const j = await change({ fresh: !o.copy, ...o }); if (j.error) return `Fikk ikke laget et nytt forslag: ${j.error}`; await show(j); return null; },
     say: text => { $("tab-chat")?.click(); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text } })); },
   }));
