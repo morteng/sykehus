@@ -179,6 +179,15 @@ g-collection[data-view="list"] .g-act__do{max-width:100%;white-space:normal;padd
   g-collection[data-view="list"] .g-act{grid-column:2 / -1;justify-content:flex-start}
   .g-empty{border:0;padding:var(--sp-4) 0}
 }
+/* ---- follow (follow.ts): the pill that takes a list back to its end; the host is positioned, the app may set --g-follow-bottom */
+.g-follow{position:absolute;left:50%;bottom:var(--sp-2);transform:translateX(-50%);z-index:2;display:inline-flex;align-items:center;justify-content:center;
+  width:var(--control-h);height:var(--control-h);padding:0;border:1px solid var(--border-strong);border-radius:999px;background:var(--panel);color:var(--text);
+  box-shadow:var(--shadow-sm);cursor:pointer}
+.g-follow[hidden]{display:none}
+.g-follow svg{width:1rem;height:1rem}
+.g-follow:hover{background:var(--hover-wash)}
+.g-follow:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+@media (hover: none), (pointer: coarse) { .g-follow{width:max(var(--tap), 44px);height:max(var(--tap), 44px)} }
 /* a touch target is at least 44 CSS px (WCAG 2.5.5) even when the root size makes --tap a little less */
 @media (hover: none), (pointer: coarse) {
   .g-icon-button,.g-search__clear{min-width:max(var(--tap), 44px);min-height:max(var(--tap), 44px)}

@@ -143,6 +143,7 @@ body.plan.ed.talk-on:not(.m) .bstack { bottom: 20px; }
 
 /* S10 the chat tab: the pill comes into its bottom row (Fab redline 29); signing in reads from the top */
 #p-chat:has(#talkLogin:not([hidden])) .talk-log { display: none; }   /* the empty log fills the tab otherwise */
+#p-chat #talk { position: relative; }   /* the host of the kit's «Til nyeste» pill (kit/follow.js), over the log's bottom edge */
 #p-chat .chatpill { flex: none; padding-top: var(--sp-2); }
 #p-chat .chatpill .pill { box-shadow: none; }
 #p-chat .talk-item { font-size: var(--fs-md); }
