@@ -50,5 +50,7 @@ export function shotOf({ viewpoint, look, lens, eyeh } = {}, view = {}) {
 /* the camera's sentence for the image model: short, one line of viewpoint and one of look */
 export function promptLine(s) {
   const V = VIEWPOINTS[s.viewpoint], L = LOOKS[s.look];
-  return `${V.line} ${L.style.replace("{mm}", s.mm ?? V.mm ?? 24)}`;
+  /* a parallel projection (aksonometri, fasade) has no lens: the sentence says orthographic and names no mm */
+  const style = s.mm == null ? L.style.replace("tilt-shift lens ({mm} mm)", "orthographic").replace("{mm} mm lens, ", "").replace(", {mm} mm.", ".") : L.style.replace("{mm}", s.mm);
+  return `${V.line} ${style}`;
 }

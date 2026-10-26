@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { VIEWPOINTS, LOOKS, SIZES, viewpointFor, lookFor, shotOf, fovFor, promptLine } from "../public/gjengicam.js";
+import { lightLine } from "../public/sunpick.js";
 import { createRenderings } from "../gjengi.mjs";
 
 test("the viewpoint and the look a view has by itself, and never froskeperspektiv", () => {
@@ -31,6 +32,9 @@ test("the lens sets the field of view; the look's shape and the line to the mode
   assert.match(promptLine(shotOf({ viewpoint: "øyehøyde", look: "blåtime" })), /blue hour.*warm lit windows/);
   assert.match(promptLine(shotOf({ viewpoint: "fugleperspektiv", lens: 28 })), /Aerial photograph, 28 mm lens/);
   assert.match(promptLine(plan), /White clay massing model/); assert.match(promptLine(shotOf({ look: "skisse" })), /watercolour/); assert.match(promptLine(shotOf({ look: "konkurransebilde" })), /people and planting/);
+  for (const [v, l] of [["aksonometri", "arkitektfoto"], ["fasade", "arkitektfoto"], ["fasade", "konkurransebilde"], ["aksonometri", "drone"], ["fasade", "blåtime"]]) assert.doesNotMatch(promptLine(shotOf({ viewpoint: v, look: l })), /\bmm\b|tilt-shift/, `${v}/${l}: orthographic, no lens`);
+  assert.match(promptLine(shotOf({ viewpoint: "fasade" })), /orthographic/);
+  assert.match(lightLine({ sunM: 12, sunD: 21, sunH: 15 }), /winter afternoon.*21\. December at 15:00/); assert.match(lightLine({ sunM: 6, sunD: 21, sunH: 17.5 }), /summer evening.*17:30/); assert.match(lightLine(null), /summer afternoon/);
   for (const v of Object.keys(VIEWPOINTS)) for (const l of Object.keys(LOOKS)) assert.ok(promptLine(shotOf({ viewpoint: v, look: l })).length < 330, `${v}/${l}: one short line`);
 });
 
@@ -63,9 +67,11 @@ test("gjengi: the estimate by size, and one call whose body carries the size, th
   assert.deepEqual([b.image_config.image_size, b.image_config.aspect_ratio], ["4K", "2:3"], "the size chosen; the froskeperspektiv's portrait shape, not the picture's 3:2");
   assert.match(b.messages[0].content[0].text, /Low viewpoint looking up, two-point perspective.*blue hour.*\(18 mm\)/);
   assert.equal(b.messages[0].content[1].image_url.url, shot, "the view is still the only geometry");
-  const cheap = await post({ image: shot, versjon: "vAbcdefgh", size: "1K", shown_usd: k1 }); assert.equal(cheap.status, 200);
+  assert.match(b.messages[0].content[0].text, /Natural light of a Norwegian summer afternoon/, "no sun sent: the default's light");
+  assert.doesNotMatch(b.messages[0].content[0].text, /summer day/);
+  const cheap = await post({ image: shot, versjon: "vAbcdefgh", size: "1K", shown_usd: k1, sunM: 12, sunD: 21, sunH: 15 }); assert.equal(cheap.status, 200);
   assert.equal(calls[1].image_config.image_size, "1K"); assert.equal(calls[1].image_config.aspect_ratio, "3:2", "no camera: the picture's own shape");
-  assert.doesNotMatch(calls[1].messages[0].content[0].text, /Camera and look/);
+  assert.doesNotMatch(calls[1].messages[0].content[0].text, /Camera and look/); assert.match(calls[1].messages[0].content[0].text, /Norwegian winter afternoon \(the sun as on 21\. December at 15:00\)/, "the view's sun, said in words");
   assert.equal((await post({ image: shot, versjon: "vAbcdefgh", size: "2K", shown_usd: 0.01 })).status, 409, "a price shown lower than the size's is refused");
 });
 

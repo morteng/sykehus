@@ -19,6 +19,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { lightLine } from "./public/sunpick.js";
 import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/gjengicam.js";
 
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
@@ -32,7 +33,7 @@ const PROMPT = "This image is a view of a 3D model of a site in Bragernes, Dramm
   + "Where the model ends, keep the background as plain sky or the same flat ground that is there; do not invent a landscape, a skyline or a town behind it. "
   + "Materials: the existing hospital wings in concrete, brick and render; new buildings in the material their colour suggests; asphalt, kerbs, grass. "
   + "Planting: trees and shrubs only where the model has trees or green areas. People: a few small pedestrians on the paths and pavements. "
-  + "Natural daylight, a Norwegian summer day, no text or labels.";
+  + "No text or labels.";   // the light is said apart, from the view's sun (lightLine)
 const WISH = " The person also asks for this; it may change only materials, light, people and planting, never the geometry: ";
 
 export function createRenderings({ SECURITY = {}, readJson, login, versions, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
@@ -99,7 +100,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     try {
       const r = await fetchImpl(URL_, { method: "POST", signal: AbortSignal.timeout(120000), headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "http-referer": "https://sykehus.gulden.no", "x-title": "Sykehustomta" },
         body: JSON.stringify({ model, modalities: google ? ["image", "text"] : ["image"], provider: ROUTING, usage: { include: true }, image_config: { aspect_ratio: ar, image_size: sz },
-          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + (cam ? " Camera and look (these override the daylight and materials wording above where they differ; the geometry stays): " + promptLine(cam) : "") + (wish ? WISH + wish : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
+          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + " " + lightLine(body) + (cam ? " Camera and look (these override the light and materials wording above where they differ; the geometry stays): " + promptLine(cam) : "") + (wish ? WISH + wish : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
       const j = await r.json().catch(() => ({}));
       const cost = Number.isFinite(+j.usage?.cost) ? +j.usage.cost : null;
       const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url || "";

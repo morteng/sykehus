@@ -26,3 +26,9 @@ export function sunOf(x) {
   if (!(m >= 1 && m <= 12) || !(d >= 1 && d <= DAYS[m - 1] + (m === 2 ? 1 : 0)) || !(h >= 0 && h <= 24)) throw new Error("Datoen eller klokkeslettet for sola finnes ikke (måned 1-12, dag i måneden, time 0-24).");
   return { sunM: m, sunD: d, sunH: Math.round(h * 2) / 2 };
 }
+/* the light for the image model's prompt (gjengi.mjs): the season and the time of day of the sun, in words; no sun given is the default's */
+export function lightLine(x) {
+  const s = sunIn(x) || SUN_DEFAULT, season = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 0][s.sunM - 1], h = s.sunH;
+  const part = h < 5 ? "night" : h < 9 ? "early morning" : h < 12 ? "morning" : h < 16 ? "afternoon" : h < 19 ? "evening" : h < 22 ? "late evening" : "night";
+  return `Natural light of a Norwegian ${["winter", "spring", "summer", "autumn"][season]} ${part} (the sun as on ${s.sunD}. ${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][s.sunM - 1]} at ${Math.floor(h)}:${h % 1 ? "30" : "00"}).`;
+}

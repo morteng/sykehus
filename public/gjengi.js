@@ -6,7 +6,7 @@ const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];
 
-export function startGjengi({ btn, pop, viewer, work, toast, view = () => ({}) }) {
+export function startGjengi({ btn, pop, viewer, work, toast, sun = () => null }) {
   const say = pop.querySelector("#gjSay"), go = pop.querySelector("#gjGo"), wish = pop.querySelector("#gjWish"), list = pop.querySelector("#gjList");
   let st = null, busy = false;
   /* the camera of the picture (gjengicam.js): the person's choice, or null for what the view has by itself; lens and eye height
@@ -55,7 +55,7 @@ export function startGjengi({ btn, pop, viewer, work, toast, view = () => ({}) }
     busy = true; draw(); say.textContent = "Bildemodellen lager bildet. Det tar ofte 10–40 sekunder.";
     const w = work(), shot = shotOf({ viewpoint: vpNow(), look: lookNow(), lens: pick.lens, eyeh: pick.eyeh }, {}), image = viewer.snapshot(shot);
     let j;
-    try { j = await fetch("api/gjengi", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image, wish: wish.value.trim() || undefined, shown_usd: priceOf(sizeNow()), size: sizeNow(), viewpoint: shot.viewpoint, look: shot.look, lens: pick.lens ?? undefined, eyeh: pick.eyeh ?? undefined, ...(w.versjon ? { versjon: w.versjon, nokkel: w.nokkel || undefined } : { utkast: w.utkast }) }) }).then(r => r.json()); }
+    try { j = await fetch("api/gjengi", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image, wish: wish.value.trim() || undefined, shown_usd: priceOf(sizeNow()), size: sizeNow(), viewpoint: shot.viewpoint, look: shot.look, lens: pick.lens ?? undefined, eyeh: pick.eyeh ?? undefined, ...(sun() || {}), ...(w.versjon ? { versjon: w.versjon, nokkel: w.nokkel || undefined } : { utkast: w.utkast }) }) }).then(r => r.json()); }
     catch { j = { error: "Fikk ikke kontakt." }; }
     busy = false;
     if (j.error) { await load(); say.textContent = j.error; return; }
