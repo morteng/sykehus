@@ -7,6 +7,9 @@ What runs: `server.mjs`, one Node process. It serves `public/` as Caddy does tod
 | `POST /mcp` | the connector for chat apps (mcp.mjs), MCP **2026-07-28** over Streamable HTTP (JSON answers, no sessions, no SSE); older clients' `initialize` (2025-03-26 … 2025-11-25) still works |
 | `GET /api/utkast/<id>` | a draft's tried changes, read by the page's `?utkast=<id>` and by the chat app |
 | `GET /api/versjon/<id>`, `GET /api/versjoner` | a saved version of the after (versions.mjs), for `?versjon=<id>`; all of them, newest first |
+| `GET /mcp/server-card` | the Server Card (SEP-2127, `application/mcp-server-card+json`, CORS `*`, an hour's cache, ETag): who the server is and where `/mcp` is, no tools |
+| `GET /api/bim/<sha>/<mesh.json, model.ifc, model.glb>` | what a construction's script made (bim.mjs, U3570), by the sha of its script and parameters |
+| `GET /favicon.ico`, `/apple-touch-icon.png`, `/apple-touch-icon-precomposed.png` | the Gulden mark (`public/icons/`, gulden-ai's), also linked from the page and named in serverInfo.icons and on each tool |
 | `GET /mcp-app.js` (static) | the in-chat view, MCP Apps **2026-01-26** (`ui://sykehus/bygget`, `text/html;profile=mcp-app`) |
 
 Needs: Node 22 or newer (node:sqlite, ESM module detection). No npm packages. About 150 MB memory.
@@ -61,6 +64,15 @@ handle /oauth/* { reverse_proxy 127.0.0.1:8090 }   # authorize and approve: forw
 ```
 
 On every route: `request_header -Remote-User` and `request_header -X-Sykehus-Proxy-Auth` before anything else.
+
+**A new public path needs the edge's matcher.** On gulden-prod `public/` is not proxied whole: caddy-public sends to
+sykehus-mcp only the paths in its `@sykehusoauth` list, so a path this server starts to answer (as `/mcp/server-card`,
+`/favicon.ico` and `/apple-touch-icon*.png` did on 2026-10-26) answers 404 from the edge until it is added there and
+caddy-public is restarted. Say so with the deploy.
+
+Constructions (U3570) need `SYKEHUS_WORKER` (the worker on the internal network `sykehus-jobs`, e.g.
+`http://sykehus-worker:8070`; see `worker/`, its AppArmor and seccomp profiles and `worker/selftest.py`); without it a
+construction is refused in plain words and the rest works. Their files are kept in `SYKEHUS_VERSIONS_DIR/bim/`.
 
 The chat app runs in the chat host's sandboxed frame on the host's own origin, and loads `mcp-app.js`, the viewer,
 `data/*` and the textures from this site as a module script: those must carry `Access-Control-Allow-Origin: *`
