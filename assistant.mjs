@@ -19,11 +19,16 @@
    qr{url,minutes,label} (a one-time sign-in link for another machine, U3539) | done | error{code,message}; POST /approve, POST /cancel, GET /history. Anton's tools are this server's MCP tools,
    called by gulden-ai with the proxy secret and Remote-User set to the person.
 
+   A check of the drawing runs in the background (gulden-no U3545): Anton answers the next message while it works. After a
+   check_drawing tool line, and on every history read, this server asks GET /jobs?person&session every 3 s while a job
+   runs. A finished job Anton has not read yet gets a turn in the person's queue: POST /chat {job} in place of a
+   message. That turn is Anton's, so the pages get no person's message for it, only his answer and the result's receipt.
+
    A turn names the version the page shows when it is the person's own, so "this one" means that version. When any of
    a person's versions is saved (by Anton or anyone), their pages get "steps" and redraw it. */
 import { randomUUID } from "node:crypto";
 
-const WAITING = 5, LONGEST = 4000, PER_10_MIN = 20, SILENCE = 180e3, PING = 15e3, BUSY_TRIES = 20;
+const WAITING = 5, LONGEST = 4000, PER_10_MIN = 20, SILENCE = 180e3, PING = 15e3, BUSY_TRIES = 20, JOB_POLL = 3e3;
 
 /* a drawing from the page, checked and tidied: a JPEG of at most 2,5 MB, at most 60 strokes of 60 site points */
 function drawingOf(d) {
@@ -53,7 +58,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   const door = login.base + prefix, ready = login.anton;
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   const threads = new Map();   // person → { queue: [turn], running, subs: Set<res>, approvals: Map, sent: [times], stop }
-  const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), sent: [], stop: null }; threads.set(p, t); } return t; };
+  const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), sent: [], stop: null, jobs: new Set(), polling: null }; threads.set(p, t); } return t; };
   const session = p => `sykehus:${p}`;
   const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   function publish(person, event, data) { const t = threads.get(person); if (!t) return; for (const r of t.subs) r.write(sse(event, data)); }
@@ -100,14 +105,33 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     finally { clearTimeout(timer); }
   }
 
+  /* a finished background job Anton has not read gets his turn in the queue, once (U3545); asks while one runs */
+  function watchJobs(person, device) {
+    const t = thread(person);
+    if (t.polling) return;
+    const tick = async () => {
+      const [st, j] = await call("/jobs", null, { person, session: session(person) }, device);
+      const jobs = st === 200 && Array.isArray(j.jobs) ? j.jobs : [];
+      for (const job of jobs) {
+        if (job.state === "running" || job.reported || t.jobs.has(job.job)) continue;
+        t.jobs.add(job.job);
+        t.queue.push({ id: randomUUID(), job: job.job, text: "Kontrollen er ferdig", at: new Date().toISOString(), device });
+        publish(person, "queue", queueView(t)); run(person);
+      }
+      if (jobs.some(job => job.state === "running")) t.polling = setTimeout(tick, JOB_POLL); else t.polling = null;
+    };
+    t.polling = setTimeout(tick, 0);
+  }
+
   async function run(person) {
     const t = thread(person);
     if (t.running) return;
     while (t.queue.length) {
       const turn = t.running = t.queue.shift();
-      publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
+      if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
-      const body = { person, session: session(person), message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+      const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
+        : { person, session: session(person), message: turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
         if (line.type === "ping" || !["text", "tool", "approval", "qr", "done", "error"].includes(line.type)) return;
@@ -116,6 +140,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
           : line.type === "qr" ? { type: "qr", url: line.url, minutes: Math.min(15, Math.max(1, +line.minutes || 10)), label: String(line.label || "Skann med iPaden").slice(0, 60) } : { ...line };
         out.reply_to = turn.id;
         if (line.type === "approval" && typeof line.id === "string") t.approvals.set(line.id, { summary: String(line.summary || "").slice(0, 300) });
+        if (line.type === "tool" && line.key === "check_drawing") watchJobs(person, turn.device);
         publish(person, line.type, out);
       };
       let st, j;
@@ -194,6 +219,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     const [st, j] = await call("/history", null, { person: me.person, session: session(me.person) }, me.device);
     if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
     const items = Array.isArray(j.items) ? j.items : Array.isArray(j) ? j : [];
+    if (st === 200) watchJobs(me.person, me.device);   // a job that finished while no page was open, or before a restart of this server
     return send(res, st === 200 ? 200 : 502, { items: items.slice(-50), queue: queueView(thread(me.person)), ...(st === 200 ? {} : { error: codeOf(j, "unavailable") }) });
   }
 
