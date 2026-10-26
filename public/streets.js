@@ -11,7 +11,7 @@
 import * as THREE from "./vendor/three.module.js";
 import { loadRaw, streetsFrom } from "./renderkit/streets.js";
 import { pathRing } from "./renderkit/paths2d.js";
-import { tagStreets, wayKind } from "./roads.js";
+import { tagStreets, wayKind, wayRingsOf } from "./roads.js";
 import { createStreetMeshes, streetContext } from "./renderkit/streets3d.js";
 import { siteGrid, siteBox } from "./utm.js?v=20261025b";
 
@@ -62,6 +62,8 @@ export async function addStreets({ viewer, site, api = STREETS_API }) {
   viewer.setRoads?.(new Map([...byId].filter(([, h]) => h.userData.road)));
   return {
     group: g,
+    /* the ways as rings on the site, as the server has them (the brush's `around`, U3655) */
+    wayRings: () => wayRingsOf(sts, F.toUtm),
     /* the after's removed road sections (site.roads_removed): hidden, with what is painted on them */
     setRemoved(ids) { const off = new Set(ids); for (const [id, h] of byId) h.visible = !off.has(id); for (const [id, h] of marks) h.visible = !off.has(id); viewer.redraw(); },
   };

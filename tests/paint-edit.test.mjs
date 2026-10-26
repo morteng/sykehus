@@ -72,3 +72,20 @@ test("a terrain edit with no height, a bad shape or an unknown op is refused", (
   assert.throws(() => checkEdit(site, [], { kind: "terrain", op: "dance", shape: { t: "circle", c: AT, r: 5 }, h: 1 }), /op er raise/);
   assert.throws(() => checkEdit(site, [], { kind: "terrain", op: "lower", shape: { t: "hex" }, h: 1 }), /shape\.t/);
 });
+
+test("the ghost the page draws is what the edit paints: paintPlan's rings and applyEdits give the same area", async () => {
+  const { paintPlan, nearWays } = await import("../public/paint-edit.js");
+  const e = checkEdit(site, [], stroke("grass", { r: 2.5 }));
+  const plan = paintPlan([], e, site), ghostArea = plan.polys.reduce((s, p) => s + Math.abs(p.ring.reduce((a, q, i, r) => a + q[0] * r[(i + 1) % r.length][1] - r[(i + 1) % r.length][0] * q[1], 0)) / 2, 0);
+  const painted = applyEdits(site, [], [e]).site.landscape[0].area_m2;
+  assert.ok(Math.abs(ghostArea - painted) < 3, `ghost ${ghostArea} against painted ${painted}`);
+  const far = [[1000, 1000], [1010, 1000], [1010, 1010]], near = [[AT[0], AT[1] + 3], [AT[0] + 5, AT[1] + 3], [AT[0] + 5, AT[1] + 8]];
+  assert.equal(nearWays([far, near], e).length, 1, "only the way near the stroke goes with the edit");
+});
+
+test("the page and the server read the ways through one function (roads.js wayRingsOf): a path becomes a ring of its width", async () => {
+  const { wayRingsOf } = await import("../public/roads.js");
+  const w = wayRingsOf([{ kind: "path", id: "x", pts: [[0, 0], [10, 0]], width: 2 }, { kind: "fence", pts: [[0, 0], [5, 5]] }], q => q);
+  assert.equal(w.length, 1, "a fence is not a way");
+  const ys = w[0].ring.map(p => p[1]); assert.ok(Math.abs(Math.max(...ys) - Math.min(...ys) - 2) < 0.01, "2 m wide");
+});

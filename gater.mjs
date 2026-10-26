@@ -4,8 +4,7 @@
    only (siteBox), so this is not a way to ask hagekart for anything else. Kept a day; a failed fetch keeps the last. */
 import { siteBox, siteGrid } from "./public/utm.js";
 import { streetsFrom } from "./public/renderkit/streets.js";
-import { pathRing } from "./public/renderkit/paths2d.js";
-import { wayKind, tagStreets } from "./public/roads.js";
+import { tagStreets, wayRingsOf } from "./public/roads.js";
 
 const DAY = 864e5;
 export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKEHUS_STREETS_URL || "https://hagekart.gulden.no", fetchImpl = fetch } = {}) {
@@ -28,10 +27,7 @@ export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKE
   /* each with its id (roads.js tagStreets), so a version's removed road sections are left out (U3543) */
   function wayRings(osm, nv) {
     const sts = streetsFrom(osm, nv, toUtm); tagStreets(osm, nv, sts, toUtm);
-    return sts.filter(p => ["path", "road", "parking"].includes(p.kind)).map(p => {
-      const ring = p.ring ? p.ring.map(toUtm) : pathRing(p.pts.map(toUtm), p.width || 2);
-      return { id: p.id || null, name: `${wayKind(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
-    }).filter(w => w.ring.length > 2);
+    return wayRingsOf(sts, toUtm);
   }
   /* U3527: the named streets and places around (OpenStreetMap's name), each as its points on the site, roads marked:
      where a shot «fra Dronninggata» stands. From the same answer the page draws; the last made are kept */

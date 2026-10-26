@@ -5,6 +5,7 @@
    longer has is simply not drawn. A restore with the same id, or the edit taken out (Angre), puts it back.
 
    Pure: no DOM, no three.js; the page (streets.js, app.js) and the server (design.js) share it. */
+import { pathRing } from "./renderkit/paths2d.js";
 export const ROAD_ID = /^vei-(osm|nvdb)-\d+$/;
 
 /* the edit, checked: the id by its shape (the server does not hold the streets the page drew), the name the page saw */
@@ -61,4 +62,13 @@ export function tagStreets(osm, nv, sts, toUtm) {
     if (best) p.on = best.r.id;
   }
   return ways;
+}
+
+/* the ways there are as rings on the site (paths, roads, car parks): the server's (gater.mjs) and the page's (streets.js) read
+   them here, so the brush stops at the same edges on both (U3655) */
+export function wayRingsOf(sts, toUtm) {
+  return sts.filter(p => ["path", "road", "parking"].includes(p.kind)).map(p => {
+    const ring = p.ring ? p.ring.map(toUtm) : pathRing(p.pts.map(toUtm), p.width || 2);
+    return { id: p.id || null, name: `${wayKind(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
+  }).filter(w => w.ring.length > 2);
 }

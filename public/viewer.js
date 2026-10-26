@@ -830,8 +830,15 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   const el = renderer.domElement, pts = new Map();
   let drag = null, dirty = true;
-  el.addEventListener("pointerdown", e => { hand(); el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, pinch: pts.size === 2 ? pinchOf() : null }; });
+  /* U3655: the brush («Mal»): with one set, one pointer that presses and drags goes to it, not to the camera; a second finger
+     ends the stroke and the two move the view as always (a mouse's shift or right button still pans) */
+  let brush = null, brushing = false;
+  el.addEventListener("pointerdown", e => {
+    if (brushing) { brush.cancel(); brushing = false; }
+    else if (brush && !pts.size && e.button === 0 && !e.shiftKey && e.isPrimary) { hand(); el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); brushing = brush.down(e) !== false; if (brushing) return; }
+    hand(); el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); drag = { x: e.clientX, y: e.clientY, moved: 0, pan: e.button === 2 || e.shiftKey, pinch: pts.size === 2 ? pinchOf() : null }; });
   el.addEventListener("pointermove", e => {
+    if (brush && (brushing || e.pointerType === "mouse")) { brush.move(e, brushing); if (brushing) return; }
     if (!drag || !pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (pts.size === 2) { const p = pinchOf(); if (drag.pinch) { O.dist = Math.max(30, Math.min(1200, O.dist * drag.pinch.d / p.d)); pan(p.x - drag.pinch.x, p.y - drag.pinch.y); } drag.pinch = p; drag.moved += 10; place(); return; }
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
@@ -905,7 +912,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     O.eye = true; O.dist = 40; eyeTo(at[0], at[1], yaw, 0); place();
   }
   addEventListener("blur", () => held.clear());
-  const up = e => { pts.delete(e.pointerId); if (drag && drag.moved < 6 && !pts.size) pick(e); if (!pts.size) drag = null; };
+  const up = e => { if (brushing) { brushing = false; pts.delete(e.pointerId); e.type === "pointerup" ? brush.up(e) : brush.cancel(); return; } pts.delete(e.pointerId); if (drag && drag.moved < 6 && !pts.size) pick(e); if (!pts.size) drag = null; };
   el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("contextmenu", e => e.preventDefault());
   /* a trackpad as in Maps: two fingers move the view the way the fingers go, a pinch zooms. Chrome and Firefox send
      the pinch as a wheel with ctrlKey, Safari as gesture events (and no wheel). A wheel in lines or pages is a mouse
@@ -1118,6 +1125,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const h = ray.intersectObjects(scene.children, true).find(i => i.object.isMesh && i.object.visible && !i.object.material?.transparent);
       return h ? [Math.round(h.point.x * 10) / 10, Math.round(-h.point.z * 10) / 10, Math.round((h.point.y + base) * 100) / 100] : null;
     },
+    setBrush(b) { if (brushing) { brush?.cancel(); brushing = false; } brush = b || null; el.style.cursor = brush ? "none" : ""; },
     follow(f) { followers.add(f); dirty = true; return () => followers.delete(f); },
     /* what a pointer at cx, cy is on: a building's or a new building's id, and the point [east, north, kote] */
     hitAt(cx, cy) {
