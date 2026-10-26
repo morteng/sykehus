@@ -566,3 +566,4 @@ body.m .pf-x { top: 8px; left: 50%; }
 .np-card { font-size: var(--fs-sm); }
 .np-card { white-space: normal; min-width: 0; line-height: 1.2; justify-content: flex-start; padding: var(--sp-2) var(--sp-1); }
 .np-acts { position: sticky; bottom: 0; background: var(--panel); padding-top: var(--sp-2); }
+.np-acts .dr-p { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
