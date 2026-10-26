@@ -124,9 +124,10 @@ test("try_change and look draw a picture with balconies in the after (22:09Z: «
 });
 
 test("pm 11:35Z: balconies on a facade that has some replace them, and the result says so; another facade's stay", async () => {
+  /* U3690: a bare facade ask is now one balcony per window axis, so a second ask for the same is «already there»; the replacing ask differs by its bay */
   const one = (await call("try_change", { edits: [{ kind: "balconies", wing: "Sentralblokka", face: 120, why: "test" }], include_screenshot: false }, {})).structuredContent, T = one.draft;
   await call("try_change", { target: T, edits: [{ kind: "balconies", wing: "Sentralblokka", face: 300, why: "test" }], include_screenshot: false }, {});
-  const two = (await call("try_change", { target: T, edits: [{ kind: "balconies", wing: "Sentralblokka", face: 120, windows: true, why: "test" }], include_screenshot: false }, {})).structuredContent;
+  const two = (await call("try_change", { target: T, edits: [{ kind: "balconies", wing: "Sentralblokka", face: 120, bay: 2.4, gap: 0.6, why: "test" }], include_screenshot: false }, {})).structuredContent;
   assert.match(two.added[0].replaced, /^Erstattet de eldre balkongene på fasaden mot 120° \(endring nr\. 1\); bare de nye står\.$/);
   assert.equal(two.changes_in_draft, 2, "the 300° ones stay, the 120° ones are the new");
   const left = two.after.built.filter(a => a.kind === "balconies").map(a => a.name).sort();
