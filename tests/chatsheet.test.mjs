@@ -21,11 +21,12 @@ test("the stored height: held to 120 px and 60 % of the view (50 % on a phone), 
   saveWidth(st, "sykehus-samtalehoyde", null); assert.equal(m.has("sykehus-samtalehoyde"), false);
 });
 
-test("the page wires the kit's sheet with that key and takes the tab's list and button, not a copy", () => {
-  const a = readFileSync(new URL("../public/anton.js", import.meta.url), "utf8");
-  assert.match(a, /chatSheet\(\{ host: \$\("bstack"\), log, actions: \$\("chat-top"\)/);
-  assert.match(a, /key: "sykehus-samtalehoyde"/);
-  assert.match(a, /sheetShown\(log\.children\.length, chatOpen\(\)\)/);
+test("U3685: the conversation is not a card over the view: anton.js wires no sheet, the line over the pill has «Les mer» that opens the tab", () => {
+  const a = readFileSync(new URL("../public/anton.js", import.meta.url), "utf8"), html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+  assert.doesNotMatch(a, /chatSheet\(/);
+  assert.match(a, /\$\("reply-more"\)\.onclick = .*panel\.reveal\("chat"\)/);
+  assert.match(a, /panel\.reveal\("chat"\); return true;/, "a send opens the tab");
+  assert.match(html, /id="reply-more"/);
 });
 
 test("U3787: «Ny samtale» says it starts a new one and that Anton can look up the old ones, in the button and in the tour", () => {

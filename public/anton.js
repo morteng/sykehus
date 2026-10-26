@@ -12,7 +12,6 @@
    When Anton saves one of the person's versions the server says "steps": the page shows that version again, from the
    same place (after the reply is done, so nothing is cut off). */
 import { pick } from "./kit/pick.js";
-import { chatSheet, sheetShown } from "./kit/chat.js";   // U3657: the conversation over the pill, the kit's
 import { toolLine } from "./toolline.js";
 import { setMd } from "./md.js?v=20261027a";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
@@ -74,41 +73,39 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
     const seen = new Set();   // the turns the stream has shown taken
     const chatOpen = () => panel.tab === "chat" && panel.open();
-    const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; sheet.toEnd(); };
-    /* U3657 (Morten 14:07Z): with the pill over the view and something said, the conversation shows above it, with «Ny samtale»; the tab's own
-       list and button are moved in, never copied (the kit's chat.js). On a phone it takes at most half the view. */
-    const sheet = chatSheet({ host: $("bstack"), log, actions: $("chat-top"), title: "Samtalen", foldLabel: "Skjul eldre meldinger", unfoldLabel: "Vis hele samtalen",
-      name: "Høyden på samtalen", hint: "Dra for å endre høyden (↑ ↓). Dobbeltklikk setter den tilbake", min: 120, maxShare: () => panel.phone ? 0.5 : 0.6,
-      viewport: () => $("view").clientHeight, key: "sykehus-samtalehoyde" });
-    $("bstack").prepend(sheet.el);
-    const syncSheet = () => { sheet.show(sheetShown(log.children.length, chatOpen())); showReply(); };
+    const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; };
+    /* U3685 (Morten 18:28Z «the chat blocks most of the 3d view»): the conversation lives in the «Anton» tab only. Over the view stay the pill and
+       one thin line: the step while Anton works, then the answer's first sentence with «Les mer», which opens the tab. */
     /* the pill where the chat is: in the tab's bottom row while it shows, else at the bottom of the view */
     function placePill() {
-      const open = chatOpen(), to = open ? $("chat-pill") : $("bstack");
+      const open = chatOpen() && panel.phone, to = open ? $("chat-pill") : $("bstack");   // wide: the pill stays over the view; the sheet on a phone covers it, so it goes in
       document.body.classList.toggle("pill-chat", open);
       if (form.parentElement !== to) { const f = document.activeElement === input; to.append(form); if (f) input.focus(); }
       if (open) { unread = 0; }
-      syncSheet(); if (open) toEnd();
+      showReply(); if (chatOpen()) toEnd();
       words();
       panel.badge("chat", asking ? "!" : unread || 0);
     }
     addEventListener("sykehus:panel", placePill);
-    /* the newest reply over the pill while the chat is shut, under the person's own last message (Morten 20:37Z: «i
-       dont see my chats … just antons replies»), which shows as soon as it is sent; a waiting question with them */
-    const ownMsg = $("reply-me").firstChild;
-    function said(text) { ownMsg.textContent = text; $("reply-body").textContent = ""; $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(); }
+    /* the line over the pill: «Arbeider … <step>» while a turn runs, else the first sentence of Anton's newest answer and «Les mer» (the
+       answer is kept whole in `answer`; the tab holds it rendered). A waiting question shows above it. */
+    let answer = "", failed = false, lastStep = "";
+    const firstSentence = md => { const t = String(md).replace(/```[\s\S]*?```/g, " ").replace(/^\s*(#{1,6}|[-*>]|\d+[.)])\s+/gm, "").replace(/[*_`]|\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/\s+/g, " ").trim(); const m = t.match(/^.*?[.!?](?=\s|$)/); return (m ? m[0] : t).slice(0, 160); };
+    function said() { showReply(); }
     function showReply(text, plain) {
-      const open = chatOpen();
-      if (text != null) { if (plain) { $("reply-body").classList.remove("md"); $("reply-body").textContent = text; } else setMd($("reply-body"), text); }
-      $("reply-me").hidden = !ownMsg.textContent; $("reply-who").hidden = $("reply-body").hidden = !$("reply-body").textContent;
-      $("reply-card").hidden = open || sheet.open || (!$("reply-body").textContent && !ownMsg.textContent);
-      $("reply").hidden = open || ($("reply-card").hidden && !$("reply-cards").children.length);
+      if (text != null) { answer = text; failed = !!plain; $("reply-card").classList.toggle("err", failed); }
+      const body = $("reply-body"), more = $("reply-more"), open = chatOpen();
+      const line = running ? `Arbeider … ${lastStep || step || "Anton tenker"}` : firstSentence(answer);
+      if (body.textContent !== line) body.textContent = line;
+      more.hidden = !!running || !answer;
+      $("reply-card").hidden = !line || (open && (panel.phone || !running));   // the open tab shows the answer itself; on a phone it covers the line
+      $("reply").hidden = (open && panel.phone) || ($("reply-card").hidden && !$("reply-cards").children.length);
     }
-    $("view").addEventListener("pointerdown", () => { $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); });   // the model first: touching it puts the reply away
-    $("reply-card").onclick = () => panel.reveal("chat");
+    $("view").addEventListener("pointerdown", () => { if (running) return; answer = ""; showReply(); });   // the model first: touching it puts the answer away
+    $("reply-more").onclick = $("reply-card").onclick = () => { if (answer) panel.reveal("chat"); };
     /* «Ny samtale» stays for the signed-in person even when this page has drawn nothing: gulden-ai may hold a thread
        the history did not give back (21:23Z: not there on testperson's page) */
-    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = false; syncSheet(); }
+    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = false; }
     function line(cls, text, who, image, about) {
       const li = document.createElement("li"); li.className = "talk-item " + cls;
       if (who) li.append(Object.assign(document.createElement("span"), { className: "talk-who", textContent: who }));
@@ -118,7 +115,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const t = document.createElement(cls === "from-asst" ? "div" : "span"); if (cls === "from-asst") { t.raw = text; setMd(t, text); } else t.textContent = text; b.append(t); li.append(b);
       log.append(li); empty(); toEnd();
       /* a failed turn shows in the pill's card too, not only in the tab (pm 21:20Z: the pill showed nothing) */
-      if (cls === "err") { $("reply-card").classList.add("err"); $("reply-who").textContent = "Feil"; showReply(text, true); }
+      if (cls === "err") showReply(text, true);
       return t;
     }
     /* while a turn runs (U3564, Morten 22:01Z «the red stop button … should animate to indicate anton is working.
@@ -137,6 +134,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (!running) { turnOf = null; step = ""; }
       if (running && !ticking) ticking = setInterval(state, 1000); else if (!running && ticking) { clearInterval(ticking); ticking = null; }
       const s = Math.round((Date.now() - since) / 1000), time = s >= 10 ? ` · ${s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`}` : "";
+      showReply();
       const text = running ? `${step || "Anton tenker"} …${time}${waiting ? ` (${waiting} venter)` : ""}` : "";
       if (busy.textContent !== text) busy.textContent = text;
     }
@@ -172,7 +170,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       /* the stream must show the turn taken (queued or running); else the text comes back with a word (pm 21:31Z: the
          first message after load went away and reached no one) */
       const { id } = await r.json().catch(() => ({})); if (id && !seen.has(id)) setTimeout(() => { if (seen.has(id)) return; line("err", "Fikk ikke bekreftet at Anton fikk meldingen; den står i feltet igjen om du vil sende den på nytt."); if (!input.value.trim() && !drawn) { input.value = text; input.oninput(); } }, 8000);
-      said(text); return true;
+      lastStep = ""; said(); panel.reveal("chat"); return true;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
     }
     $("talkTegn").onclick = () => import("./tegn.js?v=20261025b").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
@@ -236,15 +234,15 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (!dropped) return; dropped = false;
       const h = await fromHistory(); if (!h) return;
       const last = (h.items || []).filter(it => it.type === "message").at(-1);
-      if (last?.from === "assistant" && !chatOpen()) showReply(last.text);
+      if (last?.from === "assistant") showReply(last.text);
       if (!h.queue?.running) { redraw = false; refresh(); }
     });
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { for (const x of [q.running, ...q.waiting]) if (x) seen.add(x.id); running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
-    on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); said(m.text); });
+    on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); lastStep = ""; said(); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
-      b.raw += t.delta || ""; setMd(b, b.raw); if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.raw); panel.badge("chat", asking ? "!" : unread);
+      b.raw += t.delta || ""; setMd(b, b.raw); if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); showReply(b.raw); panel.badge("chat", asking ? "!" : unread);
     });
     /* U3670: each try shows in the 3D view as a ghost at once and as a small picture on its row; a tap on it takes the camera back there */
     const tryRows = matcher((el, t) => {
@@ -254,7 +252,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     });
     let liveChain = Promise.resolve();
     const liveTry = () => { liveChain = liveChain.then(async () => { const r = await tries.run().catch(() => null); if (r) tryRows.thumb(r); else redraw = true; }); };
-    on("tool", t => { if (t.label) { const el = line("tool", toolLine(t)); if (isTry(t.key)) tryRows.row(el); } step = stepOf(t.key); state(); });
+    on("tool", t => { if (t.label) { const el = line("tool", toolLine(t)); lastStep = toolLine(t); if (isTry(t.key)) tryRows.row(el); } step = stepOf(t.key); state(); });
     /* U3635: a plan Anton shows before he builds (propose_sketch): the picture to mark up (renderkit's sketch.js), «Bygg det»
        says so to Anton, the feedback goes as the drawing (the picture with the marks, strokes in metres) and the pins in words */
     async function sketchCard(s) {
@@ -280,9 +278,10 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (redraw) { redraw = false; refresh(); }
       /* the reply came while this page was not listening (a reload mid-turn): the card takes it from the history
          (21:23Z: the section turn's answer was in the thread, the card empty) */
-      if (!$("reply-body").textContent && !chatOpen()) fetch("api/anton/historikk").then(r => r.ok ? r.json() : null).then(h => {
+      showReply();
+      if (!answer) fetch("api/anton/historikk").then(r => r.ok ? r.json() : null).then(h => {
         const last = (h?.items || []).filter(it => it.type === "message").at(-1);
-        if (last?.from === "assistant" && !$("reply-body").textContent) showReply(last.text);
+        if (last?.from === "assistant" && !answer) showReply(last.text);
       }).catch(() => {});
     });
     /* Anton saved a version: the one open is shown again (in place when it can be), another gets a link */
@@ -291,7 +290,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     on("show", v => { if (/^v.{8}$/.test(v.draft || "")) { v = { ...v, version: v.draft }; delete v.draft; }   // a version's id is a version (21:05Z)
       if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}${v.key ? `&nokkel=${encodeURIComponent(v.key)}` : ""}`); } else showView(v); });
     on("signed_out", signedOut);
-    on("cleared", () => { log.textContent = ""; replies.clear(); $("reply-body").textContent = ""; ownMsg.textContent = ""; showReply(); empty(); });
+    on("cleared", () => { log.textContent = ""; replies.clear(); answer = ""; showReply(); empty(); });
     placePill(); state(); empty();
     /* ready: what was typed while the page loaded (early.js) goes now */
     form.classList.remove("wait"); btn.disabled = false; words(); state(); if (form.dataset.queued) { delete form.dataset.queued; const go = () => { busy.textContent = ""; sendIt(); }; if (es.readyState === EventSource.OPEN) go(); else es.addEventListener("open", go, { once: true }); }   // once the stream listens, so the page sees its own turn

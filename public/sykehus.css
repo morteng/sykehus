@@ -257,11 +257,10 @@ body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-
 .fl-three input, .fl-two input { min-width: 0; width: 100%; box-sizing: border-box; }
 body.placing #view { cursor: crosshair; }
 
-/* the person's own last message over Anton's reply on the pill (Morten 20:37Z): the chat's from-me bubble (laser.css
-   #p-chat .talk-item.from-me), short: two lines at most */
-#reply-card { display: flex; flex-direction: column; gap: var(--sp-1); }
-#reply-me { align-self: flex-end; max-width: 85%; background: var(--accent-panel); border: 1px solid var(--accent-panel-edge); border-radius: 14px 14px 4px 14px; padding: var(--sp-1) var(--sp-3); }
-#reply-me .talk-body { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: var(--fs-sm); }
+/* U3685: the thin line over the pill: the step while Anton works, then the first sentence of his answer and «Les mer» */
+#reply-card { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-3); min-height: 0; cursor: pointer; }
+#reply-card #reply-body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+#reply-card .rmore { flex: none; border: 0; background: none; padding: 0 var(--sp-1); font: inherit; font-size: var(--fs-sm); color: var(--accent); text-decoration: underline; cursor: pointer; }
 #reply-card [hidden] { display: none; }
 
 /* «Forslag»'s top card (Morten 20:46Z «polish needed»): title in place, one status line, the acts, the changes by kind */
@@ -376,7 +375,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .views-save button { flex: none; padding: 6px 10px; font: inherit; color: var(--on-accent, #fff); background: var(--accent); border: 0; border-radius: var(--radius); cursor: pointer; }
 
 /* a failed turn in the pill's card (pm 21:20Z) */
-#reply-card.err #reply-who { color: var(--danger, #b3261e); }
 #reply-card.err #reply-body { color: var(--danger, #b3261e); }
 
 /* the first load (pm 21:20Z) */
@@ -486,16 +484,6 @@ header .gj .ab-ic[aria-pressed=true] { background: var(--accent-panel); color: v
 .sk.sk-large { position: fixed; inset: 0; z-index: 60; background: var(--bg, var(--panel)); padding: var(--sp-3); overflow: auto; }
 .sk.sk-large .sk-stage { max-width: min(100%, calc((100vh - 280px) * 1.6)); margin: 0 auto; width: 100%; }
 body.sk-open { overflow: hidden; }
-
-/* U3657: the conversation over the pill (the kit's .g-chat, kit/chat.js): the tab's own list and button moved in */
-.bstack .g-chat { overflow: visible; }
-.bstack .g-chat:not([style*="height"]) { max-height: min(46vh, 420px); }
-.g-chat-body { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
-.g-chat-body .talk-log { max-height: none; overflow: visible; border-top: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
-.g-chat-body .talk-log > li { flex: none; }
-.g-chat-acts .chat-top { margin: 0; }
-body.m.sheet-open .bstack .g-chat, body.m.fonts-open .bstack .g-chat { display: none; }
-body.tegner .g-chat { visibility: hidden; }
 
 /* U3660: «Gjengi» in the map's tool column beside the sun, its card to the left of it as the sun's; three tabs in the dock */
 .dock[data-tabs="3"] { --tabs: 3; }
