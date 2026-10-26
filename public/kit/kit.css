@@ -96,19 +96,38 @@ g-item[hidden]{display:none}
 .g-pic{overflow:hidden;background:var(--tile-ground)}
 .g-pic img{display:block;width:100%;height:100%;object-fit:cover}
 .g-pic--contain img{object-fit:contain}
+/* a group of pictures in the one slot (U3573): 2 side by side, 3–4 as 2 × 2, more as 3 and «+N» */
+.g-pic--group{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px}
+.g-pic--group[data-n="2"]{grid-template-rows:1fr}
+.g-pic--group img{min-width:0;min-height:0}
+.g-pic__more{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--fs-sm);font-weight:600}
+/* how far along (U3573): the native bar in the status colour, its words beside it */
+.g-progress{display:flex;align-items:center;gap:var(--sp-2);min-width:0;color:var(--muted);font-size:var(--fs-sm)}
+.g-progress progress{flex:0 0 4.5rem;width:4.5rem;height:6px;-webkit-appearance:none;appearance:none;border:0;border-radius:var(--radius-pill);background:var(--border);color:var(--status);overflow:hidden}
+.g-progress progress::-webkit-progress-bar{background:var(--border);border-radius:var(--radius-pill)}
+.g-progress progress::-webkit-progress-value{background:var(--status);border-radius:var(--radius-pill)}
+.g-progress progress::-moz-progress-bar{background:var(--status);border-radius:var(--radius-pill)}
+.g-progress__text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the bar's one «New …» action (U3573) */
+.g-new{display:inline-flex;align-items:center;flex:none;min-height:var(--control-h);padding:0 var(--sp-3);border:1px solid var(--accent);border-radius:var(--radius);
+  background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;text-decoration:none;white-space:nowrap;cursor:pointer}
+.g-new:hover{filter:brightness(1.08)}
+.g-new:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
 .g-meta,.g-when{color:var(--muted);font-size:var(--fs-sm);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .g-group{grid-column:1/-1;margin:var(--sp-3) 0 0;font-size:var(--fs-sm);font-weight:600;color:var(--muted);text-transform:var(--label-transform);letter-spacing:var(--label-tracking)}
 .g-head{display:none}
 
 /* cards */
 g-collection[data-view="cards"] .g-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card-min),1fr));gap:var(--sp-3)}
-g-collection[data-view="cards"] g-item{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-2);padding:0 var(--sp-3) var(--sp-2);
+g-collection[data-view="cards"] g-item{display:flex;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:var(--sp-1) var(--sp-2);padding:0 var(--sp-3) var(--sp-2);
   background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
 g-collection[data-view="cards"] g-item:hover{border-color:var(--border-strong)}
 g-collection[data-view="cards"] g-item:focus-within{border-color:var(--focus-color)}
 g-collection[data-view="cards"] .g-pic{flex:0 0 calc(100% + 2 * var(--sp-3));margin:0 calc(-1 * var(--sp-3)) var(--sp-1);aspect-ratio:var(--card-ratio);border-bottom:1px solid var(--border)}
 g-collection[data-view="cards"] .g-title{flex:0 0 100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:var(--fs-md)}
 g-collection[data-view="cards"] .g-status:empty{display:none}
+g-collection[data-view="cards"] .g-progress{flex:0 0 100%}
+g-collection[data-view="cards"] .g-progress:empty{display:none}
 g-collection[data-view="cards"] .g-meta{display:none}
 g-collection[data-view="cards"] .g-meta[data-card]{display:block;flex:0 0 100%}
 g-collection[data-view="cards"] .g-meta[data-card]:empty{display:none}
@@ -137,6 +156,7 @@ g-collection[data-view="list"] .g-more{min-width:0}
 @media (max-width: 47.99rem) {
   .g-tools{flex-wrap:wrap;justify-content:flex-start}
   .g-search{flex:1 1 100%;max-width:none}
+  g-collection[data-view="list"] .g-progress{display:none}
   .g-bar>.g-tabs{max-width:100%;overflow-x:auto}
   g-collection[data-view="list"] .g-head{display:none}
   g-collection[data-view="list"] g-item{grid-template-columns:3rem minmax(0,1fr) auto;grid-auto-flow:row dense}
@@ -149,13 +169,14 @@ g-collection[data-view="list"] .g-more{min-width:0}
 /* a touch target is at least 44 CSS px (WCAG 2.5.5) even when the root size makes --tap a little less */
 @media (hover: none), (pointer: coarse) {
   .g-icon-button,.g-search__clear{min-width:max(var(--tap), 44px);min-height:max(var(--tap), 44px)}
-  .g-seg>a,.g-seg>button,.g-search input,.g-sort select,.g-menu button{min-height:max(var(--tap), 44px)}
+  .g-seg>a,.g-seg>button,.g-search input,.g-sort select,.g-menu button,.g-new{min-height:max(var(--tap), 44px)}
 }
 @media (prefers-reduced-motion: reduce) {
   [class^="g-"], [class*=" g-"], g-collection, g-item { transition: none; animation: none; }
 }
 @media (forced-colors: active) {
   .g-status,.g-seg,g-collection[data-view="cards"] g-item{border:1px solid CanvasText}
+  .g-progress progress{border:1px solid CanvasText}
   .g-seg>button[aria-pressed="true"],.g-seg>a[aria-current="page"],.g-levels button[aria-pressed="true"]{background:Highlight;color:HighlightText}
   .g-levels ol,.g-pick .chip{border-color:CanvasText}
 }
