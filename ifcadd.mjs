@@ -21,6 +21,22 @@
 import { createHash } from "node:crypto";
 import { stepText } from "./ifcfilter.mjs";
 import { ifcMaterial, MATERIALS } from "./public/renderkit/materials.js";   // U3619: the one list of materials
+import { placePart, typeLine } from "./partmerge.mjs";   // U3690: a balcony is the worker's part, written in where it stands
+
+/* the balcony part's widths: at most 12 m a balcony (the part's limit), at least 1.2; a size is its key in the parts handed in */
+export const BALCONY_MAX = 12;
+const r2 = v => Math.round(v * 100) / 100;
+export const balconySize = (w, d) => `${Math.max(1.2, r2(w))}x${r2(d)}`;
+/* every size of balcony the after's balconies need: size → { width, depth } (what the worker is asked for) */
+export function balconySizes(after) {
+  const out = new Map();
+  for (const a of after.added || []) if (a.kind === "balconies") for (const p of a.parts || []) {
+    if (!p.profile || p.role !== "slab") continue;
+    const [[x0, y0], [x1, y1]] = p.axis, W = Math.hypot(x1 - x0, y1 - y0), cnt = Math.max(1, Math.ceil(W / BALCONY_MAX)), width = Math.max(1.2, r2(W / cnt)), depth = r2(Math.max(...p.profile.map(q => q[0])));
+    out.set(balconySize(W / cnt, depth), { width, depth });
+  }
+  return out;
+}
 
 const B64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
 /* ifcopenshell.guid.compress of the first 128 bits of a sha1 of key: 22 characters, the first of 2 bits */
@@ -55,7 +71,7 @@ function anchors(parsed) {
 
 /* the before's IFC text (parsed) and the after (applyEdits(...).site) and the before's site → the lines to add, and the
    wings' new names by IfcBuilding id */
-export function addedLines(parsed, after, before) {
+export function addedLines(parsed, after, before, parts = null) {
   const none = { lines: [], renamed: new Map(), counts: {} };
   const moved = !!(after.terrain?.z && before.terrain?.z && after.terrain.z !== before.terrain.z), waters = (after.landscape || []).filter(w => w.basin && w.level != null);
   if (!(after.added || []).length && !(after.wings || []).some(w => w.draft?.length) && !moved && !waters.length) return none;
@@ -115,32 +131,28 @@ export function addedLines(parsed, after, before) {
       counts.buildings++; counts.elements++;
     } else if (a.kind === "balconies") {
       const bid = A.building.get(wingName(a.wing)), sts = A.storeys.get(bid); if (!bid || !sts?.length || !(after.buildings || []).some(b => b.wing === a.wing)) continue;
-      /* U3620: each balcony is the balcony part's shape: an IfcElementAssembly «Balkong» of a slab and a railing (the glass
-         or steel along the edge and its two ends as one body), each with its material, property set and quantities */
-      const by = new Map(), all = [], groups = [], types = new Map();   // types: one IfcElementAssemblyType a distinct size, its balconies the occurrences
-      for (const p of a.parts) { if (!p.profile) continue; if (p.role === "slab") groups.push({ slab: p, rails: [] }); else groups.at(-1)?.rails.push(p); }
-      groups.forEach((g, i) => {
-        const z = Math.max(...g.slab.profile.map(q => q[1])), st = sts.reduce((s, x) => x[1] <= z + 0.05 ? x : s, sts[0])[0], k = `${key}:${i}`;
-        const [[x0, y0], [x1, y1]] = g.slab.axis, W = Math.hypot(x1 - x0, y1 - y0), D = Math.max(...g.slab.profile.map(q => q[0])), T = z - Math.min(...g.slab.profile.map(q => q[1]));
-        const slab = put(`IFCSLAB('${gid(k + ":slab")}',$,'Balkong',$,$,#${placeAt(0)},#${shape([g.slab])},$,.FLOOR.)`); made(g.slab.mat, slab); counts.elements++;
-        const els = [slab];
-        if (g.rails.length) {
-          const rail = put(`IFCRAILING('${gid(k + ":rail")}',$,'Rekkverk',$,$,#${placeAt(0)},#${shape(g.rails)},$,.BALUSTRADE.)`); made(g.rails[0].mat, rail); els.push(rail); counts.elements++;
-          const RL = g.rails.reduce((t, r) => t + Math.hypot(r.axis[1][0] - r.axis[0][0], r.axis[1][1] - r.axis[0][1]), 0);
-          pset(k + ":rail", [rail], "Pset_RailingCommon", { IsExternal: true, Reference: "Balkongrekkverk" });
-          qto(k + ":rail", [rail], "Qto_RailingBaseQuantities", { Length: RL });
+      /* U3690: no balcony is drawn here: each is the worker's balcony part (its assembly of slab and railing, property sets,
+         quantities), written in again where it stands (partmerge.mjs), the assembly an occurrence of the part's type for
+         its size. A wide balcony is as many of the part's widest as it takes. */
+      const by = new Map(), all = [], types = new Map();
+      let at = 0;
+      for (const p of a.parts) {
+        if (!p.profile || p.role !== "slab") continue;
+        const [[x0, y0], [x1, y1]] = p.axis, W = Math.hypot(x1 - x0, y1 - y0), D = Math.max(...p.profile.map(q => q[0])), z = Math.max(...p.profile.map(q => q[1])), cnt = Math.max(1, Math.ceil(W / BALCONY_MAX)), w = W / cnt;
+        const st = sts.reduce((s0, x) => x[1] <= z + 0.05 ? x : s0, sts[0])[0], u = [(x1 - x0) / W, (y1 - y0) / W], size = balconySize(w, D), part = parts?.get(size);
+        if (!part) throw new Error(`Balkongdelen ${size} mangler: arbeideren må bygge den før eksporten (balconySizes sier hvilke)`);
+        for (let m = 0; m < cnt; m++, at++) {
+          const o = [x0 + u[0] * w * m, y0 + u[1] * w * m, z], k = `${key}:${at}`;
+          const place = put(`IFCLOCALPLACEMENT($,IFCAXIS2PLACEMENT3D(IFCCARTESIANPOINT(${pt(o)}),IFCDIRECTION(${pt([0, 0, 1])}),IFCDIRECTION(${pt([u[0], u[1], 0])})))`);
+          const got = placePart(part, { reserve: () => ++n, emit: (id, text) => lines.push(`#${id}=${text};`), gid, key: k, place, body: A.body });
+          for (const q of got.products) { const mk = Object.keys(MATERIALS).find(x => ifcMaterial(x)?.name === q.material); if (mk) made(mk, q.id); all.push(q.id); counts.elements++; }
+          (types.get(size) || types.set(size, []).get(size)).push(got.assembly); (by.get(st) || by.set(st, []).get(st)).push(got.assembly);
         }
-        pset(k + ":slab", [slab], "Pset_SlabCommon", { IsExternal: true, LoadBearing: true, Reference: "Balkongplate" });
-        qto(k + ":slab", [slab], "Qto_SlabBaseQuantities", { Length: W, Width: D, Depth: T, GrossArea: W * D, GrossVolume: W * D * T });
-        const asm = put(`IFCELEMENTASSEMBLY('${gid(k + ":asm")}',$,'Balkong',$,'Balkong',#${placeAt(0)},$,$,.SITE.,.USERDEFINED.)`);
-        put(`IFCRELAGGREGATES('${gid(k + ":agg")}',$,$,$,#${asm},(${els.map(e => "#" + e).join(",")}))`);
-        const tk = `${num(W)}x${num(D)}x${num(T)}`; (types.get(tk) || types.set(tk, { W, D, T, asms: [] }).get(tk)).asms.push(asm);
-        (by.get(st) || by.set(st, []).get(st)).push(asm); all.push(...els);
-      });
+      }
       for (const [st, els] of by) contain(`${key}:${st}`, els, st);
-      for (const [tk, t] of types) {
-        const ty = put(`IFCELEMENTASSEMBLYTYPE('${gid(`${key}:type:${tk}`)}',$,${stepStr(`Balkong ${String(Math.round(t.W * 10) / 10).replace(".", ",")} × ${String(Math.round(t.D * 10) / 10).replace(".", ",")} m`)},$,$,$,$,$,$,.USERDEFINED.)`);
-        put(`IFCRELDEFINESBYTYPE('${gid(`${key}:type:${tk}:rel`)}',$,$,$,(${t.asms.map(x => "#" + x).join(",")}),#${ty})`);
+      for (const [size, asms] of types) {
+        const ty = put(typeLine(parts.get(size), gid, `${key}:type:${size}`));
+        put(`IFCRELDEFINESBYTYPE('${gid(`${key}:type:${size}:rel`)}',$,$,$,(${asms.map(x => "#" + x).join(",")}),#${ty})`);
       }
       if (all.length) pset(key, all, "Sykehustomta_Nytt", { Hvorfor: a.why, Status: "NEW" });
     }
@@ -196,8 +208,8 @@ export function addedLines(parsed, after, before) {
 }
 
 /* the whole file: the lines before ENDSEC, the renamed buildings' name in place */
-export function withAdded(text, parsed, after, before) {
-  const { lines, renamed, counts } = addedLines(parsed, after, before);
+export function withAdded(text, parsed, after, before, parts = null) {
+  const { lines, renamed, counts } = addedLines(parsed, after, before, parts);
   if (!lines.length && !renamed.size) return { text, counts };
   let out = renamed.size ? text.replace(/^#(\d+)=IFCBUILDING\('([^']*)',([^,]*),'(?:[^']|'')*'/gm, (m, id, g, oh) => renamed.has(+id) ? `#${id}=IFCBUILDING('${g}',${oh},${stepStr(renamed.get(+id))}` : m) : text;
   const at = out.lastIndexOf("\nENDSEC;");

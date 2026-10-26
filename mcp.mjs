@@ -13,14 +13,15 @@ import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlink
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
-import { withAdded } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
+import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
-import { prepare, slim, withMeshes, handleBim, importFile, listParts } from "./bim.mjs";
+import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc } from "./bim.mjs";
+import { readPart } from "./partmerge.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
@@ -848,7 +849,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* GET /api/ifc?utkast=<id> | ?versjon=<id>&nokkel=: the model as IFC without the wings the after tears down
      (ifcfilter.mjs), with what it builds and the wings it renames (ifcadd.mjs); the before's file is read once, each answer kept until the draft or version changes */
   let base = null; const ifcs = new Map();
-  function handleIfc(req, res) {
+  async function handleIfc(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const q = new URL(req.url, "http://x").searchParams, vid = q.get("versjon"), did = q.get("utkast");
     let edits, tag, name;
@@ -862,7 +863,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
       const gone = (site.wings || []).filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
       base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
-      body = Buffer.from(withAdded(withoutBuildings(base, gone).text, base, m.site, site).text, "utf8");
+      /* the balconies are the worker's part (U3690): one run a size, each written in where it stands */
+      const parts = new Map(); try { for (const [size, { width, depth }] of balconySizes(m.site)) parts.set(size, readPart(await partIfc("balcony", { width, depth, door: false }))); }
+      catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
+      body = Buffer.from(withAdded(withoutBuildings(base, gone).text, base, m.site, site, parts).text, "utf8");
       if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
     }
     const file = `gamle-drammen-sykehus-${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;

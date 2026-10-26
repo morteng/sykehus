@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
 import { parseIfc, withoutBuildings, stepText } from "../ifcfilter.mjs";
-import { withAdded, gid, stepStr } from "../ifcadd.mjs";
+import { withAdded, gid, stepStr, balconySizes } from "../ifcadd.mjs";
+import { readPart } from "../partmerge.mjs";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -14,7 +15,9 @@ const base = parseIfc(readFileSync(new URL("../public/data/sykehus.ifc", import.
 const add = (edits, e) => { const m = applyEdits(site, floors, edits); edits.push(checkEdit(m.site, m.floors, e)); return edits; };
 const ifcOf = edits => { const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
   const gone = site.wings.filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
-  return withAdded(withoutBuildings(base, gone).text, base, m.site, site); };
+  /* the worker's balcony part, as it answers (tests/fixtures/balcony-part.ifc, one run of gulden-worker's parts/balcony.py), for every size asked */
+  const part = readPart(readFileSync(new URL("./fixtures/balcony-part.ifc", import.meta.url), "utf8")), parts = new Map([...balconySizes(m.site).keys()].map(k => [k, part]));
+  return withAdded(withoutBuildings(base, gone).text, base, m.site, site, parts); };
 const names = (p, type) => [...p.ents.values()].filter(e => e.type === type).map(e => stepText(/^'[^']*',[^,]*,'((?:[^']|'')*)'/.exec(e.args)?.[1] || ""));
 
 test("GlobalIds are 22 characters of IFC's alphabet, the same for the same key; text as STEP", () => {
@@ -36,10 +39,10 @@ test("the after's IFC: a new building with its storeys and body, a pyramid, balc
   assert.equal(b.length, 13 - 1 + 2);
   assert.deepEqual(names(p, "IFCBUILDINGSTOREY").filter(n => /^[1-4]\. etasje$/.test(n)).length >= 4, true);
   assert.ok([...p.ents.values()].some(e => e.type === "IFCTRIANGULATEDFACESET"), "the pyramid's faces");
-  assert.ok(names(p, "IFCSLAB").filter(n => n === "Balkong").length > 10, "balconies");
+  assert.ok(names(p, "IFCELEMENTASSEMBLY").filter(n => n === "Balkong").length > 10, "balconies");
   /* U3620: a balcony is the balcony part's shape: an assembly of a slab and a railing, with property sets and quantities */
   const asms = [...p.ents.values()].filter(e => e.type === "IFCELEMENTASSEMBLY" && /'Balkong'/.test(e.args)), kinds = t => [...p.ents.values()].filter(e => e.type === t);
-  assert.ok(asms.length > 10 && asms.length === names(p, "IFCSLAB").filter(n => n === "Balkong").length && names(p, "IFCRAILING").filter(n => n === "Rekkverk").length === asms.length, "one assembly, one slab and one railing a balcony");
+  assert.ok(asms.length > 10 && asms.length === names(p, "IFCSLAB").filter(n => n === "Balkongplate").length && names(p, "IFCRAILING").filter(n => n === "Balkongrekkverk").length === asms.length, "one assembly, one slab and one railing a balcony");
   assert.ok(kinds("IFCPROPERTYSET").some(e => /'Pset_SlabCommon'/.test(e.args)) && kinds("IFCPROPERTYSET").some(e => /'Pset_RailingCommon'/.test(e.args)), "property sets");
   assert.ok(kinds("IFCELEMENTQUANTITY").some(e => /'Qto_SlabBaseQuantities'/.test(e.args)) && kinds("IFCQUANTITYAREA").some(e => /'GrossArea'/.test(e.args)) && kinds("IFCQUANTITYVOLUME").length > 10, "quantities");
   assert.ok(kinds("IFCRELAGGREGATES").some(e => e.args.split("#").length === 4 + 0 && /\(#\d+,#\d+\)/.test(e.args)), "the assembly holds slab and railing");
@@ -47,9 +50,9 @@ test("the after's IFC: a new building with its storeys and body, a pyramid, balc
   /* U3619: one IfcMaterial a material used, named by its FreeCAD card, each element in one */
   const mats = [...p.ents.values()].filter(e => e.type === "IFCMATERIAL" && /^'(Concrete|Glass|Steel-Generic|Wood|Brick|Soil)',/.test(e.args)).map(e => e.args);
   assert.ok(mats.includes("'Glass','Glass','glass'") && mats.includes("'Concrete','Betong','concrete'") && mats.includes("'Soil','Jord','earth'"), mats.join(" | "));
-  assert.equal(counts.materials, 3, `glass (the office by default, the pyramid, the railings), concrete (the slabs) and soil (the pads moved the ground): ${JSON.stringify(counts)} ${mats.join(" | ")}`);
+  assert.equal(counts.materials, 4, `glass (the office by default, the pyramid, the railings' panes), steel (the part's handrail and posts), concrete (the slabs) and soil (the pads moved the ground): ${JSON.stringify(counts)} ${mats.join(" | ")}`);
   const rels = [...p.ents.values()].filter(e => e.type === "IFCRELASSOCIATESMATERIAL"), inRel = new Set(rels.flatMap(e => [...e.args.match(/\(([^)]*)\)/)[1].matchAll(/#(\d+)/g)].map(m => +m[1])));
-  const news = [...p.ents].filter(([, e]) => /^(IFCSLAB|IFCRAILING|IFCBUILDINGELEMENTPROXY)$/.test(e.type) && /^'[^']*',\$,'(Balkong|Rekkverk|Kontorbygg|Drivhus)'/.test(e.args));
+  const news = [...p.ents].filter(([, e]) => /^(IFCSLAB|IFCRAILING|IFCBUILDINGELEMENTPROXY)$/.test(e.type) && /^'[^']*',\$,'(Balkongplate|Balkongrekkverk|Kontorbygg|Drivhus)'/.test(e.args));
   assert.ok(news.length > 10 && news.every(([id]) => inRel.has(id)), "every new element is in a material");
   assert.ok([...p.ents.values()].some(e => e.type === "IFCMATERIALPROPERTIES" && /'Pset_MaterialCommon'/.test(e.args)), "MassDensity");
   assert.ok(text.includes("IFCMASSDENSITYMEASURE(2400.)") && text.includes("IFCLABEL('26042aa5-56e6-4d99-8b63-dd8b9ea5a37a')"), "the card's density and UUID");
