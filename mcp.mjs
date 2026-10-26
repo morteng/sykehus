@@ -112,6 +112,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const keepDraft = d => { if (!ddir) return; const p = join(ddir, d.id + ".json"); try { writeFileSync(p + ".tmp", JSON.stringify(d)); renameSync(p + ".tmp", p); } catch (e) { console.error("drafts: write", e.message); } };
   const dropDraft = id => { drafts.delete(String(id)); if (ddir && DID.test(String(id))) try { unlinkSync(join(ddir, id + ".json")); } catch { } };
   const newId = () => randomBytes(6).toString("base64url");
+  const sketches = new Map(); let notify = null;   // U3635: the plans shown to a person (by id), kept for their page to fetch; notify(person, event, data) tells their page
   /* signed in, the person's work is one private version (U3555), marked work; made on the first change */
   const workOf = me => { const v = versions.list({ owner: me, viewer: me }).find(x => x.work); if (v) return v;
     const n = versions.create(me, "Mitt etter"); n.work = true; return versions.save(n); };
@@ -424,6 +425,27 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         try { const { png, text } = await look(m.site, { view_name: a.view_name, focus: id && m.site.added?.some(x => x.id === id) ? id : null });
           return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text }], structuredContent: out } };
         } catch (e) { console.error("look (try_change's picture):", e.message, "| edits:", argsLine({ edits: a.edits }), "| added:", (m.site.added || []).map(x => x.kind).join(",")); return out; } } },
+    { name: "propose_sketch", tgt: "read", title: "Vis en skisse først", ro: true, schema: S({ title: { type: "string", maxLength: 100, description: "What the change is, in the person's words (a short title)" },
+        edits: { type: "array", minItems: 1, maxItems: 12, items: { type: "object" }, description: "The same edits you would send to try_change for it, as you would send them: nothing is saved by this call" },
+        numbers: { type: "array", maxItems: 8, items: { type: "object", properties: { label: { type: "string", maxLength: 30 }, value: { type: "string", maxLength: 40 } }, required: ["label", "value"], additionalProperties: false }, description: "The key numbers the person must see: count, size, facing, e.g. {label: «Antall», value: «454»}, {label: «Mot», value: «120°»}" },
+        focus: { type: "string", description: "A wing, building id or new building id to centre the plan on; default the first thing the edits add or change" }, distance_m: { type: "number", minimum: 30, maximum: 1200, description: "How wide the plan shows, default fitted to what is built" } }, ["title", "edits"]),
+      description: "Shows the person a quick plan (north up, with its scale bar) of a proposed change BEFORE you build it, with its key numbers, one «Bygg det» button, and tools for them to draw pen strokes, drop pins with notes and write feedback on it (U3635). Use it for a LARGE or UNCLEAR ask: a whole facade of balconies, a new building or a greenhouse in a place not named, earthworks, several changes at once, or when the person left a choice open. Do NOT use it for a small clear edit (rename, one balcony of a given size and place, move a building, one tree): send those straight to try_change. Nothing is saved: the edits are only drawn. After it, say in one short line what you propose and wait: when the person presses «Bygg det» a message «Bygg det: <title>» comes: then send the same edits to try_change. Feedback comes as a message with a picture and the marks: strokes and pins as [east, north] in site metres from the site origin; change the proposal by it and show a new sketch if it changed much. Needs the login.",
+      run: async (a, req) => {
+        const who = userOf(req); if (!who) throw toolErr("Skissen vises til en som er logget inn.");
+        const open = versions ? versions.get(pages?.open.get(who)) : null, id = open?.owner === who ? open.id : null, base = id ? editsOf(id, req) : [], ok = [], bad = [];
+        let cur = applyEdits(site, floors, base);
+        for (const [i, e0] of a.edits.entries()) { try { const f = fieldsOf(e0); if (f) throw new Error(f); const pe = await prepare(e0, cur.site), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e0?.kind, error: String(e.message || e).slice(0, 300) }); } }
+        if (!ok.length) throw toolErr(`Ingen av endringene kunne tegnes: ${bad.map(b => `nr. ${b.n} (${b.kind}): ${b.error}`).join("; ")}`);
+        const s = withMeshes(cur.site), before = new Set((site.added || []).concat(applyEdits(site, floors, base).site.added || []).map(x => x.id));
+        const made = (s.added || []).find(x => !before.has(x.id)), want = a.focus || made?.id || ok.map(e => e.wing || e.id).find(Boolean), f = want ? aimAt(s, want) : null;
+        const W = 1024, H = 640, dist = a.distance_m ?? (f ? Math.max(50, f.size * 2.6) : 220), target = f ? f.target : hospital, k = (H / 2) / (dist * Math.tan(19 * Math.PI / 180));
+        const png = await picture(s, { plan: true, target, dist, focus: f ? f.ids : [], width: W, height: H });
+        const sid = newId(), mine = [...sketches].filter(([, v]) => v.person === who); for (const [k0] of mine.slice(0, Math.max(0, mine.length - 11))) sketches.delete(k0);
+        const numbers = (a.numbers || []).slice(0, 8).map(n => ({ label: String(n.label).slice(0, 30), value: String(n.value).slice(0, 40) }));
+        sketches.set(sid, { person: who, png, t: Date.now() });
+        notify?.(who, "sketch", { type: "sketch", id: sid, title: String(a.title).slice(0, 100), numbers, url: `api/skisse/${sid}.png`, frame: { centre: [target[0], target[1]], k }, size: [W, H], at: new Date().toISOString() });
+        return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: `Skissen «${a.title}» er vist for personen i samtalen, med «Bygg det». Ingenting er lagret.${bad.length ? ` Ikke tegnet: ${bad.map(b => `nr. ${b.n} (${b.error})`).join("; ")}.` : ""} Si i én kort linje hva du foreslår og vent: «Bygg det: ${a.title}» betyr at du sender de samme endringene til try_change.` }], structuredContent: { shown: true, sketch: sid, drawn: ok.length, not_drawn: bad } } };
+      } },
     { name: "show_draft", tgt: "read", title: "Se et utkast eller en versjon", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "The changes in a draft or a saved version, in order, numbered, with what the after demolishes and builds, and the link that shows it on the website.",
       run: async (a, req) => { const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
@@ -830,5 +852,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS };
+  return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
+    setNotifier: f => { notify = f; },
+    /* GET /api/skisse/<id>.png: a plan Anton showed this person */
+    handleSketch: (req, res, rest, person) => { const m = /^([A-Za-z0-9_-]{8})\.png$/.exec(rest), k = m && sketches.get(m[1]);
+      if (!k || !person || k.person !== person) { res.writeHead(404, { ...SECURITY, "content-type": "application/json" }); return res.end(JSON.stringify({ error: "Finnes ikke." })); }
+      res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(k.png); } };
 }

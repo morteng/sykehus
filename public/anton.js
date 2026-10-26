@@ -267,6 +267,21 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       b.textContent += t.delta || ""; if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); $("reply-card").classList.remove("err"); $("reply-who").textContent = "Anton"; showReply(b.textContent); panel.badge("chat", asking ? "!" : unread);
     });
     on("tool", t => { if (t.label) line("tool", t.label); step = stepOf(t.key); state(); });
+    /* U3635: a plan Anton shows before he builds (propose_sketch): the picture to mark up (renderkit's sketch.js), «Bygg det»
+       says so to Anton, the feedback goes as the drawing (the picture with the marks, strokes in metres) and the pins in words */
+    async function sketchCard(s) {
+      const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty(); toEnd();
+      const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
+      createSketch({ host: li, image: s.url, frame: s.frame, title: s.title, numbers: s.numbers,
+        onBuild: async () => { const b = li.querySelector(".sk-build"); b.disabled = true; if (await sendIt({ text: `Bygg det: ${s.title}` })) li.querySelector(".sk-say").textContent = "Sendt til Anton."; else b.disabled = false; },
+        onSend: async ({ text, drawing }) => {
+          const pins = drawing.pins.map(p => `Nål ${p.n} (øst ${m1(p.at[0])}, nord ${m1(p.at[1])} m)${p.note ? `: ${p.note}` : ""}`);
+          const { pins: _p, ...draw } = drawing;
+          return sendIt({ text: [`Tilbakemelding på skissen «${s.title}»${text ? `: ${text}` : "."}`, ...pins].join("\n"), drawing: { ...draw, camera: {}, mode: "plan", size: s.size } });
+        } });
+      toEnd();
+    }
+    on("sketch", sketchCard);
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
