@@ -174,7 +174,11 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     addEventListener("sykehus:ask", () => { placePill(); input.focus(); });
     input.addEventListener("keydown", e => { if (e.key === "Escape" && valg.items.length) { e.stopPropagation(); valg.clear(); } });
     $("talkNew").onclick = async () => {
-      const r = await json("api/anton/ny");
+      /* one request id for the click and its retry (gulden-ai's /new-chat is idempotent by it); a server restarting
+         answers 502 or nothing for a moment (U3623, 10:39Z: the click fell in a restart and the old turns stayed) */
+      const rid = `ny-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      let r = await json("api/anton/ny", { request_id: rid });
+      if (!r || r.status === 502 || r.status === 503) { await new Promise(ok => setTimeout(ok, 2500)); r = await json("api/anton/ny", { request_id: rid }); }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Logg inn på nytt." : j.error || CODES.unavailable); }
     };
     for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
@@ -231,15 +235,30 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     }
 
     // the history first, then live
-    fetch("api/anton/historikk").then(r => r.status === 401 ? signedOut() : r.json()).then(h => {
-      for (const it of h?.items || []) {
+    const fromHistory = () => fetch("api/anton/historikk").then(r => r.status === 401 ? signedOut() : r.json()).then(h => {
+      if (!h) return null;
+      log.textContent = ""; replies.clear();
+      for (const it of h.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
         else if (it.type === "tool") line("tool", it.label);
         else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }
-      empty();
-    }).catch(() => {});
+      empty(); return h;
+    }).catch(() => null);
+    fromHistory();
     const es = new EventSource("api/anton/strom");
+    /* U3622 (10:39Z): the stream broke under a turn (the server restarted: ERR_HTTP2_PROTOCOL_ERROR), so its words and
+       its «done» never came, though the answer was in the thread. When the stream is back, the chat is drawn again from
+       the thread, the last answer goes on the card, and the version is shown again (the turn may have changed it) */
+    let dropped = false;
+    es.addEventListener("error", () => { if (es.readyState !== EventSource.OPEN) dropped = true; });
+    es.addEventListener("open", async () => {
+      if (!dropped) return; dropped = false;
+      const h = await fromHistory(); if (!h) return;
+      const last = (h.items || []).filter(it => it.type === "message").at(-1);
+      if (last?.from === "assistant" && !chatOpen()) showReply(last.text);
+      if (!h.queue?.running) { redraw = false; refresh(); }
+    });
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { for (const x of [q.running, ...q.waiting]) if (x) seen.add(x.id); running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
     on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); said(m.text); });

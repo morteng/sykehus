@@ -874,7 +874,7 @@ import("./tour.js").then(({ createTour }) => {
   $("tourBtn").onclick = () => tour.start();
   if (tour.due) setTimeout(() => { if (!document.querySelector(".tour:not([hidden])")) tour.start(); }, 1500);
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261026g").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
 import("./gjengi.js?v=20261026r").then(m => m.startGjengi({ btn: $("mgj"), pop: $("gjPop"), viewer, toast,
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
