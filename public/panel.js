@@ -1,4 +1,4 @@
-/* The right panel (the Anton-first layout, the designer's redlines §2.3 and §6): four tabs in Fab's dock, the «›» that
+/* The right panel (the Anton-first layout, the designer's redlines §2.3 and §6): three tabs (Forslag, Bygg, Anton) in Fab's dock, the «›» that
    folds it away on a wide screen, and on a narrow one (under 900 px, an iPad standing) a bottom sheet with three
    heights. The behaviour is Fab's (atomstack hurricane/server/web/editor.js at c7759f3: showTab, #side-fold, setSnap,
    the #grab drag), here without Fab's design state; the rules are Fab's laser.css as-is.
@@ -70,7 +70,7 @@ export function createPanel({ start = null, onChange = () => {} } = {}) {
   const grip = split({ panel: side, edge: "start", min: 300, maxShare: 0.6, step: 16, key: "sykehus-panelbredde", prop: "--side-w", name: "Panelets bredde",
     title: "Dra for å endre bredden på panelet (← →). Dobbeltklikk setter den tilbake", enabled: () => !phone.matches, onChange: () => onChange(tab) });
   phone.addEventListener("change", () => grip.refresh());
-  const t0 = start ?? store.get("sykehus-fane") ?? "chat";
+  const kept = store.get("sykehus-fane"), t0 = start ?? (kept && kept !== "wish" ? kept : "chat");   // «Ønsker» is a button in the bar now (U3660)
   show(t0, { quiet: true });
   return { show, reveal, badge, open, fold, get tab() { return tab; }, get phone() { return phone.matches; }, peek(html) { $("peekhead").innerHTML = html; } };
 }

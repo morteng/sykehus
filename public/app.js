@@ -1,7 +1,7 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try.
    The layout is Fab's (the Anton-first redlines, 2026-10-25): the view, the storey strip at its left edge, the view's
    tools over it, Anton's pill at the bottom, and the panel on the right with «Bygget», «Anton», «Forslag» and
-   «Ønsker» (panel.js). */
+   «Forslag», «Bygg» and «Anton» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
@@ -124,7 +124,7 @@ const valg = createSelection({ site, floors, viewer, onChange: items => { dispat
 let sun = { ...SUN_DEFAULT }, gjengiCtl = null;   // gjengiCtl: the picture card's hand (gjengi.js), set when it has loaded
 function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
 setSunTo(sun);
-$("sunBtn").onclick = () => { const on = $("sunPop").hidden; $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
+$("sunBtn").onclick = () => { const on = $("sunPop").hidden; if (on && !$("gjPop").hidden) $("mgj").click(); $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
 $("sunDay").oninput = $("sunHour").oninput = () => setSunTo(sunFromDay(+$("sunDay").value, +$("sunHour").value));
 $("sunReset").onclick = () => setSunTo(SUN_DEFAULT);
 document.addEventListener("pointerdown", e => { if (!$("sunPop").hidden && !e.target.closest("#sunPop, #sunBtn")) { $("sunPop").hidden = true; $("sunBtn").setAttribute("aria-expanded", "false"); } });
@@ -984,6 +984,8 @@ function showView(v) {
   else if (Object.keys(cam).length) viewer.look(cam, v.glide);
   pressMode();
 }
+/* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
+import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Forslag" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
 import("./tour.js").then(({ createTour }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");
