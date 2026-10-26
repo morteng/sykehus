@@ -37,3 +37,20 @@ test("a request that throws also shows it again", async () => {
   await assert.rejects(tearAtOnce({ ...r.deps, targets: ["b1"] }));
   assert.deepEqual(r.state, { gone: ["old"], roads: ["vei-osm-1"] });
 });
+
+test("back: an undone demolish is shown at once, and hidden again when the undo fails; the pick is not cleared", async () => {
+  const r = rig(true); r.state.gone = ["old", "b1"]; r.state.roads = ["vei-osm-1", "vei-nvdb-22"];
+  const p = tearAtOnce({ ...r.deps, targets: ["b1", "vei-nvdb-22"], back: true });
+  await new Promise(x => setTimeout(x, 0));
+  assert.deepEqual(r.log, [["gone", ["old"]], ["roads", ["vei-osm-1"]], ["send"]]);
+  r.release(); await p;
+  const f = rig(null); f.state.gone = ["old", "b1"];
+  const q = tearAtOnce({ ...f.deps, targets: ["b1"], back: true }); f.release(); await q;
+  assert.deepEqual(f.state.gone, ["old", "b1"]); assert.ok(!f.log.some(l => l[0] === "clear"));
+});
+
+test("a ground surface or path goes the way a building does: its id into the viewer's gone list", async () => {
+  const r = rig({ n: 1, k: 1 });
+  const p = tearAtOnce({ ...r.deps, targets: ["flate-3"] }); r.release(); await p;
+  assert.deepEqual(r.state.gone, ["old", "flate-3"]); assert.deepEqual(r.state.roads, ["vei-osm-1"]);
+});

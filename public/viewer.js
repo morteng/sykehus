@@ -406,7 +406,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }
   }
   let landNow = site.landscape || [];
-  function drawLandscape(list) { landNow = list || []; for (const [n, g] of (list || []).entries()) {
+  const landHidden = () => landNow.filter(g => goneIds.has(g.id)).map(g => g.id).join();
+  function drawLandscape(list) { landNow = list || []; for (const [n, g] of landNow.filter(g => !goneIds.has(g.id)).entries()) {
     const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
     const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []), pos = [], lim = Math.max(1, T.res) * 1.4;
     const lift = 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
@@ -1031,7 +1032,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* what the after has torn down (U3542, Morten 21:15: in place, no reload): hidden, with the plans' walls and the
      rooms' names inside it, and not picked; the camera, the terrain, the streets and the rest stay as they are */
   function setGone(ids) {
-    goneIds = new Set(ids); const rings = [...goneIds].map(id => site.buildings.find(b => b.id === id)?.ring).filter(Boolean);
+    const landWas = landHidden(); goneIds = new Set(ids); if (landHidden() !== landWas) setLandscape(landNow);   // a surface or a path is hidden by its id as a building is (U3649)
+    const rings = [...goneIds].map(id => site.buildings.find(b => b.id === id)?.ring).filter(Boolean);
     const inside = p => rings.some(r => inRing(p, r));
     for (const [id, g] of meshes) g.visible = !goneIds.has(id);
     for (const [id, p] of plates) if (goneIds.has(id)) p.visible = false;

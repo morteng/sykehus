@@ -753,10 +753,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return send(res, 200, Array.isArray(body) ? out : out[0]);
   }
   /* GET /api/utkast/<id>: the page's ?utkast=<id> lays these over the data it loads (public/edits.js) */
+  /* what GET /api/utkast and /api/versjon answer, also sent with a change (U3649), so the page need not ask again */
+  const draftBody = d => ({ draft: d.id, edits: d.edits, views: checkViews(d.views, VIEW_SPEC), saved: false });
+  const versionBody = v => ({ version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, updated: v.updated, edits: v.edits, views: checkViews(v.views, VIEW_SPEC), saved: true });
   function handleDraft(req, res, id) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const open = { "access-control-allow-origin": "*" };   // the chat app reads it from the host's frame
-    try { const d = draftOf(id); return send(res, 200, { draft: d.id, edits: d.edits, views: checkViews(d.views, VIEW_SPEC), saved: false }, open); }
+    try { return send(res, 200, draftBody(draftOf(id)), open); }
     catch { return send(res, 404, { error: "Utkastet finnes ikke (de varer et døgn)." }, open); }
   }
   /* GET /api/versjon/<id>: a saved version for the page's ?versjon=<id>; GET /api/versjoner: all of them, newest first */
@@ -764,7 +767,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const open = { "access-control-allow-origin": "*" }, v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
     const v = v0 && versions.visible(v0, userOf(req), key) ? v0 : null;
-    return v ? send(res, 200, { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, updated: v.updated, edits: v.edits, views: checkViews(v.views, VIEW_SPEC), saved: true }, open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
+    return v ? send(res, 200, versionBody(v), open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
   }
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
@@ -838,7 +841,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
       if (mine && mine.owner === me) out.nokkel = mine.own;
       if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).join(" "), ...out });
-      return send(res, 200, out);
+      const shown = mine ? versionBody(mine) : out.draft ? (() => { try { return draftBody(draftOf(String(out.draft))); } catch { return null; } })() : null;
+      return send(res, 200, shown ? { ...out, shown } : out);
     } catch (e) { return send(res, e.tool ? 400 : 500, { error: e.tool ? e.message : "Noe gikk galt." }); }
   }
   /* GET /api/ifc?utkast=<id> | ?versjon=<id>&nokkel=: the model as IFC without the wings the after tears down

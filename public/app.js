@@ -9,6 +9,7 @@ import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026t";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
+import { GROUND_ID } from "./landscape.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
@@ -275,8 +276,8 @@ addEventListener("keydown", e => {
 /* Backspace or Delete on the pick, Cmd/Ctrl-Z, and the redo (U3649, keys.js): the same acts as the card's «Riv» and the toast's «Angre» */
 const keys = createKeys({
   edits: () => draft && !draft.missing && (mine() || ownDraft()) ? draft.edits : null,
-  undo: (n, expect) => undo(n, expect),
-  put: async e => !!await edit([e], "Fikk ikke gjort igjen", true),
+  undo: (n, expect) => busy || !seen(expect) ? undo(n, expect) : tearAtOnce({ ...hiding(), targets: [expect.building], back: true, send: async () => await undo(n, expect) || null }),
+  put: e => busy || !seen(e) ? edit([e], "Fikk ikke gjort igjen", true).then(r => !!r) : tearAtOnce({ ...hiding(), targets: [e.building], send: () => edit([e], "Fikk ikke gjort igjen", true) }).then(r => !!r),
   say: text => toast(text), name: describe, riv: () => !!pickActs?.riv(),
 });
 addEventListener("keydown", e => { if (!e.target.closest?.(".g-levels")) keys.key(e); });
@@ -608,7 +609,7 @@ async function change(body) {
 async function show(j) {
   if (j.version) { versionId = j.version; nokkel = null; draftId = null; }
   else if (j.draft) { versionId = null; draftId = kept = j.draft; try { localStorage.setItem(KEPT, j.draft); } catch { } }
-  const d = await fetchDraft(); if (d.missing) return toast("Fikk ikke hentet utkastet.");
+  const d = Array.isArray(j.shown?.edits) ? j.shown : await fetchDraft(); if (d.missing) return toast("Fikk ikke hentet utkastet.");
   draft = d; const m = modelOf(draft.edits);
   const goneNow = new Set((m.site.demolished || []).map(x => x.id));
   const newNow = new Set((m.site.added || []).map(a => a.id));
@@ -646,14 +647,17 @@ async function edit(mine_, failed, redoing = false) {
     await show(j); return { n: draft.edits.length, k: mine_.length };
   } finally { busy = false; }
 }
+/* the viewer's own lists, as tearAtOnce takes them */
+const hiding = () => ({ gone: () => (site.demolished || []).map(d => d.id), roads: () => (site.roads_removed || []).map(x => x.id), setGone: ids => viewer.setGone(ids), setRoads: ids => streetsOn?.setRemoved(ids) });
+/* a demolish put back or taken out again (Cmd-Z, Shift-Cmd-Z), shown at once where the viewer has the thing: a building or a road */
+const seen = e => e?.kind === "demolish" && typeof e.building === "string" && !GROUND_ID.test(e.building);
 async function riv(targets, name, ground = false) {   // ground: a surface or a path, taken away (U3569)
   /* a target is an id, or { building, name } for a road section (U3543), whose name the server cannot look up */
   if (busy) return;
   const send = () => edit(targets.map(t => ({ kind: "demolish", ...(typeof t === "string" ? { building: t } : t), why: ground ? "fjernet på siden" : "revet på siden" })), ground ? "Fikk ikke fjernet" : "Fikk ikke revet");
-  /* hidden at once (U3649, Morten 13:06Z: «it takes a long time from i press delete to object dissapears»); a ground
-     surface or path is not in the viewer's gone list, so it waits for the answer as before */
-  const r = ground ? await send() : await tearAtOnce({ targets, send, gone: () => (site.demolished || []).map(d => d.id), roads: () => (site.roads_removed || []).map(x => x.id),
-    setGone: ids => viewer.setGone(ids), setRoads: ids => streetsOn?.setRemoved(ids), clear: () => { valg.clear(); shut(); } });
+  /* hidden at once (U3649, Morten 13:06Z: «it takes a long time from i press delete to object dissapears»); the viewer's
+     gone list takes a surface or a path as it takes a building */
+  const r = await tearAtOnce({ ...hiding(), targets, send, clear: () => { valg.clear(); shut(); } });
   if (!r) return;
   toast(`${name[0].toUpperCase() + name.slice(1)} er ${ground ? "fjernet" : "revet"} i ${versionId ? "versjonen" : "utkastet"}.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
 }
