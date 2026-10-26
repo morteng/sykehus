@@ -15,9 +15,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 spec = pathlib.Path(args[0]) if args else HERE / "keychain-board.json"
 key = args[1] if len(args) > 1 else None
-job = {"files": {"board.json": base64.b64encode(spec.read_bytes()).decode()}, "then": ["make", "route", "erc", "drc", "step"]}
+job = {"files": {"board.json": base64.b64encode(spec.read_bytes()).decode()}, "then": ["make", "route", "erc", "drc", "step", "glb"]}
 if "--script" in sys.argv:
-    job["script"] = (HERE.parent / "steps" / "make.py").read_text(); job["then"] = ["route", "erc", "drc", "step"]
+    job["script"] = (HERE.parent / "steps" / "make.py").read_text(); job["then"] = ["route", "erc", "drc", "step", "glb"]
 if key:
     job["key"] = key
 print(json.dumps(job))

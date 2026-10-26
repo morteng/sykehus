@@ -1,6 +1,6 @@
 """The KiCad steps (trusted, run in the job's sandbox, in the KiCad image): kicad-cli on a board and its schematic.
 
-  python -I .step-kicad.py <step>    step: erc, drc, step, outline or render
+  python -I .step-kicad.py <step>    step: erc, drc, step, glb, outline or render
 
 The project is the job's inputs: the .kicad_pcb and .kicad_sch (and .kicad_pro, sym-lib-table, fp-lib-table, the
 project's own .kicad_sym, .kicad_mod and 3D models), each by name, or a .tar / .tar.gz / .tgz / .zip of the project's
@@ -10,6 +10,7 @@ name is the .kicad_pro's, else the only one.
   erc      erc.json (kicad-cli's own report), ERC on the schematic, every severity
   drc      drc.json, DRC on the board, every severity, with schematic parity when there is a schematic
   step     <board>.step: the board with its parts (the 3D models the footprints name, where they are found)
+  glb      <board>.glb: the board with its parts as glTF (for a viewer that reads no STEP: Fab), the same models
   outline  outline.dxf and outline.svg: Edge.Cuts, mm, the page the board's size
   render   <board>.png: the top, 1600 × 900
 
@@ -130,6 +131,14 @@ elif STEP == "step":
         sys.exit("kicad-cli wrote no STEP: " + (p.stderr or p.stdout).strip()[-300:])
     missing = sorted({l.split("'")[1] for l in (p.stdout + p.stderr).splitlines() if "ould not" in l and "'" in l})[:40]
     note("step", {"file": out.name, "bytes": out.stat().st_size, **({"models_missing": missing} if missing else {})})
+elif STEP == "glb":
+    if not board:
+        sys.exit("no board: send a .kicad_pcb")
+    out = pathlib.Path(board.stem + ".glb")
+    cli("pcb", "export", "glb", "--force", "--subst-models", "--include-tracks", "--include-pads", "-o", out, board)
+    if not out.is_file():
+        sys.exit("kicad-cli wrote no glb")
+    note("glb", {"file": out.name, "bytes": out.stat().st_size})
 elif STEP == "outline":
     if not board:
         sys.exit("no board: send a .kicad_pcb")
