@@ -940,7 +940,7 @@ function syncShape() {
   if (shapeEd.busy) return;
   const i = valg.items.length === 1 && valg.items[0].kind === "ground" ? valg.items[0] : null, g = i && (site.landscape || []).find(x => x.id === i.id);
   if (!g || !(g.ring || g.line) || viewer.view().mode === "section") { if (shapeEd.item) shapeEd.detach(); return; }
-  shapeEd.attach(g.kind === "path" ? { id: g.id, line: g.line, width: g.width, mesh: K.groupOf(g.id) } : { id: g.id, ring: g.ring, mesh: K.groupOf(g.id) });
+  shapeEd.attach(g.kind === "path" ? { id: g.id, line: g.line, width: g.width, mesh: K.groupOf(g.id) } : { id: g.id, ring: g.points || g.ring, mesh: K.groupOf(g.id) });
 }
 addEventListener("sykehus:valg", syncShape); addEventListener("sykehus:painted", syncShape);
 viewer.follow(() => shapeEd.frame());

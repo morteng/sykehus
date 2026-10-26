@@ -18,7 +18,7 @@
    sixth item, the species id or name, and a seventh, its planting's id), site.plantings [{ id: tre-1, species, name,
    latin, count, height, crown }] (each trees change, picked and changed or taken away by its id, U3569),
    site.planted [{ species, name, count }] and site.felled (how many). */
-import { pointInRing as inRing, ringArea as signedArea } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
+import { pointInRing as inRing, ringArea as signedArea, ringOf } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
 import { SIDE_KEYS } from "./renderkit/dirs.js";
 import { PLANTS } from "./plants.js";
 
@@ -57,15 +57,24 @@ export function plantOf(s) {
 }
 
 /* one landscape change, checked: its tidy form, or null when it is not one */
+/* U3617: a surface is kept as its settings: the points given (ring), and how its corners go (radius: rounded with an arc
+   of that many metres; smooth: a curve through the points); its outline is made from them, so one setting can change */
+const outlineOf = (points, radius, smooth) => radius || smooth ? ringOf({ points, radius: radius || 0, smooth: !!smooth, step: 1 }).map(p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]) : points;
+function cornersOf(e, out) {
+  if (e.radius != null) out.radius = num(e.radius, 0, 50, "Hjørneradien (radius, m)");
+  if (e.smooth != null) { if (typeof e.smooth !== "boolean") throw new Error("smooth er true (en myk kurve gjennom punktene) eller false"); out.smooth = e.smooth; }
+  return out;
+}
+
 export function checkLandscape(site, e, str) {
   const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
   const name = (d) => e.name == null ? undefined : str(String(e.name), 80, "Navnet") || d;
   switch (e.kind) {
     case "surface": {
-      const ring = pts(e.ring, "ring", 3), a = ringArea(ring);
+      const ring = pts(e.ring, "ring", 3), corners = cornersOf(e, {}), a = ringArea(outlineOf(ring, corners.radius, corners.smooth));
       if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²");
       const surface = String(e.surface ?? ""); if (!SURFACES.includes(surface)) throw new Error(`surface er ${SURFACES.join(", ")}`);
-      const out = { kind: "surface", ring, surface, ...w_ }, n = name(); if (n) out.name = n;
+      const out = { kind: "surface", ring, surface, ...corners, ...w_ }, n = name(); if (n) out.name = n;
       if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
       Object.assign(out, waterOf(e, surface));
       return out;
@@ -138,7 +147,8 @@ export function checkGroundEdit(site, e, str) {
     if (e.crown != null) out.crown = num(e.crown, 0.3, 30, "Kronebredden (crown)");
   } else if (g.kind === "surface") {
     if (e.surface != null) { if (!SURFACES.includes(String(e.surface))) throw new Error(`surface er ${SURFACES.join(", ")}`); out.surface = String(e.surface); }
-    if (e.ring != null) { out.ring = pts(e.ring, "ring", 3); const a = ringArea(out.ring); if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²"); }
+    cornersOf(e, out);
+    if (e.ring != null || out.radius != null || out.smooth != null) { if (e.ring != null) out.ring = pts(e.ring, "ring", 3); const a = ringArea(outlineOf(out.ring || g.points || g.ring, out.radius ?? g.radius, out.smooth ?? g.smooth)); if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²"); }
     if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
     Object.assign(out, waterOf(e, out.surface || g.surface));
   } else {
@@ -188,10 +198,10 @@ export function applyLandscape(site, edits) {
     else if (e.kind === "reshape" && GROUND_ID.test(e.id)) {
       const g = land.find(x => x.id === e.id); if (!g) continue;
       for (const k of ["name", "surface", "plants", "pool", "depth", "coping", "kote", "why"]) if (e[k] != null) g[k] = e[k];
-      if (g.kind === "surface" && e.ring) { g.ring = e.ring; g.area_m2 = round1(ringArea(e.ring)); }
+      if (g.kind === "surface" && (e.ring || e.radius != null || e.smooth != null)) { if (e.ring) g.points = e.ring; if (e.radius != null) g.radius = e.radius; if (e.smooth != null) g.smooth = e.smooth; g.ring = outlineOf(g.points, g.radius, g.smooth); g.area_m2 = round1(ringArea(g.ring)); }
       if (g.kind === "path" && (e.line || e.width != null)) { g.line = e.line || g.line; g.width = e.width ?? g.width; g.ring = pathRing(g.line, g.width); g.length_m = round1(lineLength(g.line)); g.area_m2 = round1(lineLength(g.line) * g.width); }
     }
-    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, ring: e.ring, area_m2: round1(ringArea(e.ring)), plants: e.plants || [], ...Object.fromEntries(["pool", "depth", "coping", "kote"].filter(k => e[k] != null).map(k => [k, e[k]])), why: e.why });
+    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...Object.fromEntries(["pool", "depth", "coping", "kote"].filter(k => e[k] != null).map(k => [k, e[k]])), why: e.why });
     else if (e.kind === "path") land.push({ id: `sti-${++n}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), why: e.why });
     else if (e.kind === "fell") { const n = trees.length; trees = trees.filter(t => !inRing(t, e.ring)); felled += n - trees.length; }
     else if (e.kind === "trees") {

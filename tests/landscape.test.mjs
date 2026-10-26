@@ -44,3 +44,18 @@ test("a path is as wide as its width at its ends too (the last point's mitre mad
   assert.deepEqual(pathRing([[40, 76], [76, 76]], 2.5), [[40, 77.25], [76, 77.25], [76, 74.75], [40, 74.75]]);
   assert.deepEqual(pathRing([[0, 0], [10, 0], [10, 10]], 2), [[0, 1], [9, 1], [9, 10], [11, 10], [11, -1], [0, -1]]);
 });
+
+test("U3617: a surface is kept as its points and how its corners go; one setting changes alone", () => {
+  const sq = [[40, 60], [50, 60], [50, 66], [40, 66]];
+  const e = checkEdit(site, [], { kind: "surface", surface: "water", pool: true, ring: sq, radius: 2, name: "Basseng" });
+  assert.deepEqual([e.ring, e.radius], [sq, 2], "the points as given, the radius beside them");
+  let g = after([e]).landscape[0];
+  assert.deepEqual(g.points, sq); assert.ok(g.ring.length > 8, "the outline rounded");
+  assert.ok(Math.abs(g.area_m2 - (60 - (4 - Math.PI) * 4)) < 0.6, `10 × 6 less four corners of radius 2: ${g.area_m2}`);
+  const r = checkEdit(applyEdits(site, [], [e]).site, [], { kind: "reshape", id: g.id, radius: 0 });
+  g = after([e, r]).landscape[0];
+  assert.deepEqual(g.ring, sq, "radius 0: the corners sharp again, the points kept"); assert.equal(g.area_m2, 60);
+  const sm = checkEdit(applyEdits(site, [], [e]).site, [], { kind: "reshape", id: g.id, smooth: true });
+  g = after([e, sm]).landscape[0]; assert.ok(g.smooth && g.ring.length > 20, "a curve through the points");
+  assert.throws(() => checkEdit(site, [], { kind: "surface", surface: "grass", ring: sq, smooth: "ja" }), /smooth er true/);
+});
