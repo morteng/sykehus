@@ -1,0 +1,365 @@
+{
+ "name": "keychain-board",
+ "board": {
+  "outline": [
+   [
+    100,
+    100
+   ],
+   [
+    122,
+    100
+   ],
+   [
+    122,
+    145
+   ],
+   [
+    100,
+    145
+   ]
+  ],
+  "thickness": 1.0
+ },
+ "parts": [
+  {
+   "ref": "U1",
+   "value": "ESP32-S3-MINI-1-N8",
+   "symbol": "RF_Module:ESP32-S3-MINI-1",
+   "footprint": "RF_Module:ESP32-S2-MINI-1",
+   "at": [
+    111,
+    116
+   ]
+  },
+  {
+   "ref": "U2",
+   "value": "MCP73831T-2ACI/OT",
+   "symbol": "Battery_Management:MCP73831-2-OT",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "at": [
+    105,
+    128.5
+   ]
+  },
+  {
+   "ref": "U3",
+   "value": "AP2112K-3.3",
+   "symbol": "Regulator_Linear:AP2112K-3.3",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "at": [
+    110,
+    128.5
+   ]
+  },
+  {
+   "ref": "U4",
+   "value": "AMC7135",
+   "footprint": "Package_TO_SOT_SMD:SOT-89-3",
+   "at": [
+    115.5,
+    128.5
+   ],
+   "pins": [
+    {
+     "number": "1",
+     "name": "OUT",
+     "type": "passive"
+    },
+    {
+     "number": "2",
+     "name": "GND",
+     "type": "power_in"
+    },
+    {
+     "number": "3",
+     "name": "VDD",
+     "type": "input"
+    }
+   ]
+  },
+  {
+   "ref": "J1",
+   "value": "USB4105-xx-A",
+   "symbol": "Connector:USB_C_Receptacle_USB2.0_16P",
+   "footprint": "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
+   "at": [
+    111,
+    103.6
+   ]
+  },
+  {
+   "ref": "J2",
+   "value": "LiPo 502030 (PCM)",
+   "symbol": "Device:Battery_Cell",
+   "footprint": "Connector_JST:JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal",
+   "at": [
+    111,
+    143
+   ],
+   "rot": 180
+  },
+  {
+   "ref": "SW1",
+   "value": "USER (IO0/BOOT)",
+   "symbol": "Switch:SW_Push",
+   "footprint": "Button_Switch_SMD:SW_SPST_TL3342",
+   "at": [
+    104,
+    136
+   ]
+  },
+  {
+   "ref": "SW2",
+   "value": "RESET (EN)",
+   "symbol": "Switch:SW_Push",
+   "footprint": "Button_Switch_SMD:SW_SPST_TL3342",
+   "at": [
+    118,
+    136
+   ]
+  },
+  {
+   "ref": "D1",
+   "value": "Torch 1W 3535",
+   "symbol": "Device:LED",
+   "footprint": "LED_SMD:LED_Cree-XP",
+   "at": [
+    111,
+    136
+   ]
+  },
+  {
+   "ref": "D2",
+   "value": "Status 0603",
+   "symbol": "Device:LED",
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "at": [
+    111,
+    140
+   ]
+  },
+  {
+   "ref": "R1",
+   "value": "4.7k",
+   "symbol": "Device:R",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "at": [
+    105,
+    125.5
+   ]
+  },
+  {
+   "ref": "R2",
+   "value": "5.1k",
+   "symbol": "Device:R",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "at": [
+    107.5,
+    125.5
+   ]
+  },
+  {
+   "ref": "R3",
+   "value": "5.1k",
+   "symbol": "Device:R",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "at": [
+    110,
+    125.5
+   ]
+  },
+  {
+   "ref": "R4",
+   "value": "10k",
+   "symbol": "Device:R",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "at": [
+    112.5,
+    125.5
+   ]
+  },
+  {
+   "ref": "R5",
+   "value": "10k",
+   "symbol": "Device:R",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "at": [
+    115,
+    125.5
+   ]
+  },
+  {
+   "ref": "R6",
+   "value": "330",
+   "symbol": "Device:R",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "at": [
+    117.5,
+    125.5
+   ]
+  },
+  {
+   "ref": "C1",
+   "value": "10u",
+   "symbol": "Device:C",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "at": [
+    105,
+    131.5
+   ]
+  },
+  {
+   "ref": "C2",
+   "value": "4.7u",
+   "symbol": "Device:C",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "at": [
+    107.5,
+    131.5
+   ]
+  },
+  {
+   "ref": "C3",
+   "value": "4.7u",
+   "symbol": "Device:C",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "at": [
+    110,
+    131.5
+   ]
+  },
+  {
+   "ref": "C4",
+   "value": "1u",
+   "symbol": "Device:C",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "at": [
+    112.5,
+    131.5
+   ]
+  },
+  {
+   "ref": "C5",
+   "value": "4.7u",
+   "symbol": "Device:C",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "at": [
+    115,
+    131.5
+   ]
+  },
+  {
+   "ref": "C6",
+   "value": "1u",
+   "symbol": "Device:C",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "at": [
+    117.5,
+    131.5
+   ]
+  }
+ ],
+ "nets": {
+  "VBUS": [
+   "J1:VBUS",
+   "U2:V_{DD}",
+   "C2:1"
+  ],
+  "VBAT": [
+   "U2:V_{BAT}",
+   "J2:+",
+   "U3:VIN",
+   "U3:EN",
+   "D1:A",
+   "C1:1",
+   "C3:1",
+   "C4:1"
+  ],
+  "+3V3": [
+   "U3:VOUT",
+   "U1:3V3",
+   "R4:1",
+   "R5:1",
+   "C5:1"
+  ],
+  "GND": [
+   "J1:GND",
+   "J1:SHIELD",
+   "U2:V_{SS}",
+   "U3:GND",
+   "U4:GND",
+   "U1:GND",
+   "J2:-",
+   "SW1:2",
+   "SW2:2",
+   "D2:K",
+   "C1:2",
+   "C2:2",
+   "C3:2",
+   "C4:2",
+   "C5:2",
+   "C6:2",
+   "R2:2",
+   "R3:2",
+   "R1:2"
+  ],
+  "USB_DP": [
+   "J1:D+",
+   "U1:USB_D+"
+  ],
+  "USB_DN": [
+   "J1:D-",
+   "U1:USB_D-"
+  ],
+  "CC1": [
+   "J1:CC1",
+   "R2:1"
+  ],
+  "CC2": [
+   "J1:CC2",
+   "R3:1"
+  ],
+  "PROG": [
+   "U2:PROG",
+   "R1:1"
+  ],
+  "EN": [
+   "U1:EN",
+   "SW2:1",
+   "R4:2",
+   "C6:1"
+  ],
+  "BOOT": [
+   "U1:IO0",
+   "SW1:1",
+   "R5:2"
+  ],
+  "TORCH": [
+   "U1:IO1",
+   "U4:VDD"
+  ],
+  "LEDK": [
+   "U4:OUT",
+   "D1:K"
+  ],
+  "CHG_STAT": [
+   "U2:STAT",
+   "U1:IO4"
+  ],
+  "STATUS": [
+   "U1:IO2",
+   "R6:1"
+  ],
+  "STATUS_A": [
+   "R6:2",
+   "D2:A"
+  ]
+ },
+ "power_flags": [
+  "VBUS",
+  "GND",
+  "VBAT"
+ ],
+ "note": "From pi-anton-fob's draft (anton-fob 436ea2f hardware/keychain-board), with library parts and fixes: D2 K only on GND (was on GND and STATUS2), LDO EN on VBAT (was on the module's EN), charger STAT on IO4 (IO43 is TXD0), USB on the module's USB_D+/USB_D- (IO20/IO19), AMC7135 3-pin SOT-89 with VDD from IO1 (PWM), the cell on a JST SH 2-pin. AMC7135 pin order (1 OUT, 2 GND, 3 VDD) to be checked against its datasheet."
+}

@@ -86,9 +86,15 @@ j = job("import json\nopen('out.txt', 'w').write('hei')\nprint(json.dumps({'ok':
 say("control", j.get("state") == "done" and [o["name"] for o in j.get("outputs", [])] == ["out.txt"], (j.get("state"), j.get("outputs")))
 # the engines work with an empty /proc: an IFC through the mesh step; FreeCAD's STEP through check, where there is FreeCAD
 IFC = "import ifcopenshell.api as A\nf = A.run('project.create_file', version='IFC4'); p = A.run('root.create_entity', f, ifc_class='IfcProject'); A.run('unit.assign_unit', f, length={'is_metric': True, 'raw': 'METERS'})\nc = A.run('context.add_context', f, context_type='Model'); b = A.run('context.add_context', f, context_type='Model', context_identifier='Body', target_view='MODEL_VIEW', parent=c)\nw = A.run('root.create_entity', f, ifc_class='IfcWall'); A.run('geometry.assign_representation', f, product=w, representation=A.run('geometry.add_wall_representation', f, context=b, length=5, height=3, thickness=0.2))\nf.write('model.ifc')\n"
-j = job(IFC, then=["mesh"])
-say("ifc_engine", j.get("state") == "done" and "mesh.json" in [o["name"] for o in j.get("outputs", [])], (j.get("state"), j.get("errors")))
-if json.loads(urllib.request.urlopen(f"{W}/health", timeout=10).read()).get("engine") == "freecad":
+# the engine this image has: the KiCad image has no IfcOpenShell, but kicad-cli
+ENGINE = json.loads(urllib.request.urlopen(f"{W}/health", timeout=10).read()).get("engine")
+if ENGINE == "kicad":
+    j = job("import subprocess, json\nv = subprocess.run(['kicad-cli', 'version'], capture_output=True, text=True).stdout.strip()\nprint(json.dumps({'kicad': v}))\n")
+    say("kicad_engine", j.get("state") == "done" and bool((j.get("result") or {}).get("kicad")), (j.get("state"), j.get("result"), j.get("errors")))
+else:
+    j = job(IFC, then=["mesh"])
+    say("ifc_engine", j.get("state") == "done" and "mesh.json" in [o["name"] for o in j.get("outputs", [])], (j.get("state"), j.get("errors")))
+if ENGINE == "freecad":
     j = job("import FreeCAD, Part, Import\nd = FreeCAD.newDocument('t'); o = d.addObject('Part::Feature', 'Box'); o.Shape = Part.makeBox(10, 20, 30); d.recompute(); Import.export([o], 'box.step')\n", then=["check"])
     say("freecad_engine", j.get("state") == "done" and (j.get("check") or {}).get("files", {}).get("box.step", {}).get("size") == [10.0, 20.0, 30.0], (j.get("state"), j.get("errors"), str(j.get("log"))[-300:]))
 print("all held" if ok_all else "A JOB GOT OUT")
