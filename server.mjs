@@ -12,6 +12,7 @@
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
   /api/onsker             wishes for what it cannot do yet (wishes.mjs)
+  /api/guide              the guide's «seen» for a person signed in (guide.mjs)
   /api/gjengi             «Gjengi»: a view made a realistic picture by an image model, within the month's cap (gjengi.mjs)
 
   GET  /api/bruk          calls a day per login and per (hashed) address, for pm's report (the box only)
@@ -31,6 +32,7 @@ import { createLogin } from "./login.mjs";
 import { createAssistant } from "./assistant.mjs";
 import { createStreets } from "./gater.mjs";
 import { createWishes } from "./wishes.mjs";
+import { createGuide } from "./guide.mjs";
 import { importFile, MAX_IMPORT } from "./bim.mjs";
 import { createRenderings } from "./gjengi.mjs";
 
@@ -88,6 +90,7 @@ const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFi
 const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
 const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
+const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   // the guide's «seen», on the person (U3658)
 /* the person's open pages, as Anton's tools need them: the version the pill has open (assistant.mjs sets it with each
    turn) and a way to move those pages to a view (show_building); one object, filled in by both */
 const pages = { open: new Map(), show: () => false };
@@ -103,7 +106,7 @@ createServer(async (req, res) => {
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (path === "/mcp/server-card") return mcp.handleCard(req, res);
     if (await auth.route(req, res, url) || await streets.route(req, res, path, url)) return;
-    if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path)) return;
+    if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path) || await guide?.route(req, res, path)) return;
     // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;
     if (path === "/api/endring") return mcp.handleChange(req, res);
