@@ -20,9 +20,10 @@ import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // 
 import { texturedMaterial, worldUV } from "./renderkit/materials-three.js";
 import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
+import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
-const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
+const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297", pane: "#56737b" };
 
 export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality(), walkKeys = () => true }) {
   const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
@@ -255,9 +256,26 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }
     return grp;
   }
+  /* U3656: a wing the BIM model has (public/bimglb.js, tools/glb.py from the IFC's own geometry) is drawn from that: its walls with
+     the window openings cut in them, the floor slabs, the roof, the windows as glass, one mesh a material. The group stays the
+     building's, so picking, the storey cut, «Riv» and the section all find it as before; the model replaces the outline. */
+  function loadBim(b, grp) {
+    fetch(BIM[b.wing]).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))).then(buf => {
+      const old = [...grp.children], parts = readGlb(buf);
+      for (const p of parts) {
+        const g = new THREE.BufferGeometry(), M = MATERIALS[p.material] || MATERIALS.concrete;
+        g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1)); g.computeBoundingSphere();
+        const glass = p.material === "glass", m = mat(glass ? C.pane : M.colour, { ...M.look, ...(glass ? { opacity: 0.7 } : {}), flatShading: true, clippingPlanes: [cuts.get(b.id)] });   // flat: the file carries no normals, and every face is plane
+        const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
+        if (selected === b.id) m.emissive.set("#6b5200");
+      }
+      for (const o of old) { grp.remove(o); o.traverse(x => { x.geometry?.dispose(); x.material?.dispose?.(); }); }
+      dirty = true;
+    }).catch(e => console.warn("bim:", b.id, e.message));
+  }
   for (const b of site.buildings) {
     const grp = new THREE.Group(), b0 = b.base - 0.5, ring = b.ring;
-    if (b.own && b.blocks?.length) grp.add(blocksMesh(b, wallTex[kindOf(b)]));
+    if (b.own && b.blocks?.length) { grp.add(blocksMesh(b, wallTex[kindOf(b)])); if (BIM[b.wing]) loadBim(b, grp); }   // a wing with a model: the extruded outline stands till the model has come (or when it cannot)
     else if (!b.own || b.top == null) {
       const top = b.top ?? b.base + (b.osmHeight || (b.levels || 2) * 3);
       grp.add(wallsTo(ring, b0, () => top, mat(b.own ? C.own : C.nb)));
