@@ -7,7 +7,7 @@
 import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, lookFor, viewpointFor } from "./renderkit/photo.js";
 import { LENSES, ASPECTS, frameRect, frameFov, viewFov, hFov, poseFromCam, frameSvg, frustumSvg } from "./renderkit/photoframe.js";
 import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO } from "./gjengi-no.js";
-import { spotOfView, flyTo, isStale, retakeBody, retake, total } from "./photospots.js";
+import { spotOfView, flyTo, isStale, retakeBody, retake, total, whyNot, hasWork, NEEDS_WORK } from "./photospots.js";
 const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];
@@ -65,7 +65,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   }
 
   /* ---- the card: price, the shutter, the pictures, the places ---- */
-  const can = () => { const w = work(); return !busy && st?.on && st.signed_in && (w.versjon || w.utkast) && st.left_usd >= priceOf(sizeNow()); };
+  const why = () => whyNot({ st, work: work(), busy, price: priceOf(sizeNow()) }), can = () => !why();
   function draw() {
     if (!st) return;
     const w = work(), m = MONTH[new Date().getUTCMonth()], est = priceOf(sizeNow()), room = st.left_usd >= est; drawCam();
@@ -73,9 +73,9 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
       : !st.signed_in ? `Logg inn for å gjengi: hvert bilde koster penger (omtrent ${usd(est)}).`
       : !w.versjon && !w.utkast ? "Gjør en endring eller åpne et forslag først: bildene lagres i forslaget."
       : `Rammen er bildet: det du ser i den blir sendt. Brukt i ${m}: ${usd(st.month_usd)} av ${usd(st.cap_usd)}.${room ? "" : " Grensen er nådd denne måneden."}`;
-    const label = busy ? "Lager bildet …" : `Ta bildet · ca. ${usd(est)}`;
-    for (const b of [go, shotBtn]) { b.disabled = !can(); b.setAttribute("aria-label", label); }
-    go.textContent = label; $("pfPrice").textContent = busy ? "Lager …" : `ca. ${usd(est)}`; shotBtn.title = label;
+    const reason = why(), label = reason || `Ta bildet · ca. ${usd(est)}`;   // a grey shutter says why on itself, in the view and in the drawer
+    for (const b of [go, shotBtn]) { b.disabled = !!reason; b.setAttribute("aria-label", reason ? `Ta bildet: ${reason}` : label); }
+    go.textContent = reason ? `Ta bildet: ${reason}` : label; $("pfPrice").textContent = reason || `ca. ${usd(est)}`; shotBtn.title = label;
     list.innerHTML = (st.pictures || []).map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener" title="Åpne i full størrelse"><img src="${esc(p.url)}" alt="Gjengitt bilde ${esc(new Date(p.at).toLocaleString("nb-NO"))}" loading="lazy"></a>
       <span class="gj-r"><button type="button" class="gj-fav" data-fav="${esc(p.id)}" aria-pressed="${p.fav}" title="${p.fav ? "Ta bort som favoritt" : "Behold som favoritt"}" aria-label="${p.fav ? "Ta bort som favoritt" : "Behold som favoritt"}">${p.fav ? "★" : "☆"}</button>
       <a href="${esc(p.download)}" download>Last ned</a><small>${esc(new Date(p.at).toLocaleDateString("nb-NO"))} · ${usd(p.cost_usd)}${p.wish ? ` · ${esc(p.wish)}` : ""}</small></span></li>`).join("");
@@ -163,7 +163,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
 
   /* ---- photo mode in and out: what is not needed is hidden by the body's class, the view's own lens is given back ---- */
   function enter() {
-    if (on) return; on = true; prevMode = viewer.view().mode; if (prevMode !== "3d") setMode("3d");
+    if (on) return; if (!hasWork(work())) { panel.show(prevTab); return; } on = true; prevMode = viewer.view().mode; if (prevMode !== "3d") setMode("3d");
     document.body.classList.add("photo"); pf.hidden = false; panel.snap?.("peek"); layout(); load();
     tick = setInterval(() => { const s = JSON.stringify([pose(), view.clientWidth, view.clientHeight, sun()]); if (s !== sig && dragM == null) { sig = s; layout(); drawCam(); } }, 250);
   }
@@ -171,8 +171,15 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
     if (!on) return; on = false; clearInterval(tick); document.body.classList.remove("photo"); pf.hidden = true; result.hidden = true; result.innerHTML = ""; viewer.lens(null);
     if (prevMode !== "3d") setMode(prevMode);
   }
+  /* «Før» (no version or draft open): the tab is greyed, not hidden, and says why; a photo mode open when the person goes there is left for the earlier tab (U3666) */
+  const tabBtn = $("tab-photo"); let lastWhy = null;
+  function syncTab() {
+    const ok = hasWork(work()); tabBtn.disabled = !ok; tabBtn.setAttribute("aria-disabled", String(!ok)); tabBtn.title = ok ? "Fotomodus: ta et bilde av det du ser" : NEEDS_WORK; tabBtn.setAttribute("aria-label", ok ? "Gjengi" : `Gjengi. ${NEEDS_WORK}`);
+    if (!ok && on) panel.show(prevTab); const y = why(); if (st && y !== lastWhy) { lastWhy = y; draw(); }
+  }
+  syncTab(); setInterval(syncTab, 500);
   addEventListener("sykehus:panel", e => { if (e.detail === "photo") enter(); else { prevTab = e.detail; leave(); } });
-  $("pfExit").onclick = () => panel.show(prevTab);
+  $("pfExit").onclick = $("pfX").onclick = () => panel.show(prevTab);   // «Avslutt» in the drawer, and on the view: a phone's drawer is at peek
   addEventListener("keydown", e => { if (e.key !== "Escape" || !on) return; if (!result.hidden) { result.hidden = true; result.innerHTML = ""; } else panel.show(prevTab); });
   go.onclick = shotBtn.onclick = shoot;
   new ResizeObserver(() => { if (on) layout(); }).observe(view);
@@ -184,6 +191,6 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
     if (any && st) { draw(); if (on) layout(); }
   }
   /* Anton proposed new pictures from some places: the Gjengi tab shows the card with the price; nothing is made until the press */
-  function proposal() { panel.reveal("photo"); setTimeout(load, 0); }
+  function proposal() { if (!hasWork(work())) return toast(NEEDS_WORK); panel.reveal("photo"); setTimeout(load, 0); }
   return { load, setChoice, proposal, enter, leave, get on() { return on; }, pick, spotNow, selectSpot, retakeMany };
 }

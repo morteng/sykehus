@@ -1026,7 +1026,7 @@ import("./tour.js").then(({ createTour }) => {
 }).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261027a").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
-import("./gjengi.js?v=20261027j").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
+import("./gjengi.js?v=20261027l").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
