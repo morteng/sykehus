@@ -1,0 +1,13 @@
+# The 3D models baked into the KiCad image (U3582): sha256, path under KICAD9_3DMODEL_DIR, source. Only the ones the
+# boards made here name (pm 01:43Z: not the -full tag). KiCad's packages3D at 9.0.9 and Espressif's kicad-libraries at
+# dd76561, both CC-BY-SA 4.0 with KiCad's exception for designs made with them. Add a line for a new part.
+91507e5af4251cb4ef38e04889c9b98da29904432bd83786bba13ae9b605eacb Resistor_SMD.3dshapes/R_0402_1005Metric.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Resistor_SMD.3dshapes/R_0402_1005Metric.step
+4857b3dc717675bf1fb22edda622ac3b3ae03cf44d81eefaf3fa3ba3a86d84c1 Capacitor_SMD.3dshapes/C_0603_1608Metric.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Capacitor_SMD.3dshapes/C_0603_1608Metric.step
+98343205ec260ec165026ba2d44329a23096779ac36c553ea84aa7b370242e6d LED_SMD.3dshapes/LED_0603_1608Metric.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/LED_SMD.3dshapes/LED_0603_1608Metric.step
+b505c9b42f73800ae91f3df52a55895ce806f028c3f33a0b99f4bdd420336f72 LED_SMD.3dshapes/LED_WS2812B-Mini_PLCC4_3.5x3.5mm.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/LED_SMD.3dshapes/LED_WS2812B-Mini_PLCC4_3.5x3.5mm.step
+720a6eab0024069bbee68e7cb4c3ff1149468a34611225cdc852662c5d0ec2b7 Package_TO_SOT_SMD.3dshapes/SOT-23-5.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Package_TO_SOT_SMD.3dshapes/SOT-23-5.step
+844c0bb504d0c383535d9845c6376fe7a4053241a2ede8d8ef694df3fcfc37c8 Package_TO_SOT_SMD.3dshapes/SOT-89-3.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Package_TO_SOT_SMD.3dshapes/SOT-89-3.step
+23b1770b921df25f489d37b5636ad4a292f966c00638da7b5cb4b7f97d11c639 Button_Switch_SMD.3dshapes/SW_SPST_TL3342.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Button_Switch_SMD.3dshapes/SW_SPST_TL3342.step
+6338ce740fa231c2d3dcc6384e0576994a47240a312a21413cb85d76990a69a0 Connector_USB.3dshapes/USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Connector_USB.3dshapes/USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal.step
+c7580ba6320b5978fc3e659ad51a0c3ae8aba7e2d06dfd92fed391446fa3c525 Connector_JST.3dshapes/JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal.step https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/9.0.9/Connector_JST.3dshapes/JST_SH_SM02B-SRSS-TB_1x02-1MP_P1.00mm_Horizontal.step
+042750ceda97250e23802b1eccf38a7f3e6868707a2d41c8607961006dcda14b espressif.3dshapes/ESP32-S3-MINI-1.STEP https://raw.githubusercontent.com/espressif/kicad-libraries/dd76561812ab300351234ba6e0ec1295641796f0/3dmodels/espressif.3dshapes/ESP32-S3-MINI-1.STEP

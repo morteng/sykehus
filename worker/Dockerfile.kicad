@@ -1,12 +1,19 @@
 # The worker with KiCad (U3531, pm 01:07Z): the same service and sandbox as worker/Dockerfile, on the official KiCad
 # image (kicad-cli, Debian 12, its symbol and footprint libraries; the 3D models are in the -full tag, not here: a
-# project's own models come in as inputs). Steps erc, drc, step, outline, render (steps/kicad.py), a job with no script.
+# project's own models come in as inputs, the ones in kicad-models.txt are baked in). Steps make (steps/make.py: a project
+# from a parts-and-nets spec), erc, drc, step, outline, render (steps/kicad.py), a job with no script.
 # uid 1000 as in the other images; /work: the mount point bwrap binds a job at, made here since the root is read-only.
 #   docker build -t sykehus-worker-kicad -f worker/Dockerfile.kicad worker/
 FROM kicad/kicad:9.0.9
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap util-linux python3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap util-linux python3 ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN kicad-cli version && mkdir -p /jobs /work /srv/worker && chown 1000 /jobs
+# the 3D models the boards made here name (kicad-models.txt: each checked against its sha256), not the -full tag's
+# several GB; KICAD9_3DMODEL_DIR is where footprints look for them (and passes into each job's sandbox)
+COPY kicad-models.txt /srv/worker/
+RUN python3 -I -c "import hashlib, os, sys, urllib.request; [(os.makedirs(os.path.dirname('/usr/share/kicad/3dmodels/' + p), exist_ok=True), (lambda b: open('/usr/share/kicad/3dmodels/' + p, 'wb').write(b) if hashlib.sha256(b).hexdigest() == h else sys.exit('sha256 differs: ' + p))(urllib.request.urlopen(u, timeout=120).read())) for h, p, u in (l.split() for l in open('/srv/worker/kicad-models.txt') if l.strip() and not l.startswith('#'))]" \
+ && du -sh /usr/share/kicad/3dmodels
+ENV KICAD9_3DMODEL_DIR=/usr/share/kicad/3dmodels
 COPY service.py /srv/worker/
 COPY steps /srv/worker/steps
 COPY selftest.py /srv/worker/

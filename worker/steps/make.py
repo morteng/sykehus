@@ -5,7 +5,8 @@ symbols and footprints, so ERC and DRC can run on it (then: ["make", "erc", "drc
   {"name": "keychain-board",
    "board": {"outline": [[x, y], ...] (mm, x right, y down, as pcbnew has it), "thickness": 1.0},
    "parts": [{"ref": "R1", "value": "4.7k", "symbol": "Device:R", "footprint": "Resistor_SMD:R_0402_1005Metric",
-              "at": [x, y], "rot": 0}, ...
+              "at": [x, y], "rot": 0, "model": {"file": "${KICAD9_3DMODEL_DIR}/....step", "offset": [x, y, z],
+              "rotate": [x, y, z]} (optional: in place of the footprint's own, where the library has none)}, ...
              a part with no library symbol: "pins": [{"number": "1", "name": "OUT", "type": "output"}, ...]
              in place of symbol: a box symbol is drawn for it],
    "nets": {"VBAT": ["U2:VBAT", "C3:1", ...], ...}    a pin by number or by its symbol's pin name (every pin of that name)
@@ -15,7 +16,8 @@ symbols and footprints, so ERC and DRC can run on it (then: ["make", "erc", "drc
                     whole), a net label on every pin in a net, a no-connect flag on every other pin
   <name>.kicad_pcb  the board (pcbnew): each footprint from the library at its place, every pad on its net, the
                     outline on Edge.Cuts, each footprint tied to its symbol (schematic parity); not routed
-  <name>.kicad_pro  the project
+  <name>.kicad_pro  the project, with its sym-lib-table and fp-lib-table (each library it used, where this image
+                    has it; custom.kicad_sym for the box symbols), so ERC and DRC find them
   make.json         what it made: parts, nets, the pins left unconnected, the libraries it read
 
 Runs as it is in a job too (a script job of the KiCad image, while it is being tried): `python make.py`.
@@ -237,6 +239,20 @@ for p in parts + [{"ref": f["ref"], "key": "power:PWR_FLAG", "value": "PWR_FLAG"
 sch = ["kicad_sch", ["version", 20250114], ["generator", Q("eeschema")], ["generator_version", Q("9.0")], ["uuid", Q(ROOT)], ["paper", Q("A1")],
        ["lib_symbols"] + list(libsyms.values())] + items + [["sheet_instances", ["path", Q("/"), ["page", Q("1")]]], ["embedded_fonts", "no"]]
 (HERE / f"{NAME}.kicad_sch").write_text(dump(sch) + "\n")
+# the project's library tables: every library a part came from, so ERC's and DRC's library checks find it
+def table(kind, rows):
+    return f"({kind}_lib_table\n\t(version 7)\n" + "".join(f'\t(lib (name "{n}")(type "KiCad")(uri "{u}")(options "")(descr ""))\n' for n, u in sorted(rows.items())) + ")\n"
+
+
+syml = {k.split(":")[0] for k in libsyms}
+rows = {l: str(next(pathlib.Path(d) / f"{l}.kicad_sym" for d in SYMDIRS if (pathlib.Path(d) / f"{l}.kicad_sym").is_file())) for l in syml if l != "custom"}
+custom = [[s[0], Q(s[1].split(":", 1)[1])] + s[2:] for k, s in libsyms.items() if k.startswith("custom:")]
+if custom:
+    (HERE / "custom.kicad_sym").write_text(dump(["kicad_symbol_lib", ["version", 20241209], ["generator", Q("sykehus_make")], ["generator_version", Q("9.0")]] + custom) + "\n")
+    rows["custom"] = "${KIPRJMOD}/custom.kicad_sym"
+(HERE / "sym-lib-table").write_text(table("sym", rows))
+fpl = {p["footprint"].split(":")[0] for p in parts if p.get("footprint")}
+(HERE / "fp-lib-table").write_text(table("fp", {l: str(d) for l in fpl for d in [next((pathlib.Path(x) / f"{l}.pretty" for x in FPDIRS if (pathlib.Path(x) / f"{l}.pretty").is_dir()), None)] if d}))
 (HERE / f"{NAME}.kicad_pro").write_text(json.dumps({"meta": {"filename": f"{NAME}.kicad_pro", "version": 3}}, indent=2) + "\n")
 
 # ---------- the board (pcbnew, in the KiCad image)
@@ -270,6 +286,16 @@ else:
         b.Add(fp)
         fp.SetPosition(pcbnew.VECTOR2I(mm(p["at"][0]), mm(p["at"][1])))
         fp.SetOrientationDegrees(float(p.get("rot", 0)))
+        if p.get("model"):   # a body the footprint's library has none for (a stand-in, or the maker's own model)
+            ms = fp.Models()
+            while len(ms):
+                ms.pop_back()
+            m = pcbnew.FP_3DMODEL(); m.m_Filename = p["model"]["file"]; m.m_Show = True
+            if p["model"].get("offset"):
+                m.m_Offset = pcbnew.VECTOR3D(*map(float, p["model"]["offset"]))
+            if p["model"].get("rotate"):
+                m.m_Rotation = pcbnew.VECTOR3D(*map(float, p["model"]["rotate"]))
+            ms.push_back(m)
         for pad in fp.Pads():
             n = net_of.get((p["ref"], pad.GetNumber())) or nc_net.get((p["ref"], pad.GetNumber()))
             if n:
@@ -285,4 +311,7 @@ else:
     pcbnew.SaveBoard(str(HERE / f"{NAME}.kicad_pcb"), b)
     made["board"] = f"{NAME}.kicad_pcb"; made["kicad"] = pcbnew.GetBuildVersion()
 (HERE / "make.json").write_text(json.dumps(made, indent=1))
+k = json.loads((HERE / "kicad.json").read_text()) if (HERE / "kicad.json").exists() else {}
+k["make"] = {"board": made.get("board"), "schematic": f"{NAME}.kicad_sch", "parts": made["parts"], "nets": made["nets"], "unconnected_pins": len(loose), "power_flags": want}
+(HERE / "kicad.json").write_text(json.dumps(k, indent=1))
 print(json.dumps({k: made[k] for k in ("name", "parts", "nets", "board")} | {"unconnected_pins": len(loose)}))

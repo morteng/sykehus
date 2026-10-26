@@ -5,7 +5,7 @@ what it made. One container on the stack's internal network; shared by sykehus (
   POST /blobs           the bytes of a file (a STEP, a KiCad part, an image) → {sha256, bytes}; kept a week
   GET  /blobs/<sha256>  the bytes
   POST /jobs[?wait=S]   {script, params?, inputs?: {name: sha256}, files?: {name: base64}, then?: ["mesh", "glb",
-                        "check"] (the KiCad image: "erc", "drc", "step", "outline", "render", with no script),
+                        "check"] (the KiCad image: "make", "erc", "drc", "step", "outline", "render", with no script),
                         mesh?: {linear_mm, angular_deg}, expect?: {...}, caps?: {s, mem_mb}, key?}
                         → 202 {id} or, with wait, the job when it is done (up to S seconds). key (or the
                         Idempotency-Key header): the same key within the hour is the same job, not a second run
@@ -53,7 +53,7 @@ CAPS = {"s": 300, "mem_mb": 4096}
 SLOTS = threading.Semaphore(int(os.environ.get("WORKER_SLOTS", "1")))
 BLOBS = pathlib.Path(os.environ.get("WORKER_BLOBS", str(ROOT / ".blobs")))   # under ROOT: hidden from the jobs (a tmpfs there)
 BLOB_KEEP_S, BLOB_CAP, MAX_BLOB = 7 * 86400, 4 << 30, 64 << 20   # a week, 4 GB in all, 64 MB each
-KICAD = ("erc", "drc", "step", "outline", "render")   # steps/kicad.py <step>, in the KiCad image
+KICAD = ("make", "erc", "drc", "step", "outline", "render")   # steps/make.py, then steps/kicad.py <step>, in the KiCad image
 STEPS = ("mesh", "glb", "check") + (KICAD if shutil.which("kicad-cli") else ())
 DEV = os.environ.get("WORKER_UNSAFE_DEV") == "1"   # no bubblewrap: only on a developer's machine, never on the box
 jobs, lock = {}, threading.Lock()
@@ -135,7 +135,7 @@ def run_job(j):
             if j.get("mesh") is not None:
                 (work / ".mesh.json").write_text(json.dumps(j["mesh"]))
             for step in j.get("then") or []:
-                src = "kicad" if step in KICAD else step
+                src = "kicad" if step in KICAD and step != "make" else step
                 shutil.copy(HERE / "steps" / f"{src}.py", work / f".step-{src}.py")
                 q = subprocess.run(sandboxed([sys.executable, "-I", f".step-{src}.py", *([step] if src == "kicad" else [])], work, caps), cwd=work, capture_output=True, text=True, timeout=caps["s"] + 30)
                 (work / f".step-{src}.py").unlink(missing_ok=True)

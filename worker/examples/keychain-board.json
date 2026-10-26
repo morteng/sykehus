@@ -31,7 +31,10 @@
     111,
     110.25
    ],
-   "rot": 0
+   "rot": 0,
+   "model": {
+    "file": "${KICAD9_3DMODEL_DIR}/espressif.3dshapes/ESP32-S3-MINI-1.STEP"
+   }
   },
   {
    "ref": "U2",
@@ -135,7 +138,10 @@
     111,
     133.8
    ],
-   "rot": 0
+   "rot": 0,
+   "model": {
+    "file": "${KICAD9_3DMODEL_DIR}/LED_SMD.3dshapes/LED_WS2812B-Mini_PLCC4_3.5x3.5mm.step"
+   }
   },
   {
    "ref": "D2",
@@ -382,5 +388,5 @@
   "GND",
   "VBAT"
  ],
- "note": "From pi-anton-fob's draft (anton-fob 436ea2f hardware/keychain-board), with library parts and fixes: D2 K only on GND (was on GND and STATUS2), LDO EN on VBAT (was on the module's EN), charger STAT on IO4 (IO43 is TXD0), USB on the module's USB_D+/USB_D- (IO20/IO19), AMC7135 3-pin SOT-89 with VDD from IO1 (PWM), the cell on a JST SH 2-pin. AMC7135 pin order (1 OUT, 2 GND, 3 VDD) to be checked against its datasheet. Placement (try 3): the module's antenna at the top edge (its keepout spans the board's width), the ICs, two rows of passives, the buttons and the torch, then USB-C with its mouth at the bottom edge, the cell's JST and the status LED; courtyards from the 9.0.9 footprints."
+ "note": "From pi-anton-fob's draft (anton-fob 436ea2f hardware/keychain-board), with library parts and fixes: D2 K only on GND (was on GND and STATUS2), LDO EN on VBAT (was on the module's EN), charger STAT on IO4 (IO43 is TXD0), USB on the module's USB_D+/USB_D- (IO20/IO19), AMC7135 3-pin SOT-89 with VDD from IO1 (PWM), the cell on a JST SH 2-pin. AMC7135 pin order (1 OUT, 2 GND, 3 VDD) to be checked against its datasheet. Placement (try 3): the module's antenna at the top edge (its keepout spans the board's width), the ICs, two rows of passives, the buttons and the torch, then USB-C with its mouth at the bottom edge, the cell's JST and the status LED; courtyards from the 9.0.9 footprints. 3D: U1 is Espressif's own ESP32-S3-MINI-1 model (KiCad's library has none for the S2/S3-MINI-1; its placement on KiCad's footprint to be checked in the STEP); D1 is a 3.5 x 3.5 mm PLCC body as a stand-in for the 3535 torch LED (no model for LED_Cree-XP), for the case fit only."
 }
