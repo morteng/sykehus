@@ -63,6 +63,9 @@
     "hatch-wood.svg": "68d5bc8f5d43f963aa11b5e0ddba60acace139a5",
     "sketch.js": "193547cb25ecdc2744a575230035df4c61df0477",
     "sunpick.js": "e4efe0f58fab9f20f478a5d8cb45f1b786b27899",
-    "photo.js": "93ce8f8792d64e4bf04fc8940fd50f5ec34292b4"
+    "photo.js": "93ce8f8792d64e4bf04fc8940fd50f5ec34292b4",
+    "grid2d.js": "7ba402edbec5bb2aaeb5d057588e626c4b06163a",
+    "paint.js": "f614df5ffe6404ba230771ceec9003bf5cd045fb",
+    "terrain.js": "b98d60291e2d28aa9dd9758e74c23220d168d302"
   }
 }
