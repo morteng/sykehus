@@ -17,6 +17,18 @@ export function fallOf(groundAt, c, R) {
   return { high: { kote: r1(hi.k), x: r1(hi.p[0]), y: r1(hi.p[1]) }, low: { kote: r1(lo.k), x: r1(lo.p[0]), y: r1(lo.p[1]) }, spread_m: r1(spread), line };
 }
 
+/* the steepest rise over a run of at most maxRun m, from any point within R of c, in 16 directions (2 m grid): what a stair or ramp of that run can really get.
+   A spread over a ring is not it: a 9 % slope falls 2 m over 23 m and still has no 1,5 m over 10 m (Sentralblokka south, 2026-10-26). */
+export function steepestRise(groundAt, c, R, maxRun = 10, buildings = []) {
+  const inB = p => buildings.some(x => inRing(x.ring, p));   // the terrain model is only interpolated under a footprint: not ground to stand on
+  let best = { rise_m: 0, run_m: 0 };
+  for (let dx = -R; dx <= R; dx += 2) for (let dy = -R; dy <= R; dy += 2) {
+    const b = [c[0] + dx, c[1] + dy]; if (Math.hypot(dx, dy) > R) continue; const kb = groundAt(b); if (!Number.isFinite(kb) || inB(b)) continue;
+    for (let a = 0; a < 16; a++) { const th = a * Math.PI / 8; for (let d = 2; d <= maxRun; d += 1) { const q = [b[0] + Math.sin(th) * d, b[1] + Math.cos(th) * d], k = groundAt(q); if (inB(q)) break; if (Number.isFinite(k) && k - kb > best.rise_m) best = { rise_m: k - kb, run_m: d }; } }
+  }
+  return { rise_m: r1(best.rise_m), run_m: best.run_m };
+}
+
 /* ways: [{id, what, ring}], buildings: [{ring}], surfaces: [{name, surface, ring}]. A candidate stands on a way's edge (bottom), a run of 2..10 m up the slope (top). */
 export function findDrops({ groundAt, c, R, drop, ways = [], buildings = [], surfaces = [] }) {
   const want = Math.abs(drop), out = [];
@@ -48,9 +60,9 @@ export function findDrops({ groundAt, c, R, drop, ways = [], buildings = [], sur
   return pick.map(x => x.cand);
 }
 
-/* the sentence Anton reads: does the asked drop fit the ground round the place? */
-export function fitLine(fall, drop, cands, R = 20) {
+/* the sentence Anton reads: does the asked drop fit the ground round the place? rise = steepestRise: the most the ground rises over <= 10 m near the place */
+export function fitLine(rise, drop, cands, R = 12) {
   const want = Math.abs(drop);
-  if (fall && fall.spread_m >= want * 0.9) return { fits_here: true, answer: `Terrenget her har ${com(fall.spread_m)} m fall innen ${Math.round(R)} m, så ${com(want)} m kan passe.` };
-  return { fits_here: false, answer: `Terrenget her faller bare ${com(fall?.spread_m ?? 0)} m innen ${Math.round(R)} m, ikke ${com(want)} m.${cands.length ? ` Nærmeste steder som passer: ${cands.map(c => `${com(c.top.kote)} ned til ${com(c.bottom.kote)} ved ${c.bottom.is} (x=${c.bottom.x}, y=${c.bottom.y})`).join("; ")}.` : " Fant ikke noe sted innen radiusen med så mye fall mot en vei eller sti."}` };
+  if (rise.rise_m >= want * 0.9) return { fits_here: true, answer: `Terrenget her har ${com(rise.rise_m)} m fall over ${rise.run_m} m innen ${Math.round(R)} m, så ${com(want)} m kan passe.` };
+  return { fits_here: false, answer: `Terrenget her faller bare ${com(rise.rise_m)} m over ${rise.run_m || 10} m (størst innen ${Math.round(R)} m), ikke ${com(want)} m.${cands.length ? ` Nærmeste steder som passer: ${cands.map(c => `${com(c.top.kote)} ned til ${com(c.bottom.kote)} ved ${c.bottom.is} (x=${c.bottom.x}, y=${c.bottom.y})`).join("; ")}.` : " Fant ikke noe sted innen radiusen med så mye fall mot en vei eller sti."}` };
 }

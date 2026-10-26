@@ -7,7 +7,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { fallOf, findDrops, fitLine } from "../groundfit.mjs";
+import { fallOf, findDrops, fitLine, steepestRise } from "../groundfit.mjs";
 
 const way = (id, x0, y0, x1, y1) => ({ id, what: id, ring: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] });
 /* flat everywhere except a 1,5 m step down to the east of x=100 (over 6 m), where a way lies at x 108..110 */
@@ -19,8 +19,8 @@ test("flat ground: the fall line says nearly flat with the numbers; a 1,5 m drop
   const f = fallOf(flat, C, 40);
   assert.ok(f.spread_m < 0.3, f.line); assert.match(f.line, /nesten flatt: 0,\d m mellom høyeste og laveste punkt innen 40 m/);
   const cands = findDrops({ groundAt: flat, c: C, R: 120, drop: 1.5, ways });
-  const a = fitLine(fallOf(flat, C, 12), 1.5, cands, 12);
-  assert.equal(a.fits_here, false); assert.match(a.answer, /faller bare 0 m innen 12 m, ikke 1,5 m/);
+  const a = fitLine(steepestRise(flat, C, 12), 1.5, cands, 12);
+  assert.equal(a.fits_here, false); assert.match(a.answer, /faller bare 0 m over 10 m \(størst innen 12 m\), ikke 1,5 m/);
   assert.ok(cands.length >= 1 && cands.length <= 3);
   for (const k of cands) { assert.equal(k.bottom.is, "gangvei-ned"); assert.ok(k.run_m <= 10); assert.ok(k.top.kote - k.bottom.kote >= 1.35, JSON.stringify(k)); assert.ok(k.top.x < k.bottom.x, "up the slope is west"); assert.equal(k.top.is, "åpen mark"); }
   assert.match(a.answer, /Nærmeste steder som passer/);
@@ -37,8 +37,23 @@ test("a building or a way on the top end is not a candidate; a laid surface is n
 test("sloped ground: the fall is stated and 1,5 m fits here", () => {
   const f = fallOf(slope, C, 40); assert.ok(f.spread_m > 10, f.line); assert.match(f.line, /faller 12 m innen 40 m: høyest 26 \(sør/);
   assert.equal(f.high.kote, 26); assert.equal(f.low.kote, 14);
-  const a = fitLine(f, 1.5, [], 40); assert.equal(a.fits_here, true); assert.match(a.answer, /kan passe/);
-  assert.equal(fitLine({ spread_m: 0.2 }, 1.5, []).fits_here, false); assert.match(fitLine({ spread_m: 0.2 }, 1.5, []).answer, /Fant ikke noe sted/);
+  const a = fitLine(steepestRise(slope, C, 12), 1.5, [], 12); assert.equal(a.fits_here, true); assert.match(a.answer, /kan passe/);
+  assert.equal(fitLine({ rise_m: 0.2, run_m: 10 }, 1.5, []).fits_here, false); assert.match(fitLine({ rise_m: 0.2, run_m: 10 }, 1.5, []).answer, /Fant ikke noe sted/);
+});
+
+/* Sentralblokka south, as measured: 9 % fall (15,2 at the wall, 13,2 at 23 m): the ring spread is 1,9 m, yet no 1,5 m over a 10 m run */
+test("a gentle 9 % slope: the ring spread is over 1,5 m but 1,5 m does not fit over 10 m", () => {
+  const gentle = ([, y]) => 15.2 + 0.09 * y;
+  assert.ok(fallOf(gentle, C, 12).spread_m > 1.5); const r = steepestRise(gentle, C, 12); assert.ok(r.rise_m < 1.35, JSON.stringify(r));
+  assert.equal(fitLine(r, 1.5, []).fits_here, false);
+  assert.equal(fitLine(steepestRise(([, y]) => 0.2 * y, C, 12), 1.5, []).fits_here, true);
+});
+
+/* the terrain model is only interpolated under a footprint (live: a 1,7 m rise ended inside building 134660428): a rise that starts or ends in one is no ground */
+test("a steep rise inside a building footprint is not counted", () => {
+  const hump = ([x, y]) => Math.abs(x) < 4 && Math.abs(y) < 4 ? 17 : 15;
+  assert.ok(steepestRise(hump, C, 12).rise_m >= 2);
+  assert.equal(steepestRise(hump, C, 12, 10, [{ ring: [[-4.5, -4.5], [4.5, -4.5], [4.5, 4.5], [-4.5, 4.5]] }]).rise_m, 0);
 });
 
 const dir = mkdtempSync(join(tmpdir(), "gf-")), secret = "proxy-secret-for-tests-0123456789", PORT = 8000 + Math.floor(Math.random() * 900), O = `http://localhost:${PORT}`;

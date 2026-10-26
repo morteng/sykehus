@@ -18,7 +18,7 @@ import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the aft
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
-import { fallOf, findDrops, fitLine } from "./groundfit.mjs";   // U3684: the ground against what was asked
+import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces, placeBeside } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
@@ -611,7 +611,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const trees = (S0.trees || []).filter(t => Math.hypot(t[0] - c[0], t[1] - c[1]) <= R).length;
         const fl = fallOf(p => groundAt(S0, p), c, R), fit = { ...fl };
         if (W) { const cands = findDrops({ groundAt: p => groundAt(S0, p), c, R, drop: W, ways: wl.filter(w => nearest(w.ring).d <= R + 25), buildings: S0.buildings, surfaces: (S0.landscape || []).filter(l => l.kind === "surface" && l.ring?.length > 2).map(l => ({ name: l.name, surface: l.surface, ring: l.ring })) });
-          Object.assign(fit, { asked_drop_m: W, ...fitLine(fallOf(p => groundAt(S0, p), c, Math.min(R, 12)), W, cands, Math.min(R, 12)), candidates: cands }); }
+          Object.assign(fit, { asked_drop_m: W, ...fitLine(steepestRise(p => groundAt(S0, p), c, Math.min(R, 12), 10, S0.buildings), W, cands, Math.min(R, 12)), candidates: cands }); }
         return { place: said, center: pt(c), radius_m: R, fall: fit, ways: wayList, ground_laid: surf, buildings: bl, terrain_around: around, trees_within_radius: trees,
           note: `${fit.line} ${W ? fit.answer + " " : ""}Kote i meter over havet, fra terrengmodellen. Høydeforskjell mellom to punkter: forskjellen på koten deres. Veier og stier er kartlagt (OpenStreetMap/NVDB); plen finnes ikke som egen flate i grunnkartet.` };
       } },
