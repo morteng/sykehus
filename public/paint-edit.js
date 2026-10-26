@@ -3,7 +3,7 @@
 
    { kind: "paint", surface, mode?, line, r?, why? }
         a brush stroke along line (1 or more points), radius r metres, laid as grass, planting (a bed), paving or gravel;
-        mode "erase" rubs that surface out instead. The brush stops at buildings, water, paths and the lot's edge, and
+        mode "erase" rubs that surface out instead. The brush stops at buildings, water, roads and paths (not at the plot line, which is not exact to the ground), and
         pulls the last 0.8 m to a building, a road or a path, so the lawn meets the wall. Joins the surface it touches.
         around (set by the connector, not asked for): the rings of the ways near the stroke.
    { kind: "terrain", op, shape, h?, level?, rel?, skirt?, why? }
@@ -63,11 +63,13 @@ export function applyPaint(land, e, site, gone, nextId) {
   return { land: out, m2: res.m2 };
 }
 
+/* a square far wider than any site: what the brush's «inside the lot» is now */
+const OPEN = [[-3000, -3000], [3000, -3000], [3000, 3000], [-3000, 3000]];
 const closed = r => r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1] ? r : [...r, r[0]];
 /* what the brush would paint, before it is committed: the rings of the stroke stopped by what is blocked and pulled the last
    0.8 m to its edge. The page draws these while one drags (mal.js); applyPaint commits them: one function, one answer */
 export function paintPlan(land, e, site, gone = new Set()) {
-  const lot = site.lot?.ring; if (!lot) return null;
+  const lot = OPEN;   // the plot line (tomtegrense) is not a wall: it is not exact to the ground, and the brush may cross it (Morten 2026-10-26)
   const blocked = [...site.buildings.filter(b => !gone.has(b.id) && !gone.has(b.wing)).map(b => b.ring), ...(e.around || []),
     ...land.filter(g => g.kind === "path" || (g.kind === "surface" && (g.surface === "water" || !KIND[g.surface]))).map(g => g.ring)].map(closed);
   const erase = e.mode === "erase", L = e.line;
@@ -80,7 +82,11 @@ export function paintPlan(land, e, site, gone = new Set()) {
 /* the rings of the ways within reach of a stroke (the edit's `around`), the same on the server and on the page */
 export function nearWays(rings, e) {
   const r = (+e.r || 1.5) + 4, xs = e.line.map(p => +p[0]), ys = e.line.map(p => +p[1]), b = [Math.min(...xs) - r, Math.min(...ys) - r, Math.max(...xs) + r, Math.max(...ys) + r];
-  return rings.filter(w => w.length > 2 && w.some(p => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3])).slice(0, 100).map(w => w.map(p => [r1(p[0]), r1(p[1])]));
+  /* by the ring's own box, not by its corners: a long straight road has two corners far from the stroke on both sides of it
+     (U3655: the corner test let a road across the stroke through, and the brush painted over it) */
+  const hit = w => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const p of w) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return x1 >= b[0] && x0 <= b[2] && y1 >= b[1] && y0 <= b[3]; };
+  /* a way as the server and the page keep it, { id, name, ring }, or its bare ring: the page once passed the first and nothing matched (U3655) */
+  return rings.map(w => Array.isArray(w) ? w : w?.ring).filter(w => Array.isArray(w) && w.length > 2 && hit(w)).slice(0, 100).map(w => w.map(p => [r1(p[0]), r1(p[1])]));
 }
 
 /* the terrain ops of the edits laid on the site's ground grid (a copy; the before's grid stays): what they dig and fill
