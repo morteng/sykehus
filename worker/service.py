@@ -203,10 +203,14 @@ def versions():
             out["kicad"] = subprocess.run(["kicad-cli", "version"], capture_output=True, text=True, timeout=30).stdout.strip()
         except Exception:
             pass
+    # each engine asked in a python of its own: `import FreeCAD` deletes names from __main__ (pm 02:33Z: threading and
+    # time gone, the service then crashed at its sweep thread)
     for m in ("ifcopenshell", "FreeCAD"):
         try:
-            mod = __import__(m)
-            out[m.lower()] = getattr(mod, "version", None) or ".".join(mod.Version()[:3])
+            q = subprocess.run([sys.executable, "-I", "-c", f"import {m} as m; print(getattr(m, 'version', None) or '.'.join(m.Version()[:3]))"],
+                               capture_output=True, text=True, timeout=120)
+            if q.returncode == 0 and q.stdout.strip():
+                out[m.lower()] = q.stdout.strip().splitlines()[-1]
         except Exception:
             pass
     return out
