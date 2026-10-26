@@ -18,6 +18,7 @@ import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the aft
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
+import { fallOf, findDrops, fitLine } from "./groundfit.mjs";   // U3684: the ground against what was asked
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces, placeBeside } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
@@ -42,6 +43,7 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "For people: the page has a guided tour, under the «?» («Vis guiden») in the top bar (a short one for a visitor, ending on «Logg inn»; the full one once signed in, and the newer steps again after an update). Say so when someone asks how to get started or what the page can do. The «Tilbakemelding» button in the top bar sends Morten a problem, an idea or a question (with a picture of the page if asked) and lists what the person sent before; the panel has three tabs, Forslag, Bygg and Anton. "
   + "about_site also lists the named streets and places around the site (streets: Welhavens gate, Dronninggata …), the names show_building's from_place stands in. "
   + "When a place is unclear (where a path goes, where a stair comes down, which side), do not ask in text: first find it with about_ground (the paths, roads, what is laid, the buildings and the terrain's kote round a place, from a wing and a side, a street or a point; take heights from the terrain, never ask the person for them), and only if it is still unclear ask_point, which shows the person the plan with a pin to set, and the pin comes back as their next message. "
+  + "Before you ask the person to point, compare what they asked (a height, a drop, a slope: «1,5 m ned») with the terrain: call about_ground with want_drop_m. If fall.fits_here is false, say so in one sentence with the numbers (fall.answer) and propose the nearest places in fall.candidates (what is at the top, the way at the bottom, the drop) instead of asking for a pin; ask_point only when the ground fits or the person has chosen. "
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
   + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
   + "For people: the tree button in the tool column under the sun switches the trees and planted bushes between full, simple (plain shapes) and off (the ground stays); it is kept in the person's browser, and a Gjengi picture shows what is on. "
@@ -575,11 +577,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         side: { type: "string", enum: ["N", "Ø", "S", "V"], description: "With wing: which side of it, seen on a map with north up («sør for Sentralblokka» is wing Sentralblokka, side S). Leave out for the wing's own surroundings" },
         place: { type: "string", description: "A street or place by name (about_site lists them)" },
         x: { type: "number", description: "A site point, metres east (as in try_change), with y" }, y: { type: "number", description: "Metres north" },
-        radius_m: { type: "number", minimum: 10, maximum: 80, description: "How far round the place to look (default 40)" },
+        radius_m: { type: "number", minimum: 10, maximum: 120, description: "How far round the place to look (default 40; with want_drop_m up to 120)" },
+        want_drop_m: { type: "number", minimum: 0.2, maximum: 10, description: "The height drop the person asked for (a stair 1,5 m down, a ramp, a wall): the answer says whether the ground here has it (fall.fits_here) and lists up to 3 places within radius_m where the terrain falls about that much over at most 10 m to a way (fall.candidates)" },
       }),
       description: "What is on the ground round a place, so you can find it yourself instead of asking the person: the footpaths, roads and car parks there are (OpenStreetMap and NVDB, as the page draws them) with their kind, width and nearest point; what is laid on the ground in the version (lawn, gravel, paving and so on, also what the person painted), with the nearest point; the buildings close by; and the terrain's kote at the place and in eight directions (so the height drop between two points is read from the terrain, not asked). Name the place with wing and side, place, or x and y. The base map has no lawn polygons: open ground with nothing listed is grass or bare ground. Use this FIRST when the person names a place («sør for Sentralblokka», «gangveien ved Welhavens gate»); use ask_point only if it is still unclear. Take heights from here, not from the person.",
       run: async (a, req) => {
-        const m = model(a.draft, req), S0 = m.site, R = Math.max(10, Math.min(80, Number(a.radius_m) || 40));
+        const m = model(a.draft, req), S0 = m.site, W = Number(a.want_drop_m) > 0 ? Number(a.want_drop_m) : 0, R = Math.max(10, Math.min(W ? 120 : 80, Number(a.radius_m) || 40));
         let c = null, said = "";
         if (Number.isFinite(a.x) && Number.isFinite(a.y)) { c = [a.x, a.y]; said = "punktet du ga"; }
         else if (a.wing) {
@@ -600,14 +603,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const inside = ring => { let o = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, yi] = ring[i], [xj, yj] = ring[j]; if ((yi > c[1]) !== (yj > c[1]) && c[0] < (xj - xi) * (c[1] - yi) / (yj - yi) + xi) o = !o; } return o; };
         const pt = q => ({ x: r1(q[0]), y: r1(q[1]), kote: kote(q) });
         const wl = ways ? (await ways()).filter(w => w.ring && !(S0.roads_removed || []).some(rr => rr.id === w.id)) : [];
-        const wayList = wl.map(w => ({ w, n: nearest(w.ring) })).filter(x => x.n.d <= R + 25).sort((p, q) => p.n.d - q.n.d).slice(0, 10).map(({ w, n }) => ({ id: w.id, what: w.name, distance_m: r1(n.d), nearest: pt(n.p), ...(n.d === 0 ? { on_it: true } : {}) }));
+        const wayList = wl.map(w => ({ w, n: nearest(w.ring) })).filter(x => x.n.d <= R + 25).sort((p, q) => p.n.d - q.n.d).slice(0, 10).map(({ w, n }) => ({ id: w.id, what: w.name, distance_m: r1(n.d), nearest: pt(n.p), kote_vs_center_m: r1(groundAt(S0, n.p) - groundAt(S0, c)), ...(n.d === 0 ? { on_it: true } : {}) }));
         const surf = (S0.landscape || []).filter(l => l.kind === "surface" && l.ring?.length > 2).map(l => ({ l, n: nearest(l.ring), in: inside(l.ring) })).filter(x => x.in || x.n.d <= R).sort((p, q) => p.n.d - q.n.d).slice(0, 10)
           .map(({ l, n, in: ins }) => ({ id: l.id, name: l.name, surface: l.surface, area_m2: l.area_m2, distance_m: ins ? 0 : r1(n.d), nearest: pt(n.p), ...(ins ? { covers_the_place: true } : {}) }));
         const bl = S0.buildings.map(b => ({ b, n: nearest(b.ring) })).filter(x => x.n.d <= R).sort((p, q) => p.n.d - q.n.d).slice(0, 8).map(({ b, n }) => ({ name: b.name || b.id, wing: b.wing || null, distance_m: r1(n.d), nearest: pt(n.p), ...(b.base != null ? { base_kote: r1(b.base) } : {}) }));
         const around = Array.from({ length: 8 }, (_, i) => { const th = i * Math.PI / 4, q = [c[0] + Math.sin(th) * R / 2, c[1] + Math.cos(th) * R / 2]; return { direction: ["N", "NØ", "Ø", "SØ", "S", "SV", "V", "NV"][i], distance_m: r1(R / 2), kote: kote(q) }; });
         const trees = (S0.trees || []).filter(t => Math.hypot(t[0] - c[0], t[1] - c[1]) <= R).length;
-        return { place: said, center: pt(c), radius_m: R, ways: wayList, ground_laid: surf, buildings: bl, terrain_around: around, trees_within_radius: trees,
-          note: "Kote i meter over havet, fra terrengmodellen. Høydeforskjell mellom to punkter: forskjellen på koten deres. Veier og stier er kartlagt (OpenStreetMap/NVDB); plen finnes ikke som egen flate i grunnkartet." };
+        const fl = fallOf(p => groundAt(S0, p), c, R), fit = { ...fl };
+        if (W) { const cands = findDrops({ groundAt: p => groundAt(S0, p), c, R, drop: W, ways: wl.filter(w => nearest(w.ring).d <= R + 25), buildings: S0.buildings, surfaces: (S0.landscape || []).filter(l => l.kind === "surface" && l.ring?.length > 2).map(l => ({ name: l.name, surface: l.surface, ring: l.ring })) });
+          Object.assign(fit, { asked_drop_m: W, ...fitLine(fallOf(p => groundAt(S0, p), c, Math.min(R, 12)), W, cands, Math.min(R, 12)), candidates: cands }); }
+        return { place: said, center: pt(c), radius_m: R, fall: fit, ways: wayList, ground_laid: surf, buildings: bl, terrain_around: around, trees_within_radius: trees,
+          note: `${fit.line} ${W ? fit.answer + " " : ""}Kote i meter over havet, fra terrengmodellen. Høydeforskjell mellom to punkter: forskjellen på koten deres. Veier og stier er kartlagt (OpenStreetMap/NVDB); plen finnes ikke som egen flate i grunnkartet.` };
       } },
     /* U3671: a place Anton cannot know is asked for as a point: the page shows the plan, frames the hint and waits for a tap (app.js askPoint) */
     { name: "ask_point", title: "Be om et punkt på planen", write: true, schema: S({
