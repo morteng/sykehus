@@ -276,8 +276,8 @@ addEventListener("keydown", e => {
 /* Backspace or Delete on the pick, Cmd/Ctrl-Z, and the redo (U3649, keys.js): the same acts as the card's «Riv» and the toast's «Angre» */
 const keys = createKeys({
   edits: () => draft && !draft.missing && (mine() || ownDraft()) ? draft.edits : null,
-  undo: (n, expect) => busy || !seen(expect) ? undo(n, expect) : tearAtOnce({ ...hiding(), targets: [expect.building], back: true, send: async () => await undo(n, expect) || null }),
-  put: e => busy || !seen(e) ? edit([e], "Fikk ikke gjort igjen", true).then(r => !!r) : tearAtOnce({ ...hiding(), targets: [e.building], send: () => edit([e], "Fikk ikke gjort igjen", true) }).then(r => !!r),
+  undo: (n, expect) => busy || !quickBack(expect) ? undo(n, expect) : tearAtOnce({ ...hiding(), targets: [expect.building], back: true, send: async () => await undo(n, expect) || null }),
+  put: e => busy || !quickBack(e) ? edit([e], "Fikk ikke gjort igjen", true).then(r => !!r) : tearAtOnce({ ...hiding(), targets: [e.building], send: () => edit([e], "Fikk ikke gjort igjen", true) }).then(r => !!r),
   say: text => toast(text), name: describe, riv: () => !!pickActs?.riv(),
 });
 addEventListener("keydown", e => { if (!e.target.closest?.(".g-levels")) keys.key(e); });
@@ -650,7 +650,7 @@ async function edit(mine_, failed, redoing = false) {
 /* the viewer's own lists, as tearAtOnce takes them */
 const hiding = () => ({ gone: () => (site.demolished || []).map(d => d.id), roads: () => (site.roads_removed || []).map(x => x.id), setGone: ids => viewer.setGone(ids), setRoads: ids => streetsOn?.setRemoved(ids) });
 /* a demolish put back or taken out again (Cmd-Z, Shift-Cmd-Z), shown at once where the viewer has the thing: a building or a road */
-const seen = e => e?.kind === "demolish" && typeof e.building === "string" && !GROUND_ID.test(e.building);
+const quickBack = e => e?.kind === "demolish" && typeof e.building === "string" && !GROUND_ID.test(e.building);
 async function riv(targets, name, ground = false) {   // ground: a surface or a path, taken away (U3569)
   /* a target is an id, or { building, name } for a road section (U3543), whose name the server cannot look up */
   if (busy) return;
