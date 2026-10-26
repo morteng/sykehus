@@ -16,7 +16,6 @@ import { follow } from "./kit/follow.js";
 import { toolLine } from "./toolline.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
-const NEEDS_LOGIN = "Logg inn for å bygge og snakke med Anton";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -41,17 +40,18 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
   const chip = $("me");
   const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
   if (!me.person) {
-    /* not signed in (U3662): no pill, no chips, only «Logg inn» in the bar, with the code in a dialog; the Bygg and Anton tabs are greyed with the reason (U3677,
-       Morten 2026-10-26 17:27Z), Gjengi is not there; a tap does not switch, and a page that opens on one of them falls back to Forslag */
-    unmark(); document.body.classList.add("anon"); $("tab-photo").hidden = true;
-    for (const [id, name] of [["tab-selected", "Bygg"], ["tab-chat", "Anton"]]) { const b = $(id); b.disabled = true; b.title = NEEDS_LOGIN; b.setAttribute("aria-label", `${name}. ${NEEDS_LOGIN}`); }
+    /* not signed in (U3662): no pill, no chips, only «Logg inn» in the bar, with the code in a dialog. The Bygg, Anton and Gjengi tabs are not there at all (Morten
+       2026-10-26 21:16Z «should not see greyed out anton, bygg or gjengi tabs … keep it as simple and anonymous»; this replaces the greyed tabs of U3677); a page
+       that opens on one of them falls back to Forslag, the one tab left */
+    unmark(); document.body.classList.add("anon");
+    for (const id of ["tab-photo", "tab-selected", "tab-chat"]) $(id).hidden = true;
+    $("dock").style.setProperty("--tabs", "1");
     panel.show("changes", { quiet: true });
     if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; import("./login.js").then(m => m.startLogin({ button: $("meBtn") })).catch(e => console.error("login:", e)); }
     meReady();   // the bar has its «Logg inn»: the tour can count its steps (U3669)
     return;
   }
   document.body.classList.remove("anon");
-  for (const id of ["tab-selected", "tab-chat"]) { const b = $(id); b.disabled = false; b.removeAttribute("title"); b.removeAttribute("aria-label"); }
   $("tab-photo").hidden = false;   // Gjengi costs money: only for a signed-in person (U3663)
   chip.innerHTML = `<button type="button" class="me" id="meBtn" aria-haspopup="true" aria-expanded="false" title="Logget inn som ${esc(me.person)}"><i></i>${esc(me.person)}</button>`;
   chip.hidden = false; chip.style.position = "relative";

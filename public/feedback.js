@@ -31,7 +31,7 @@ export function startFeedback({ button, version, toast, page = () => ({}) }) {
     below.hidden = !j.wishes.length;
     ul.innerHTML = j.wishes.map(w => `<li>${esc(w.text)}<br><small>${j.admin ? esc(w.person) + " · " : ""}${new Date(w.at).toLocaleDateString("nb-NO")}</small>
       ${j.admin ? `<select data-id="${esc(w.id)}" aria-label="Status">${Object.entries(ST).map(([k, t]) => `<option value="${k}"${k === w.status ? " selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="st ${esc(w.status)}">${ST[w.status] || esc(w.status)}</span>`}
-      ${w.note ? `<br><small>Morten: ${esc(w.note)}</small>` : ""}</li>`).join("");
+      ${w.note ? `<br><small>Svar: ${esc(w.note)}</small>` : ""}</li>`).join("");
     for (const s of ul.querySelectorAll("select")) s.onchange = () => fetch(`api/onsker/${encodeURIComponent(s.dataset.id)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: s.value }) });
   }
   return feedback({
