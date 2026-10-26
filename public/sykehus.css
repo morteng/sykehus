@@ -469,7 +469,7 @@ body.tegner .g-chat { visibility: hidden; }
 .fb-sent h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
 
 /* U3662: signed out, nothing of Anton: no tab, no panel, no pill, no «Spør Anton» on a card (early.js and anton.js set .anon) */
-body.anon #tab-chat, body.anon #p-chat, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat { display: none !important; }
+body.anon #tab-chat, body.anon #p-chat, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat, body.anon #mfb { display: none !important; }   /* #mfb: /api/feedback needs a sign-in */
 body.anon .dock[data-tabs] { --tabs: 2; }
 .login-form { display: grid; gap: var(--sp-3); }
 .login-sub { margin: 0; font-size: var(--fs-md); }
