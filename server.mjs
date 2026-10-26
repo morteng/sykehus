@@ -24,6 +24,8 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { extname, normalize, join } from "node:path";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
 import { createMcp } from "./mcp.mjs";
 import { createVersions } from "./versions.mjs";
 import { createAuth } from "./auth.mjs";
@@ -39,6 +41,8 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; ch
 const SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" };
 /* the chat app runs in the host's sandboxed frame, on another origin: its module script, the viewer's imports, the
    data and the textures are fetched cross-origin. All of it is public and read-only, so any origin may read it. */
+const zipOf = promisify(gzip), zipped = new Map();   // the bytes gzipped once a file and size
+const gzipped = async (body, key) => { const k = key + body.length; if (!zipped.has(k)) zipped.set(k, await zipOf(body)); return zipped.get(k); };
 const OPEN = { "access-control-allow-origin": "*" };
 const RELEASE = "https://github.com/morteng/sykehus/releases/download/dokumenter-2026-10-24/";
 
@@ -121,7 +125,8 @@ createServer(async (req, res) => {
     const ICON = { "/favicon.ico": "/icons/icon-192.png", "/apple-touch-icon.png": "/icons/apple-touch-icon-180.png", "/apple-touch-icon-precomposed.png": "/icons/apple-touch-icon-180.png" }[path];
     const file = normalize(join(PUB, ICON || (path.endsWith("/") ? path + "index.html" : path)));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
-    const body = await readFile(file);
-    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache" }).end(req.method === "HEAD" ? undefined : body);
+    let body = await readFile(file); const zip = /\bgzip\b/.test(req.headers["accept-encoding"] || "") && [".glb", ".js", ".json", ".css", ".html"].includes(extname(file)) && body.length > 1024;
+    if (zip) body = await gzipped(body, file);   // the model (U3656), the data and the scripts, whoever sits in front of this
+    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache", ...(zip ? { "content-encoding": "gzip", vary: "Accept-Encoding" } : {}) }).end(req.method === "HEAD" ? undefined : body);
   } catch { if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Ikke funnet"); }
 }).listen(PORT, () => console.log(`Sykehustomta on http://localhost:${PORT}${docs ? "" : " (no document store: set DOCS)"}`));

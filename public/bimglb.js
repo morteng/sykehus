@@ -1,6 +1,6 @@
 /* The wings the page draws from their BIM model (U3656): wing id -> the GLB tools/glb.py wrote from the same model as the IFC
    (tools/ifc.py ENVELOPE names the same wings; tests/bimglb.test.mjs holds the two together). And the small reader of that GLB:
-   per material, float32 positions (x east, y up as kote, z -north) and uint32 indices. Not a general glTF loader. */
+   per material, float32 positions (x east, y up as kote, z -north; stored as int16 on one box) and 16- or 32-bit indices. Not a general glTF loader. */
 export const BIM = { sentralblokka: "data/hoyblokka.glb" };
 
 export function readGlb(buf) {
@@ -13,6 +13,14 @@ export function readGlb(buf) {
     o = s + n;
   }
   if (!json || !bin) throw new Error("a GLB without JSON or BIN");
-  const take = (i, Type) => { const a = json.accessors[i], v = json.bufferViews[a.bufferView], c = a.type === "VEC3" ? 3 : 1; return new Type(bin, (v.byteOffset || 0) + (a.byteOffset || 0), a.count * c); };
-  return json.meshes.flatMap(m => m.primitives).map(p => ({ material: json.materials[p.material]?.name, positions: take(p.attributes.POSITION, Float32Array), indices: take(p.indices, Uint32Array) }));
+  const node = json.nodes[0], S = node.scale || [1, 1, 1], Tr = node.translation || [0, 0, 0];
+  const view = i => { const a = json.accessors[i], v = json.bufferViews[a.bufferView]; return { a, v, at: (v.byteOffset || 0) + (a.byteOffset || 0) }; };
+  const positions = i => {   // int16 x3 in 8-byte vertices, put back by the node's scale and translation
+    const { a, v, at } = view(i), out = new Float32Array(a.count * 3), d = new DataView(bin), stride = v.byteStride || 6;
+    for (let k = 0; k < a.count; k++) for (let c = 0; c < 3; c++) out[k * 3 + c] = d.getInt16(at + k * stride + c * 2, true) * S[c] + Tr[c];
+    return out;
+  };
+  const indices = i => { const { a, at } = view(i); return a.componentType === 5125 ? new Uint32Array(bin, at, a.count) : new Uint16Array(bin, at, a.count); };
+  const mesh = json.meshes[0], prims = mesh.primitives.map(p => ({ material: json.materials[p.material]?.name, positions: positions(p.attributes.POSITION), indices: indices(p.indices) }));
+  return Object.assign(prims, { windows: mesh.extras?.windows ?? null });
 }

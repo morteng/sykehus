@@ -23,7 +23,7 @@ import { bimPlace } from "./design.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
-const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297", pane: "#56737b" };
+const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
 
 export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality(), walkKeys = () => true }) {
   const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
@@ -259,13 +259,30 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* U3656: a wing the BIM model has (public/bimglb.js, tools/glb.py from the IFC's own geometry) is drawn from that: its walls with
      the window openings cut in them, the floor slabs, the roof, the windows as glass, one mesh a material. The group stays the
      building's, so picking, the storey cut, «Riv» and the section all find it as before; the model replaces the outline. */
+  /* the picture of a material on a model with no UVs: each face from its own plane, in metres, so it is at true scale (a wall
+     along its own length and up, a slab by east and north) */
+  function faceUV(g, tile) {
+    const p = g.attributes.position, uv = new Float32Array(p.count * 2), [tu, tv] = tile || [1, 1], A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), N = new THREE.Vector3();
+    for (let i = 0; i < p.count; i += 3) {
+      A.fromBufferAttribute(p, i); B.fromBufferAttribute(p, i + 1); C.fromBufferAttribute(p, i + 2); N.subVectors(C, B).cross(A.clone().sub(B)).normalize();
+      for (let k = 0; k < 3; k++) {
+        const x = p.getX(i + k), y = p.getY(i + k), z = p.getZ(i + k), flat = Math.abs(N.y) > 0.7;
+        uv[(i + k) * 2] = (flat ? x : x * -N.z + z * N.x) / tu; uv[(i + k) * 2 + 1] = (flat ? z : y) / tv;
+      }
+    }
+    g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  }
   function loadBim(b, grp) {
-    fetch(BIM[b.wing]).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))).then(buf => {
-      const old = [...grp.children], parts = readGlb(buf);
+    fetch(BIM[b.wing]).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))).then(async buf => {
+      const old = [...grp.children], parts = readGlb(buf), cutPlane = [cuts.get(b.id)];
+      const pic = Q.pbr && MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, clippingPlanes: cutPlane } }).catch(() => null) : null;
       for (const p of parts) {
-        const g = new THREE.BufferGeometry(), M = MATERIALS[p.material] || MATERIALS.concrete;
-        g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1)); g.computeBoundingSphere();
-        const glass = p.material === "glass", m = mat(glass ? C.pane : M.colour, { ...M.look, ...(glass ? { opacity: 0.7 } : {}), flatShading: true, clippingPlanes: [cuts.get(b.id)] });   // flat: the file carries no normals, and every face is plane
+        const glass = p.material === "glass", M = MATERIALS[p.material] || MATERIALS.concrete;
+        let g = new THREE.BufferGeometry(), m;
+        g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1));
+        if (!glass && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; }   // concrete as the site's other buildings wear it: its picture and relief
+        else m = mat(M.colour, { ...M.look, flatShading: true, ...(glass && envMap ? { envMap, envMapIntensity: 1 } : {}), clippingPlanes: cutPlane });   // flat: the file carries no normals, and every face is plane
+        g.computeBoundingSphere();
         const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
         if (selected === b.id) m.emissive.set("#6b5200");
       }
