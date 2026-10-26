@@ -548,3 +548,21 @@ body.m .pf-box { width: 104px; height: 104px; top: 8px; left: 8px; bottom: auto;
 .pf-shutter small { max-width: 220px; white-space: normal; text-align: left; }
 .pf-x { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); pointer-events: auto; font: inherit; font-size: var(--fs-sm); padding: 5px 14px; min-height: 32px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; box-shadow: var(--shadow-sm); cursor: pointer; }
 body.m .pf-x { top: 8px; left: 50%; }
+
+/* «Nytt forslag» (U3667): the dialog over the kit's modal */
+.np { display: grid; gap: var(--sp-2); padding: var(--sp-3); overflow: auto; }
+.np-l { font-size: var(--fs-sm); color: var(--muted); margin-top: var(--sp-2); }
+.np input, .np select, .np textarea { width: 100%; box-sizing: border-box; }
+.np-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--sp-2); }
+.np-card { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); min-height: var(--tap); padding: var(--sp-2); border-radius: var(--radius-lg); text-align: center; }
+.np-card svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.np-card[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
+.np-s { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
+.np-err { margin: 0; color: var(--danger, #b3261e); }
+.np-acts { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-2); }
+.bygg-acts + #draftRow { margin-top: var(--sp-2); }
+.np-panel .g-modal-body { overflow: auto; min-height: 0; }
+.np { overflow: visible; }
+.np-card { font-size: var(--fs-sm); }
+.np-card { white-space: normal; min-width: 0; line-height: 1.2; justify-content: flex-start; padding: var(--sp-2) var(--sp-1); }
+.np-acts { position: sticky; bottom: 0; background: var(--panel); padding-top: var(--sp-2); }

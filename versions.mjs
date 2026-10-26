@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, exists
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 
-export const MAX_PER_OWNER = 50, MAX_EDITS = 300, TRASH_DAYS = 30;
+export const MAX_PER_OWNER = 50, MAX_EDITS = 300, TRASH_DAYS = 30, EMPTY_DAYS = 7;
 const ID = /^v[A-Za-z0-9_-]{8}$/;
 export const SHARING = ["privat", "lenke", "offentlig"];
 const newKey = () => randomBytes(9).toString("base64url");
@@ -34,7 +34,9 @@ export function createVersions(dir = process.env.SYKEHUS_VERSIONS_DIR, clock = (
   const write = v => { const p = join(dir, v.id + ".json"), t = p + ".tmp"; writeFileSync(t, JSON.stringify(v)); renameSync(t, p); };
   const live = v => !v.deleted, trashed = v => v.deleted && clock() - Date.parse(v.deleted) < TRASH_DAYS * 864e5;
   /* a deleted version past its 30 days: the file and the record go */
-  const sweep = () => { for (const v of [...all.values()]) if (v.deleted && !trashed(v)) { try { unlinkSync(join(dir, v.id + ".json")); } catch (e) { if (e.code !== "ENOENT") console.error("versions: purge", v.id, e.message); } all.delete(v.id); } };
+  const sweep = () => { sweepEmpty(); for (const v of [...all.values()]) if (v.deleted && !trashed(v)) { try { unlinkSync(join(dir, v.id + ".json")); } catch (e) { if (e.code !== "ENOENT") console.error("versions: purge", v.id, e.message); } all.delete(v.id); } };
+  /* an empty version (no changes) left for EMPTY_DAYS goes to the trash like a deleted one (U3667: «Nytt forslag» makes one at once) */
+  const sweepEmpty = () => { const at = clock(); for (const v of all.values()) if (live(v) && !v.edits.length && at - Date.parse(v.updated) > EMPTY_DAYS * 864e5) { v.deleted = new Date(at).toISOString(); delete v.work; write(v); } };
   sweep();
   return {
     get: id => { if (!ID.test(String(id))) return null; const v = all.get(String(id)); return v && live(v) ? v : null; },

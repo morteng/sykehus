@@ -437,13 +437,20 @@ function drawDraft() {
 }
 /* a new copy or proposal: its title ready to be typed over, in the card */
 const nameIt = () => { const t = $("drTitle"); if (t && t.offsetParent) { t.focus(); t.select(); } };
-/* «Nytt forslag»: signed in, a new empty version from the before, worked on from now; signed out, the draft kept here
-   is let go, and the next change starts a new one */
-async function fresh() {
-  if (me.person) { const j = await change({ fresh: true }); if (j.error) return toast(`Fikk ikke laget et nytt forslag: ${j.error}`); await show(j); nameIt(); return toast(`Nytt forslag fra før: «${j.title}». Gi det et navn, eller begynn: endringene går inn i det.`); }
-  try { localStorage.removeItem(KEPT); } catch { }
-  location.href = "./?for";
+/* «Nytt forslag» (U3667): the dialog (nytt-forslag.js). Signed in, it makes the version (a new empty one from the before, or a copy of
+   one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
+let nyttForslag = null;
+function fresh() {
+  nyttForslag ||= import("./nytt-forslag.js").then(({ startNew }) => startNew({
+    signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et forslag."); $("meBtn")?.click(); },
+    mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
+    money: () => fetch("api/gjengi").then(r => r.ok ? r.json() : null).catch(() => null),
+    create: async o => { const j = await change({ fresh: !o.copy, ...o }); if (j.error) return `Fikk ikke laget et nytt forslag: ${j.error}`; await show(j); return null; },
+    say: text => { $("tab-chat")?.click(); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text } })); },
+  }));
+  nyttForslag.then(n => n.open());
 }
+$("mnp").onclick = fresh;
 /* the name of a building in a change, plainly: a wing's name, a new building's, else what it is; never its id */
 const KIND = { hospital: "sykehusbygg", apartments: "boligblokk", house: "bolig", semidetached_house: "tomannsbolig", garage: "garasje", garages: "garasjer", civic: "offentlig bygg", kindergarten: "barnehage", university: "skolebygg", office: "kontorbygg", warehouse: "lager", shed: "bod", service: "teknisk bygg", roof: "tak" };
 function nameOf(id) {
@@ -1025,7 +1032,7 @@ import("./tour.js").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261027d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261027e").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
 import("./gjengi.js?v=20261027o").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
