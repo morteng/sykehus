@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap && r
  && useradd -u 1000 -m worker && mkdir /jobs && chown worker /jobs
 COPY service.py /srv/worker/
 COPY steps /srv/worker/steps
+COPY selftest.py /srv/worker/
 USER worker
 ENV WORKER_JOBS=/jobs PORT=8070
 EXPOSE 8070

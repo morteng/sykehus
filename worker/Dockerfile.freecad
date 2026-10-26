@@ -1,0 +1,27 @@
+# The worker with FreeCAD (U3531 for Fab, U3558 / U3574): the same service, steps and sandbox as worker/Dockerfile,
+# on FreeCAD (Part, Import for STEP, TechDraw, Spreadsheet, the BIM workbench) and IfcOpenShell, headless. The bake-off
+# image (u3570-bakeoff tools/freecad-worker/Dockerfile) with bubblewrap and the service.
+#   docker build -t sykehus-worker-freecad -f worker/Dockerfile.freecad worker/
+FROM mambaorg/micromamba:1.5.10
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap util-linux && rm -rf /var/lib/apt/lists/*
+RUN micromamba install -y -n base -c conda-forge freecad ifcopenshell lark numpy matplotlib \
+ && micromamba clean -a -y \
+ && cd /opt/conda && rm -rf include share/doc share/man share/gtk-doc share/info conda-meta/*.json.bak pkgs \
+ && find . -name "*.a" -delete && find . -name "__pycache__" -prune -exec rm -rf {} + \
+ && rm -rf Mod/Fem Mod/CAM Mod/Robot Mod/OpenSCAD Mod/Inspection Mod/Test Mod/Help lib/python*/site-packages/*/tests \
+ && du -sh /opt/conda
+ENV PATH=/opt/conda/bin:$PATH QT_QPA_PLATFORM=offscreen HOME=/tmp MPLCONFIGDIR=/tmp
+# `import FreeCAD` from plain python (and so under -I in a job): FreeCAD.so sits in the prefix's lib
+RUN python -c "import FreeCAD" 2>/dev/null \
+ || echo /opt/conda/lib > "$(python -c 'import site; print(site.getsitepackages()[0])')/freecad.pth"
+RUN python -I -c "import FreeCAD, Part, Import, Spreadsheet, TechDraw, ifcopenshell, ifcopenshell.api, ifcopenshell.geom; print(FreeCAD.Version()[:3], ifcopenshell.version)" \
+ && useradd -u 1001 -m worker && mkdir /jobs && chown worker /jobs
+COPY service.py /srv/worker/
+COPY steps /srv/worker/steps
+COPY selftest.py /srv/worker/
+ENTRYPOINT []
+USER worker
+ENV WORKER_JOBS=/jobs PORT=8070
+EXPOSE 8070
+CMD ["python", "-I", "/srv/worker/service.py"]

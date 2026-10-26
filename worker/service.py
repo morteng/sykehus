@@ -2,20 +2,27 @@
 what it made. One container on the stack's internal network; shared by sykehus (U3570, IfcOpenShell scripts) and Fab
 (U3558, FreeCAD scripts, in the FreeCAD image). Python's standard library only, so it runs in either image.
 
-  POST /jobs[?wait=S]   {script, params?, files?: {name: base64}, then?: ["mesh", "glb"], caps?: {s, mem_mb}}
+  POST /blobs           the bytes of a file (a STEP, a KiCad part, an image) → {sha256, bytes}; kept a week
+  GET  /blobs/<sha256>  the bytes
+  POST /jobs[?wait=S]   {script, params?, inputs?: {name: sha256}, files?: {name: base64}, then?: ["mesh", "glb",
+                        "check"], expect?: {...}, caps?: {s, mem_mb}}
                         → 202 {id} or, with wait, the job when it is done (up to S seconds)
-  GET  /jobs/<id>       {id, state: queued|running|done|failed|refused, result, files: {name: url}, errors: [{code,
-                        line, message}], log, seconds}
-  GET  /jobs/<id>/files/<name>   the bytes
-  GET  /health          {ok, engine, versions, queue}
+  GET  /jobs/<id>       {id, state: queued|running|done|failed|refused, result, outputs: [{name, sha256, bytes, url}],
+                        files: {name: url}, check, errors: [{code, line, message}], log, seconds}
+  GET  /jobs/<id>/files/<name>   the bytes (also at /blobs/<sha256>, as long as the blob is kept)
+  GET  /health          {ok, engine, steps, versions, queue}
 
 A job: script.py and params.json (and the files) in an empty folder; `python script.py` there under bubblewrap
 (--unshare-all: no network; the image read-only; only the job folder writable; no environment; rlimits on CPU time,
 memory, processes and file size; a wall clock). Its result is the last line of its output that is a JSON object.
 then: built-in steps of this image on what it made (trusted code, run the same way): mesh writes mesh.json from the
-IFC (triangles by class, for a viewer), glb a glTF of it. Errors carry a stable code and English words, for an app to
+IFC (triangles by class, for a viewer), glb a glTF of it, check a report on every file it made (check.json, and the
+job's check): solids, valid, closed, volume, box, the solids that overlap (STEP, BREP, FCStd with FreeCAD; STL; IFC),
+and each of expect's numbers against what was measured, so an app knows without opening the files whether the part
+is what was asked. A job whose check fails is still done: check.ok is false and check.failed says which. Errors carry a stable code and English words, for an app to
 put in its own language: script_error (with line), no_output, time_limit, memory_limit, network_refused,
-file_refused, too_big, bad_request; sandbox_unavailable when bubblewrap cannot make its namespaces here (its words
+file_refused, too_big, bad_request, missing_input (an inputs sha the worker does not have: POST it to /blobs);
+sandbox_unavailable when bubblewrap cannot make its namespaces here (its words
 in /health's sandbox_error).
 """
 import base64
@@ -38,6 +45,9 @@ MAX_BODY = 8 << 20                 # 8 MB in
 MAX_OUT = 64 << 20                 # 64 MB out, all files
 CAPS = {"s": 300, "mem_mb": 4096}
 SLOTS = threading.Semaphore(int(os.environ.get("WORKER_SLOTS", "1")))
+BLOBS = pathlib.Path(os.environ.get("WORKER_BLOBS", str(ROOT / ".blobs")))   # under ROOT: hidden from the jobs (a tmpfs there)
+BLOB_KEEP_S, BLOB_CAP, MAX_BLOB = 7 * 86400, 4 << 30, 64 << 20   # a week, 4 GB in all, 64 MB each
+STEPS = ("mesh", "glb", "check")
 DEV = os.environ.get("WORKER_UNSAFE_DEV") == "1"   # no bubblewrap: only on a developer's machine, never on the box
 jobs, lock = {}, threading.Lock()
 
@@ -70,6 +80,18 @@ def classify(log, code, timed_out):
     return [{"code": "script_error", "line": int(tb[-1]) if tb else None, "message": last[0][:500]}]
 
 
+def put_blob(path_or_bytes):
+    """the bytes kept by their sha256 (the same bytes, the same blob): its sha"""
+    import hashlib
+    b = path_or_bytes if isinstance(path_or_bytes, bytes) else pathlib.Path(path_or_bytes).read_bytes()
+    sha = hashlib.sha256(b).hexdigest(); f = BLOBS / sha
+    if not f.exists():
+        BLOBS.mkdir(parents=True, exist_ok=True); t = BLOBS / f".{sha}.{uuid.uuid4().hex}"; t.write_bytes(b); t.replace(f)
+    else:
+        os.utime(f)
+    return sha, len(b)
+
+
 def run_job(j):
     work = ROOT / j["id"]
     with SLOTS:
@@ -91,6 +113,8 @@ def run_job(j):
             j["errors"] = classify(log, code, late)
             j["state"] = "refused" if j["errors"][0]["code"] in ("network_refused", "file_refused", "time_limit", "memory_limit") else "failed"
         else:
+            if j.get("expect") is not None:
+                (work / ".expect.json").write_text(json.dumps(j["expect"]))
             for step in j.get("then") or []:
                 shutil.copy(HERE / "steps" / f"{step}.py", work / f".step-{step}.py")
                 q = subprocess.run(sandboxed([sys.executable, "-I", f".step-{step}.py"], work, caps), cwd=work, capture_output=True, text=True, timeout=caps["s"] + 30)
@@ -104,6 +128,15 @@ def run_job(j):
                       if f.is_file() and not f.name.startswith(".") and f.name not in ("script.py", "params.json") and f.name not in j["inputs"]}
         if sum((work / n).stat().st_size for n in j["files"]) > MAX_OUT:
             j["state"], j["errors"], j["files"] = "failed", [{"code": "too_big", "message": "What the script made is more than 64 MB."}], {}
+        j["outputs"] = []
+        for n in j["files"]:
+            sha, size = put_blob(work / n)
+            j["outputs"].append({"name": n, "sha256": sha, "bytes": size, "url": f"/blobs/{sha}"})
+        if "check.json" in j["files"] and "check" in (j.get("then") or []):
+            try:
+                j["check"] = json.loads((work / "check.json").read_text())
+            except ValueError:
+                j["check"] = None
         j["seconds"] = round(time.time() - t0, 1)
         j["done"].set()
 
@@ -114,10 +147,16 @@ def sweep():
         with lock:
             for k in [k for k, j in jobs.items() if time.time() - j["t"] > KEEP_S]:
                 shutil.rmtree(ROOT / k, ignore_errors=True); jobs.pop(k, None)
+        # blobs: a week from last use, and the oldest first past the cap
+        fs = sorted((f for f in BLOBS.glob("[0-9a-f]" * 64)), key=lambda f: f.stat().st_mtime) if BLOBS.is_dir() else []
+        total = sum(f.stat().st_size for f in fs)
+        for f in fs:
+            if time.time() - f.stat().st_mtime > BLOB_KEEP_S or total > BLOB_CAP:
+                total -= f.stat().st_size; f.unlink(missing_ok=True)
 
 
 def view(j):
-    return {k: j.get(k) for k in ("id", "state", "result", "files", "errors", "log", "seconds")}
+    return {k: j.get(k) for k in ("id", "state", "result", "outputs", "files", "check", "errors", "log", "seconds")}
 
 
 def versions():
@@ -156,7 +195,11 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/health":
-            return self.send(200 if not SANDBOX_ERR else 503, {"ok": not SANDBOX_ERR, "sandbox": "dev" if DEV else "bwrap", **({"sandbox_error": SANDBOX_ERR} if SANDBOX_ERR else {}), "versions": VERSIONS, "queue": sum(1 for j in jobs.values() if j["state"] in ("queued", "running"))})
+            return self.send(200 if not SANDBOX_ERR else 503, {"ok": not SANDBOX_ERR, "engine": "freecad" if "freecad" in (VERSIONS or {}) else "ifcopenshell", "steps": list(STEPS), "sandbox": "dev" if DEV else "bwrap", **({"sandbox_error": SANDBOX_ERR} if SANDBOX_ERR else {}), "versions": VERSIONS, "queue": sum(1 for j in jobs.values() if j["state"] in ("queued", "running"))})
+        b = re.fullmatch(r"/blobs/([0-9a-f]{64})", path)
+        if b:
+            f = BLOBS / b.group(1)
+            return self.send(200, f.read_bytes(), "application/octet-stream") if f.is_file() else self.send(404, {"errors": [{"code": "missing_input", "message": "No such blob."}]})
         m = re.fullmatch(r"/jobs/([0-9a-f]{32})(?:/files/([A-Za-z0-9._-]{1,80}))?", path)
         j = m and jobs.get(m.group(1))
         if not j:
@@ -170,8 +213,14 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path, _, q = self.path.partition("?")
+        if path == "/blobs":
+            n = int(self.headers.get("content-length") or 0)
+            if n > MAX_BLOB:
+                return self.send(413, {"errors": [{"code": "too_big", "message": "A blob is at most 64 MB."}]})
+            sha, size = put_blob(self.rfile.read(n))
+            return self.send(200, {"sha256": sha, "bytes": size, "url": f"/blobs/{sha}"})
         if path != "/jobs":
-            return self.send(404, {"errors": [{"code": "bad_request", "message": "POST /jobs"}]})
+            return self.send(404, {"errors": [{"code": "bad_request", "message": "POST /jobs or /blobs"}]})
         if SANDBOX_ERR:
             return self.send(503, {"errors": [{"code": "sandbox_unavailable", "message": "The sandbox cannot start here: " + SANDBOX_ERR}]})
         n = int(self.headers.get("content-length") or 0)
@@ -180,9 +229,13 @@ class H(BaseHTTPRequestHandler):
         try:
             a = json.loads(self.rfile.read(n))
             assert isinstance(a.get("script"), str) and a["script"].strip()
-            assert all(s in ("mesh", "glb") for s in a.get("then") or [])
+            assert all(s in STEPS for s in a.get("then") or [])
+            assert all(re.fullmatch(r"[A-Za-z0-9._-]{1,80}", k) and not k.startswith(".") and re.fullmatch(r"[0-9a-f]{64}", str(v)) for k, v in (a.get("inputs") or {}).items())
         except Exception:
-            return self.send(400, {"errors": [{"code": "bad_request", "message": "A job is JSON with a script (text), and then from mesh, glb."}]})
+            return self.send(400, {"errors": [{"code": "bad_request", "message": "A job is JSON with a script (text), inputs as {name: sha256}, and then from " + ", ".join(STEPS) + "."}]})
+        missing = [k for k, v in (a.get("inputs") or {}).items() if not (BLOBS / v).is_file()]
+        if missing:
+            return self.send(400, {"errors": [{"code": "missing_input", "message": "Not here (POST them to /blobs first): " + ", ".join(missing), "names": missing}]})
         jid = uuid.uuid4().hex; work = ROOT / jid; work.mkdir(parents=True)
         (work / "script.py").write_text(a["script"]); (work / "params.json").write_text(json.dumps(a.get("params") or {}))
         inputs = []
@@ -190,8 +243,10 @@ class H(BaseHTTPRequestHandler):
             if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name) or name.startswith("."):
                 continue
             (work / name).write_bytes(base64.b64decode(b64)); inputs.append(name)
+        for name, sha in (a.get("inputs") or {}).items():
+            shutil.copyfile(BLOBS / sha, work / name); os.utime(BLOBS / sha); inputs.append(name)
         os.chmod(work, 0o777)
-        j = {"id": jid, "t": time.time(), "state": "queued", "then": a.get("then"), "caps": a.get("caps"), "inputs": inputs, "done": threading.Event()}
+        j = {"id": jid, "t": time.time(), "state": "queued", "then": a.get("then"), "caps": a.get("caps"), "expect": a.get("expect"), "inputs": inputs, "done": threading.Event()}
         with lock:
             jobs[jid] = j
         threading.Thread(target=run_job, args=(j,), daemon=True).start()
