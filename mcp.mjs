@@ -390,7 +390,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
         /* and the slopes of a new building's pad onto those ways (U3566 d) */
-        const wayRings = ways && ((m.site.landscape || []).some(l => l.kind === "surface") || (m.site.added || []).some(a => a.ground?.reach_m)) ? await ways() : [];
+        const wayRings = ways && ((m.site.landscape || []).some(l => l.kind === "surface") || (m.site.added || []).some(a => a.ground?.reach_m)) ? (await ways()).filter(w => !(m.site.roads_removed || []).some(r => r.id === w.id)) : [];   // a removed road section is no way (U3543)
         const fit = [...fitOf(m.site), ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit(m.site, wayRings) : []), ...padFit(m.site, wayRings)];
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};

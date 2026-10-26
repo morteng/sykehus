@@ -11,7 +11,7 @@ import { siteGrid } from "../public/utm.js";
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url), "utf8")), g = siteGrid(site.origin);
 const way = [[-120, -60], [-120, -100]].map(g.toLngLat);   // a footway, 2 m wide, running north–south at east -120
 const stub = createServer((req, res) => {
-  const body = req.url.startsWith("/api/streets") ? { type: "FeatureCollection", features: [{ type: "Feature", properties: { highway: "footway" }, geometry: { type: "LineString", coordinates: way } }] } : { type: "FeatureCollection", features: [] };
+  const body = req.url.startsWith("/api/streets") ? { type: "FeatureCollection", features: [{ type: "Feature", properties: { osm: 777, highway: "footway" }, geometry: { type: "LineString", coordinates: way } }] } : { type: "FeatureCollection", features: [] };
   res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
 }).listen(0);
 const SP = stub.address().port, PORT = 19000 + Math.floor(Math.random() * 800);
@@ -26,4 +26,11 @@ test("try_change: a pool over the footway says it covers it, by m²; one beside 
   const o = f.overlaps.find(x => /^gangvei, 2 m bred \(OSM\)$/.test(x.with)); assert.ok(o && Math.abs(o.m2 - 20) <= 3, JSON.stringify(f.overlaps));
   const beside = await call("try_change", { edits: [{ kind: "surface", ring: [[-150, -85], [-135, -85], [-135, -75], [-150, -75]], surface: "grass", name: "Plen" }], include_screenshot: false });
   assert.deepEqual(beside.fit.find(x => x.name === "Plen").overlaps.filter(x => /OSM/.test(x.with)), []);
+});
+
+test("U3543: a footway the draft has taken away is no longer a way the pool covers", async () => {
+  const pool = { kind: "surface", ring: [[-130, -85], [-110, -85], [-110, -75], [-130, -75]], surface: "water", name: "Basseng" };
+  const r = await call("try_change", { edits: [{ kind: "demolish", building: "vei-osm-777", name: "gangvei" }, pool], include_screenshot: false });
+  assert.deepEqual(r.after.roads_removed, ["gangvei"]);
+  assert.deepEqual(r.fit.find(x => x.name === "Basseng").overlaps.filter(x => /OSM/.test(x.with)), [], "the removed way is not counted");
 });

@@ -5,7 +5,7 @@
 import { siteBox, siteGrid } from "./public/utm.js";
 import { streetsFrom } from "./public/renderkit/streets.js";
 import { pathRing } from "./public/renderkit/paths2d.js";
-import { wayKind } from "./public/roads.js";
+import { wayKind, tagStreets } from "./public/roads.js";
 
 const DAY = 864e5;
 export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKEHUS_STREETS_URL || "https://hagekart.gulden.no", fetchImpl = fetch } = {}) {
@@ -25,10 +25,12 @@ export function createStreets({ site, SECURITY = {}, upstream = process.env.SYKE
      ms for them (a change is not held up by hagekart); the last made are kept */
   const grid = siteGrid(site.origin), toUtm = q => grid.fromLngLat(q);
   let ways = null, waysOf = null;
+  /* each with its id (roads.js tagStreets), so a version's removed road sections are left out (U3543) */
   function wayRings(osm, nv) {
-    return streetsFrom(osm, nv, toUtm).filter(p => ["path", "road", "parking"].includes(p.kind)).map(p => {
+    const sts = streetsFrom(osm, nv, toUtm); tagStreets(osm, nv, sts, toUtm);
+    return sts.filter(p => ["path", "road", "parking"].includes(p.kind)).map(p => {
       const ring = p.ring ? p.ring.map(toUtm) : pathRing(p.pts.map(toUtm), p.width || 2);
-      return { name: `${wayKind(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
+      return { id: p.id || null, name: `${wayKind(p)}${p.ring ? "" : `, ${String(Math.round((p.width || 2) * 10) / 10).replace(".", ",")} m bred`} (${p.src === "nvdb" ? "NVDB" : "OSM"})`, ring };
     }).filter(w => w.ring.length > 2);
   }
   /* U3527: the named streets and places around (OpenStreetMap's name), each as its points on the site, roads marked:
