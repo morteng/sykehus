@@ -33,7 +33,7 @@ Data, built by the tools (Python runs with `-I`; the drawings are downloaded fil
   the free space is shared out between the stamps nearby (`poly_how: "delt"`), kept only where the stamps bear it out.
   Run after trace-import.mjs.
 - `python -I tools/ifc.py public/data/site.json public/data/floors.json public/data/sykehus.ifc [wing id ...]`: the
-  buildings as IFC4 (BIM) for "Last ned som BIM-modell": the high block (Sentralblokka) as a model, every other wing as simple blocks with Status DEMOLISH (U3637); for the high block: a building, its storeys, outer walls with the
+  buildings as IFC4 (BIM) for "Last ned som BIM-modell": the high block (Sentralblokka, `ENVELOPE`) with windows from the bay rule on its real storey height (U3637); a building its storeys, outer walls with the
   facades' windows and doors as real openings, slabs, roofs, the drawn plans' walls and rooms, sources on each element; quantities (Qto_*), NS 3451 parts,
   Status EXISTING and the wings' assumed materials (site.json `materials`) for schedules and takeoffs.
   Run last. Needs IfcOpenShell (0.8 or newer) and node (it reads public/bays.js and renderkit/materials.js); FreeCAD 1.1 opens the file.
