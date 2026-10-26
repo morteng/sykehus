@@ -119,6 +119,7 @@ export async function importFile(bytes, meta = {}) {
   const mesh = JSON.parse((await get("mesh.json")).toString("utf8")), info = j.files["import.json"] ? JSON.parse((await get("import.json")).toString("utf8")) : null;
   const tmp = join(DIR, `.${sha}.${process.pid}`); mkdirSync(tmp, { recursive: true });
   const src = { filename: String(meta.filename || `modell.${ext}`).replace(/[\p{C}\/\\"<>]/gu, "_").slice(0, 120), bytes: bytes.length, format: fmt, by: meta.by ?? null, at: new Date().toISOString(),
+    ...(meta.fetched_from ? { fetched_from: String(meta.fetched_from).slice(0, 300) } : {}), ...(meta.licence ? { licence: String(meta.licence).slice(0, 120) } : {}),
     ...(info ? { unit: info.unit, unit_from: info.unit_from, up: info.up, parts: info.parts, ...(info.segments ? { segments: info.segments, layers: info.names } : {}) } : {}) };
   writeFileSync(join(tmp, "mesh.json"), JSON.stringify(mesh)); writeFileSync(join(tmp, "source.json"), JSON.stringify(src));
   writeFileSync(join(tmp, "model.ifc"), fmt === "ifc" ? bytes : await get("model.ifc"));
@@ -140,7 +141,8 @@ function importBim(e) {
   const file = String(e.file ?? "");
   if (!/^[0-9a-f]{64}$/.test(file)) throw toolErr("import trenger file: sha-en /api/import ga for fila");
   const m = meshOf(file); if (!m) throw toolErr("Fila finnes ikke her (lenger): last den opp igjen.");
-  const src = sourceOf(file), source = said(e.source, 300, "Kilden"), licence = said(e.licence, 120, "Lisensen");
+  /* what was said with the edit, else what was kept when it was fetched (fetch_model: the URL, the library's licence) */
+  const src = sourceOf(file), kept = rawSource(file), source = said(e.source, 300, "Kilden") ?? kept.fetched_from, licence = said(e.licence, 120, "Lisensen") ?? kept.licence;
   if (!licence) throw toolErr("Si lisensen fila har (fra produsentens side), eller «ukjent»");
   return { file, sha: file, script: null, params: {}, box: m.box, classes: m.classes, filename: src.filename, ...(src.format && src.format !== "ifc" ? { format: src.format } : {}), ...(source ? { source } : {}), licence };
 }

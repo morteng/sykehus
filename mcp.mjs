@@ -14,7 +14,8 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { fitOf, surfaceFit, groundText } from "./public/design.js";
-import { prepare, slim, withMeshes, handleBim } from "./bim.mjs";   // U3570: constructions a script builds, in the worker
+import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
+import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
@@ -50,6 +51,7 @@ const round1 = v => Math.round(v * 10) / 10;
 export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
+  const libs = libraries();
   const counts = new Map();
   const bump = (key, max, windowMs) => {
     const now = Date.now(), h = counts.get(key);
@@ -387,6 +389,19 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
         try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link }); return { sent: true, wish: w.id, status: w.status, receipt: "Sendt. Morten ser det.", see_them: `${originOf(req)}/ (Ønsker)` }; }
         catch (e) { throw toolErr(e.message); } } },
+    { name: "find_models", title: "Finn modeller i åpne bibliotek", ro: true, schema: S({ query: { type: "string", description: "What to look for, in English mostly (greenhouse, window, bench, tree, chair): the libraries are in English" } }, ["query"]),
+      description: "Searches open libraries for a model to bring in (U3571): Poly Haven (furniture, props, plants; CC0; glTF) and the FreeCAD parts library (architectural and other parts; CC-BY-3.0, which asks that its author be named; STEP). Each hit has its licence: say it to the person before you use one. link_only lists the libraries that need an account or forbid a program downloading (BIMobject, NBS, bimstore, 3D Warehouse, Sketchfab …): give the person those links to look and download themselves (then «Hent fil» on the page), never fetch from them. Needs the login.",
+      run: async (a, req) => { if (!userOf(req)) throw toolErr("Å lete i bibliotekene krever innlogging."); return libs.find(a.query); } },
+    { name: "fetch_model", title: "Hent en modell", write: true, schema: S({ url: { type: "string", description: "A url from find_models (polyhaven:<id>, or a raw.githubusercontent.com / github.com release / Wikimedia address)" },
+      licence: { type: "string", description: "Its licence as its page states it; the libraries' own are filled in" }, unit: { type: "string", enum: ["m", "cm", "mm", "in", "ft"], description: "Only for OBJ or STL, or a DXF that says none" } }, ["url"]),
+      description: "Fetches a model and reads it in as an upload is (IFC, STEP, glTF, OBJ, STL, DXF, DWG; at most 100 MB, 60 s), only from the open sources find_models gives: any other address is refused with a link for the person to open themselves. Say its licence before you place it. Then place it with try_change kind import (file, from, to; licence and source are kept from here). Needs the login.",
+      run: async (a, req) => {
+        const who = userOf(req); if (!who) throw toolErr("Å hente en modell krever innlogging.");
+        let got; try { got = await libs.get(String(a.url || "")); }
+        catch (e) { if (e.link) throw toolErr(`${e.message} Gi personen lenken i stedet: ${e.link.name} (${e.link.why}), ${e.link.search("")}`); throw e; }
+        const licence = got.licence || (a.licence ? String(a.licence).slice(0, 120) : ""); if (!licence) throw toolErr("Si lisensen fra kildens side (licence), eller «ukjent».");
+        const r = await importFile(got.bytes, { filename: got.filename, unit: a.unit, by: who, fetched_from: got.url, licence });
+        return { ...r, licence, source: got.url, next: "Say the licence to the person, then place it: try_change with {kind: 'import', file, from, to}." }; } },
     { name: "rename_version", tgt: "version", title: "Gi versjonen nytt navn", write: true, schema: S({ target: TARGET, version: OLD, title: { type: "string" } }, ["title"]),
       description: "Renames one of the person's own versions.",
       run: async (a, req) => { const v = ownVersion(a.version, req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn)."); v.title = t; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },

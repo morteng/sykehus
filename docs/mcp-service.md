@@ -75,7 +75,9 @@ on the internal network, `http://gulden-worker:8070`; it is its own repo, github
 AppArmor and seccomp profiles and selftest). STEP is read by the FreeCAD image: `SYKEHUS_WORKER_FREECAD` or
 `GULDEN_WORKER_FREECAD` (`http://gulden-worker-freecad:8070`). Without them a construction or a file is refused in plain
 words and the rest works. Their files are kept in `SYKEHUS_VERSIONS_DIR/bim/`. `/api/import` takes up to 100 MB: the
-edge's body limit for that path must allow it.
+edge's body limit for that path must allow it. Anton's `find_models` and `fetch_model` (U3571 S4, signed in only) fetch
+from the hosts in `fetchimport.mjs` FETCH_HOSTS and nowhere else (https, no private addresses, 100 MB, 60 s): the
+service needs egress to those.
 
 The chat app runs in the chat host's sandboxed frame on the host's own origin, and loads `mcp-app.js`, the viewer,
 `data/*` and the textures from this site as a module script: those must carry `Access-Control-Allow-Origin: *`
