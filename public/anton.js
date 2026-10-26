@@ -32,6 +32,8 @@ const json = (url, body) => fetch(url, { method: "POST", headers: { "content-typ
 export async function start({ viewer, version, refresh, showView, panel, valg }) {
   /* back from a redraw: the camera where it was */
   try { const p = JSON.parse(sessionStorage.getItem(POSE) || "null"); sessionStorage.removeItem(POSE); if (p) viewer.pose(p); } catch { }
+  /* the tour counts the steps whose part is on the page when it opens: it waits for this (U3669: «1 av 4» at first, «1 av 5» from «?», for the «Logg inn» button came after) */
+  const meReady = () => { window.sykehusMeReady = true; dispatchEvent(new Event("sykehus:me")); };
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
   const chip = $("me");
   const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
@@ -40,12 +42,14 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     unmark(); document.body.classList.add("anon"); $("tab-photo").hidden = true;
     panel.show(["changes", "selected"].find(t => !$(`tab-${t}`).hidden), { quiet: true });
     if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; import("./login.js").then(m => m.startLogin({ button: $("meBtn") })).catch(e => console.error("login:", e)); }
+    meReady();   // the bar has its «Logg inn»: the tour can count its steps (U3669)
     return;
   }
   document.body.classList.remove("anon");
   $("tab-photo").hidden = false;   // Gjengi costs money: only for a signed-in person (U3663)
   chip.innerHTML = `<button type="button" class="me" id="meBtn" aria-haspopup="true" aria-expanded="false" title="Logget inn som ${esc(me.person)}"><i></i>${esc(me.person)}</button>`;
   chip.hidden = false; chip.style.position = "relative";
+  meReady();   // the person's chip is in the bar (U3669)
   if (me.via !== "gulden.no") {   // signed in on gulden.no: signed out there, not here
     const menu = document.createElement("div"); menu.className = "g-menu me-menu"; menu.setAttribute("role", "menu"); menu.hidden = true;
     menu.innerHTML = `<button type="button" role="menuitem" id="meOut">Logg ut</button>`; chip.append(menu);

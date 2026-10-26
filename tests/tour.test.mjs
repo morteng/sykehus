@@ -56,3 +56,19 @@ test("the server keeps the person's marks: raised, never taken back, signed out 
   assert.deepEqual(await call("POST", "lars", { seenIn: 1, dismissed: false }), [200, { seenIn: 2, dismissed: true }]);
   assert.deepEqual(await call("GET", "anna"), [200, { seenIn: 0, dismissed: false }]);
 });
+
+test("U3669: the tour is counted after the bar has its «Logg inn» or the person's chip, so «1 av 5» shows at first open as from «?»", async () => {
+  const { readFileSync } = await import("node:fs"), rd = f => readFileSync(new URL("../public/" + f, import.meta.url), "utf8");
+  const anton = rd("anton.js"), app = rd("app.js");
+  /* the step «Logg inn» is the bar's #meBtn, which anton.js makes after /api/meg: both the signed-out and the signed-in path say when it is there */
+  assert.equal([...anton.matchAll(/\bmeReady\(\);/g)].length, 2, "signed out (after «Logg inn» is placed) and signed in (after the chip)");
+  assert.match(anton, /const meReady = \(\) => \{ window\.sykehusMeReady = true; dispatchEvent\(new Event\("sykehus:me"\)\); \};/);
+  assert.match(anton, /chip\.innerHTML = `<button type="button" class="me" id="meBtn"><i><\/i>Logg inn<\/button>`; chip\.hidden = false;[^\n]*\n\s*meReady\(\);\s*\/\/[^\n]*\n\s*return;/);
+  /* and the automatic start waits for it (or 8 s), before its own 1,5 s */
+  assert.match(app, /window\.sykehusMeReady \? Promise\.resolve\(\) : new Promise\(ok => \{ addEventListener\("sykehus:me", ok, \{ once: true \}\); setTimeout\(ok, 8000\); \}\)/);
+  assert.match(app, /tour\.ready\(\)\.then\(due => meIn\(\)\.then\(\(\) => due\)\)\.then\(due => \{ if \(due\) setTimeout\(/);
+  /* the visitor list really has five steps once the button is there, four when it is not: the count is made at start */
+  const { visitorSteps } = await import("../public/tour.js"), s = visitorSteps({ phone: () => false });
+  assert.equal(s.length, 5); assert.equal(s.at(-1).title, "Logg inn");
+  assert.equal(s.at(-1).el.length === 0, true, "its part is looked up when the tour starts (a function), which is why the timing mattered");
+});
