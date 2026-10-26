@@ -48,11 +48,11 @@ ROOT = pathlib.Path(os.environ.get("WORKER_JOBS", "/jobs"))
 HERE = pathlib.Path(__file__).resolve().parent
 KEEP_S = 3600                      # a job's folder is kept an hour
 MAX_BODY = 8 << 20                 # 8 MB in
-MAX_OUT = 64 << 20                 # 64 MB out, all files
+MAX_OUT = 192 << 20                # 192 MB out, all files (a 100 MB IFC brought in, with its mesh and glb)
 CAPS = {"s": 300, "mem_mb": 4096}
 SLOTS = threading.Semaphore(int(os.environ.get("WORKER_SLOTS", "1")))
 BLOBS = pathlib.Path(os.environ.get("WORKER_BLOBS", str(ROOT / ".blobs")))   # under ROOT: hidden from the jobs (a tmpfs there)
-BLOB_KEEP_S, BLOB_CAP, MAX_BLOB = 7 * 86400, 4 << 30, 64 << 20   # a week, 4 GB in all, 64 MB each
+BLOB_KEEP_S, BLOB_CAP, MAX_BLOB = 7 * 86400, 4 << 30, 128 << 20   # a week, 4 GB in all, 128 MB each (U3571: files to 100 MB)
 # the KiCad image's steps: make and route their own (steps/make.py, route.py), the rest kicad-cli's (steps/kicad.py
 # <step>); glb there is the board's (kicad-cli), not the IFC's, which that image has no IfcOpenShell for
 KICAD_OWN, KICAD_CLI = ("make", "route"), ("erc", "drc", "step", "glb", "outline", "render")
@@ -94,7 +94,7 @@ def classify(log, code, timed_out, seconds=0, cap=CAPS["s"]):
     if re.search(r"Read-only file system|Permission denied: '/(?!work)", log):
         return [{"code": "file_refused", "message": "The script tried to write outside its own folder; only its folder can be written."}]
     if re.search(r"File too large", log):
-        return [{"code": "too_big", "message": "The script wrote a file larger than 64 MB."}]
+        return [{"code": "too_big", "message": f"The script wrote a file larger than {MAX_OUT >> 20} MB."}]
     if re.search(r"MemoryError|std::bad_alloc|Cannot allocate memory", log) or code in (-9, 137):
         return [{"code": "memory_limit", "message": "The script used more memory than it may."}]
     tb = re.findall(r'File "(?:[^"]*/)?script\.py", line (\d+)', log)
@@ -159,7 +159,7 @@ def run_job(j):
         j["files"] = {f.name: f"/jobs/{j['id']}/files/{f.name}" for f in sorted(work.iterdir())
                       if f.is_file() and not f.name.startswith(".") and f.name not in ("script.py", "params.json") and f.name not in j["inputs"] and f.name not in unpacked}
         if sum((work / n).stat().st_size for n in j["files"]) > MAX_OUT:
-            j["state"], j["errors"], j["files"] = "failed", [{"code": "too_big", "message": "What the script made is more than 64 MB."}], {}
+            j["state"], j["errors"], j["files"] = "failed", [{"code": "too_big", "message": f"What the script made is more than {MAX_OUT >> 20} MB."}], {}
         j["outputs"] = []
         for n in j["files"]:
             sha, size = put_blob(work / n)
@@ -258,7 +258,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/blobs":
             n = int(self.headers.get("content-length") or 0)
             if n > MAX_BLOB:
-                return self.send(413, {"errors": [{"code": "too_big", "message": "A blob is at most 64 MB."}]})
+                return self.send(413, {"errors": [{"code": "too_big", "message": f"A blob is at most {MAX_BLOB >> 20} MB."}]})
             sha, size = put_blob(self.rfile.read(n))
             return self.send(200, {"sha256": sha, "bytes": size, "url": f"/blobs/{sha}"})
         if path != "/jobs":

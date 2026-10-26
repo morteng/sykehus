@@ -54,6 +54,13 @@ export function freeId(asked, site) {
 }
 /* a construction's script and what it made, as the server filled it in: checked for form here (the server ran it) */
 function bimOf(b) {
+  /* a file brought in (U3571): no script, its sha the file's; where it came from and its licence go on its card */
+  if (b && typeof b === "object" && b.file != null) {
+    if (!/^[0-9a-f]{64}$/.test(String(b.file)) || b.sha !== b.file) throw new Error("Fila er ikke lastet opp ennå: serveren leser den først");
+    const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Fila har ingen form");
+    const t = (v, n) => v == null ? undefined : String(v).slice(0, n);
+    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
+  }
   if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
   if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");
   const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !Number.isFinite(+v)) throw new Error(`Parameteren «${k}» må ha et navn av bokstaver og et tall`); params[k] = +v; }

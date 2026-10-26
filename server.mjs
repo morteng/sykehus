@@ -30,6 +30,7 @@ import { createLogin } from "./login.mjs";
 import { createAssistant } from "./assistant.mjs";
 import { createStreets } from "./gater.mjs";
 import { createWishes } from "./wishes.mjs";
+import { importIfc, MAX_IMPORT } from "./bim.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
@@ -54,6 +55,32 @@ function readJson(req, max) {
     req.on("error", no);
   });
 }
+/* the bytes of an upload, refused past max */
+function readBytes(req, max) {
+  return new Promise((ok, no) => {
+    if (+req.headers["content-length"] > max) return no(Object.assign(new Error("too large"), { big: true }));
+    let n = 0; const parts = [];
+    req.on("data", c => { n += c.length; if (n > max) { no(Object.assign(new Error("too large"), { big: true })); req.destroy(); } else parts.push(c); });
+    req.on("end", () => ok(Buffer.concat(parts)));
+    req.on("error", no);
+  });
+}
+/* POST /api/import?filename=: a file brought in (U3571), signed in, at most 100 MB, one at a time per person; kept by
+   its sha (bim.mjs importIfc), then placed with the edit kind import */
+const importing = new Set();
+async function handleImport(req, res) {
+  const json = (n, o) => res.writeHead(n, { ...SECURITY, "content-type": "application/json; charset=utf-8" }).end(JSON.stringify(o));
+  if (req.method !== "POST") return json(405, { error: "POST only" });
+  const who = login.personOf(req)?.person;
+  if (!who) return json(401, { error: "Logg inn for å hente inn filer." });
+  if (importing.has(who)) return json(429, { error: "Én fil om gangen: vent til den forrige er lest." });
+  importing.add(who);
+  try {
+    const bytes = await readBytes(req, MAX_IMPORT);
+    return json(200, await importIfc(bytes, { filename: new URL(req.url, "http://x").searchParams.get("filename"), by: who }));
+  } catch (e) { return json(e.big ? 413 : e.tool ? 400 : 500, { error: e.big ? "Fila er større enn 100 MB." : e.tool ? e.message : "Noe gikk galt." }); }
+  finally { importing.delete(who); }
+}
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
 const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
@@ -76,6 +103,7 @@ createServer(async (req, res) => {
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;
     if (path === "/api/endring") return mcp.handleChange(req, res);
     if (path === "/api/ifc") return mcp.handleIfc(req, res);
+    if (path === "/api/import") return await handleImport(req, res);
     if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));

@@ -2,7 +2,7 @@
 
 IFC (the first, model.ifc if there is one): mesh.json, one part per IFC class: positions in metres to the cm (x east,
 y north, z kote, as the IFC has them) and triangle indices; the box round it all; the count of each class; what the
-IFC is (schema, building, storeys).
+IFC is (schema, building, storeys, its length unit).
 
 STEP / BREP / FCStd (with FreeCAD; the inputs too, so a bought part's STEP can come in alone): for each file <stem>,
 one mesh per part (a STEP's product names, an FCStd's labels) in the part's own frame, at the job's mesh tolerance
@@ -53,7 +53,12 @@ def ifc_mesh(path):
     if not parts:
         sys.exit("no geometry: the IFC has no shapes")
     counts = collections.Counter(p.is_a() for p in f.by_type("IfcProduct") if not p.is_a("IfcSpatialElement") and not p.is_a("IfcOpeningElement"))
-    out = {"ifc": path.name, "schema": f.schema, "box": {"min": [round(x, 2) for x in lo], "max": [round(x, 2) for x in hi]},
+    # the file's own length unit (ifcopenshell.geom gives metres whatever it is): what an imported file is said to be in
+    import ifcopenshell.util.unit
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f)
+    lu = next((u for a in f.by_type("IfcUnitAssignment") for u in a.Units if getattr(u, "UnitType", None) == "LENGTHUNIT"), None)
+    unit = ((lu.Prefix or "") + lu.Name).lower() if lu and lu.is_a("IfcSIUnit") else (str(lu.Name).lower() if lu else None)
+    out = {"ifc": path.name, "schema": f.schema, "unit": {"length": unit, "to_m": scale}, "box": {"min": [round(x, 2) for x in lo], "max": [round(x, 2) for x in hi]},
            "classes": dict(counts), "buildings": len(f.by_type("IfcBuilding")), "storeys": len(f.by_type("IfcBuildingStorey")),
            "triangles": sum(len(p["idx"]) // 3 for p in parts.values()), "parts": list(parts.values())}
     pathlib.Path("mesh.json").write_text(json.dumps(out, separators=(",", ":")))

@@ -266,6 +266,15 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .where:hover { border-color: var(--accent-panel-edge); }
 /* «Visninger»: the saved camera views (U3562) */
 .views { position: relative; }
+/* «Hent fil» (U3571): an IFC from a manufacturer, with where it came from and its licence */
+.imp { position: relative; }
+.imp-pop { position: absolute; top: calc(100% + 4px); left: 0; width: min(300px, calc(100vw - 132px)); display: grid; gap: var(--sp-2); padding: var(--sp-3); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md, var(--shadow-sm)); font-size: var(--fs-sm); }
+.imp-pop[hidden] { display: none; }
+.imp-pop label { display: grid; gap: 4px; color: var(--muted); }
+.imp-pop input { padding: 6px 8px; font: inherit; color: var(--text); background: var(--bg, #fff); border: 1px solid var(--border); border-radius: var(--radius); }
+.imp-pop .imp-say { margin: 0; color: var(--text); }
+.imp-pop button { justify-self: start; padding: 7px 12px; font: inherit; color: var(--on-accent, #fff); background: var(--accent); border: 0; border-radius: var(--radius); cursor: pointer; }
+.imp-pop button:disabled { opacity: .6; cursor: progress; }
 .views-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px var(--sp-3); font: inherit; font-size: var(--fs-sm); color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); cursor: pointer; }
 .views-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
 .views-btn:hover, .views-btn[aria-expanded="true"] { border-color: var(--accent-panel-edge); }

@@ -63,6 +63,50 @@ export async function runBim(script, params) {
 }
 const summary = m => ({ box: m.box, classes: m.classes, buildings: m.buildings, storeys: m.storeys, triangles: m.triangles });
 
+/* a file brought in (U3571): an IFC a person uploaded (a manufacturer's greenhouse, a window), kept by the sha of its
+   bytes in the same folder (model.ifc as it came, mesh.json the worker made of it, source.json what was said of it).
+   Its units are the file's (the worker's mesh is in metres whatever they are), its origin its own: the page stands
+   its box's middle on from -> to and its foot on the ground, as a construction's. { file, box, size, unit, ... } */
+export const MAX_IMPORT = 100 << 20;
+export async function importIfc(bytes, meta = {}) {
+  if (!bytes?.length) throw toolErr("Fila er tom.");
+  if (bytes.length > MAX_IMPORT) throw toolErr("Fila er større enn 100 MB.");
+  const head = bytes.subarray(0, 4096).toString("latin1");
+  if (!/^\s*ISO-10303-21;/.test(head) || !/FILE_SCHEMA\s*\(\s*\(\s*'IFC/i.test(head)) throw toolErr("Det er ikke en IFC-fil (IFC2X3, IFC4 eller IFC4X3 i STEP-form, .ifc). Andre formater kommer.");
+  const sha = createHash("sha256").update(bytes).digest("hex"), have = meshOf(sha);
+  if (have) return { file: sha, ...importSummary(have), ...sourceOf(sha) };
+  const W = process.env.SYKEHUS_WORKER;
+  if (!W) throw toolErr("Filer leses av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
+  const base = W.replace(/\/+$/, "");
+  let j;
+  try {
+    const b = await (await fetch(`${base}/blobs`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: bytes, signal: AbortSignal.timeout(120000) })).json();
+    if (b.sha256 !== sha) throw new Error(b.errors?.[0]?.message || "fila kom ikke fram");
+    const r = await fetch(`${base}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs: { "model.ifc": sha }, then: ["mesh"] }), signal: AbortSignal.timeout(360000) });
+    j = await r.json();
+  } catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
+  if (j.state !== "done" || !j.files?.["mesh.json"]) throw toolErr(j.errors?.[0]?.message?.includes("no geometry") ? "IFC-fila har ingen former arbeideren kan tegne." : `Arbeideren kunne ikke lese fila: ${j.errors?.[0]?.message || j.state || "ukjent"}`);
+  const mesh = JSON.parse(Buffer.from(await (await fetch(`${base}${j.files["mesh.json"]}`, { signal: AbortSignal.timeout(120000) })).arrayBuffer()).toString("utf8"));
+  const tmp = join(DIR, `.${sha}.${process.pid}`); mkdirSync(tmp, { recursive: true });
+  const src = { filename: String(meta.filename || "modell.ifc").replace(/[\p{C}\/\\"<>]/gu, "_").slice(0, 120), bytes: bytes.length, by: meta.by ?? null, at: new Date().toISOString() };
+  writeFileSync(join(tmp, "mesh.json"), JSON.stringify(mesh)); writeFileSync(join(tmp, "model.ifc"), bytes); writeFileSync(join(tmp, "source.json"), JSON.stringify(src));
+  if (!existsSync(join(DIR, sha))) renameSync(tmp, join(DIR, sha));
+  return { file: sha, ...importSummary(mesh), ...sourceOf(sha) };
+}
+const r2 = v => Math.round(v * 100) / 100;
+const importSummary = m => ({ ...summary(m), size_m: m.box ? [0, 1, 2].map(i => r2(m.box.max[i] - m.box.min[i])) : null, unit: m.unit ?? null, origin: m.box ? m.box.min : null });
+const sourceOf = sha => { try { const s = JSON.parse(readFileSync(join(DIR, sha, "source.json"), "utf8")); return { filename: s.filename, bytes: s.bytes }; } catch { return {}; } };
+/* what was said of where a file came from: kept with the edit, shown on its card */
+const said = (v, n, what) => { if (v == null || v === "") return undefined; const t = String(v).replace(/\s+/g, " ").trim(); if (t.length > n) throw toolErr(`${what} er høyst ${n} tegn`); return t; };
+function importBim(e) {
+  const file = String(e.file ?? "");
+  if (!/^[0-9a-f]{64}$/.test(file)) throw toolErr("import trenger file: sha-en /api/import ga for fila");
+  const m = meshOf(file); if (!m) throw toolErr("Fila finnes ikke her (lenger): last den opp igjen.");
+  const src = sourceOf(file), source = said(e.source, 300, "Kilden"), licence = said(e.licence, 120, "Lisensen");
+  if (!licence) throw toolErr("Si lisensen fila har (fra produsentens side), eller «ukjent»");
+  return { file, sha: file, script: null, params: {}, box: m.box, classes: m.classes, filename: src.filename, ...(source ? { source } : {}), licence };
+}
+
 /* the kote design.js stands a construction on: the lowest ground under its box's footprint over from -> to, or the
    roof it is on, or the kote asked */
 const footOf = (site, from, to, box, at = {}) => Math.round(baseOf(site, { ...bimBody(from, to, box), on: at.on, base_kote: at.base_kote }) * 100) / 100;
@@ -81,6 +125,12 @@ async function placed(site, script, p, from, to, at, asked) {
 /* what the agent sends (construction; reshape with params) made into what design.js checks (volume shape bim; reshape
    with bim), after the worker ran it. site: the model as it stands (for the ground and the construction's script) */
 export async function prepare(e, site) {
+  /* a file brought in (U3571): placed like a construction, the box its file's */
+  if (e?.kind === "import") {
+    const { kind, file, source, licence, material, ...rest } = e, bim = importBim(e);
+    const m = meshOf(bim.file), mat = material || (m.classes?.IfcPlate || m.classes?.IfcWindow || m.classes?.IfcCurtainWall ? "glass" : "concrete");
+    return { ...rest, name: rest.name || bim.filename?.replace(/\.ifc$/i, "") || "Innhentet", kind: "volume", shape: "bim", material: mat, bim, _ran: { file: bim.file, ...importSummary(m) } };
+  }
   if (e?.kind === "construction") {
     const { kind, script, params = {}, material, ...rest } = e;
     if (typeof script !== "string" || !script.trim()) throw toolErr("construction trenger script: Python med IfcOpenShell som skriver model.ifc");
@@ -100,6 +150,8 @@ export async function prepare(e, site) {
   if (e?.kind === "reshape" && ((e.params && typeof e.params === "object") || e.from || e.to)) {
     const a = (site.added || []).find(x => x.id === String(e.id) && x.shape === "bim");
     if (!a) return e;
+    /* a file brought in has no script: it moves and turns as it is */
+    if (a.bim.file) { if (e.params) throw toolErr(`${a.name} er en innhentet fil: den har ingen parametre å endre`); return e; }
     const { params, ...rest } = e, from = e.from || a.from, to = e.to || a.to;
     const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: a.on });
     const { r, p } = await placed(site, a.bim.script, p0, from, to, { on: a.on }, false);
@@ -108,6 +160,7 @@ export async function prepare(e, site) {
   /* a construction as it was kept (a draft's edits shown again, or replayed into one's own version): its script and
      parameters are what count; the sha, box and classes are what the worker makes of them here, never what was sent */
   if ((e?.kind === "volume" || e?.kind === "reshape") && e.bim && typeof e.bim === "object") {
+    if (e.bim.file) return { ...e, bim: importBim(e.bim) };
     const { script, params = {} } = e.bim;
     if (typeof script !== "string" || !script.trim()) throw toolErr("bim trenger script");
     const r = await runBim(script, params);
@@ -117,7 +170,7 @@ export async function prepare(e, site) {
 }
 /* an edit as the agent is told of it: the script left out (it has it), what the worker made in */
 export function slim(e) {
-  if (!e?.bim) return e;
+  if (!e?.bim || e.bim.file) return e;
   const { script, ...b } = e.bim;
   return { ...e, bim: { ...b, script_chars: script.length } };
 }
@@ -143,7 +196,9 @@ export function handleBim(req, res, rest, SECURITY = {}) {
   const m = /^([0-9a-f]{64})\/(mesh\.json|model\.ifc|model\.glb)$/.exec(rest);
   const f = m && join(DIR, m[1], m[2]);
   if (!f || !existsSync(f)) return res.writeHead(404, { ...SECURITY, "content-type": "application/json" }).end(JSON.stringify({ error: "Finnes ikke." }));
+  /* a file brought in downloads under the name it came with */
+  const came = m[2] === "model.ifc" && sourceOf(m[1]).filename, name = came || `konstruksjon-${m[1].slice(0, 8)}.${m[2].split(".")[1]}`;
   res.writeHead(200, { ...SECURITY, "content-type": FILES[m[2]], "cache-control": "public, max-age=31536000, immutable",
-    ...(m[2] !== "mesh.json" ? { "content-disposition": `attachment; filename="konstruksjon-${m[1].slice(0, 8)}.${m[2].split(".")[1]}"` } : {}) });
+    ...(m[2] !== "mesh.json" ? { "content-disposition": `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(name)}` } : {}) });
   res.end(readFileSync(f));
 }

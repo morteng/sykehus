@@ -99,3 +99,40 @@ test("prepare: the worker's failure in plain words, with the script's line", asy
     await assert.rejects(prepare({ kind: "construction", name: "X", from: [0, -80], to: [10, -80], script: "boom()", params: {} }, site), /linje 7: NameError/);
   } finally { w.close(); }
 });
+
+/* a file brought in (U3571): the bytes to the worker's /blobs, a steps-only job meshes it, kept by its sha */
+test("importIfc and prepare: an uploaded IFC is read once, kept by its sha, and stands like a construction", async () => {
+  const { createHash } = await import("node:crypto");
+  const ifc = Buffer.from("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n"), sha = createHash("sha256").update(ifc).digest("hex");
+  const seen = [], MESH = { box: { min: [1000, 2000, 5], max: [1006, 2003, 8.5] }, unit: { length: "millimetre", to_m: 0.001 }, classes: { IfcWindow: 1 }, buildings: 0, storeys: 0, triangles: 1,
+    parts: [{ cls: "IfcWindow", n: 1, pos: [1000, 2000, 5, 1006, 2000, 5, 1003, 2003, 8.5], idx: [0, 1, 2] }] };
+  const srv = createServer((req, res) => { const b = []; req.on("data", c => b.push(c)); req.on("end", () => {
+    const body = Buffer.concat(b); seen.push([req.method, req.url.split("?")[0]]);
+    if (req.url === "/blobs") return res.end(JSON.stringify({ sha256: createHash("sha256").update(body).digest("hex"), bytes: body.length }));
+    if (req.url.startsWith("/jobs?")) { const j = JSON.parse(body); seen.push(j); return res.end(JSON.stringify({ state: "done", files: { "mesh.json": "/jobs/y/files/mesh.json" } })); }
+    res.end(JSON.stringify(MESH));
+  }); });
+  await new Promise(r => srv.listen(0, "127.0.0.1", r));
+  process.env.SYKEHUS_WORKER = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const { importIfc, prepare, slim } = await import("../bim.mjs");
+    await assert.rejects(importIfc(Buffer.from("solid x\nendsolid\n")), /ikke en IFC-fil/);
+    const r = await importIfc(ifc, { filename: "Vindu «A».ifc", by: "p1" });
+    assert.equal(r.file, sha); assert.deepEqual(r.size_m, [6, 3, 3.5]); assert.equal(r.unit.length, "millimetre"); assert.equal(r.filename, "Vindu «A».ifc");
+    const job = seen.find(x => x.inputs); assert.deepEqual(job, { inputs: { "model.ifc": sha }, then: ["mesh"] });
+    const n0 = seen.length; await importIfc(ifc); assert.equal(seen.length, n0, "the same bytes: kept, not read again");
+    await assert.rejects(prepare({ kind: "import", file: sha, from: [0, -80], to: [6, -80] }, site), /lisensen/);
+    const p = await prepare({ kind: "import", file: sha, from: [0, -80], to: [6, -80], licence: "Fri bruk fra produsenten", source: "https://example.com/vindu" }, site), { _ran, ...v } = p;
+    assert.equal(v.kind, "volume"); assert.equal(v.shape, "bim"); assert.equal(v.material, "glass"); assert.equal(v.name, "Vindu «A»");
+    assert.equal(v.bim.file, sha); assert.equal(v.bim.sha, sha); assert.equal(v.bim.licence, "Fri bruk fra produsenten"); assert.equal(slim(v), v);
+    const ed = add([], v), m = applyEdits(site, floors, ed), a = m.site.added[0];
+    assert.equal(a.width, 3); assert.equal(a.height, 3.5); assert.equal(Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), 6);
+    assert.equal(a.bim.source, "https://example.com/vindu");
+    const mv = await prepare({ kind: "reshape", id: a.id, from: [0, -60], to: [6, -60] }, m.site);
+    assert.equal(mv.bim, undefined, "a move keeps the file as it is"); assert.equal(seen.length, n0);
+    await assert.rejects(prepare({ kind: "reshape", id: a.id, params: { x: 1 } }, m.site), /ingen parametre/);
+    const kept = await prepare({ ...v, bim: { ...v.bim, box: { min: [0, 0, 0], max: [1, 1, 1] } } }, site);
+    assert.deepEqual(kept.bim.box, MESH.box, "a kept import's box is the file's, not what was sent");
+    await assert.rejects(prepare({ kind: "import", file: "c".repeat(64), from: [0, -80], to: [6, -80], licence: "x" }, site), /finnes ikke/);
+  } finally { srv.close(); }
+});
