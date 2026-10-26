@@ -27,8 +27,10 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
   + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
   + "The person keeps camera views by name on a version (U3562): show_building with save_as keeps the view it shows under that name (when they say «husk denne», «lagre visningen»), saved_view goes to one; show_draft lists them. "
+  + "The person can also build: try_change takes edits of these kinds: demolish and restore (whole buildings or alle), volume (a new building: box, gable, triangle, lean_to, pyramid, terraces; on a roof with on), reshape (move, turn, resize or re-fact one), wing and balconies, surface (a lawn, paving, a pool or pond with surface water), path, trees and fell, and construction: a Python script with IfcOpenShell that builds a structure as BIM (a glass greenhouse, a pavilion, a frame: members, plates, slab, door), run in a sandboxed worker and kept as its own IfcBuilding with named parameters that the person can change later; its script contract is in the construction kind's description. "
+  + "look shows the model from any side, after the changes; show_draft lists the changes and the after. "
   + "Tell the person only what a tool result shows: a change is made only when it is in the result's added and the result names the version it went into; when it is rejected or refused, say so and what you do next. "
-  + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless he writes otherwise, and cite drawings and documents by title with their link. "
+  + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless they write otherwise, and cite drawings and documents by title with their link. "
   + "Say how each fact is known: read off a drawing, worked out (beregnet), assumed (antatt) or measured from the laser; areas measured between drawn walls are rough (about 15 %).";
 
 const err = (code, message) => Object.assign(new Error(message), { code });
@@ -314,7 +316,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "try_change", tgt: "write", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, target: { ...TARGET, description: TARGET.description + ". Signed out with none open: a new draft (a day, no login)" }, draft: OLD, version: OLD,
       include_screenshot: { type: "boolean", description: "A picture of the model after the change comes back (default true). false for the middle steps of a sequence; look at the last one" },
       view_name: VIEW_NAME }, ["edits"]),
-      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, and the ground (a pool or pond is kind surface with surface water): surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
+      description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a new volume such as a greenhouse, a construction (a structure an IfcOpenShell script builds as BIM, in metres, its foot at params.ground: the contract is in the construction kind's description), and the ground (a pool or pond is kind surface with surface water): surfaces, paths, trees (hagekart's species) and felling. Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
         "The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap; and for each new surface (a pool, a lawn, paving) what it covers, by m²: buildings, and the footpaths, pavements and roads there are today (from OSM and NVDB). A pool or a lawn over a path cuts the path: say so, and move it or lay a new path round it, unless that is what was asked. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
       run: async (a, req) => {
         let d, v = null;
@@ -472,8 +474,32 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     : k === "edit" && v && typeof v === "object" ? `${v.kind}{${Object.entries(v).filter(([k]) => !["kind", "why", "note", "value", "name"].includes(k)).map(([k, x]) => `${k}=${short(x)}`).join(",")}}`
     : ["why", "note", "text", "title", "value"].includes(k) ? `${k}=…` : `${k}=${short(v)}`).join(" ");
   const BY = Object.fromEntries(TOOLS.map(t => [t.name, t]));
-  const toolList = () => TOOLS.map(t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.schema,
-    annotations: { title: t.title, readOnlyHint: !!t.ro, destructiveHint: false, idempotentHint: !!t.ro, openWorldHint: false },
+  /* what each tool's structuredContent holds (outputSchema, 2025-06-18+): the keys it has, none of them required, so a
+     result with more or fewer still fits; look has none (its answer is a picture and words) */
+  const O = (props, d) => ({ type: "object", ...(d ? { description: d } : {}), properties: Object.fromEntries(Object.entries(props).map(([k, v]) => [k, typeof v === "string" ? { type: v } : v])), additionalProperties: true });
+  const TARGET_OUT = { draft: "string", version: "string", link: "string" };
+  const OUTPUT = {
+    about_site: O({ name: "string", address: "string", gnr_bnr: "string", lot_area_m2: "number", heights: "string", origin_utm33: "array", wings: "array", drawn_storeys: "array", bim: "string", sources: "array", documents: "number", notes: "array", ...TARGET_OUT }),
+    about_wing: O({ id: "string", name: "string", aliases: "array", sure: "boolean", built: { type: ["string", "null"] }, storeys: { type: ["string", "number", "null"] }, footprint_m2: "number", ground_kote: "number", top_kote: "number", levels: "array", drawn_storeys: "array", facades: "array", drawn_sections: "array", sources: "array", draft_changes: "array", notes: "array", ...TARGET_OUT }),
+    storeys: O({ storeys: "array" }),
+    floor_plan: O({ storey: "string", sheets: "array", per_wing: "object", rooms: "array" }),
+    openings: O({ wing: "string", facades: "array" }),
+    show_draft: O({ changes: "array", after: "object", saved: "boolean", saved_views: "array", ...TARGET_OUT }),
+    list_versions: O({ versions: "array", you: { type: ["string", "null"] } }),
+    search_documents: O({ query: "string", documents: "array", more: "number" }),
+    read_document: O({ id: { type: ["string", "number"] }, title: "string", pages: "array", next_page: { type: ["number", "null"] } }),
+    list_documents: O({ documents: "array" }),
+    try_change: O({ added: { type: "array", description: "The changes that went in, as checked" }, rejected: { type: "array", description: "{index, error} for each refused" }, ids: { type: "object", description: "An asked id that was taken: the id each got" },
+      changes_in_draft: "number", after: "object", fit: "array", saved: "boolean", note: "string", ...TARGET_OUT }, "What went in and what was refused, and where"),
+    show_building: O({ app: "string", view: "object", saved_view: "object" }),
+  };
+  /* the Gulden mark (gulden-ai's, Morten 00:35Z), served from here */
+  const ICONS = o => [{ src: `${o}/icons/icon-192.png`, mimeType: "image/png", sizes: ["192x192"] }, { src: `${o}/icons/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] }];
+  const serverInfo = o => ({ ...SERVER_INFO, icons: ICONS(o), websiteUrl: o });
+  /* destructive: what takes a change out; idempotent: the reads, and what sets a value to the same again */
+  const DESTRUCTIVE = new Set(["undo_change"]), IDEMPOTENT = new Set(["set_sharing", "rename_version"]);
+  const toolList = (o = "") => TOOLS.map(t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.schema, ...(OUTPUT[t.name] ? { outputSchema: OUTPUT[t.name] } : {}), ...(o ? { icons: ICONS(o) } : {}),
+    annotations: { title: t.title, readOnlyHint: !!t.ro, destructiveHint: !t.ro && DESTRUCTIVE.has(t.name), idempotentHint: !!t.ro || IDEMPOTENT.has(t.name), openWorldHint: false },
     ...(t.write ? { securitySchemes: [{ type: "oauth2", scopes: [SCOPE] }] } : t.writeIf ? { securitySchemes: [{ type: "noauth" }, { type: "oauth2", scopes: [SCOPE] }] } : {}),
     ...(t.ui ? { _meta: { ui: { resourceUri: APP_URI, visibility: ["model", "app"] } } } : {}) }));
 
@@ -490,10 +516,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const asked = params._meta?.[M("protocolVersion")];
     if (asked && !VERSIONS.includes(asked)) throw Object.assign(err(-32022, `Unsupported protocol version ${asked}`), { data: { supported: VERSIONS } });
     switch (method) {
-      case "initialize": return { protocolVersion: VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : VERSIONS[1], capabilities: caps, serverInfo: SERVER_INFO, instructions: INSTRUCTIONS };
-      case "server/discover": return { supportedVersions: VERSIONS, capabilities: caps, serverInfo: SERVER_INFO, instructions: INSTRUCTIONS };
+      case "initialize": return { protocolVersion: VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : VERSIONS[1], capabilities: caps, serverInfo: serverInfo(originOf(req)), instructions: INSTRUCTIONS };
+      case "server/discover": return { supportedVersions: VERSIONS, capabilities: caps, serverInfo: serverInfo(originOf(req)), instructions: INSTRUCTIONS };
       case "ping": return {};
-      case "tools/list": return { tools: toolList(), ...CACHE };
+      case "tools/list": return { tools: toolList(originOf(req)), ...CACHE };
       case "resources/list": return { resources: [{ uri: APP_URI, name: "Sykehustomta 3D", title: "Sykehustomta: bygget i 3D og plan", mimeType: "text/html;profile=mcp-app", _meta: { ui: { csp: appCsp(originOf(req)), prefersBorder: true } } }], ...CACHE };
       case "resources/read": {
         if (params.uri !== APP_URI) throw err(-32602, `Unknown resource: ${params.uri}`);
@@ -527,6 +553,21 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         throw err(-32601, `Method not found: ${method}`);
     }
   }
+  /* GET /mcp/server-card: the Server Card (SEP-2127, Final, extension ext-server-card), at the place it reserves,
+     <streamable-http-url>/server-card; who the server is and where to connect, no tools (those are listed live) */
+  function handleCard(req, res) {
+    const CORS = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET", "access-control-allow-headers": "Content-Type, If-None-Match", "access-control-expose-headers": "ETag" };
+    if (req.method === "OPTIONS") return res.writeHead(204, CORS).end();
+    if (req.method !== "GET" && req.method !== "HEAD") return res.writeHead(405, { ...CORS, allow: "GET" }).end();
+    const o = originOf(req), body = JSON.stringify({ $schema: "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json",
+      name: "no.gulden/sykehus", title: SERVER_INFO.title, version: SERVER_INFO.version,
+      description: "The old Drammen hospital: its wings, drawings and documents, and an after designed on them",
+      websiteUrl: o, repository: { url: "https://github.com/morteng/sykehus", source: "github" }, icons: ICONS(o),
+      remotes: [{ type: "streamable-http", url: `${o}/mcp`, supportedProtocolVersions: VERSIONS }] });
+    const tag = `"${createHash("sha256").update(body).digest("hex").slice(0, 16)}"`;
+    if (req.headers["if-none-match"] === tag) return res.writeHead(304, { ...CORS, etag: tag }).end();
+    res.writeHead(200, { ...SECURITY, ...CORS, "content-type": "application/mcp-server-card+json", "cache-control": "public, max-age=3600", etag: tag }).end(req.method === "HEAD" ? undefined : body);
+  }
   async function handleMcp(req, res) {
     if (req.method !== "POST") return send(res, 405, { error: "POST only" }, { allow: "POST" });
     const origin = req.headers.origin;
@@ -543,7 +584,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const result = await rpc(req, m);
         /* 2026-07-28 requires resultType on every result; older clients ignore it */
         if (m.id !== undefined && m.id !== null) out.push({ jsonrpc: "2.0", id: m.id, result: result && typeof result === "object"
-          ? { resultType: "complete", ...result, _meta: { ...(result._meta || {}), [M("serverInfo")]: SERVER_INFO } } : result });
+          ? { resultType: "complete", ...result, _meta: { ...(result._meta || {}), [M("serverInfo")]: serverInfo(originOf(req)) } } : result });
       } catch (e) {
         if (e.auth) return send(res, 401, { jsonrpc: "2.0", id: m.id ?? null, error: { code: -32001, message: "Logg inn for å lagre egne versjoner (koble til Sykehustomta)." } }, { "www-authenticate": auth ? auth.challenge(req) : "Bearer" });
         console.error("mcp", m.method, m.params?.name || "", e.message);
@@ -658,5 +699,5 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { handleMcp, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS };
+  return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS };
 }

@@ -69,17 +69,21 @@ createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x"), path = decodeURIComponent(url.pathname);
     if (path === "/mcp") return await mcp.handleMcp(req, res);
+    if (path === "/mcp/server-card") return mcp.handleCard(req, res);
     if (await auth.route(req, res, url) || await streets.route(req, res, path, url)) return;
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path)) return;
+    // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;
     if (path === "/api/endring") return mcp.handleChange(req, res);
     if (path === "/api/ifc") return mcp.handleIfc(req, res);
-    if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha   // the cookie lets its owner see their own private versions
+    if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
     if (path === "/api/versjoner") return mcp.handleVersions(req, res);
     if (path === "/inn") return res.writeHead(308, { ...SECURITY, location: "/inn/" }).end();   // the fragment (the sign-in link's token) goes along
-    const file = normalize(join(PUB, path.endsWith("/") ? path + "index.html" : path));
+    /* the Gulden mark where browsers look for it without a link */
+    const ICON = { "/favicon.ico": "/icons/icon-192.png", "/apple-touch-icon.png": "/icons/apple-touch-icon-180.png", "/apple-touch-icon-precomposed.png": "/icons/apple-touch-icon-180.png" }[path];
+    const file = normalize(join(PUB, ICON || (path.endsWith("/") ? path + "index.html" : path)));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
     const body = await readFile(file);
     res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache" }).end(req.method === "HEAD" ? undefined : body);
