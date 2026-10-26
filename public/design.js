@@ -30,6 +30,7 @@
    is its faces as triangles, tris [[[east, north, kote] × 3], …].
 
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
+import { applyTerrain } from "./paint-edit.js";
 import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./landscape.js";
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { batterZ, balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
@@ -558,6 +559,7 @@ export function applyDesign(site, floors, edits) {
   applyLandscape(site, edits);
   applyRoads(site, edits);
   applyGrading(site, edits);   // U3616: the ground set to a level, water at its own, before the buildings' pads
+  applyTerrain(site, edits);   // U3655: raise, lower, flatten, smooth, pond, terrace (renderkit/terrain.js), the same way
   const gone = new Set(), added = [], vols = new Map();   // vols: the new buildings, by id, as their edits leave them
   for (const e of edits) {
     if ((e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id)) continue;   // landscape.js's

@@ -309,15 +309,21 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       ring: POINTS, kote: { type: "number", description: "The level, as a kote (m above sea). Leave out: the level where what is dug out fills the rest (no earth driven away or brought in)" },
       fall: { type: "number", minimum: 2, maximum: 500, description: "A fall of 1:fall from its middle (e.g. 50 for 2 %, so water runs off); leave out for flat" }, fall_toward: { type: "string", enum: ["N", "Ø", "S", "V"], description: "Which way it falls (default S)" },
       edge: { type: "string", enum: ["batter", "wall"], description: "batter (default): a sloping bank to the ground around; wall: a retaining wall at the edge, the ground outside as it is" }, slope: { type: "number", minimum: 1, maximum: 10, description: "The bank's run per rise, default 2 (1:2)" }, name: { type: "string" } }, ["ring"]),
+    K("paint", "Paint the ground with a brush, as hagekart does: a stroke along line (1 or more points [east, north]), r metres wide each side, laid as grass, planting (a bed), paving or gravel (mode add, default), or rubbed out (mode erase). The brush stops at buildings, water, paths and the lot's edge, and is pulled the last 0.8 m to a building, road or path, so the lawn meets the wall. It joins the surface it touches, and takes the ground from the other surfaces under it; a bed in a lawn is a hole in the lawn. Use it for lawns, drives and beds in the shape of the ground; surface (a ring) for a shape you know the corners of", {
+      surface: { type: "string", enum: ["grass", "planting", "paving", "gravel"] }, mode: { type: "string", enum: ["add", "erase"], description: "add (default) paints; erase rubs out that surface" }, line: POINTS, r: { type: "number", minimum: 0.3, maximum: 10, description: "The brush's radius in m, default 1.5" }, name: { type: "string" } }, ["surface", "line"]),
+    K("terrain", "Move earth in a shape on the ground, with what is dug out and filled back (m³ and tipper loads): raise or lower by h m, flatten (to level, a kote, or rel, m above the shape's mean), smooth, pond (dug h m with 1:2 banks) or terrace (a level pad with a slope skirt m wide round it). shape is { t: \"circle\", c: [east, north], r } or { t: \"poly\", ring } or { t: \"stroke\", pts, r }. For a plane with a fall or a retaining wall use ground; for a swimming pool use surface water with pool: true", {
+      op: { type: "string", enum: ["raise", "lower", "flatten", "smooth", "pond", "terrace"] }, shape: { type: "object", description: "{ t: circle, c, r } | { t: poly, ring } | { t: stroke, pts, r }, points [east, north] in m" },
+      h: { type: "number", description: "raise, lower, pond: the m moved" }, level: { type: "number", description: "flatten, terrace: the kote (m above sea)" }, rel: { type: "number", description: "flatten, terrace: m above the shape's mean (instead of level)" }, skirt: { type: "number", description: "terrace: the slope's width outside the pad, m" }, k: { type: "number", minimum: 0, maximum: 1, description: "smooth: how much" }, name: { type: "string" } }, ["op", "shape"]),
     K("path", "A path", { line: POINTS, width: { type: "number", description: "m, default 2" }, surface: { type: "string", enum: ["gravel", "paving", "asphalt", "wood"] }, name: { type: "string" } }, ["line"]),
     K("trees", "Trees planted (hagekart's species; check_species first: banned species are refused)", { species: { type: "string" }, points: POINTS, line: POINTS, spacing: { type: "number", description: "m along line, default 8" }, height: { type: "number" }, crown: { type: "number", description: "m wide" } }, ["species"]),
     K("fell", "Take down today's trees inside a ring", { ring: POINTS }, ["ring"]),
   ] };
   /* what a draft builds and takes away, without the geometry: for the agent to report back */
-  const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape || m.site.roads_removed || m.site.grading) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
+  const afterOf = m => (m.site.demolished || m.site.added || m.site.landscape || m.site.roads_removed || m.site.grading || m.site.earthwork) ? { demolished: (m.site.demolished || []).map(d => ({ name: d.name, footprint_m2: d.footprint_m2, gross_volume_m3: d.gross_volume_m3 })),
     demolished_gross_volume_m3: (m.site.demolished || []).reduce((a, d) => a + (d.gross_volume_m3 || 0), 0),
     built: (m.site.added || []).map(({ parts, ...a }) => slim(a)),
     ...(m.site.roads_removed ? { roads_removed: m.site.roads_removed.map(r => r.name || "en veistrekning") } : {}),
+    ...(m.site.earthwork ? { earthwork: { ...m.site.earthwork, say: `Graves ut ${m.site.earthwork.cut_m3} m³ og fylles ${m.site.earthwork.fill_m3} m³ (netto ${m.site.earthwork.net_m3} m³, om lag ${m.site.earthwork.tippers} lass)` } } : {}),
     ...(m.site.grading ? { grading: m.site.grading.map(({ ring, plane, ...g }) => ({ ...g, say: gradingText({ ring, ...g }) })) } : {}),
     ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g.basin ? { ...g, say: basinText(g) } : g), planted: m.site.planted, plantings: (m.site.plantings || []).map(({ why, ...g }) => g), trees_felled: m.site.felled } : {}) } : null;
   const isVid = id => /^v.{8}$/.test(String(id ?? ""));
@@ -352,10 +358,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return { e: { ...rest, from: r.from, to: r.to }, placed: r.text };
   }
   /* each change's own fields, before it is checked (the toolkit audit: refuse at the boundary, naming what is missing) */
+  /* a brush stroke (paint) stops at the ways there are and pulls to their edge: the rings of those near it go with the edit (U3655) */
+  const withAround = async e => {
+    if (e?.kind !== "paint" || e.around != null || !ways || !Array.isArray(e.line) || !e.line.length) return e;
+    const r = (+e.r || 1.5) + 4, xs = e.line.map(p => +p[0]), ys = e.line.map(p => +p[1]), b = [Math.min(...xs) - r, Math.min(...ys) - r, Math.max(...xs) + r, Math.max(...ys) + r];
+    const near = (await ways()).filter(w => w.ring?.length > 2 && w.ring.some(p => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3])).slice(0, 100).map(w => w.ring);
+    return { ...e, around: near };
+  };
   function fieldsOf(e) {
     const k = EDIT.anyOf.find(x => x.properties.kind.const === e?.kind);
     if (!k) return `kind «${e?.kind}» finnes ikke; kind er en av ${EDIT.anyOf.map(x => x.properties.kind.const).join(", ")}`;
-    const miss = k.required.filter(f => e[f] == null || e[f] === ""), extra = Object.keys(e).filter(f => !(f in k.properties) && !(f === "bim" && (e.kind === "volume" || e.kind === "reshape")));   // bim: a construction as kept (bim.mjs prepare makes it again)
+    const miss = k.required.filter(f => e[f] == null || e[f] === ""), extra = Object.keys(e).filter(f => !(f in k.properties) && !(f === "bim" && (e.kind === "volume" || e.kind === "reshape")) && !(f === "around" && e.kind === "paint"));   // bim: a construction as kept (bim.mjs prepare makes it again)
     if (miss.length) return `${e.kind} mangler ${miss.join(", ")} (${e.kind} tar ${Object.keys(k.properties).filter(f => f !== "kind").join(", ")})`;
     if (extra.length) return `${e.kind} tar ikke ${extra.join(", ")} (${e.kind} tar ${Object.keys(k.properties).filter(f => f !== "kind").join(", ")})`;
     return null;
@@ -443,7 +456,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         /* a later change in the same call to a new building that got another id goes to the id it got */
-        for (const [i, e0] of a.edits.entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await prepare(e, m.site), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
+        for (const [i, e0] of a.edits.entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
             /* a new building that differs only in the id it was given is the same one sent again */
             const bare = x => JSON.stringify(x.kind === "volume" ? { ...x, id: undefined } : x);
@@ -483,7 +496,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const who = userOf(req); if (!who) throw toolErr("Skissen vises til en som er logget inn.");
         const open = versions ? versions.get(pages?.open.get(who)) : null, id = open?.owner === who ? open.id : null, base = id ? editsOf(id, req) : [], ok = [], bad = [];
         let cur = applyEdits(site, floors, base);
-        for (const [i, e00] of a.edits.entries()) { try { const { e: e0 } = placeAt(e00), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await prepare(e0, cur.site), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
+        for (const [i, e00] of a.edits.entries()) { try { const { e: e0 } = placeAt(e00), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await withAround(await prepare(e0, cur.site)), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
         if (!ok.length) throw toolErr(`Ingen av endringene kunne tegnes: ${bad.map(b => `nr. ${b.n} (${b.kind}): ${b.error}`).join("; ")}`);
         const s = withMeshes(cur.site), before = new Set((site.added || []).concat(applyEdits(site, floors, base).site.added || []).map(x => x.id));
         const made = (s.added || []).find(x => !before.has(x.id)), want = a.focus || made?.id || ok.map(e => e.wing || e.id).find(Boolean), f = want ? aimAt(s, want) : null;

@@ -411,7 +411,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const landHidden = () => landNow.filter(g => goneIds.has(g.id)).map(g => g.id).join();
   function drawLandscape(list) { landNow = list || []; for (const [n, g] of landNow.filter(g => !goneIds.has(g.id)).entries()) {
     const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
-    const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []), pos = [], lim = Math.max(1, T.res) * 1.4;
+    const holes = (g.holes || []).map(h => { const q = h.slice(); if (ringArea2(q) > 0) q.reverse(); return q; }), all = ring.concat(...holes), v2 = r => r.map(([x, y]) => new THREE.Vector2(x, y));   // a painted surface has holes (U3655)
+    const tris = THREE.ShapeUtils.triangulateShape(v2(ring), holes.map(v2)), pos = [], lim = Math.max(1, T.res) * 1.4;
     const lift = 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
     const flat = g.level != null;   // water lies flat at its own level (U3616), whatever the ground under it
     const put = p => { const v = P(p, flat ? g.level : ground(...p) + lift); pos.push(v.x, v.y, v.z); };
@@ -424,7 +425,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       else if (m === e[1]) { const k = mid(b, c); split(a, b, k, d + 1); split(a, k, c, d + 1); }
       else { const k = mid(c, a); split(a, b, k, d + 1); split(k, b, c, d + 1); }
     };
-    for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
+    for (const [i, j, k] of tris) split(all[i], all[j], all[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); smoothNormals(geo);
     /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
     const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = g.level; scene.add(m); pictured(m, g.surface); groundMeshes.push(m);

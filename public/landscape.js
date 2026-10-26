@@ -21,6 +21,7 @@
 import { pointInRing as inRing, ringArea as signedArea, ringOf } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
 import { SIDE_KEYS } from "./renderkit/dirs.js";
 import { PLANTS } from "./plants.js";
+import { checkPaint, checkTerrain, applyPaint } from "./paint-edit.js";
 
 export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"];
 export const PATHS = ["gravel", "paving", "asphalt", "wood"];
@@ -100,6 +101,8 @@ export function checkLandscape(site, e, str) {
       if (treePoints(out).length > MAX_TREES) throw new Error(`Høyst ${MAX_TREES} trær i én endring`);
       return out;
     }
+    case "paint": return checkPaint(e, { pts, num, name, w_ });
+    case "terrain": return checkTerrain(e, { pts, num, name, w_ });
     case "fell": { const ring = pts(e.ring, "ring", 3); if (ringArea(ring) < 1) throw new Error("Området er for lite"); return { kind: "fell", ring, ...w_ }; }
   }
   return null;
@@ -187,7 +190,9 @@ export function applyLandscape(site, edits) {
   /* n, nt: the ids given, so one taken away leaves the others' ids as they were; a planting's id has its own count, so
      the surfaces and paths keep the ids they had before plantings had any */
   let land = [], plantings = [], n = 0, nt = 0, felled = 0, trees = (site.trees || []).slice();
+  const torn = new Set();   // the buildings the edits so far take down: a brush may paint where they stood (U3655)
   for (const e of edits) {
+    if (e.kind === "demolish") torn.add(e.building); else if (e.kind === "restore") torn.delete(e.building);
     if (e.kind === "demolish" && /^tre-/.test(e.building)) { trees = trees.filter(t => t[6] !== e.building); plantings = plantings.filter(g => g.id !== e.building); }
     else if (e.kind === "demolish" && GROUND_ID.test(e.building)) land = land.filter(g => g.id !== e.building);
     else if (e.kind === "reshape" && /^tre-/.test(e.id)) {
@@ -203,6 +208,7 @@ export function applyLandscape(site, edits) {
     }
     else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...Object.fromEntries(["pool", "depth", "coping", "kote"].filter(k => e[k] != null).map(k => [k, e[k]])), why: e.why });
     else if (e.kind === "path") land.push({ id: `sti-${++n}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), why: e.why });
+    else if (e.kind === "paint") { const r = applyPaint(land, e, site, torn, () => `flate-${++n}`); land = r.land; (site.painted ||= []).push({ surface: e.surface, mode: e.mode, m2: Math.round(r.m2 * 10) / 10 }); }
     else if (e.kind === "fell") { const n = trees.length; trees = trees.filter(t => !inRing(t, e.ring)); felled += n - trees.length; }
     else if (e.kind === "trees") {
       const p = plantOf(e.species), cat = p.cat === "conifer" ? "conifer" : /shrub|hedge|rose/.test(p.cat) ? "shrub" : "tree";
@@ -211,7 +217,7 @@ export function applyLandscape(site, edits) {
       plantings.push({ id, kind: "trees", species: e.species, name: p.no, latin: p.la || null, count: at.length, height: h, crown: Math.round(r * 200) / 100, why: e.why });
     }
   }
-  if (!land.length && !n && !nt && !felled) return;
+  if (!land.length && !n && !nt && !felled && !site.painted) return;
   const planted = new Map();
   for (const g of plantings) { const q = planted.get(g.species) || { species: g.species, name: g.name, latin: g.latin, count: 0 }; q.count += g.count; planted.set(g.species, q); }
   site.trees = trees; site.landscape = land; site.plantings = plantings; site.planted = [...planted.values()]; site.felled = felled;

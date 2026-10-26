@@ -61,7 +61,7 @@ const drawnSections0 = await fetch("data/sections.json").then(r => r.ok ? r.json
    holds them (the selection, the card over the pick) sees the change. */
 const TEARS = e => e.kind === "demolish" || e.kind === "restore";
 /* what the page changes in place: torn down (setGone), new buildings (setAdded), a wing's facts and name (relabel) */
-const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "ground", "note", "level", "room"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees; level setLevels; room setRooms
+const LIVE = e => TEARS(e) || ["volume", "reshape", "wing", "balconies", "surface", "path", "trees", "fell", "ground", "paint", "terrain", "note", "level", "room"].includes(e.kind);   // balconies are added parts; surfaces and paths setLandscape; trees setTrees; level setLevels; room setRooms
 const modelOf = edits => applyEdits(site0, floors0, edits || []);
 const { site, floors } = modelOf(draft?.edits);
 const shown = modelOf(draft?.edits?.filter(e => !LIVE(e)));   // its own copy: the page's is refilled under it
@@ -385,7 +385,7 @@ const GROUPS = [
   { k: "keep", name: "Beholdt", of: e => e.kind === "restore", tip: "Ta ut igjen" },
   { k: "ny", name: "Nye bygg", of: e => e.kind === "volume", tip: "Ta bort igjen" },
   { k: "ed", name: "Endret", of: e => ["reshape", "wing", "level", "room", "balconies"].includes(e.kind), tip: "Ta endringen ut igjen" },
-  { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell", "ground"].includes(e.kind), tip: "Ta det ut igjen" },
+  { k: "ute", name: "Uteområdet", of: e => ["surface", "path", "trees", "fell", "ground", "paint", "terrain"].includes(e.kind), tip: "Ta det ut igjen" },
   { k: "note", name: "Notater", of: () => true, tip: "Ta notatet ut igjen" },
 ];
 /* the reasons that say nothing a reader needs: the page's own, and Anton's when it only says the person asked (pm 26.10) */
@@ -600,6 +600,8 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   if (e.kind === "path") return `${e.name || "Sti"}: ${surf(e.surface)}, ${String(e.width).replace(".", ",")} m bred${why}`;
   if (e.kind === "trees") return `Planter ${e.points ? e.points.length : "en rekke"} ${e.species}${why}`;
   if (e.kind === "fell") return `Feller trærne i et område${why}`;
+  if (e.kind === "paint") return `${e.mode === "erase" ? "Visker ut" : "Maler"} ${surf(e.surface).toLowerCase()}${why}`;
+  if (e.kind === "terrain") return `${{ raise: "Hever terrenget", lower: "Senker terrenget", flatten: "Planerer terrenget", smooth: "Jevner terrenget", pond: "Graver en dam", terrace: "Lager en terrasse" }[e.op] || "Flytter jord"}${e.h != null ? ` ${String(e.h).replace(".", ",")} m` : ""}${why}`;
   if (e.kind === "ground") return `${e.name || "Terrenget"} planeres${e.kote != null ? ` på kote ${kote(e.kote)}` : ""}${e.fall ? `, fall 1:${e.fall}` : ""}${e.edge === "wall" ? ", med støttemur" : ""}${why}`;
   return `Notat${e.wing ? " på " + w : ""}${e.storey ? ", " + e.storey : ""}: ${e.text}`;
 }
@@ -690,6 +692,26 @@ $("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(asyn
   valg.clear(); valg.add({ kind: "new", id, label: "Nytt bygg" }); const a = site.added.find(x => x.id === id); if (a) showNew(a);
   toast("Nytt bygg satt opp. Trykk «Endre» for navn, etasjer og mål.", { label: "Angre", run: () => undoLast(r.n, r.k) });
 }, "ny");
+/* «Mal» (U3655, Morten 13:53Z «painting lawns … do we get those?»): the brush hagekart paints with, from renderkit. Taps on
+   the ground make the stroke; «Legg på» sends it as one paint change (the brush stops at buildings, water and ways and is
+   pulled to their edge on the server's side too, so what Anton paints and what is painted here is the same), with Angre. */
+const malPop = $("malPop"); let malPts = [];
+const malSay = t => { $("malSay").textContent = t; };
+function malOpen(on) {
+  malPop.hidden = !on; $("mmal").setAttribute("aria-expanded", String(on)); $("mmal").setAttribute("aria-pressed", String(on)); malPts = []; $("malGo").disabled = true;
+  if (!on) { if (placing === malTap) placing = null; document.body.classList.remove("placing"); return; }
+  malSay("Trykk på bakken langs strøket, så «Legg på»."); placing = malTap; document.body.classList.add("placing");
+}
+function malTap([x, y]) { malPts.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]); $("malGo").disabled = false; malSay(`${malPts.length} ${malPts.length === 1 ? "punkt" : "punkter"}. Trykk videre, eller «Legg på».`); placing = malTap; }
+$("mmal").onclick = () => malOpen(malPop.hidden);
+$("malStop").onclick = () => malOpen(false);
+malPop.onsubmit = async ev => {
+  ev.preventDefault(); if (!malPts.length) return;
+  const erase = $("malErase").checked, surface = $("malSurface").value, r = await edit([{ kind: "paint", surface, mode: erase ? "erase" : "add", line: malPts, r: +$("malSize").value, why: "malt på siden" }], erase ? "Fikk ikke visket ut" : "Fikk ikke malt");
+  if (!r) return;
+  malPts = []; $("malGo").disabled = true; malSay("Lagt på. Trykk for å male mer.");
+  toast(erase ? "Visket ut i utkastet." : "Malt i utkastet. Penselen stoppet ved hus, vann og veier.", { label: "Angre", run: () => undoLast(r.n, r.k) });
+};
 /* «Hent fil» (U3571): an IFC from a manufacturer (a greenhouse, a window), signed in; the server keeps it by its sha
    and the worker reads it (its own units, made metres), then a tap stands it there as a construction is: its box's
    middle at the tap, its length across the screen, its foot on the ground; its card says where it came from */
