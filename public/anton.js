@@ -52,32 +52,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     addEventListener("pointerdown", e => { if (!chip.contains(e.target)) { menu.hidden = true; $("meBtn").setAttribute("aria-expanded", "false"); } });
     menu.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; $("meBtn").focus(); } });
   }
-  wishTab();
-  if (me.anton) talk(); else { unmark(); $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten et ønske i «Ønsker».</p>`; }
-
-  /* «Ønsker»: what Sykehustomta cannot do yet, to Morten (wishes.mjs); your own, and for Morten all of them */
-  function wishTab() {
-    $("tab-wish").hidden = false; $("dock").dataset.tabs = "4"; $("dock").style.setProperty("--tabs", 4);
-    const ST = { ny: "ny", sett: "sett", laget: "laget", nei: "ikke nå" }, p = $("p-wish");
-    p.innerHTML = `<h2>Ønsker</h2><p class="sub">Noe du vil at Sykehustomta skal kunne, men som ikke går ennå? Skriv det her, så ser Morten det.</p>
-      <form id="wishForm"><textarea id="wishText" maxlength="4000" placeholder="For eksempel: Jeg vil kunne tegne et snitt gjennom drivhuset."></textarea>
-      <div class="oc-row"><button type="submit" class="pri">Send til Morten</button><span id="wishOk" class="ok" role="status"></span></div></form>
-      <p id="wishErr" class="err" role="alert"></p><ul class="wishes" id="wishList"></ul>`;
-    $("wishForm").onsubmit = async e => {
-      e.preventDefault(); $("wishErr").textContent = ""; $("wishOk").textContent = "";
-      const r = await json("api/onsker", { text: $("wishText").value, version: version() });
-      const j = r ? await r.json().catch(() => ({})) : {};
-      if (r?.ok) { $("wishText").value = ""; $("wishOk").textContent = "Sendt. Morten ser det."; list(); } else $("wishErr").textContent = j.error || "Fikk ikke sendt. Prøv igjen.";
-    };
-    $("tab-wish").addEventListener("click", list);
-    async function list() {
-      const j = await fetch("api/onsker").then(r => r.ok ? r.json() : { wishes: [] }).catch(() => ({ wishes: [] })), ul = $("wishList");
-      ul.innerHTML = j.wishes.map(w => `<li>${esc(w.text)}<br><small>${j.admin ? esc(w.person) + " · " : ""}${new Date(w.at).toLocaleDateString("nb-NO")}</small>
-        ${j.admin ? `<select data-id="${esc(w.id)}" aria-label="Status">${Object.entries(ST).map(([k, t]) => `<option value="${k}"${k === w.status ? " selected" : ""}>${t}</option>`).join("")}</select>` : `<span class="st ${esc(w.status)}">${ST[w.status] || esc(w.status)}</span>`}
-        ${w.note ? `<br><small>Morten: ${esc(w.note)}</small>` : ""}</li>`).join("");
-      for (const s of ul.querySelectorAll("select")) s.onchange = () => json(`api/onsker/${encodeURIComponent(s.dataset.id)}`, { status: s.value });
-    }
-  }
+  if (me.anton) talk(); else { unmark(); $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten en tilbakemelding.</p>`; }
 
   /* the four digits, big, in the Anton tab */
   function loginCard(can) {

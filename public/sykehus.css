@@ -458,3 +458,12 @@ body.sk-open { overflow: hidden; }
 .g-chat-acts .chat-top { margin: 0; }
 body.m.sheet-open .bstack .g-chat, body.m.fonts-open .bstack .g-chat { display: none; }
 body.tegner .g-chat { visibility: hidden; }
+
+/* U3660: «Gjengi» in the map's tool column beside the sun, its card to the left of it as the sun's; three tabs in the dock */
+.dock[data-tabs="3"] { --tabs: 3; }
+.nz .zoom2 #mgj svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.nz .zoom2 #mgj[aria-expanded=true] { background: var(--accent-panel); }
+.nz .gj-pop { position: absolute; right: calc(100% + 8px); bottom: 0; top: auto; left: auto; z-index: 30; width: min(340px, calc(100vw - 132px)); }
+#mfb { position: relative; }
+.g-modal .fb-sent { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-2); }
+.fb-sent h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }

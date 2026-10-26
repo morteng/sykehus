@@ -1,17 +1,19 @@
 {
-  "kits": "d517cdf27970b79feccb00df49a520d16c30cf73",
+  "kits": "d239b3d651ba96224c18340251deb7fab177a71c",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "6fc6cc0823a27968e393351fdc9848980ceb2105",
+    "kit.css": "f5721fc6648219f861c918066fd1efcf2b8e20ab",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
     "keys.js": "9c09c304c87f3ffffb3b5c6b28195df800b35923",
     "chat.js": "01797fe2d00642ee69dd462f8a4213a620dd109c",
-    "tour.js": "4302f6c5f7d802a8d212b3cea90f0d7828878c83"
+    "tour.js": "4302f6c5f7d802a8d212b3cea90f0d7828878c83",
+    "modal.js": "a6ea717bf76cfc11cf12dd901e7da482f949efb3",
+    "feedback.js": "f2c8d9a7d14e7b400bd3a39ea118462c0d4efad3"
   }
 }

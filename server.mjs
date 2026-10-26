@@ -12,6 +12,7 @@
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
   /api/onsker             wishes for what it cannot do yet (wishes.mjs)
+  /api/feedback           the «Tilbakemelding» dialog's reports, kept as wishes (wishes.mjs)
   /api/guide              the guide's «seen» for a person signed in (guide.mjs)
   /api/gjengi             «Gjengi»: a view made a realistic picture by an image model, within the month's cap (gjengi.mjs)
 

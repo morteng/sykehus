@@ -30,14 +30,7 @@
     </div>
   </div>
   <span class="sp"></span>
-  <span class="imp gj"><button type="button" class="ab-ic" id="mgj" aria-pressed="false" aria-expanded="false" aria-controls="gjPop" aria-label="Gjengi" title="Gjengi: gjør det du ser nå til et realistisk bilde. Prisen står før du lager det"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg></button>
-        <form class="imp-pop gj-pop" id="gjPop" hidden>
-          <p class="imp-say" id="gjSay">Henter prisen …</p>
-          <div class="gj-cam" id="gjCam"></div>
-          <label>Ønske (valgfritt)<input id="gjWish" maxlength="300" placeholder="kveldslys, vinter, tegl på det nye bygget …" autocomplete="off"></label>
-          <button type="submit" id="gjGo" disabled>Lag bilde</button>
-          <ul class="gj-list" id="gjList"></ul>
-        </form></span>
+  <button type="button" class="ab-ic" id="mfb" aria-label="Tilbakemelding" title="Gi tilbakemelding"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z"/><path d="M8.5 9h7M8.5 12h4.5"/></svg></button>
   <button class="ab-ic" id="tourBtn" title="Vis guiden: en kort gjennomgang av siden" aria-label="Vis guiden"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.4c-.7.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r=".6"/></svg></button>
   <button class="ab-ic" id="print" hidden title="Skriv ut det du ser, med målestokk og kilder" aria-label="Skriv ut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="7" rx="1.5"/><path d="M7 14h10v6H7z"/></svg></button>
   <a class="ab-ic" href="data/sykehus.ifc" download="gamle-drammen-sykehus.ifc" title="Last ned modellen (IFC, 12 MB) til arkitektprogrammet: fløyer, etasjer, vegger, dekker, vinduer og dører, med kilder" aria-label="Last ned modellen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19h14"/></svg></a>
@@ -55,13 +48,20 @@
     </div>
     <div class="nz">
       <div class="north" id="north" title="Nord"><svg viewBox="-20 -20 40 40" aria-label="Nordpil"><path d="M0 -8 L7 17 L0 12 L-7 17 Z" fill="currentColor"/><text x="0" y="-10" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">N</text></svg></div>
-      <div class="zoom2"><button type="button" id="zin" title="Zoom inn (+)" aria-label="Zoom inn">+</button><button type="button" id="zout" title="Zoom ut (−)" aria-label="Zoom ut">−</button><button type="button" id="zhome" title="Tilbake til startvisningen (0)" aria-label="Tilbake til startvisningen">⌂</button><button type="button" id="peg" class="peg" title="Gateplan herfra: dra mannen dit du vil stå, eller trykk på ham og så på stedet" aria-label="Gateplan: velg hvor du vil stå"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.6"/><path d="M8.5 10.5h7l-1 6h-1.4l-.6 5h-1l-.6-5H9.5z"/></svg></button><button type="button" id="sunBtn" title="Sola: velg dato og klokkeslett" aria-label="Sola: velg dato og klokkeslett" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg></button></div>
+      <div class="zoom2"><button type="button" id="zin" title="Zoom inn (+)" aria-label="Zoom inn">+</button><button type="button" id="zout" title="Zoom ut (−)" aria-label="Zoom ut">−</button><button type="button" id="zhome" title="Tilbake til startvisningen (0)" aria-label="Tilbake til startvisningen">⌂</button><button type="button" id="peg" class="peg" title="Gateplan herfra: dra mannen dit du vil stå, eller trykk på ham og så på stedet" aria-label="Gateplan: velg hvor du vil stå"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.6"/><path d="M8.5 10.5h7l-1 6h-1.4l-.6 5h-1l-.6-5H9.5z"/></svg></button><button type="button" id="sunBtn" title="Sola: velg dato og klokkeslett" aria-label="Sola: velg dato og klokkeslett" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg></button><button type="button" id="mgj" aria-pressed="false" aria-expanded="false" aria-controls="gjPop" aria-label="Gjengi" title="Gjengi: gjør det du ser nå til et realistisk bilde. Prisen står før du lager det"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg></button></div>
       <div class="sun-pop" id="sunPop" hidden>
         <b id="sunText"></b>
         <label>Dato<input type="range" id="sunDay" min="1" max="365" step="1" aria-label="Dato"></label>
         <label>Klokkeslett<input type="range" id="sunHour" min="0" max="24" step="0.5" aria-label="Klokkeslett"></label>
         <button type="button" id="sunReset">21. juni kl. 14</button>
       </div>
+      <form class="imp-pop gj-pop" id="gjPop" hidden>
+          <p class="imp-say" id="gjSay">Henter prisen …</p>
+          <div class="gj-cam" id="gjCam"></div>
+          <label>Ønske (valgfritt)<input id="gjWish" maxlength="300" placeholder="kveldslys, vinter, tegl på det nye bygget …" autocomplete="off"></label>
+          <button type="submit" id="gjGo" disabled>Lag bilde</button>
+          <ul class="gj-list" id="gjList"></ul>
+        </form>
     </div>
     <div id="scale"><div class="ticks"><i></i><i></i><i></i><i></i></div><div class="nums"><span>0</span><span id="scaleEnd"></span></div></div>
     <!-- Fab's bottom stack: Anton's newest reply and a waiting question over the pill, while the Anton tab is shut -->
@@ -85,11 +85,10 @@
     <button type="button" class="sidetoggle" id="side-fold" aria-controls="right" aria-expanded="true" title="Legg bort panelet">›<span class="dbadge" id="b-fold" hidden></span></button>
     <button type="button" class="grab" id="grab" aria-label="Panelets høyde" aria-controls="right"><i></i></button>
     <div class="peekhead" id="peekhead"></div>
-    <nav class="dock" id="dock" data-tabs="4" role="tablist" aria-label="Panel">
+    <nav class="dock" id="dock" data-tabs="3" style="--tabs:3" role="tablist" aria-label="Panel">
+      <button type="button" role="tab" data-tab="changes" id="tab-changes" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>Forslag<span class="dbadge" id="b-changes" hidden></span></button>
       <button type="button" role="tab" data-tab="selected" id="tab-selected" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>Bygg</button>
       <button type="button" role="tab" data-tab="chat" id="tab-chat" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z"/></svg>Anton<span class="dbadge" id="b-chat" hidden></span></button>
-      <button type="button" role="tab" data-tab="changes" id="tab-changes" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>Forslag<span class="dbadge" id="b-changes" hidden></span></button>
-      <button type="button" role="tab" data-tab="wish" id="tab-wish" aria-selected="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 16.2 7 19l1.2-5.6L4 9.6 9.6 9z"/></svg>Ønsker</button>
     </nav>
     <div class="side-body">
       <p class="sel-empty side-wait" id="sideWait">Laster …</p>
@@ -131,7 +130,6 @@
         <div class="ver-bar" id="verBar" hidden><button type="button" id="verSel" aria-pressed="false">Velg</button><button type="button" id="verDelSel" hidden>Slett valgte (0)</button></div>
         <ul class="ver-list" id="verList"><li class="sel-empty">Ingen forslag å vise ennå.</li></ul>
       </section>
-      <section class="tabp" id="p-wish" data-tab="wish" role="tabpanel" aria-labelledby="tab-wish" hidden></section>
     </div>
   </aside>
 </main>

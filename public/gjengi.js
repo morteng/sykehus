@@ -49,7 +49,7 @@ export function startGjengi({ btn, pop, viewer, work, toast, sun = () => null })
     if (j.error) return toast(j.error);
     await load();
   }
-  function open(on) { pop.hidden = !on; btn.setAttribute("aria-expanded", String(on)); btn.setAttribute("aria-pressed", String(on)); if (on) load(); }
+  function open(on) { if (on) { const sp = document.getElementById("sunPop"); if (sp && !sp.hidden) document.getElementById("sunBtn").click(); } pop.hidden = !on; btn.setAttribute("aria-expanded", String(on)); btn.setAttribute("aria-pressed", String(on)); if (on) load(); }
   btn.onclick = () => open(pop.hidden);
   pop.onsubmit = async e => {
     e.preventDefault(); if (busy || !st) return;
@@ -64,7 +64,7 @@ export function startGjengi({ btn, pop, viewer, work, toast, sun = () => null })
     toast(`Bildet er laget (${usd(j.picture.cost_usd)}). Trykk på stjernen for å beholde det som favoritt.`);
   };
   addEventListener("keydown", e => { if (e.key === "Escape" && !pop.hidden) open(false); });
-  document.addEventListener("pointerdown", e => { if (!pop.hidden && !e.target.closest(".gj")) open(false); });
+  document.addEventListener("pointerdown", e => { if (!pop.hidden && !e.target.closest(".gj, #gjPop, #mgj")) open(false); });
   /* a view that says the camera (Anton's show_building: camera, look, lens, eye height, size): the card's choice follows it */
   function setChoice(v) {
     if (!v) return; let on = false;

@@ -48,7 +48,35 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   /* pm's own read, with its token (not the proxy secret: the edge adds that to every page request) */
   const token = req => { const t = process.env.SYKEHUS_ADMIN_TOKEN, m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || ""); return !!t && t.length >= 24 && !!m && same(m[1], t); };
+  /* POST /api/feedback (U3660): the kit's feedback dialog {kind, text, page?, tab?, version?, screenshot?}: kept as a wish for Morten (gulden-ai's
+     sykehus door has no feedback route yet), the kind in front, the context in «tried», a picture kept beside it. 10 an hour a person. */
+  const KIND_NO = { bug: "Feil", idea: "Ide", question: "Spørsmål", other: "Annet" }, hour = new Map(), PNG = Buffer.from("89504e470d0a1a0a", "hex");
+  function feedback(person, b) {
+    const kind = KIND_NO[b?.kind] ? b.kind : null, text = String(b?.text ?? "").trim();
+    if (!kind || !text) return [400, { code: "bad_request" }];
+    if (text.length > 4000) return [413, { code: "too_long" }];
+    let png = null;
+    if (b.screenshot != null) {
+      const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(b.screenshot)); png = m ? Buffer.from(m[1], "base64") : null;
+      if (!png || png.length > 1024 * 1024 || !png.subarray(0, 8).equals(PNG)) return [png && png.length > 1024 * 1024 ? 413 : 400, { code: "bad_image" }];
+    }
+    const now = Date.now(), q = (hour.get(person) || []).filter(t => now - t < 3600e3);
+    if (q.length >= 10) return [429, { code: "limit", retry_at: new Date(q[0] + 3600e3 + 1000).toISOString() }];
+    q.push(now); hour.set(person, q);
+    const ctx = [b.page && `side ${String(b.page).slice(0, 200)}`, b.tab && `fane ${String(b.tab).slice(0, 40)}`, png && "med bilde"].filter(Boolean).join(", ");
+    const w = add(person, { text: `[${KIND_NO[kind]}] ${text}`, tried: ctx, version: b.version });
+    if (png) { try { writeFileSync(join(home, w.id + ".png"), png); } catch (e) { console.error("feedback picture:", e.message); } }
+    return [200, { id: w.id }];
+  }
   async function route(req, res, path) {
+    if (path === "/api/feedback") {
+      if (req.method !== "POST") { send(res, 405, { error: "POST" }); return true; }
+      if (req.headers.origin && (() => { try { return new URL(req.headers.origin).host !== req.headers.host; } catch { return true; } })()) { send(res, 403, { error: "Feil opphav" }); return true; }
+      const me = personOf(req)?.person ?? null; if (!me) { send(res, 401, { error: "signed_out" }); return true; }
+      let b; try { b = await readJson(req, 2_000_000); } catch { send(res, 400, { code: "bad_request" }); return true; }
+      try { const [code, out] = feedback(me, b); send(res, code, out); } catch (e) { send(res, 400, { code: "bad_request", error: e.message }); }
+      return true;
+    }
     if (path !== "/api/onsker" && !path.startsWith("/api/onsker/")) return false;
     const me = personOf(req)?.person ?? null, admin = token(req) || isAdmin(me);
     if (req.method === "GET" && path === "/api/onsker") { if (!me && !admin) send(res, 401, { error: "Logg inn for å se ønskene dine." }); else send(res, 200, { wishes: admin ? every() : mine(me), admin, you: me }); return true; }
