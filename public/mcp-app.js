@@ -13,7 +13,7 @@
    ui/notifications/tool-result with {structuredContent: {view}}. */
 import { createViewer } from "./viewer.js";
 import { applyEdits } from "./edits.js";
-
+import { SUN_DEFAULT, sunIn, sunDate } from "./sunpick.js";
 const $ = id => document.getElementById(id);
 
 /* ---------- talking to the chat app ---------- */
@@ -77,9 +77,10 @@ async function show(payload) {
     $("v3").innerHTML = "";
     try { viewer = createViewer({ container: $("v3"), site: data.site, floors: data.floors, onPick: id => caption(id) }); viewer.key = data.key; }
     catch { $("main").hidden = true; $("msg").hidden = false; $("msg").textContent = "Denne visningen kan ikke tegne 3D her (WebGL mangler). Åpne bygget i nettleseren: sykehus.gulden.no"; return; }
-    viewer.setSun(new Date(new Date().getFullYear(), 5, 21, 14));
+    viewer.setSun(sunDate(SUN_DEFAULT));
     ladder();
   }
+  { const sv = sunIn(view); if (sv) viewer.setSun(sunDate(sv)); }   // show_building's sun (U3651)
   viewer.setStorey(view.storey || null);
   const drawn = view.drawn && data.sections.find(x => x.id === view.drawn);
   if (view.mode === "section" && view.wing) { viewer.setMode("3d"); viewer.select(view.building); viewer.setSection(view.wing, view.section, 0, drawn?.through || null, view.side ? LOOK[view.side].map(x => -x) : LOOK[drawn?.looking] || null); }

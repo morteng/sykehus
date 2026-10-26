@@ -7,6 +7,7 @@ import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026t";
+import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate, sunLabel } from "./sunpick.js?v=20261026v";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
@@ -114,8 +115,15 @@ requestAnimationFrame(() => { $("loading")?.remove(); $("sideWait")?.remove(); }
 try { const p = JSON.parse(sessionStorage.getItem("sykehus-pose") || "null"); sessionStorage.removeItem("sykehus-pose"); if (p) viewer.pose(p); } catch { }   // Anton's redraw comes back to where it was
 /* what is picked in the model, to talk to Anton about (valg.js); the chips are in the pill (anton.js) */
 const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
-/* a high summer sun reads the forms best; choosing the date and hour comes later */
-viewer.setSun(new Date(new Date().getFullYear(), 5, 21, 14));
+/* a high summer sun reads the forms best (21 June at 14); the date and the hour are chosen with the sun button, by a view
+   (v.sunM, v.sunD, v.sunH: a saved view keeps its light) or by Anton's show_building sun (U3651, sunpick.js) */
+let sun = { ...SUN_DEFAULT };
+function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
+setSunTo(sun);
+$("sunBtn").onclick = () => { const on = $("sunPop").hidden; $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
+$("sunDay").oninput = $("sunHour").oninput = () => setSunTo(sunFromDay(+$("sunDay").value, +$("sunHour").value));
+$("sunReset").onclick = () => setSunTo(SUN_DEFAULT);
+document.addEventListener("pointerdown", e => { if (!$("sunPop").hidden && !e.target.closest("#sunPop, #sunBtn")) { $("sunPop").hidden = true; $("sunBtn").setAttribute("aria-expanded", "false"); } });
 
 /* the storey strip (the kit's g-levels): the whole site, then every storey some wing has, top first as on a
    section; a dot where a storey is drawn, dimmed (still a tap) where the wing picked has none */
@@ -470,6 +478,7 @@ const canSave = () => mine() || (ownDraft() && !!draft && !draft.missing);
 function viewNow() {
   const p = viewer.pose(), v = viewer.view(), s = { x: p.x, y: p.y, h: p.h, yaw: p.yaw, pitch: p.pitch, dist: p.dist, mode: v.mode, ...(v.eye ? { cam: "eye" } : {}), ...(names ? { names: true } : {}) };
   if (v.mode !== "section" && storeyOn) s.storey = storeyOn;
+  if (sun.sunM !== SUN_DEFAULT.sunM || sun.sunD !== SUN_DEFAULT.sunD || sun.sunH !== SUN_DEFAULT.sunH) Object.assign(s, sun);   // the light a saved view keeps
   if (v.mode === "section" && v.section) Object.assign(s, { wing: v.section.wing, section: v.section.kind, building: site.buildings.find(b => b.wing === v.section.wing)?.id,
     ...(v.section.kind === "fasade" && side ? { side } : {}), ...(sheet ? { drawn: sheet.id } : {}) });
   return s;
@@ -874,6 +883,7 @@ function showView(v) {
     if (v.section === "fasade") return facade(b, v.side || "S");
     const d = v.drawn && drawnSections.find(x => x.id === v.drawn); return d ? section(b, d.kind, d) : section(b, v.section === "lengde" ? "lengde" : "tverr");
   }
+  const sv = sunIn(v); if (sv) setSunTo(sv);   // the view's own light, else the light stays
   paintEra(v.era); if (v.names != null) setNames(!!v.names, false);
   if (v.mode === "plan" || v.mode === "3d") setMode(v.mode); else if (viewer.view().mode === "section") setMode("3d");
   if (v.storey) pickStorey(v.storey); else if (storeyOn) pickStorey(null);
