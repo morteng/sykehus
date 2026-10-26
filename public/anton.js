@@ -12,6 +12,7 @@
    When Anton saves one of the person's versions the server says "steps": the page shows that version again, from the
    same place (after the reply is done, so nothing is cut off). */
 import { pick } from "./kit/pick.js";
+import { follow } from "./kit/follow.js";
 import { toolLine } from "./toolline.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
@@ -73,16 +74,20 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
     const seen = new Set();   // the turns the stream has shown taken
     const chatOpen = () => panel.tab === "chat" && panel.open();
-    const toEnd = () => { const t = $("talk"); t.scrollTop = t.scrollHeight; };
+    /* the log follows its end while the person is at it, and lets go when they scroll up; the pill «Til nyeste» takes them back
+       (kit/follow.js, U3830). Growth is seen by the kit (a streamed chunk, a picture, a card opening), so only an act that must
+       show (the person's own message, a question that needs a yes, the tab opening) asks for the end */
+    const fol = follow(log, { label: "Til nyeste", host: $("talk") }), toEnd = () => fol.toEnd();
     /* U3685 (Morten 18:28Z «the chat blocks most of the 3d view»): the conversation lives in the «Anton» tab only. Over the view stay the pill and
        one thin line: the step while Anton works, then the answer's first sentence with «Les mer», which opens the tab. */
     /* the pill where the chat is: in the tab's bottom row while it shows, else at the bottom of the view */
+    let wasOpen = false;
     function placePill() {
-      const open = chatOpen() && panel.phone, to = open ? $("chat-pill") : $("bstack");   // wide: the pill stays over the view; the sheet on a phone covers it, so it goes in
+      const open = chatOpen(), to = open ? $("chat-pill") : $("bstack");   // U3833: open, the panel holds the pill (wide or phone); shut, or another tab, it is over the view
       document.body.classList.toggle("pill-chat", open);
       if (form.parentElement !== to) { const f = document.activeElement === input; to.append(form); if (f) input.focus(); }
       if (open) { unread = 0; }
-      showReply(); if (chatOpen()) toEnd();
+      showReply(); if (chatOpen() !== wasOpen) { wasOpen = chatOpen(); if (wasOpen) toEnd(); }   // the tab opening shows the end; later panel events leave a reader where they are
       words();
       panel.badge("chat", asking ? "!" : unread || 0);
     }
@@ -98,8 +103,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const line = running ? `Arbeider … ${lastStep || step || "Anton tenker"}` : firstSentence(answer);
       if (body.textContent !== line) body.textContent = line;
       more.hidden = !!running || !answer;
-      $("reply-card").hidden = !line || (open && (panel.phone || !running));   // the open tab shows the answer itself; on a phone it covers the line
-      $("reply").hidden = (open && panel.phone) || ($("reply-card").hidden && !$("reply-cards").children.length);
+      $("reply-card").hidden = !line || open;   // the open tab shows the answer and the step itself (U3833: the pill is in it, so no line over the map)
+      $("reply").hidden = open || ($("reply-card").hidden && !$("reply-cards").children.length);
     }
     $("view").addEventListener("pointerdown", () => { if (running) return; answer = ""; showReply(); });   // the model first: touching it puts the answer away
     $("reply-more").onclick = $("reply-card").onclick = () => { if (answer) panel.reveal("chat"); };
@@ -113,7 +118,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (about) b.append(Object.assign(document.createElement("span"), { textContent: `Om ${about}`, className: "about" }));
       if (image) b.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "snap" }));
       const t = document.createElement(cls === "from-asst" ? "div" : "span"); if (cls === "from-asst") { t.raw = text; setMd(t, text); } else t.textContent = text; b.append(t); li.append(b);
-      log.append(li); empty(); toEnd();
+      log.append(li); empty(); if (cls === "from-me" || cls === "err") toEnd();
       /* a failed turn shows in the pill's card too, not only in the tab (pm 21:20Z: the pill showed nothing) */
       if (cls === "err") showReply(text, true);
       return t;
@@ -208,7 +213,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     }
     function goTo(id, title) {
       const li = document.createElement("li"); li.className = "talk-item tool";
-      li.innerHTML = `<div class="talk-body">Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a></div>`; log.append(li); empty(); toEnd();
+      li.innerHTML = `<div class="talk-body">Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a></div>`; log.append(li); empty();
     }
 
     const sketchShown = new Set();   // the plans on the page by id (a reload and the stream both bring one)
@@ -242,13 +247,13 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); lastStep = ""; said(); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
-      b.raw += t.delta || ""; setMd(b, b.raw); if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } toEnd(); showReply(b.raw); panel.badge("chat", asking ? "!" : unread);
+      b.raw += t.delta || ""; setMd(b, b.raw); if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } showReply(b.raw); panel.badge("chat", asking ? "!" : unread);
     });
     /* U3670: each try shows in the 3D view as a ghost at once and as a small picture on its row; a tap on it takes the camera back there */
     const tryRows = matcher((el, t) => {
       const li = el.closest("li"); if (!li || li.querySelector(".try-thumb")) return;
       const b = document.createElement("button"); b.type = "button"; b.className = "try-thumb"; b.title = "Gå tilbake til dette synet"; b.setAttribute("aria-label", "Gå tilbake til dette synet");
-      const img = document.createElement("img"); img.src = t.thumb; img.alt = "Slik så det ut da Anton prøvde endringen"; b.append(img); b.onclick = () => tries?.back(t.pose); li.append(b); toEnd();
+      const img = document.createElement("img"); img.src = t.thumb; img.alt = "Slik så det ut da Anton prøvde endringen"; b.append(img); b.onclick = () => tries?.back(t.pose); li.append(b);
     });
     let liveChain = Promise.resolve();
     const liveTry = () => { liveChain = liveChain.then(async () => { const r = await tries.run().catch(() => null); if (r) tryRows.thumb(r); else redraw = true; }); };
@@ -257,7 +262,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
        says so to Anton, the feedback goes as the drawing (the picture with the marks, strokes in metres) and the pins in words */
     async function sketchCard(s) {
       if (sketchShown.has(s.id)) return; sketchShown.add(s.id);
-      const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty(); toEnd();
+      const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty();
       const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
       createSketch({ host: li, image: s.url, frame: s.frame, title: s.title, legend: s.legend, numbers: s.numbers,
         onBuild: async () => { const b = li.querySelector(".sk-build"); b.disabled = true; if (await sendIt({ text: `Bygg det: ${s.title}` })) { li.querySelector(".sk-say").textContent = "Sendt til Anton."; fetch(`api/skisse/${s.id}/sendt`, { method: "POST" }).catch(() => { }); } else b.disabled = false; },
@@ -267,7 +272,6 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
           return sendIt({ text: [`Tilbakemelding på skissen «${s.title}»${text ? `: ${text}` : "."}`, ...pins].join("\n"), drawing: { ...draw, camera: {}, mode: "plan", size: s.size } });
         } });
       if (s.sent) { li.querySelector(".sk-say").textContent = "Sendt til Anton."; li.querySelector(".sk-build").disabled = true; }   // after a reload (U3661)
-      toEnd();
     }
     on("sketch", sketchCard);
     on("approval", card);
