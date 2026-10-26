@@ -38,7 +38,7 @@ import { importFile, MAX_IMPORT } from "./bim.mjs";
 import { createRenderings } from "./gjengi.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21", ".glb": "model/gltf-binary" };
 const SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" };
 /* the chat app runs in the host's sandboxed frame, on another origin: its module script, the viewer's imports, the
    data and the textures are fetched cross-origin. All of it is public and read-only, so any origin may read it. */
