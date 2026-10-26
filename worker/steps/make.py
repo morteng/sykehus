@@ -3,7 +3,9 @@ symbols and footprints, so ERC and DRC can run on it (then: ["make", "erc", "drc
 
   board.json (in the job's folder; params.json's spec may name another):
   {"name": "keychain-board",
-   "board": {"outline": [[x, y], ...] (mm, x right, y down, as pcbnew has it), "thickness": 1.0},
+   "board": {"outline": [[x, y], ...] (mm, x right, y down, as pcbnew has it), "thickness": 1.0,
+             "rules": {"track": 0.25, "clearance": 0.2, "via": 0.6, "drill": 0.3} (mm; the default net class, which
+             the router (route) keeps to)},
    "parts": [{"ref": "R1", "value": "4.7k", "symbol": "Device:R", "footprint": "Resistor_SMD:R_0402_1005Metric",
               "at": [x, y], "rot": 0, "model": {"file": "${KICAD9_3DMODEL_DIR}/....step", "offset": [x, y, z],
               "rotate": [x, y, z]} (optional: in place of the footprint's own, where the library has none)}, ...
@@ -265,6 +267,14 @@ else:
     mm = pcbnew.FromMM
     b = pcbnew.CreateEmptyBoard()
     b.GetDesignSettings().SetBoardThickness(mm(float(S.get("board", {}).get("thickness", 1.6))))
+    # the default net class: what route lays tracks and vias by (the router reads it from the DSN)
+    rules = {"track": 0.25, "clearance": 0.2, "via": 0.6, "drill": 0.3, **(S.get("board", {}).get("rules") or {})}
+    try:
+        nc = b.GetDesignSettings().m_NetSettings.GetDefaultNetclass()
+        nc.SetTrackWidth(mm(rules["track"])); nc.SetClearance(mm(rules["clearance"])); nc.SetViaDiameter(mm(rules["via"])); nc.SetViaDrill(mm(rules["drill"]))
+        made["rules"] = rules
+    except Exception as e:
+        made["rules"] = f"not set ({type(e).__name__}: {e})"
     nets = {}
     for k, n in nc_net.items():
         ni = pcbnew.NETINFO_ITEM(b, n); b.Add(ni); nets[n] = ni
@@ -282,6 +292,8 @@ else:
             missing.append(p["footprint"]); continue
         fp.SetFPID(pcbnew.LIB_ID(lib, nm))
         fp.SetReference(p["ref"]); fp.SetValue(p.get("value") or "")
+        # the reference on the fab drawing, not the silk: a 22 mm board has no room for it beside the parts
+        fp.Reference().SetLayer(pcbnew.F_Fab if fp.GetLayer() == pcbnew.F_Cu else pcbnew.B_Fab)
         fp.SetPath(pcbnew.KIID_PATH("/" + p["uuid"]))
         b.Add(fp)
         fp.SetPosition(pcbnew.VECTOR2I(mm(p["at"][0]), mm(p["at"][1])))

@@ -5,6 +5,7 @@ Prints one line a probe and exits 1 if any job got out. After it, `docker exec <
 service's python and nothing a job left behind.
 """
 import json
+import re
 import sys
 import urllib.request
 
@@ -71,8 +72,9 @@ else:
     for k in ("pid1", "service_root"):
         say(k, str(r.get(k, "")).startswith("refused"), r.get(k))
     say("kill_parent", r.get("kill_parent") in ("GOT 0", "GOT 1") or str(r.get("kill_parent")).startswith("refused"), r.get("kill_parent"))   # its parent is bwrap's, pid 0/1 in its own namespace
-    # the sandbox's own names only: PWD from bwrap's --chdir, LC_CTYPE from Python's locale coercion
-    say("env", set(r.get("env", [])) <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE", "PWD"}, r.get("env"))
+    # the sandbox's own names only: PWD from bwrap's --chdir, LC_CTYPE from Python's locale coercion, and the KiCad
+    # image's KICAD*_DIR paths (where its libraries are; the service passes them in)
+    say("env", {e for e in r.get("env", []) if not re.fullmatch(r"KICAD\d*_[A-Z0-9]+_DIR", e)} <= {"HOME", "PATH", "MPLCONFIGDIR", "QT_QPA_PLATFORM", "PYTHONDONTWRITEBYTECODE", "LC_CTYPE", "PWD"}, r.get("env"))
 
 j = job("x = bytearray(6 << 30)\n")
 say("memory", (j.get("errors") or [{}])[0].get("code") == "memory_limit", (j.get("state"), j.get("errors")))
