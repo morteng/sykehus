@@ -32,6 +32,7 @@ function errorOf(j) {
     network_refused: "Skriptet prøvde å nå nettet; arbeideren har ikke nett",
     file_refused: "Skriptet prøvde å skrive utenfor sin egen mappe; bare den kan skrives",
     too_big: "Det skriptet laget er større enn 64 MB",
+    sandbox_unavailable: "Arbeideren kan ikke kjøre skript nå (sandkassa starter ikke der); si fra til den som drifter siden",
   }[e.code] || `Arbeideren svarte ikke som ventet (${j.state || "ukjent"})`;
   return say + (e.code === "script_error" && tail ? `\nSlutten av utskriften:\n${tail}` : "");
 }

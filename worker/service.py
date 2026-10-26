@@ -15,7 +15,8 @@ memory, processes and file size; a wall clock). Its result is the last line of i
 then: built-in steps of this image on what it made (trusted code, run the same way): mesh writes mesh.json from the
 IFC (triangles by class, for a viewer), glb a glTF of it. Errors carry a stable code and English words, for an app to
 put in its own language: script_error (with line), no_output, time_limit, memory_limit, network_refused,
-file_refused, too_big, bad_request.
+file_refused, too_big, bad_request; sandbox_unavailable when bubblewrap cannot make its namespaces here (its words
+in /health's sandbox_error).
 """
 import base64
 import json
@@ -131,6 +132,17 @@ def versions():
 
 
 VERSIONS = None
+SANDBOX_ERR = None   # what bubblewrap said when it could not make its namespaces here (then no job runs)
+
+
+def probe():
+    """bubblewrap tried once at start, as a job runs it: its exact words if it cannot"""
+    w = ROOT / ".probe"; w.mkdir(parents=True, exist_ok=True)
+    try:
+        p = subprocess.run(sandboxed(["true"], w, CAPS), capture_output=True, text=True, timeout=30)
+        return None if p.returncode == 0 else (p.stderr.strip() or f"exit {p.returncode}")
+    except Exception as e:
+        return str(e)
 
 
 class H(BaseHTTPRequestHandler):
@@ -144,7 +156,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/health":
-            return self.send(200, {"ok": True, "sandbox": "dev" if DEV else "bwrap", "versions": VERSIONS, "queue": sum(1 for j in jobs.values() if j["state"] in ("queued", "running"))})
+            return self.send(200 if not SANDBOX_ERR else 503, {"ok": not SANDBOX_ERR, "sandbox": "dev" if DEV else "bwrap", **({"sandbox_error": SANDBOX_ERR} if SANDBOX_ERR else {}), "versions": VERSIONS, "queue": sum(1 for j in jobs.values() if j["state"] in ("queued", "running"))})
         m = re.fullmatch(r"/jobs/([0-9a-f]{32})(?:/files/([A-Za-z0-9._-]{1,80}))?", path)
         j = m and jobs.get(m.group(1))
         if not j:
@@ -160,6 +172,8 @@ class H(BaseHTTPRequestHandler):
         path, _, q = self.path.partition("?")
         if path != "/jobs":
             return self.send(404, {"errors": [{"code": "bad_request", "message": "POST /jobs"}]})
+        if SANDBOX_ERR:
+            return self.send(503, {"errors": [{"code": "sandbox_unavailable", "message": "The sandbox cannot start here: " + SANDBOX_ERR}]})
         n = int(self.headers.get("content-length") or 0)
         if n > MAX_BODY:
             return self.send(413, {"errors": [{"code": "too_big", "message": "A job is at most 8 MB."}]})
@@ -193,6 +207,9 @@ if __name__ == "__main__":
     if not DEV and not shutil.which("bwrap"):
         sys.exit("worker: no bubblewrap; set WORKER_UNSAFE_DEV=1 only on a developer's machine")
     VERSIONS = versions()
+    SANDBOX_ERR = None if DEV else probe()
+    if SANDBOX_ERR:
+        print(f"worker: bubblewrap cannot start here: {SANDBOX_ERR}", flush=True)
     threading.Thread(target=sweep, daemon=True).start()
     port = int(os.environ.get("PORT", "8070"))
     print(f"worker on :{port} ({'dev, no sandbox' if DEV else 'bwrap'})", flush=True)
