@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
-import { groundAt, groundText, padFit, lotText, windowBays, balconyFaces } from "../public/design.js";
+import { BALCONY_DEPTH, groundAt, groundText, padFit, lotText, windowBays, balconyFaces } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -220,4 +220,11 @@ test("a whole facade asked with no width is one balcony per window axis, not one
   assert.ok(Math.max(...slabs.map(p => Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]))) < 3.5, "none is a long strip");
   const wide = applyEdits(site, floors, add([], { kind: "balconies", wing: "Sentralblokka", face: 120, bay: 6, gap: 1 })).site.added[0].parts.filter(p => p.role === "slab");
   assert.ok(Math.hypot(wide[0].axis[1][0] - wide[0].axis[0][0], wide[0].axis[1][1] - wide[0].axis[0][1]) > 5.9, "a width asked is kept");
+});
+
+test("balconies come out 1.5 m deep unless a depth is asked (U3780: the area plan allows 1.5 m of projection)", () => {
+  const depth = e => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 120, ...e });
+  assert.equal(BALCONY_DEPTH, 1.5);
+  const a = depth({}); assert.equal(a.depth, 1.5, "the edit as stored");
+  assert.equal(depth({ depth: 2.2 }).depth, 2.2, "a depth asked is kept");
 });

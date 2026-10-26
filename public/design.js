@@ -177,7 +177,7 @@ export function checkDesign(site, e, str) {
       const side = e.side == null && e.face != null ? SIDE_KEYS[Math.round(norm360(+e.face) / 90) % 4] : String(e.side ?? "").toUpperCase().replace("O", "Ø");
       if (!SIDES[side]) throw new Error("side er N, Ø, S eller V: fasaden balkongene vender mot (eller face: retningen i grader)");
       const names = (w.levels || []).map(l => l.name), storey = (s, what) => { if (s == null) return undefined; const n = /^\d+$/.test(String(s).trim()) ? `${String(s).trim()}. etasje` : String(s).trim(); if (!names.includes(n)) throw new Error(`${what}: ${w.name} har ikke «${n}» (har ${names.join(", ")})`); return n; };
-      const out = { kind: "balconies", wing: w.id, side, depth: num(e.depth, 0.8, 4, "Dybden", 1.8), railing: e.railing == null ? "glass" : String(e.railing), ...w_ };
+      const out = { kind: "balconies", wing: w.id, side, depth: num(e.depth, 0.8, 4, "Dybden", BALCONY_DEPTH), railing: e.railing == null ? "glass" : String(e.railing), ...w_ };
       if (!["glass", "steel", "concrete"].includes(out.railing)) throw new Error("railing er glass, steel eller concrete");
       const f = storey(e.from_storey, "from_storey"), t = storey(e.to_storey, "to_storey"); if (f) out.from_storey = f; if (t) out.to_storey = t;
       if (e.face != null) { const fs = facadesOf(site, w.id), d = num(e.face, 0, 360, "face (retningen fasaden vender, grader fra nord)") % 360; if (!fs.some(x => turn(x.bearing, d) <= 20)) throw new Error(`${w.name} har ingen fasade som vender ${d}°. Fasadene vender ${fs.map(x => `${x.bearing}° (${String(x.length_m).replace(".", ",")} m)`).join(", ")}`); out.face = d; }
@@ -334,7 +334,7 @@ export function windowBays(site, wing) {
      window too near the wall's end, or one a lower wing in front stands in, has none), so the number is the one a change
      gets; kind: the picture's rule */
   return facadesOf(site, wing).map(f => {
-    const e = { wing, side: "N", face: f.bearing, windows: true, depth: 1.8 }, bays = axesOf(balconyParts(site, e).filter(p => p.role === "slab"));
+    const e = { wing, side: "N", face: f.bearing, windows: true, depth: BALCONY_DEPTH }, bays = axesOf(balconyParts(site, e).filter(p => p.role === "slab"));
     const b = site.buildings.find(x => x.wing === wing);
     return bays ? { face: f.bearing, length_m: f.length_m, bays, bay_m: BAY, picture: b && kindOf(b) === "tower" ? "par av vinduer i en nisje" : "vindusbånd" } : null; }).filter(Boolean);
 }
@@ -411,6 +411,8 @@ const PAD_M = 3, FALL = 1 / 50, WALL_M = 1.5, PAD_FAR = 3;
 /* U3566 (b), TEK17 § 8-6: a step-free entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn),
    then a ramp at most 1:20 (RAMP) to the ground, 1.8 m wide (ENTRY_W), with a rest for every 0.6 m it rises; past
    RAMP_MAX m of ramp it is said to need a lift or another door */
+/* the balcony depth when none is asked: 1.5 m, the most the area plan lets a balcony stand out (Områdeplan Bragernes sentrum vest, bestemmelsene 07.01.26 pkt. 4.1.1 f; U3780). The worker's balcony part has the same default (parts.json) */
+export const BALCONY_DEPTH = 1.5;
 const LANDING = 1.6, RAMP = 20, ENTRY_W = 1.8, REST_RISE = 0.6, RAMP_MAX = 80;
 /* write false: only the numbers, the grid left as it is (balancedFoot tries koter with it). keep (U3566 c): the cells
    of the pads laid before, each with whose it is: what stands under a building or in its fall stays as that one left
