@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlink
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
-import { fitOf, surfaceFit, groundText, padFit } from "./public/design.js";
+import { fitOf, surfaceFit, groundText, padFit, lotText } from "./public/design.js";
 import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
@@ -280,7 +280,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (a.tilt_deg != null && !v.plan) v.tilt = a.tilt_deg;
     const dist = a.distance_m ?? (f ? Math.max(50, f.size * 2.6) : v.plan ? 220 : 330);
     /* a new building's pad (U3566), as the picture shows it: what is dug out and filled, and at which side */
-    const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground ? `${fa.name}: ${groundText(fa.ground)}` : "";
+    const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground || fa?.lot ? `${fa.name}: ${fa.ground ? groundText(fa.ground) : ""}${lotText(fa.lot) ? ` ${lotText(fa.lot)}` : ""}`.trim() : "";
     const png = await picture(s, { ...v, target: f ? f.target : hospital, dist, focus: f ? f.ids : [], width: a.width || 1024, height: a.height || 640 });
     const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
     return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(v.tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, ${f.name} i oransje` : ""}. Nordpilen øverst til høyre.${pad ? " " + pad : ""}` };

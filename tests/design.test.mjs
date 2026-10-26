@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
-import { groundAt, groundText, padFit } from "../public/design.js";
+import { groundAt, groundText, padFit, lotText } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -150,4 +150,16 @@ test("a pad's slope stops at a path (a wall there), counts the trees it cuts or 
   assert.deepEqual(f[0].slopes_onto.map(w => w.way), ["Konggata"]); assert.match(f[0].say, /når Konggata/);
   const t = applyEdits(site, floors, add([], { kind: "volume", id: "nTre", name: "T", shape: "box", from: [-10, -100], to: [10, -100], width: 12, height: 6 })).site.added[0];
   assert.ok(t.ground.trees?.count >= 1, "trees where the ground moves"); assert.match(groundText(t.ground), /må felles, eller rotsonen sikres/);
+});
+
+test("the lot line: the slope stops there and the ground outside stays (a wall), and a building nearer than 4 m is told", () => {
+  const m = applyEdits(site, floors, add([], { kind: "volume", id: "nGrense", name: "Ved grensen", shape: "box", from: [-14, 121.2], to: [0.4, 114.1], width: 12, height: 6 })), a = m.site.added[0];
+  assert.ok(a.lot.near && a.lot.m > 1 && a.lot.m < 4, `${a.lot.m} m`); assert.match(lotText(a.lot), /fra tomtegrensen: nærmere enn 4 m \(pbl\. § 29-4\)/);
+  assert.ok(Math.abs(a.ground.lot_wall) > 0.5); assert.match(groundText(a.ground), /Skråningen når tomtegrensen/);
+  const T = site.terrain, ring = site.lot.ring, inside = (p) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) if ((ring[i][1] > p[1]) !== (ring[j][1] > p[1]) && p[0] < (ring[j][0] - ring[i][0]) * (p[1] - ring[i][1]) / (ring[j][1] - ring[i][1]) + ring[i][0]) c = !c; return c; };
+  let outside = 0;
+  for (let r = 0; r < T.h; r++) for (let k = 0; k < T.w; k++) { const p = [T.x0 + (k + 0.5) * T.res, T.y1 - (r + 0.5) * T.res]; if (!inside(p) && m.site.terrain.z[r * T.w + k] !== T.z[r * T.w + k]) outside++; }
+  assert.equal(outside, 0, "no cell outside the lot is moved");
+  const far = applyEdits(site, floors, add([], { kind: "volume", id: "nMidt", name: "Midt", shape: "box", from: [-10, 20], to: [10, 20], width: 12, height: 6 })).site.added[0];
+  assert.equal(lotText(far.lot), "", "well inside: nothing to say");
 });

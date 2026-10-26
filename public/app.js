@@ -9,7 +9,7 @@ import { createSelection, SURFACE_NO, groundName } from "./valg.js?v=20261025f";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
-import { baseOf, groundText } from "./design.js";
+import { baseOf, groundText, lotText } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
@@ -668,6 +668,7 @@ function showNew(a) {
     ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`],
     ...(a.ground ? [["Graving", `${num(a.ground.cut_m3)} m³ ut, ${num(a.ground.fill_m3)} m³ fylling`]] : [])]) +
     (a.ground ? `<p class="note">${esc(groundText(a.ground))}</p>` : "") +
+    (lotText(a.lot) ? `<p class="note">${esc(lotText(a.lot))}</p>` : "") +
     (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + (a.shape === "bim" && a.bim?.file
       /* a file brought in (U3571): where it came from and its licence, as said when it came; the file as it came */
       ? `<p class="src">Innhentet fil «${esc(a.bim.filename || "modell.ifc")}»${a.bim.format ? `, gjort om til IFC` : ""} (${a.bim.format ? `${Object.values(a.bim.classes || {}).reduce((x, y) => x + y, 0)} deler` : Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}). Kilde: ${/^https?:\/\//.test(a.bim.source || "") ? `<a href="${esc(a.bim.source)}" target="_blank" rel="noopener noreferrer">${esc(a.bim.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a>` : esc(a.bim.source || "ikke oppgitt")}. Lisens: ${esc(a.bim.licence || "ukjent")}. <a href="api/bim/${a.bim.file}/model.ifc" download>Last ned IFC</a></p>`
