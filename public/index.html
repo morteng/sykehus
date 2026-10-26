@@ -54,9 +54,12 @@
     </div>
     <div class="shot" id="shot" hidden role="region" aria-label="Bildeserie"><button type="button" class="ic" id="shotPrev" aria-label="Forrige bilde">‹</button><div class="shot-t"><b id="shotTitle"></b><span id="shotCap"></span></div><button type="button" class="era" id="shotEra" hidden></button><button type="button" class="ic" id="shotNext" aria-label="Neste bilde">›</button><button type="button" class="ic" id="shotEnd" aria-label="Lukk bildeserien">×</button></div>
     <div class="loading" id="loading" role="status"><span class="spin" aria-hidden="true"></span>Laster modellen av sykehuset …</div>
-    <div class="levels" id="levels"></div>
     <div class="vt">
       <span class="seg2" role="group" aria-label="Visning"><button type="button" id="m3d" aria-pressed="true">3D</button><button type="button" id="meye" aria-pressed="false" title="Som en som står på bakken: øyet 1,7 m over terrenget. Dra for å se deg rundt, W A S D eller piltastene for å gå (Shift går fortere), rull for å gå nærmere">Gateplan</button><button type="button" id="mplan" aria-pressed="false">Plan</button></span>
+      <div class="flr" id="flr">
+        <span class="seg2" role="group" aria-label="Etasje"><button type="button" id="floorBtn" aria-haspopup="true" aria-expanded="false" aria-controls="floorPop" title="Velg etasje: hele anlegget eller en etasje. Prikk betyr at arkivet har plantegning av etasjen"><span id="floorTxt">Hele anlegget</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><button type="button" id="floorUp" title="Etasjen over (↑)" aria-label="Etasjen over"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></button><button type="button" id="floorDown" title="Etasjen under (↓)" aria-label="Etasjen under"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button></span>
+        <div class="flr-pop" id="floorPop" hidden></div>
+      </div>
       <button type="button" class="tgl" id="names" aria-pressed="false" title="Vis eller skjul navnene på fløyene og rommene (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10l4 5-4 5H4z"/></svg>Navn</button>
     </div>
     <div class="nz">
@@ -173,6 +176,6 @@
 <div id="sheet"></div>
 <!-- ?v: once, past what browsers held from before the edge sent no-cache (2026-10-25) -->
 <script src="early.js" defer></script>
-<script type="module" src="app.js?v=20261027zi"></script>
+<script type="module" src="app.js?v=20261027zj"></script>
 </body>
 </html>
