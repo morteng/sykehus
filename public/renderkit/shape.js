@@ -14,6 +14,10 @@
      (onCommit). Esc or a right click puts it back.
    The pure part (no three.js) is exported for tests: centroidOf, areaOf, lengthOf, turnPts, moveEdge, snapPoint. */
 
+import { snapAlign } from "./infer.js";
+import { dragContext, snapDragPoint, guideList, POINT_KINDS } from "./dragsnap.js";
+import { createGuides } from "./guidelines.js";
+
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const r2 = v => Math.round(v * 100) / 100;
 const round = (v, s) => Math.round(v / s) * s;
@@ -37,15 +41,29 @@ function axisOf(pts, closed) {
 /* point i at g, snapped: in line with its neighbours (within tol m) along the shape's long direction and across it,
    else to the grid in that frame; the neighbours it lines up with are the guides. axis: the direction to use (a drag
    gives the shape's as it was, so the frame does not turn with the point in hand) */
-export function snapPoint(pts, i, g, { closed = true, grid = 0.5, tol = 0.6, axis = null } = {}) {
-  const u = axis || axisOf(pts, closed), v = [-u[1], u[0]], dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+export function snapPoint(pts, i, g, { closed = true, grid = 0.5, tol = 0.6, axis = null, near = null, origin = null, reach = 0.8 } = {}) {
+  const u = axis || axisOf(pts, closed);
   const nb = [i - 1, i + 1].map(j => closed ? pts[(j + pts.length) % pts.length] : pts[j]).filter(Boolean);
-  let gu = dot(g, u), gv = dot(g, v); const guides = [];
-  const su = nb.map(p => dot(p, u)).find(x => Math.abs(x - gu) < tol), sv = nb.map(p => dot(p, v)).find(x => Math.abs(x - gv) < tol);
-  gu = su ?? round(gu, grid); gv = sv ?? round(gv, grid);
-  const p = [r2(u[0] * gu + v[0] * gv), r2(u[1] * gu + v[1] * gv)];
-  for (const q of nb) if ((su != null && Math.abs(dot(q, u) - gu) < 1e-6) || (sv != null && Math.abs(dot(q, v) - gv) < 1e-6)) guides.push([q, p]);
-  return { p, guides };
+  const a = snapAlign(g, nb, u, { grid, tol });
+  if (a.su == null && a.sv == null && near) {
+    /* in line with no neighbour: a catch on the near outlines (midpoint, edge, axis, mirror, midline ...) before the grid */
+    const q = snapDragPoint(g, near, { origin, reach, kinds: POINT_KINDS });
+    if (q.kind) return { p: [r2(q.p[0]), r2(q.p[1])], guides: guideList(q), kind: q.kind };
+  }
+  const p = [r2(a.p[0]), r2(a.p[1])];
+  return { p, guides: a.hits.map(h => [h.ref, p]), kind: a.hits.length ? "align" : "grid" };
+}
+/* the edge i moved square to itself as far out as g: g first catches a near outline, then the middle of the edge is
+   taken square to the edge; → { ring, guides } */
+export function snapEdge(ring, i, g, { near = null, reach = 0.8, grid = 0.5 } = {}) {
+  const a = ring[i], b = ring[(i + 1) % ring.length], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, n = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L];
+  let h = g, guides = [];
+  if (near) {
+    const d = (g[0] - m[0]) * n[0] + (g[1] - m[1]) * n[1], on = [m[0] + n[0] * d, m[1] + n[1] * d], q = snapDragPoint(on, near, { origin: m, reach, kinds: POINT_KINDS });
+    if (q.kind) { h = q.p; guides = guideList(q); }
+  }
+  if (!guides.length) h = [round(g[0], grid), round(g[1], grid)];
+  return { ring: moveEdge(ring, i, h), guides };
 }
 
 /* the three.js part. The app gives THREE, el (the canvas), host (for the numbers), scene, camera() (the one in use),
@@ -54,14 +72,15 @@ export function snapPoint(pts, i, g, { closed = true, grid = 0.5, tol = 0.6, axi
    onBusy(on) (the picker stands aside).
    attach(item) shows the handles for item { id, ring } or { id, line, width }, with mesh (its Object3D, hidden while
    the new shape is drawn) */
-export function createShape({ THREE, el, host = el.parentElement, scene, camera, P, ground, redraw, onCommit, onBusy = () => {} }) {
+export function createShape({ THREE, el, host = el.parentElement, scene, camera, P, ground, redraw, onCommit, onBusy = () => {}, others = () => [], onLive = () => {}, snapPx = 10, touchPx = 28 }) {
   const G = new THREE.Group(); scene.add(G); G.visible = false;
   const ACC = 0x2f6fde;
   const onTop = m => { m.depthTest = false; m.depthWrite = false; m.transparent = true; return m; };
   const kMat = onTop(new THREE.MeshBasicMaterial({ color: ACC })), mMat = onTop(new THREE.MeshBasicMaterial({ color: 0xffffff }));
   const ringMat = onTop(new THREE.MeshBasicMaterial({ color: ACC, opacity: 0.8, side: THREE.DoubleSide }));
   const fillMat = onTop(new THREE.MeshBasicMaterial({ color: ACC, opacity: 0.22, side: THREE.DoubleSide }));
-  const lineMat = onTop(new THREE.LineBasicMaterial({ color: ACC })), guideMat = onTop(new THREE.LineDashedMaterial({ color: ACC, dashSize: 1, gapSize: 0.7 }));
+  const lineMat = onTop(new THREE.LineBasicMaterial({ color: ACC }));
+  const guideLines = createGuides({ THREE, scene, host, el, camera, P, ground });
   const knob = new THREE.SphereGeometry(1, 16, 12);
   const turnRing = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 96).rotateX(-Math.PI / 2), ringMat), turnKnob = new THREE.Mesh(knob, mMat);
   turnRing.userData.h = ["ring"]; turnKnob.userData.h = ["ring"]; turnRing.renderOrder = turnKnob.renderOrder = 21; G.add(turnRing, turnKnob);
@@ -119,8 +138,8 @@ export function createShape({ THREE, el, host = el.parentElement, scene, camera,
         }
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); const f = new THREE.Mesh(g, fillMat); f.renderOrder = 19; drawn.add(f);
       }
-      for (const [p, q] of guides) { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([at(p, 0.35), at(q, 0.35)]), guideMat); l.computeLineDistances(); l.renderOrder = 22; drawn.add(l); }
     }
+    guideLines.set(shown ? guides : []);
     if (item?.mesh) item.mesh.visible = !shown;
     label();
   }
@@ -153,21 +172,45 @@ export function createShape({ THREE, el, host = el.parentElement, scene, camera,
     const g = onGround(e) || centroidOf(pts), from = pts.map(p => p.slice());
     if (h[0] === "add") { pts.splice(h[1] + 1, 0, g.slice()); op = { kind: "point", i: h[1] + 1, from, how: "add" }; }
     else op = { kind: h[0], i: h[1], from, grab: g, how: h[0], turned: 0, a0: deg(Math.atan2(g[1] - centroidOf(pts)[1], g[0] - centroidOf(pts)[0])), press: { x: e.clientX, y: e.clientY } };
-    op.axis = axisOf(from, closed()); onBusy(true); shown = true; draw();
+    op.axis = axisOf(from, closed()); op.touch = e.pointerType === "touch"; op.near = dragContext((others(item.id) || []).map(o => o.ring), centroidOf(from), 60); onBusy(true); shown = true; draw();
   }
   function move(e) {
     if (!op) { if (item && !e.buttons && e.target === el) el.style.cursor = handleAt(e) ? "grab" : ""; return; }
     const g = onGround(e); if (!g) return;
-    const free = e.altKey; let guides = [];
-    if (op.kind === "point") { const r = free ? { p: g, guides: [] } : snapPoint(pts, op.i, g, { closed: closed(), axis: op.axis }); pts[op.i] = r.p; guides = r.guides; }
-    else if (op.kind === "edge") pts = moveEdge(op.from, op.i, free ? g : [round(g[0], 0.5), round(g[1], 0.5)]);
+    const free = e.altKey || !snapsOn; let guides = [];
+    const reach = Math.max(0.3, Math.min(3, (op.touch ? touchPx / 2 : snapPx) / pxPerM(g)));
+    if (op.kind === "point") { const r = free ? { p: g, guides: [] } : snapPoint(pts, op.i, g, { closed: closed(), axis: op.axis, near: op.near, origin: op.from[op.i], reach }); pts[op.i] = r.p; guides = r.guides; }
+    else if (op.kind === "edge") { if (free) pts = moveEdge(op.from, op.i, g); else { const r = snapEdge(op.from, op.i, g, { near: op.near, reach }); pts = r.ring; guides = r.guides; } }
     else if (op.kind === "body") { let d = [g[0] - op.grab[0], g[1] - op.grab[1]]; if (!free) d = d.map(v => round(v, 0.5)); pts = op.from.map(p => [r2(p[0] + d[0]), r2(p[1] + d[1])]); }
     else if (op.kind === "ring") { const c = centroidOf(op.from); let a = deg(Math.atan2(g[1] - c[1], g[0] - c[0])) - op.a0; if (!free) a = round(a, 15); op.turned = a; pts = turnPts(op.from, c, a); }
-    draw(guides); redraw();
+    draw(guides); redraw(); live(e);
+  }
+  /* metres on the ground to one pixel's worth: pixels per metre at g */
+  function pxPerM(g) { const a = at(g).project(camera()), b = at([g[0] + 1, g[1]]).project(camera()); return Math.max(2, Math.hypot((a.x - b.x) / 2 * el.clientWidth, (a.y - b.y) / 2 * el.clientHeight)); }
+  /* live numbers for the type-in box: a point's distance from the point before it, an edge's distance moved */
+  function liveValues() {
+    if (!op) return null;
+    if (op.kind === "point") { const j = (op.i - 1 + pts.length) % pts.length, p = pts[op.i], q = pts[j]; return { L: Math.hypot(p[0] - q[0], p[1] - q[1]) }; }
+    if (op.kind === "edge") { const a = op.from[op.i], b = op.from[(op.i + 1) % pts.length], c = pts[op.i], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return { d: ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / L }; }
+    return null;
+  }
+  function live(e) { const v = liveValues(); if (v) onLive(op.kind, v, e ? { x: e.clientX, y: e.clientY } : null); }
+  let snapsOn = true;
+  /* typed numbers: a point at that distance from the point before it, in the direction it has; an edge that far out */
+  function typed(v) {
+    if (!op) return false;
+    if (op.kind === "point" && Number.isFinite(v.L)) {
+      const j = (op.i - 1 + pts.length) % pts.length, q = pts[j], p = pts[op.i], n = Math.hypot(p[0] - q[0], p[1] - q[1]) || 1;
+      pts[op.i] = [r2(q[0] + (p[0] - q[0]) / n * Math.max(0.1, v.L)), r2(q[1] + (p[1] - q[1]) / n * Math.max(0.1, v.L))];
+    } else if (op.kind === "edge" && Number.isFinite(v.d)) {
+      const a = op.from[op.i], b = op.from[(op.i + 1) % pts.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nn = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      pts = moveEdge(op.from, op.i, [m[0] + nn[0] * v.d, m[1] + nn[1] * v.d]);
+    } else return false;
+    const o = op; op = null; snapsOn = true; onBusy(false); guideLines.clear(); finish(o.how, o.from, "typed"); return true;
   }
   function up(e) {
     if (!op) return;
-    const o = op; op = null; onBusy(false);
+    const o = op; op = null; snapsOn = true; onBusy(false); guideLines.clear();
     const moved = JSON.stringify(pts) !== JSON.stringify(o.from);
     if (!moved || (o.press && Math.hypot(e.clientX - o.press.x, e.clientY - o.press.y) < 4 && o.kind !== "point")) { back(o.from); return; }
     finish(o.how, o.from, "drag");
@@ -179,7 +222,7 @@ export function createShape({ THREE, el, host = el.parentElement, scene, camera,
     Promise.resolve(onCommit(id, body, how, by)).then(ok => { if (ok === false && item?.id === id) back(from); }, () => { if (item?.id === id) back(from); });
   }
   function back(from) { pts = from.map(p => p.slice()); shown = false; draw(); redraw(); }
-  function cancel() { if (!op) return; const o = op; op = null; onBusy(false); back(o.from); }
+  function cancel() { if (!op) return; const o = op; op = null; snapsOn = true; onBusy(false); guideLines.clear(); back(o.from); }
 
   /* a double click: on a point, take it away; on an edge's knob, a new point there */
   function dbl(e) {
@@ -217,9 +260,9 @@ export function createShape({ THREE, el, host = el.parentElement, scene, camera,
   el.addEventListener("dblclick", dbl, true); addEventListener("keydown", key, true); el.addEventListener("contextmenu", menu, true);
   el.addEventListener("pointerenter", enter); el.addEventListener("pointerleave", leave);
   return {
-    attach, detach, cancel, get busy() { return !!op || !!keyRun; }, get item() { return item; },
+    attach, detach, cancel, typed, setSnaps(on) { snapsOn = !!on; }, get snaps() { return snapsOn; }, get live() { return liveValues(); }, get busy() { return !!op || !!keyRun; }, get item() { return item; },
     /* the handles' size follows the camera: call when the view moves */
     frame() { if (item) { sizeKnobs(); if (op) label(); } },
-    destroy() { detach(); scene.remove(G, drawn); num.remove(); el.removeEventListener("pointerdown", down, true); removeEventListener("pointermove", move); removeEventListener("pointerup", up, true); el.removeEventListener("dblclick", dbl, true); removeEventListener("keydown", key, true); el.removeEventListener("contextmenu", menu, true); el.removeEventListener("pointerenter", enter); el.removeEventListener("pointerleave", leave); },
+    destroy() { detach(); scene.remove(G, drawn); guideLines.destroy(); num.remove(); el.removeEventListener("pointerdown", down, true); removeEventListener("pointermove", move); removeEventListener("pointerup", up, true); el.removeEventListener("dblclick", dbl, true); removeEventListener("keydown", key, true); el.removeEventListener("contextmenu", menu, true); el.removeEventListener("pointerenter", enter); el.removeEventListener("pointerleave", leave); },
   };
 }

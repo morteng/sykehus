@@ -21,6 +21,7 @@ import { GROUND_ID } from "./landscape.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
+import { createDragType } from "./dragtype.js?v=20261027zh";
 import { baseOf, groundText, lotText } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
@@ -835,7 +836,7 @@ impPop.onsubmit = async ev => {
   toast(`${f.name}: ${m1(lx)} × ${m1(ly)} m, ${m1(lz)} m høy${j.unit?.length && j.unit.length !== "metre" && j.unit.from !== "person" ? ` (fila er i ${{ millimetre: "millimeter", centimetre: "centimeter", decimetre: "desimeter", foot: "fot", inch: "tommer" }[j.unit.length] || j.unit.length}, gjort om)` : ""}. Trykk der den skal stå.`, { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
 };
 /* by: how the build tools made it (renderkit build.js), in its why, so a change no one meant says where it came from */
-const BY = { drag: "dratt", click: "med «Flytt»", keys: "med tastene", wheel: "med Shift og hjulet" };
+const BY = { drag: "dratt", click: "med «Flytt»", keys: "med tastene", wheel: "med Shift og hjulet", typed: "med tall" };
 async function reshape(id, set, what = "Endret", by = null) {
   const r = await edit([{ kind: "reshape", id, ...set, why: `endret på siden${BY[by] ? ` (${BY[by]})` : ""}` }], "Fikk ikke endret"); if (!r) return false;
   toast(`${what}.`, { label: "Angre", run: () => undoLast(r.n, r.k) }); return true;
@@ -1120,11 +1121,16 @@ addEventListener("sykehus:valg", () => picker.set(valg.items.map(valg.key), unde
 /* a new building picked gets the build tools (renderkit build.js, U3569, Morten 22:29Z «make it like in a good
    game»): drag it, its ring, an end, a side or its top; R, Q, E turn it, the arrows nudge it; each drag one change */
 const buildingName = b => nameOf(b.id);
+/* what a drag snaps to and the type-in box (U3878, Morten 20:24Z «subtle symmetry guides/snaps … the few manual controls in 3d and 2d up to par»): one copy for the volume and the ground knobs */
+const dragType = createDragType({ host: $("stage") });
+const nearbyRings = id => { const gone = new Set((site.demolished || []).map(d => d.id));
+  return [...site.buildings.filter(b => !gone.has(b.id) && b.ring?.length > 2).map(b => ({ id: b.id, name: buildingName(b), ring: b.ring })),
+    ...(site.added || []).filter(a => a.kind === "volume" && a.id !== id && !gone.has(a.id)).map(a => ({ id: a.id, name: a.name, ring: cornersOf(bodyOf(a)) }))]; };
 const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K.scene, camera: K.camera, P: K.P, ground: K.ground, lot: site.lot?.ring || null, storey: 3.2, redraw: K.redraw,
-  others: id => { const gone = new Set((site.demolished || []).map(d => d.id));
-    return [...site.buildings.filter(b => !gone.has(b.id) && b.ring?.length > 2).map(b => ({ id: b.id, name: buildingName(b), ring: b.ring })),
-      ...(site.added || []).filter(a => a.kind === "volume" && a.id !== id && !gone.has(a.id)).map(a => ({ id: a.id, name: a.name, ring: cornersOf(bodyOf(a)) }))]; },
-  onBusy: on => picker.pause(on),
+  others: nearbyRings,
+  snapPx: 10, touchPx: 28,
+  onLive: (k, v, p) => dragType.live({ name: "build", typed: v2 => build.typed(v2), setSnaps: on => build.setSnaps(on), get snaps() { return build.snaps; } }, k, v, p),
+  onBusy: on => { picker.pause(on); dragType.busy(on); },
   /* where its foot will stand there: design.js's rule, with the base_kote its own edit gave, if any */
   baseFor: body => { const a = (site.added || []).find(x => x.id === build.item?.id); if (!a) return build.item?.base ?? 0; const e0 = draft?.edits?.find(x => x.kind === "volume" && x.id === a.id); return baseOf(site, { ...a, ...body, base_kote: e0?.base_kote }); },
   onCommit: (id, body, how, by) => {
@@ -1139,7 +1145,9 @@ const build = createBuild({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K
    and a turn ring, and paths by their points»): each drag one change, through reshape as the card's fields go */
 const SHAPED = { point: "fikk et punkt flyttet", edge: "fikk en kant flyttet", add: "fikk et nytt punkt", remove: "mistet et punkt", move: "flyttet", ring: "snudd" };
 const shapeEd = createShape({ THREE: K.THREE, el: K.el, host: $("stage"), scene: K.scene, camera: K.camera, P: K.P, ground: K.ground, redraw: K.redraw,
-  onBusy: on => { picker.pause(on); viewer.bands(!on); },
+  others: nearbyRings,
+  onLive: (k, v, p) => dragType.live({ name: "shape", typed: v2 => shapeEd.typed(v2), setSnaps: on => shapeEd.setSnaps(on), get snaps() { return shapeEd.snaps; } }, k, v, p),
+  onBusy: on => { picker.pause(on); viewer.bands(!on); dragType.busy(on); },
   onCommit: (id, body, how, by) => { const g = (site.landscape || []).find(x => x.id === id); if (!g) return false; return reshape(id, body, `${groundName(g)} ${SHAPED[how] || "endret"}`, by); } });
 function syncShape() {
   if (shapeEd.busy) return;

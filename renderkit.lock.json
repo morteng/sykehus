@@ -1,5 +1,5 @@
 {
-  "kits": "3f6776195f499d2bb0d6b99c0e62532231f2dec2",
+  "kits": "57421756265f5532b1847d826f90c21cda2f9d6a",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -26,8 +26,8 @@
     "fit.js": "476f22c5a8d4032393e7fc33be5ae9037b990028",
     "views.js": "0de40109de70b91115a9d1a78ee2a4e27c361229",
     "select.js": "ccb48dbd13e700bca8fcc64d64ce18067d0391e5",
-    "build.js": "af3ea96aa947cbf0088d043b856febe3d960a650",
-    "shape.js": "e5e10dbfb0ea61a7390831e249a169dacf0f6d5e",
+    "build.js": "c7cde0532d433c6bfb4f42c81fe2481354b23b12",
+    "shape.js": "3943c293d8f331f786fafb3bb14fa3a9179151aa",
     "grade.js": "34a5a56933754484f4a87a16d4f240dbfc52cb8c",
     "materials.js": "40cb42d2788c06499d05bc38dbbf7eb6e51ec007",
     "materials-three.js": "c7f5b02b3e879cb753778b18f2299a1580eb5ff5",
@@ -82,6 +82,9 @@
     "thumb-concrete.webp": "5741b565ec0d678ce86476a27e094801f9518cc7",
     "thumb-wood.webp": "9f2a2319430e396a95fa1f088f4736a2f87516c6",
     "areaclip.js": "eb6f5d2cb4e82e0e573bf40e8611c9e3c2e6ce83",
-    "frame.js": "b299a6e856e92fa583c87bf7d19e90ec2d847062"
+    "frame.js": "b299a6e856e92fa583c87bf7d19e90ec2d847062",
+    "dragsnap.js": "348a591aaf26f5f90ae410eaec69bc02b9c0da25",
+    "guidelines.js": "4353b2403cf4bc12846274d092957b2fb4df31a4",
+    "infer.js": "e1a1fae0759c072530969cf8b1965cace5413d2d"
   }
 }
