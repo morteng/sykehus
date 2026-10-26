@@ -621,6 +621,7 @@ async function saveFacts(item, v) {
     const a = site.added.find(x => x.id === item.id), set = {};
     for (const k of ["name", "use", "built", "note"]) if (v[k] != null && v[k] !== (a[k] ?? "")) set[k] = v[k];
     if (v.storeys && +v.storeys !== a.storeys) set.storeys = +v.storeys;
+    if (v.entrance != null && v.entrance !== (a.entrance ?? "")) set.entrance = v.entrance || null;
     /* length, direction (a compass's degrees) and middle: the same numbers the build tools show (U3569) */
     const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), c0 = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2], ang0 = ((90 - Math.atan2(a.to[1] - a.from[1], a.to[0] - a.from[0]) * 180 / Math.PI) % 360 + 360) % 360;
     const nL = v.length && Math.abs(+v.length - L) > 0.05 ? +v.length : L, nA = v.angle !== "" && v.angle != null && Number.isFinite(+v.angle) && Math.abs(+v.angle - Math.round(ang0)) >= 1 ? +v.angle : ang0;

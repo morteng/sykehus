@@ -94,6 +94,12 @@ function facts(e, str, out) {
   if (e.use != null) out.use = str(String(e.use), 80, "Bruken");
   if (e.built != null) out.built = str(String(e.built), 40, "Byggeåret");
   if (e.note != null) out.note = str(String(e.note), 600, "Merknaden");
+  /* U3566 (b): the side of its step-free entrance (N, Ø, S, V); "" or null takes it away */
+  if (e.entrance !== undefined) {
+    const k = e.entrance == null ? "" : String(e.entrance).trim().toUpperCase().replace(/^(O|E|ØST|OST|EAST)$/, "Ø").replace(/^(W|VEST|WEST)$/, "V").replace(/^(NORD|NORTH)$/, "N").replace(/^(SØR|SOR|SOUTH)$/, "S");
+    if (k && !SIDES_ENTRY.includes(k)) throw new Error("entrance er siden inngangen vender mot: N, Ø, S eller V");
+    out.entrance = k || null;
+  }
   if (e.storeys != null) { const n = +e.storeys; if (!Number.isInteger(n) || n < 1 || n > 30) throw new Error("Etasjene er et helt tall fra 1 til 30"); out.storeys = n; }
   return out;
 }
@@ -287,9 +293,9 @@ function volumeParts(site, e) {
   return { parts: [{ axis: [from, to], profile: prof, mat: e.material, role: "volume" }], base: z };
 }
 
-/* U3566: the ground a new building stands on, as a builder leaves it: a level pad at its foot 1 m out past its footprint
-   (PAD_M), and from the pad's edge a slope of 1:2 (SLOPE, run per rise) up to the ground where it is cut and down to it
-   where it is filled, till it meets the ground. Made on the after's own copy of the terrain grid (the before's is shared
+/* U3566: the ground a new building stands on, as a builder leaves it: at its foot by the wall, falling away from it 1:50
+   (FALL) for 3 m (PAD_M), so water runs off the house (Byggforsk 514.221), and from that edge a slope of 1:2 (SLOPE,
+   run per rise) up to the ground where it is cut and down to it where it is filled, till it meets the ground. Made on the after's own copy of the terrain grid (the before's is shared
    and never written), so the viewer draws it, and what stands on the ground (paths, trees, the next building) stands on
    it. Its numbers on the building: ground { kote, cut_m3, fill_m3, max_cut, max_fill, sides { N, Ø, S, V: { cut, fill } }
    the deepest at each side (m), wall: the side a retaining wall would go, when the cut there is deeper than WALL_M }.
@@ -297,7 +303,11 @@ function volumeParts(site, e) {
    onto roads, paths, pools and trees, the plot line, a step-free entrance, the foundation and geotechnics. Its foot,
    unless a kote is asked: where the cut and the fill are the same (balancedFoot, U3566 f), balanced: true. */
 /* PAD_FAR: a foot set more than this over or under the ground (base_kote) stands on its own, on posts or in a pit: no pad */
-const PAD_M = 1, SLOPE = 2, WALL_M = 1.5, PAD_FAR = 3;
+const PAD_M = 3, FALL = 1 / 50, SLOPE = 2, WALL_M = 1.5, PAD_FAR = 3;
+/* U3566 (b), TEK17 § 8-6: a step-free entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn),
+   then a ramp at most 1:20 (RAMP) to the ground, 1.8 m wide (ENTRY_W), with a rest for every 0.6 m it rises; past
+   RAMP_MAX m of ramp it is said to need a lift or another door */
+const LANDING = 1.6, RAMP = 20, ENTRY_W = 1.8, REST_RISE = 0.6, RAMP_MAX = 80, SIDES_ENTRY = ["N", "Ø", "S", "V"], COMPASS = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 /* write false: only the numbers, the grid left as it is (balancedFoot tries koter with it) */
 function padGround(site, a, base, write = true) {
   const T = site.terrain; if (!T?.z) return null;
@@ -307,11 +317,31 @@ function padGround(site, a, base, write = true) {
   const r0 = Math.max(0, Math.floor((T.y1 - c[1] - R) / T.res)), r1 = Math.min(T.h - 1, Math.ceil((T.y1 - c[1] + R) / T.res));
   const sides = { N: { cut: 0, fill: 0 }, "Ø": { cut: 0, fill: 0 }, S: { cut: 0, fill: 0 }, V: { cut: 0, fill: 0 } };
   let cut = 0, fill = 0;
+  /* the entrance's face: of the four, the one whose outward normal is nearest the side asked; f its normal in the
+     building's own frame (along u, across n), off0 how far the face stands out from the middle */
+  const nv = [-u[1], u[0]], want = a.entrance && COMPASS[a.entrance];
+  const face = want && [[1, 0, L / 2], [-1, 0, L / 2], [0, 1, a.width / 2], [0, -1, a.width / 2]].map(([fu, fn, off0]) => ({ fu, fn, off0, dot: (fu * u[0] + fn * nv[0]) * want[0] + (fu * u[1] + fn * nv[1]) * want[1] })).sort((p, q) => q.dot - p.dot)[0];
+  let entry = null;
+  if (face) {
+    const dir = [face.fu * u[0] + face.fn * nv[0], face.fu * u[1] + face.fn * nv[1]], mid = [c[0] + dir[0] * face.off0, c[1] + dir[1] * face.off0];
+    let meet = null;
+    for (let t = LANDING; t <= LANDING + RAMP_MAX; t += 0.25) { const z0 = groundAt(site, [mid[0] + dir[0] * t, mid[1] + dir[1] * t]); if (Math.abs(z0 - base) <= (t - LANDING) / RAMP + 1e-9) { meet = { t, z0 }; break; } }
+    const rise = meet ? Math.abs(meet.z0 - base) : Math.abs(groundAt(site, [mid[0] + dir[0] * (LANDING + RAMP_MAX), mid[1] + dir[1] * (LANDING + RAMP_MAX)]) - base);
+    entry = { side: a.entrance, ramp_m: meet ? Math.round((meet.t - LANDING) * 10) / 10 : null, rise: Math.round(rise * 100) / 100, up: meet ? meet.z0 > base : null, rests: meet ? Math.max(0, Math.ceil(rise / REST_RISE) - 1) : null, ok: !!meet };
+  }
+  const half = Math.max(ENTRY_W / 2, T.res * 0.75);
   for (let r = r0; r <= r1; r++) for (let k = c0; k <= c1; k++) {
     const i = r * T.w + k, z0 = T.z[i]; if (z0 == null) continue;
     const x = T.x0 + (k + 0.5) * T.res - c[0], y = T.y1 - (r + 0.5) * T.res - c[1];
-    const du = Math.max(0, Math.abs(x * u[0] + y * u[1]) - hu), dv = Math.max(0, Math.abs(-x * u[1] + y * u[0]) - hv), dist = Math.hypot(du, dv);
-    const z = z0 > base ? Math.min(z0, base + dist / SLOPE) : Math.max(z0, base - dist / SLOPE);
+    /* off: how far out from the wall; the fall to PAD_M, then the slope to the ground */
+    const du = Math.max(0, Math.abs(x * u[0] + y * u[1]) - L / 2), dv = Math.max(0, Math.abs(-x * u[1] + y * u[0]) - a.width / 2), off = Math.hypot(du, dv);
+    const zp = base - FALL * Math.min(off, PAD_M), dist = Math.max(0, off - PAD_M);
+    let z = z0 > zp ? Math.min(z0, zp + dist / SLOPE) : Math.max(z0, zp - dist / SLOPE);
+    /* in the entrance's way: level with the floor on the landing, then the ramp till it meets the ground */
+    if (face) {
+      const al = x * u[0] + y * u[1], ac = x * nv[0] + y * nv[1], t = (face.fu ? face.fu * al : face.fn * ac) - face.off0, lat = face.fu ? ac : al;
+      if (t > 0 && Math.abs(lat) <= half) z = t <= LANDING ? base : z0 > base ? Math.min(z0, base + (t - LANDING) / RAMP) : Math.max(z0, base - (t - LANDING) / RAMP);
+    }
     if (Math.abs(z - z0) < 0.005) continue;
     if (write) T.z[i] = z;
     const dz = z0 - z, side = Math.abs(x) > Math.abs(y) ? (x > 0 ? "Ø" : "V") : (y > 0 ? "N" : "S");
@@ -321,7 +351,7 @@ function padGround(site, a, base, write = true) {
   for (const s of Object.values(sides)) { s.cut = r2(s.cut); s.fill = r2(s.fill); }
   const deep = Object.entries(sides).filter(([, s]) => s.cut > WALL_M).sort((p, q) => q[1].cut - p[1].cut)[0];
   if (!write) return { cut, fill };
-  return { kote: r2(base), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
+  return { kote: r2(base), ...(entry ? { entrance: entry } : {}), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
 }
 
 /* a pad's work in words, for the pane and for Anton (look): «graves ut 1,2 m mot nord, fylles opp 0,8 m mot sør» */
@@ -331,8 +361,16 @@ export function groundText(g) {
   const most = k => Object.entries(g.sides).filter(([, s]) => s[k] >= 0.2).sort((p, q) => q[1][k] - p[1][k])[0];
   const c = most("cut"), f = most("fill"), bits = [];
   if (c) bits.push(`graves ut ${m1(c[1].cut)} m mot ${SIDE_NO[c[0]]}`); if (f) bits.push(`fylles opp ${m1(f[1].fill)} m mot ${SIDE_NO[f[0]]}`);
-  return `Tomta planeres på kote +${m1(g.kote)}${g.balanced ? ", der det som graves ut fyller resten" : ""}, 1 m ut fra bygget, med skråning 1:${SLOPE} til terrenget${bits.length ? ": " + bits.join(", ") : ""}. Utgraving ${g.cut_m3.toLocaleString("nb-NO")} m³, fylling ${g.fill_m3.toLocaleString("nb-NO")} m³.`
-    + (g.wall ? ` Skjæringen mot ${SIDE_NO[g.wall]} er ${m1(g.sides[g.wall].cut)} m dyp: en støttemur der tar mindre plass enn skråningen.` : "");
+  return `Tomta planeres på kote +${m1(g.kote)} ved veggen${g.balanced ? ", der det som graves ut fyller resten" : ""}, med fall 1:50 bort fra bygget de første ${PAD_M} m og skråning 1:${SLOPE} derfra til terrenget${bits.length ? ": " + bits.join(", ") : ""}. Utgraving ${g.cut_m3.toLocaleString("nb-NO")} m³, fylling ${g.fill_m3.toLocaleString("nb-NO")} m³.`
+    + (g.wall ? ` Skjæringen mot ${SIDE_NO[g.wall]} er ${m1(g.sides[g.wall].cut)} m dyp: en støttemur der tar mindre plass enn skråningen.` : "") + entranceText(g.entrance);
+}
+/* the step-free entrance in words (TEK17 § 8-6) */
+export function entranceText(n) {
+  if (!n) return "";
+  const s = SIDE_NO[n.side];
+  if (!n.ok) return ` Inngangen mot ${s} ligger ${m1(n.rise)} m fra terrenget: en rampe 1:${RAMP} blir lengre enn ${RAMP_MAX} m, så den trenger heis, en annen inngang, eller bygget en annen kote.`;
+  if (n.ramp_m < 0.5) return ` Trinnfri inngang mot ${s}: terrenget ligger i nivå med gulvet.`;
+  return ` Trinnfri inngang mot ${s}: repos ${String(LANDING).replace(".", ",")} m i nivå med gulvet, så rampe 1:${RAMP} ${n.up ? "opp" : "ned"} til terrenget, ${m1(n.ramp_m)} m lang (${m1(n.rise)} m${n.rests ? `, ${n.rests} hvilerepos` : ""}).`;
 }
 
 const profArea = p => Math.abs(p.reduce((a, q, i) => { const r = p[(i + 1) % p.length]; return a + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
@@ -362,7 +400,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base) : null;
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));

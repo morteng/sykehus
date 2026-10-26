@@ -96,3 +96,33 @@ test("a new building's foot balances its pad's cut and fill; a kote asked is kep
   const l = applyEdits(site, floors, add([], { ...v, base_kote: Math.round(low * 10) / 10 })).site.added[0];
   assert.equal(l.base_kote, Math.round(low * 10) / 10, "a kote asked is the kote"); assert.ok(l.ground.cut_m3 > 3 * g.cut_m3, `on the lowest it digs: ${l.ground.cut_m3} m³`);
 });
+
+/* U3566 (a): the ground falls away from the wall 1:50 for 3 m, so water runs off the house */
+test("the ground by a new building falls 1:50 away from its wall for the first 3 m", () => {
+  const v = { kind: "volume", id: "nFall", name: "Hus", shape: "box", from: [-10, -62], to: [10, -62], width: 12, height: 6 };
+  const m = applyEdits(site, floors, add([], v)), a = m.site.added[0], T = m.site.terrain, base = a.ground.kote;
+  let n = 0;
+  for (let r = 0; r < T.h; r++) for (let k = 0; k < T.w; k++) {
+    const x = T.x0 + (k + 0.5) * T.res, y = T.y1 - (r + 0.5) * T.res, off = Math.hypot(Math.max(0, Math.abs(x) - 10), Math.max(0, Math.abs(y + 62) - 6));
+    if (off > 0 && off <= 3) { n++; assert.ok(Math.abs(groundAt(m.site, [x, y]) - (base - off / 50)) < 0.011, `at ${off.toFixed(2)} m out: ${groundAt(m.site, [x, y])} for ${base - off / 50}`); }
+  }
+  assert.ok(n > 20, `${n} cells in the fall`);
+  assert.match(groundText(a.ground), /fall 1:50 bort fra bygget/);
+});
+
+/* U3566 (b): a step-free entrance: level with the floor by the door, then a ramp 1:20 to the ground */
+test("a step-free entrance: a landing level with the floor, a ramp of 1:20 to the ground, said in words", () => {
+  const v = { kind: "volume", id: "nInn", name: "Hus", shape: "box", from: [-15, -62], to: [5, -62], width: 12, height: 6, entrance: "sør" };
+  const c = add([], v), m = applyEdits(site, floors, c), a = m.site.added[0], n = a.ground.entrance;
+  assert.equal(a.entrance, "S"); assert.equal(n.side, "S");
+  assert.equal(n.ok, true); assert.ok(Math.abs(n.ramp_m - n.rise * 20) <= 0.5, `${n.ramp_m} m for ${n.rise} m`);
+  assert.ok(n.ramp_m > 5, `a ramp: ${n.ramp_m} m`);
+  assert.ok(Math.abs(groundAt(m.site, [-5, -68.8]) - a.ground.kote) < 0.011, "the landing by the door is the floor's kote");
+  assert.match(groundText(a.ground), /Trinnfri inngang mot sør/);
+  assert.throws(() => add([], { ...v, entrance: "opp" }), /N, Ø, S eller V/);
+  /* where the ground falls faster than 1:20 the ramp never meets it: said so */
+  const steep = applyEdits(site, floors, add([], { ...v, id: "nBratt", from: [50, 40], to: [70, 40] })).site.added[0];
+  assert.equal(steep.ground.entrance.ok, false); assert.match(groundText(steep.ground), /trenger heis, en annen inngang/);
+  const off = applyEdits(site, floors, [...c, checkEdit(m.site, m.floors, { kind: "reshape", id: a.id, entrance: null })]).site.added[0];
+  assert.equal(off.entrance, undefined); assert.equal(off.ground.entrance, undefined);
+});
