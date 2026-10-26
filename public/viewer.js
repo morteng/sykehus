@@ -615,9 +615,12 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       /* and the centre on the terrain: past its edge there is no ground to stand on (pm 23:17Z: wheel ticks took the view
          off the map, under the terrain's edge) */
       const mx = Math.min(60, T.w * T.res / 4), my = Math.min(60, T.h * T.res / 4);
-      O.x = Math.max(T.x0 + mx, Math.min(T.x0 + T.w * T.res - mx, O.x)); O.y = Math.max(T.y1 - T.h * T.res + my, Math.min(T.y1 - my, O.y));
+      if (O.eye) {   // U3606: in «Gateplan» it is the eye that stays on the terrain (the centre is only where it looks)
+        const s = Math.sin(O.yaw), c = Math.cos(O.yaw), ex = Math.max(T.x0 + 2, Math.min(T.x0 + T.w * T.res - 2, O.x + O.dist * s)), ey = Math.max(T.y1 - T.h * T.res + 2, Math.min(T.y1 - 2, O.y - O.dist * c));
+        O.x = ex - O.dist * s; O.y = ey + O.dist * c;
+      } else { O.x = Math.max(T.x0 + mx, Math.min(T.x0 + T.w * T.res - mx, O.x)); O.y = Math.max(T.y1 - T.h * T.res + my, Math.min(T.y1 - my, O.y)); }
       t.x = O.x; t.z = -O.y;
-      const tg = ground(O.x, O.y) - base + 1; if (O.h < tg) { O.h = tg; t.y = tg; }
+      const tg = ground(O.x, O.y) - base + 1; if (O.h < tg && !O.eye) { O.h = tg; t.y = tg; }
       const fov = O.eye ? FOV_EYE : FOV; if (persp.fov !== fov) { persp.fov = fov; persp.updateProjectionMatrix(); }
       if (O.eye) {
         const ex = t.x + O.dist * Math.sin(O.yaw), ez = t.z + O.dist * Math.cos(O.yaw);
@@ -795,7 +798,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const typing = t => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
   function walkStep(now) {
     if (!held.size || !(mode === "3d" && O.eye)) { held.clear(); walkT = 0; return; }
-    const dt = walkT ? Math.min(0.25, (now - walkT) / 1000) : 1 / 60; walkT = now;
+    const dt = walkT ? Math.min(0.5, (now - walkT) / 1000) : 1 / 60; walkT = now;
     let f = 0, r = 0; for (const k of held) { f += WALK[k][0]; r += WALK[k][1]; }
     const v = (fast ? 18 : 6) * dt, n = Math.hypot(f, r) || 1;
     if (f || r) { eyeWalk(f / n * v, r / n * v); place(); }
@@ -807,7 +810,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     e.preventDefault(); hand();
     if (!held.size) { held.add(e.code); walkT = 0; requestAnimationFrame(walkStep); } else held.add(e.code);
   });
-  addEventListener("keyup", e => { fast = e.shiftKey; held.delete(e.code); });
+  /* a key let go walks the time since the last frame first, so a slow frame does not shorten the step */
+  addEventListener("keyup", e => { if (held.has(e.code) && held.size === 1 && walkT) walkStep(performance.now()); fast = e.shiftKey; held.delete(e.code); });
   /* U3606 (Morten 10:01Z «the google maps way of getting to gateplan mode by dropping a small person icon»): where a
      person dropped at a screen point would stand: on the ground, a road or a lawn; not on a roof, a tree or past the
      model. A ring on the ground shows it while the person is dragged. */
