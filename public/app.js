@@ -811,6 +811,17 @@ function showView(v) {
   else if (Object.keys(cam).length) viewer.look(cam, v.glide);
   pressMode();
 }
+/* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
+import("./tour.js").then(({ createTour }) => {
+  const sb = site.buildings.find(b => b.wing === "sentralblokka");
+  const tour = createTour({
+    home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },
+    pick: () => { if (!sb) return; valg.clear(); valg.pick(sb.id, {}); showInfo(sb); panel.reveal("selected"); },
+    unpick: () => valg.clear(), tab: t => panel.reveal(t), phone: () => panel.phone,
+  });
+  $("tourBtn").onclick = () => tour.start();
+  if (tour.due) setTimeout(() => { if (!document.querySelector(".tour:not([hidden])")) tour.start(); }, 1500);
+}).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261025d").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
 requestAnimationFrame(() => import("./streets.js?v=20261025b").then(m => m.addStreets({ viewer, site })).catch(e => console.warn("gater:", e)));

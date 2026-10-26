@@ -358,3 +358,20 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .shot .era[hidden] { display: none; }
 /* below 900 px: between the storey strip on the left and the zoom on the right */
 @media (max-width: 900px) { .shot { top: 64px; left: 84px; right: 92px; width: auto; transform: none; } }
+
+/* «Omvisning» (U3528): the rest dimmed round the part spoken of, and the card beside it */
+.tour { position: fixed; inset: 0; z-index: 1000; }
+.tour[hidden] { display: none; }
+.tour-hole { position: fixed; border-radius: var(--radius-lg); box-shadow: 0 0 0 200vmax rgba(24, 22, 18, .46); outline: 2px solid var(--accent); outline-offset: 2px; transition: left .25s, top .25s, width .25s, height .25s; pointer-events: none; }
+.tour-card { position: fixed; padding: var(--sp-3) var(--sp-4) var(--sp-3); background: var(--panel); color: var(--text); border-radius: var(--radius-lg); box-shadow: var(--shadow-md, 0 8px 28px rgba(0,0,0,.25)); transition: left .25s, top .25s; }
+.tour-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.tour-n { font-size: var(--fs-sm); color: var(--muted); }
+.tour-x { width: 32px; height: 32px; font: inherit; font-size: 20px; line-height: 1; color: var(--muted); background: none; border: 0; border-radius: var(--radius); cursor: pointer; }
+.tour-x:hover { color: var(--text); background: var(--hover-wash); }
+.tour-card h2 { margin: 0 0 6px; font-size: 18px; }
+.tour-card p { margin: 0; font-size: var(--fs-md, 15px); line-height: 1.45; }
+.tour-acts { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: var(--sp-3); }
+.tour-acts button { min-height: 40px; padding: 0 var(--sp-4); font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.tour-acts button[hidden] { display: none; }
+.tour-acts .go { color: var(--on-accent, #fff); background: var(--accent); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .tour-hole, .tour-card { transition: none; } }
