@@ -27,5 +27,5 @@ test("the page links the manifest, asks for the whole screen and carries the iOS
 
 test("the bars use the safe-area insets", () => {
   const c = read("../public/sykehus.css");
-  for (const sel of [".appbar", ".bstack", "#scale", "#levels", ".pf-bar"]) assert.match(c, new RegExp(`^${sel.replace(".", "\\.")}[^{]*\\{[^}]*env\\(safe-area-inset-(top|bottom)`, "m"), sel);
+  for (const sel of [".appbar", ".bstack", "#scale", ".pf-bar"]) assert.match(c, new RegExp(`^${sel.replace(".", "\\.")}[^{]*\\{[^}]*env\\(safe-area-inset-(top|bottom)`, "m"), sel);
 });

@@ -30,10 +30,24 @@
 .me-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; min-width: 12rem; }
 
 /* S4 the view tools, top left (right of the storey strip): 3D | Plan and Navn */
-.vt { position: absolute; z-index: var(--z-canvas); top: 12px; left: 100px; display: flex; gap: var(--sp-2); align-items: center; }
+.vt { position: absolute; z-index: var(--z-canvas); top: 12px; left: max(12px, env(safe-area-inset-left)); display: flex; gap: var(--sp-2); align-items: center; }
 .vt .seg2 { box-shadow: var(--shadow-sm); }
 .vt .seg2 button { min-height: var(--tap); padding: 0 var(--sp-4); font-size: var(--fs-md); }
 .vt .tgl { min-height: var(--tap); display: inline-flex; align-items: center; gap: var(--sp-2); box-shadow: var(--shadow-sm); font-size: var(--fs-md); }
+/* the floor control (U3888): replaces the strip down the left edge; the list opens under the button */
+.flr { position: relative; }
+.flr .seg2 { display: inline-flex; overflow: hidden; }
+.flr .seg2 button { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.flr #floorBtn.on { background: var(--accent-panel); color: var(--accent); font-weight: 600; }
+.flr .seg2 #floorUp, .flr .seg2 #floorDown { padding: 0 var(--sp-2); border-left: 1px solid var(--border); }
+.flr-pop { position: absolute; z-index: calc(var(--z-canvas) + 2); top: calc(100% + 6px); left: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.flr-pop[hidden] { display: none; }
+.flr-pop .g-levels { display: flex; max-height: min(72vh, 580px); overflow-y: auto; overscroll-behavior: contain; }
+.flr-pop .g-levels ol { width: 170px; }
+.flr-pop .g-levels button, .flr-pop .g-levels button.all { height: 33px; min-height: 33px; font-size: var(--fs-md); text-align: left; padding: 0 var(--sp-3); white-space: nowrap; }
+.flr-pop .g-levels button.drawn::after { right: 12px; }
+.flr-key { display: flex; align-items: center; gap: var(--sp-2); margin: 0; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border); color: var(--muted); font-size: var(--fs-xs); }
+.flr-key i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .vt .tgl[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
 
 /* S5 north and zoom, top right, clear of the fold tab */
@@ -56,10 +70,6 @@
 .nz .zoom2 .peg[aria-pressed=true] { background: var(--accent-panel); }
 .peg-ghost { position: fixed; z-index: 1000; width: 28px; height: 28px; margin: -26px 0 0 -14px; pointer-events: none; fill: #e8a317; stroke: #7a5200; stroke-width: 1; }
 
-/* S6 the storey strip (the kit's g-levels): its place at the left edge, centred */
-#levels { position: absolute; z-index: var(--z-canvas); left: 12px; top: 12px; bottom: 12px; display: flex; flex-direction: column; justify-content: center; pointer-events: none; }
-#levels > * { pointer-events: auto; }
-body.m.sheet-full #levels { display: none; }
 
 /* the scale bar (Plan), bottom right, and the first visit's tip, top centre */
 #scale { position: absolute; z-index: var(--z-canvas); right: 40px; bottom: 20px; padding: 8px 12px 6px; font-size: var(--fs-sm); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); display: none; }
@@ -165,12 +175,11 @@ body.plan.ed.talk-on:not(.m) .bstack { bottom: 20px; }
 .md table { border-collapse: collapse; margin: 0 0 var(--sp-2); font-size: .95em; } .md th, .md td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; }
 
 /* S12 iPad standing (Fab's body.m): the strip and the tools stay */
-body.m .vt { left: 100px; }
 body.m.ed.talk-on .stage .bstack { left: 100px; right: 16px; width: auto; }
 
 /* «Tegn» (tegn.js): the view stands still under the pen, framed in blue; the view's tools step aside, the panel stays */
 body.tegner .vt, body.tegner #bstack, body.tegner #tip { visibility: hidden; }
-body.tegner #levels, body.tegner .nz, body.tegner #scale { opacity: .4; pointer-events: none; z-index: calc(var(--z-canvas) + 6); }   /* over the still picture, greyed */
+body.tegner .nz, body.tegner #scale { opacity: .4; pointer-events: none; z-index: calc(var(--z-canvas) + 6); }   /* over the still picture, greyed */
 #tegn { position: absolute; inset: 0; z-index: calc(var(--z-canvas) + 5); }
 #tegnInk { position: absolute; inset: 0; touch-action: none; cursor: crosshair; box-shadow: inset 0 0 0 5px #2f6db0; }
 #tegn .card { position: absolute; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
@@ -415,9 +424,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .dr-top button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* the storey rail inside the view whatever its height: shorter rows on a short screen, and it scrolls before it runs
    under the app bar (1024 × 768: «Hele anlegget» was under the bar, «etasje» cut) */
-#levels .g-levels { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-@media (max-height: 860px) { #levels .g-levels button:not(.all) { height: 36px; min-height: 36px; } #levels .g-levels button.all { height: 44px; min-height: 44px; } }
-@media (max-height: 640px) { #levels .g-levels button:not(.all) { height: 30px; min-height: 30px; } }
 /* the views list over everything beside it while open (the panel's fold tab stood over it) */
 .appbar:has(.views-pop:not([hidden])) { z-index: calc(var(--z-sticky) + 20); }
 
@@ -537,7 +543,7 @@ body.anon #p-chat, body.anon #tab-photo, body.anon #p-photo, body.anon #pf, body
 .pf-stale { margin: 2px 0; color: var(--accent); font-weight: 600; font-size: var(--fs-sm); } .pf-spot-t { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--muted); }
 .pf-retake { border: 1px solid var(--accent-panel-edge); background: var(--accent-panel); border-radius: var(--radius); padding: var(--sp-2); margin: var(--sp-2) 0; } .pf-retake p { margin: 0 0 var(--sp-2); }
 /* in photo mode what the picture does not need steps aside: the storey rail, the view switch, the map's tools but the compass and the sun, the conversation, the bar's extras */
-body.photo .levels, body.photo .vt, body.photo .shot, body.photo #scale, body.photo #talk-form, body.photo .g-chat, body.photo #mfb, body.photo #tourBtn, body.photo #print, body.photo .nz .zoom2 > :not(#sunBtn):not(#mtree) { display: none !important; }
+body.photo .vt, body.photo .shot, body.photo #scale, body.photo #talk-form, body.photo .g-chat, body.photo #mfb, body.photo #tourBtn, body.photo #print, body.photo .nz .zoom2 > :not(#sunBtn):not(#mtree) { display: none !important; }
 body.photo .nz .north { width: 40px; height: 40px; } body.photo .nz .north svg { width: 28px; height: 28px; }
 body.m .pf-box { width: 104px; height: 104px; top: 8px; left: 8px; bottom: auto; } body.m .pf-bar { bottom: 112px; } body.m .pf-bar .pf-row { flex-wrap: wrap; max-width: 100%; justify-content: center; padding: 0 8px; } body.m .pf-bar .pf-row button { flex: 0 0 auto; padding: 4px 8px; min-height: 30px; }
 #p-photo label { display: grid; gap: 4px; margin: var(--sp-2) 0; color: var(--muted); font-size: var(--fs-sm); } #p-photo label input { font: inherit; color: var(--text); padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
@@ -595,6 +601,5 @@ body.m .pf-x { top: 8px; left: 50%; }
 .bstack { bottom: calc(16px + env(safe-area-inset-bottom)); }
 body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 #scale { bottom: calc(20px + env(safe-area-inset-bottom)); right: max(40px, env(safe-area-inset-right)); }
-#levels { left: max(12px, env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); }
 .pf-bar { bottom: calc(12px + env(safe-area-inset-bottom)); }
 .pf-box { bottom: calc(104px + env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); }

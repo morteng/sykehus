@@ -146,13 +146,29 @@ let storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.nam
 const koteOf = n => { const ks = wings.map(w => (w.levels || []).find(l => l.name === n)?.kote).filter(k => k != null); return ks.length ? Math.min(...ks) : null; };
 const stripItems = (wing = null) => storeys.slice().reverse().map(n => ({ id: n, label: String(order(n) || n), title: koteOf(n) != null ? `${n} · ${kote(koteOf(n))}` : n,
   drawn: floors.some(f => f.name === n), dim: !!wing && !(wing.levels || []).some(l => l.name === n) }));
-const strip = levels($("levels"), { items: stripItems(), all: { label: "Hele anlegget", title: "Hele anlegget" }, value: null, onPick: id => pickStorey(id ?? null), labelOf: i => i.id, name: "Etasjer", cap: "etasje" });
+const strip = levels($("floorPop"), { items: stripItems(), all: { label: "Hele anlegget", title: "Hele anlegget" }, value: null, onPick: id => { pickStorey(id ?? null); floorShut(true); }, labelOf: i => i.id, name: "Etasjer" });
+$("floorPop").insertAdjacentHTML("beforeend", `<p class="flr-key"><i aria-hidden="true"></i>Plantegning i arkivet</p>`);
+/* the floor control in the view bar (U3888): the button names the floor shown and opens the list (the kit's strip, so ↑ ↓ Home End and the dots
+   are the kit's); the two steppers walk the same ladder as the ↑ ↓ keys */
+const floorTxt = n => n === null ? "Hele anlegget" : n;
+function floorSet(n) { strip.set(n); $("floorTxt").textContent = floorTxt(n); $("floorBtn").classList.toggle("on", n !== null); }
+function floorShut(back) { if ($("floorPop").hidden) return; $("floorPop").hidden = true; $("floorBtn").setAttribute("aria-expanded", "false"); if (back) $("floorBtn").focus(); }
+$("floorBtn").onclick = () => {
+  if (!$("floorPop").hidden) return floorShut(true);
+  $("floorPop").hidden = false; $("floorBtn").setAttribute("aria-expanded", "true");
+  ($("floorPop").querySelector('[aria-pressed="true"]') || $("floorPop").querySelector("button"))?.focus();
+  $("floorPop").querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: "nearest" });
+};
+addEventListener("keydown", e => { if (e.key === "Escape" && !$("floorPop").hidden) { e.preventDefault(); e.stopPropagation(); floorShut(true); } }, true);
+document.addEventListener("pointerdown", e => { if (!e.target.closest("#flr")) floorShut(false); });
+function stepStorey(d) { const ladder = [null, ...storeys], i = ladder.indexOf(storeyOn), j = Math.max(0, Math.min(ladder.length - 1, i + d)); if (j !== i) pickStorey(ladder[j]); }
+$("floorUp").onclick = () => stepStorey(1); $("floorDown").onclick = () => stepStorey(-1);
 function dimStrip() { const w = valg.items.find(i => i.kind === "wing"); strip.setItems(stripItems(w ? wings.find(x => x.id === w.id) : null)); }
 let storeyOn = null;
 function pickStorey(name) {
   storeyOn = name;
   if (name === null) viewer.home(); else viewer.setStorey(name);
-  strip.set(name); pressMode(); showStorey(name);
+  floorSet(name); pressMode(); showStorey(name);
 }
 /* how a kote is known: read off a drawing, worked out, or assumed */
 const how = l => l.how && l.how !== "tegning" ? ` · ${esc(l.how)}` : "";
@@ -229,12 +245,12 @@ const FREE = () => panel.phone ? 0 : 100;   // the strip's width: the drawing is
 function facade(b, k) {
   sheet = null; side = k; const from = LOOK[k];
   viewer.setSection(b.wing, "fasade", FREE(), null, [-from[0], -from[1]]); pressMode();
-  storeyOn = null; strip.set(null); showInfo(b);
+  storeyOn = null; floorSet(null); showInfo(b);
 }
 function section(b, kind, drawn = null) {
   sheet = drawn; side = null;
   viewer.setSection(b.wing, kind, FREE(), drawn?.through || null, LOOK[drawn?.looking] || null); pressMode();
-  storeyOn = null; strip.set(null); showInfo(b);
+  storeyOn = null; floorSet(null); showInfo(b);
 }
 /* the names over the picture: off until this viewer turns them on with «Navn» or N (U3541, Morten 2026-10-25 19:26Z),
    remembered in this browser; only a choice is kept, under a new key, since the old one held «på» for everyone */
@@ -282,7 +298,7 @@ $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.
 /* the keys: + and − zoom, 0 the view as it opened (⌂), ↑ ↓ (or Page Up / Down) a storey up or down the strip, Home the whole site, Esc puts the
    card and the picks away */
 addEventListener("keydown", e => {
-  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.target.closest?.(".g-levels")) return;
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable || e.target.closest?.("#floorPop")) return;
   if (e.key === "n" || e.key === "N") setNames(!names);
   else if (e.key === "+" || e.key === "=") viewer.zoom(1 / 1.5);
   else if (e.key === "-" || e.key === "−") viewer.zoom(1.5);
@@ -290,8 +306,7 @@ addEventListener("keydown", e => {
   else if (e.key === "Escape") { if (!pickActs?.escape()) { shut(); valg.clear(); } }   // the card beside the pick folds first, the pick kept
   else if (e.key === "Home") pickStorey(null);
   else if (/^(ArrowUp|ArrowDown|PageUp|PageDown)$/.test(e.key)) {
-    const ladder = [null, ...storeys], i = ladder.indexOf(storeyOn), j = Math.max(0, Math.min(ladder.length - 1, i + (/Up$/.test(e.key) ? 1 : -1)));
-    if (j !== i) pickStorey(ladder[j]);
+    stepStorey(/Up$/.test(e.key) ? 1 : -1);
   } else return;
   e.preventDefault();
 });
@@ -302,7 +317,7 @@ const keys = createKeys({
   put: e => busy || !quickBack(e) ? edit([e], "Fikk ikke gjort igjen", true).then(r => !!r) : tearAtOnce({ ...hiding(), targets: [e.building], send: () => edit([e], "Fikk ikke gjort igjen", true) }).then(r => !!r),
   say: text => toast(text), name: describe, riv: () => !!pickActs?.riv(),
 });
-addEventListener("keydown", e => { if (!e.target.closest?.(".g-levels")) keys.key(e); });
+addEventListener("keydown", e => { if (!e.target.closest?.("#floorPop")) keys.key(e); });
 /* the first visit: how to move about, once; gone at the first touch or after a while */
 const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
 /* -2: shown once more when Shift and a drag stopped panning (U3569) */
@@ -362,7 +377,7 @@ function drawnList(w, v) {
 }
 function peel(b, w, name) {
   viewer.cutBuilding(b.id, name);
-  storeyOn = null; strip.set(null);
+  storeyOn = null; floorSet(null);
   pressMode(); showInfo(b);
 }
 /* a document as the cards name it: its title and year, the page, a link to it */
