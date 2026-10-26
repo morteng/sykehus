@@ -16,7 +16,7 @@ test("first turn: choices in plain words, how to begin, zoning early; no name as
   assert.match(t, /begynn å arbeide/); assert.match(t, /høyst to spørsmål/); assert.match(t, /regulering og vern/); assert.match(t, /Gi det et kort navn selv/);
   const n = firstTurn({ name: "Tun sør", card: "blank", from: "Mitt etter" });
   assert.match(n, /kopi av «Mitt etter»/); assert.match(n, /Navnet er «Tun sør»/); assert.doesNotMatch(n, /Gi det et kort navn/); assert.doesNotMatch(n, /Utgangspunkt/);
-  assert.deepEqual(CARDS.map(c => c.label), ["Behold høyblokka", "Riv og bygg nytt", "Mer grønt", "Boliger", "Blank"]);
+  assert.deepEqual(CARDS.map(c => c.label), ["Behold høyblokka", "Riv og bygg nytt", "Mer grønt", "Boliger", "Som i dag"]);
 });
 
 test("an empty version left over EMPTY_DAYS goes to the trash; one with a change, or a fresh one, stays", () => {

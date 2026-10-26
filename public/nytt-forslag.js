@@ -8,7 +8,7 @@ export const CARDS = [
   { id: "riv", label: "Riv og bygg nytt", say: "Riv det som står og bygg nytt.", icon: '<path d="M4 20h16"/><path d="M6 20V10l6-5 6 5v10"/><path d="M3 4l5 5M8 4L3 9"/>' },
   { id: "gront", label: "Mer grønt", say: "Mer grønt: trær, plen og planter på tomta.", icon: '<path d="M12 21v-7"/><path d="M12 14c-4 0-6-3-6-6 4 0 6 2 6 6zM12 12c0-4 2-6 6-6 0 4-2 6-6 6z"/>' },
   { id: "boliger", label: "Boliger", say: "Gjør tomta om til boliger.", icon: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>' },
-  { id: "blank", label: "Blank", say: "", icon: '<rect x="5" y="4" width="14" height="16" rx="2"/>' },
+  { id: "blank", label: "Som i dag", say: "", icon: '<rect x="5" y="4" width="14" height="16" rx="2"/>' },
 ];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
