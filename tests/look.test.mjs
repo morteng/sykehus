@@ -75,3 +75,13 @@ test("make_shots: each shot comes back as a picture with its caption; look saved
   assert.equal((await call("make_shots", { draft: d, pictures: false })).content.filter(isPng).length, 0, "without pictures when asked");
   assert.match((await call("look", { draft: d, saved_view: "finnes ikke" })).content[0].text, /finnes ikke|Fant ikke|Ingen/i);
 });
+
+test("show_building at eye level with picture: the picture comes back to Anton too; without it, Anton is told how to see it", async () => {
+  const r = await call("show_building", { wing: "Sentralblokka", eye_level: true, from_direction: "S", distance_m: 80, picture: true });
+  assert.ok(!r.isError, JSON.stringify(r.content));
+  const img = r.content.find(c => c.type === "image");
+  assert.ok(img && Buffer.from(img.data, "base64").subarray(1, 4).toString() === "PNG", "a PNG");
+  assert.match(r.content.at(-1).text, /The picture above is what you see/);
+  const n = await call("show_building", { wing: "Sentralblokka", eye_level: true, from_direction: "S", distance_m: 80 });
+  assert.ok(!n.content.some(c => c.type === "image")); assert.match(n.content.at(-1).text, /picture: true to see it/);
+});
