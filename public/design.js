@@ -308,15 +308,17 @@ const PAD_M = 3, FALL = 1 / 50, SLOPE = 2, WALL_M = 1.5, PAD_FAR = 3;
    then a ramp at most 1:20 (RAMP) to the ground, 1.8 m wide (ENTRY_W), with a rest for every 0.6 m it rises; past
    RAMP_MAX m of ramp it is said to need a lift or another door */
 const LANDING = 1.6, RAMP = 20, ENTRY_W = 1.8, REST_RISE = 0.6, RAMP_MAX = 80, SIDES_ENTRY = ["N", "Ø", "S", "V"], COMPASS = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
-/* write false: only the numbers, the grid left as it is (balancedFoot tries koter with it) */
-function padGround(site, a, base, write = true) {
+/* write false: only the numbers, the grid left as it is (balancedFoot tries koter with it). keep (U3566 c): the cells
+   of the pads laid before, each with whose it is: what stands under a building or in its fall stays as that one left
+   it, and where this pad meets one, the step between them is said (meets) */
+function padGround(site, a, base, write = true, keep = null) {
   const T = site.terrain; if (!T?.z) return null;
   const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, u = [d[0] / L, d[1] / L], c = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2];
   const hu = L / 2 + PAD_M, hv = a.width / 2 + PAD_M, R = Math.hypot(hu, hv) + 40, cell = T.res * T.res;
   const c0 = Math.max(0, Math.floor((c[0] - R - T.x0) / T.res)), c1 = Math.min(T.w - 1, Math.ceil((c[0] + R - T.x0) / T.res));
   const r0 = Math.max(0, Math.floor((T.y1 - c[1] - R) / T.res)), r1 = Math.min(T.h - 1, Math.ceil((T.y1 - c[1] + R) / T.res));
   const sides = { N: { cut: 0, fill: 0 }, "Ø": { cut: 0, fill: 0 }, S: { cut: 0, fill: 0 }, V: { cut: 0, fill: 0 } };
-  let cut = 0, fill = 0;
+  let cut = 0, fill = 0; const meets = new Map();
   /* the entrance's face: of the four, the one whose outward normal is nearest the side asked; f its normal in the
      building's own frame (along u, across n), off0 how far the face stands out from the middle */
   const nv = [-u[1], u[0]], want = a.entrance && COMPASS[a.entrance];
@@ -342,6 +344,12 @@ function padGround(site, a, base, write = true) {
       const al = x * u[0] + y * u[1], ac = x * nv[0] + y * nv[1], t = (face.fu ? face.fu * al : face.fn * ac) - face.off0, lat = face.fu ? ac : al;
       if (t > 0 && Math.abs(lat) <= half) z = t <= LANDING ? base : z0 > base ? Math.min(z0, base + (t - LANDING) / RAMP) : Math.max(z0, base - (t - LANDING) / RAMP);
     }
+    const other = keep?.get(i);
+    if (other && other.id !== a.id) {
+      if (off <= PAD_M) { const step = z - z0, was = meets.get(other.id); if (!was || Math.abs(step) > Math.abs(was.step)) meets.set(other.id, { id: other.id, name: other.name, step }); }
+      continue;
+    }
+    if (write && keep && off <= PAD_M) keep.set(i, { id: a.id, name: a.name });
     if (Math.abs(z - z0) < 0.005) continue;
     if (write) T.z[i] = z;
     const dz = z0 - z, side = Math.abs(x) > Math.abs(y) ? (x > 0 ? "Ø" : "V") : (y > 0 ? "N" : "S");
@@ -351,7 +359,8 @@ function padGround(site, a, base, write = true) {
   for (const s of Object.values(sides)) { s.cut = r2(s.cut); s.fill = r2(s.fill); }
   const deep = Object.entries(sides).filter(([, s]) => s.cut > WALL_M).sort((p, q) => q[1].cut - p[1].cut)[0];
   if (!write) return { cut, fill };
-  return { kote: r2(base), ...(entry ? { entrance: entry } : {}), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
+  const met = [...meets.values()].map(m => ({ ...m, step: r2(m.step) }));
+  return { kote: r2(base), ...(entry ? { entrance: entry } : {}), ...(met.length ? { meets: met } : {}), cut_m3: Math.round(cut), fill_m3: Math.round(fill), max_cut: r2(max("cut")), max_fill: r2(max("fill")), sides, ...(deep ? { wall: deep[0] } : {}) };
 }
 
 /* a pad's work in words, for the pane and for Anton (look): «graves ut 1,2 m mot nord, fylles opp 0,8 m mot sør» */
@@ -362,7 +371,11 @@ export function groundText(g) {
   const c = most("cut"), f = most("fill"), bits = [];
   if (c) bits.push(`graves ut ${m1(c[1].cut)} m mot ${SIDE_NO[c[0]]}`); if (f) bits.push(`fylles opp ${m1(f[1].fill)} m mot ${SIDE_NO[f[0]]}`);
   return `Tomta planeres på kote +${m1(g.kote)} ved veggen${g.balanced ? ", der det som graves ut fyller resten" : ""}, med fall 1:50 bort fra bygget de første ${PAD_M} m og skråning 1:${SLOPE} derfra til terrenget${bits.length ? ": " + bits.join(", ") : ""}. Utgraving ${g.cut_m3.toLocaleString("nb-NO")} m³, fylling ${g.fill_m3.toLocaleString("nb-NO")} m³.`
-    + (g.wall ? ` Skjæringen mot ${SIDE_NO[g.wall]} er ${m1(g.sides[g.wall].cut)} m dyp: en støttemur der tar mindre plass enn skråningen.` : "") + entranceText(g.entrance);
+    + (g.wall ? ` Skjæringen mot ${SIDE_NO[g.wall]} er ${m1(g.sides[g.wall].cut)} m dyp: en støttemur der tar mindre plass enn skråningen.` : "") + entranceText(g.entrance) + meetText(g.meets);
+}
+/* where its pad meets another's: the step between them, or that they run together */
+function meetText(ms) {
+  return (ms || []).map(m => Math.abs(m.step) < 0.1 ? ` Platået møter platået til ${m.name} og flyter sammen med det.` : ` Platået møter platået til ${m.name}, som ligger ${m1(Math.abs(m.step))} m ${m.step > 0 ? "lavere" : "høyere"}: en mur eller trapp mellom dem${Math.abs(m.step) > 0.6 ? ", eller samme kote for begge" : ""}.`).join("");
 }
 /* the step-free entrance in words (TEK17 § 8-6) */
 export function entranceText(n) {
@@ -395,12 +408,18 @@ export function applyDesign(site, floors, edits) {
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
   const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan ? baseOf(site, { ...e, base_kote: undefined }) : null]);
   if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
+  const keep = new Map();
   for (const [id, e, { parts, base }, free] of feet) {
     /* free: where it would stand of itself, on the ground as it was before any pad */
-    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base) : null;
+    const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep) : null;
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
       footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+  }
+  /* a meeting is said on both: the one laid first learns of the one that met it */
+  for (const a of added) for (const m of a.ground?.meets || []) {
+    const b = added.find(x => x.id === m.id); if (!b?.ground) continue;
+    (b.ground.meets ??= []).push({ id: a.id, name: a.name, step: -m.step });
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));

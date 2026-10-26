@@ -126,3 +126,16 @@ test("a step-free entrance: a landing level with the floor, a ramp of 1:20 to th
   const off = applyEdits(site, floors, [...c, checkEdit(m.site, m.floors, { kind: "reshape", id: a.id, entrance: null })]).site.added[0];
   assert.equal(off.entrance, undefined); assert.equal(off.ground.entrance, undefined);
 });
+
+/* U3566 (c): two pads that meet: the first one's footprint and fall stay as it left them; the step is said on both */
+test("pads that meet: the one laid first is kept, and both say the step between them", () => {
+  const A = { kind: "volume", id: "nHusA", name: "Hus A", shape: "box", from: [50, 40], to: [70, 40], width: 12, height: 6 };
+  const B = { kind: "volume", id: "nHusB", name: "Hus B", shape: "box", from: [50, 25], to: [70, 25], width: 12, height: 6 };
+  const ed = add(add([], A), B), m = applyEdits(site, floors, ed), a = m.site.added.find(x => x.name === "Hus A"), b = m.site.added.find(x => x.name === "Hus B");
+  const alone = applyEdits(site, floors, add([], A)).site;
+  for (const p of [[60, 40], [55, 37], [65, 35]]) assert.equal(groundAt(m.site, p), groundAt(alone, p), `under and by Hus A as it left it at ${p}`);
+  assert.ok(Math.abs(a.base_kote - b.base_kote) > 0.3, "on a slope they stand at koter apart");
+  assert.equal(b.ground.meets?.[0]?.id, a.id); assert.equal(a.ground.meets?.[0]?.id, b.id, "said on both");
+  assert.ok(Math.abs(a.ground.meets[0].step + b.ground.meets[0].step) < 0.011, "the same step, seen from each");
+  assert.match(groundText(b.ground), /Platået møter platået til Hus A/);
+});
