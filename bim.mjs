@@ -97,6 +97,8 @@ export async function runPart(part, params, name) {
   if (!existsSync(join(DIR, sha))) renameSync(tmp, join(DIR, sha));
   return { sha, params: full, ...summary(mesh), result: mesh.result };
 }
+/* a part's IFC text, run (or found) for these settings: for partmerge.mjs */
+export async function partIfc(part, params) { const r = await runPart(part, params); return readFileSync(join(DIR, r.sha, "model.ifc"), "utf8"); }
 const summary = m => ({ box: m.box, classes: m.classes, buildings: m.buildings, storeys: m.storeys, triangles: m.triangles });
 
 /* a file brought in (U3571): an IFC (or a STEP, glTF, OBJ, STL made one) a person uploaded (a manufacturer's
@@ -216,7 +218,7 @@ export async function prepare(e, site) {
     if (params.ground != null && e.on == null && e.base_kote == null) rest.base_kote = pp.ground;
     if (r.box?.min?.[2] < -0.01 && e.on == null && rest.base_kote == null) rest.base_kote = Math.round((pp.ground + r.box.min[2]) * 100) / 100;
     const mat = material || (MATERIALS[r.params?.material] ? r.params.material : r.classes?.IfcPlate && !r.classes?.IfcSlab ? "glass" : "concrete");
-    return { ...rest, name: nm, kind: "volume", shape: "bim", material: mat, bim: { part, script: null, params: r.params ?? pp, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
+    return { ...rest, name: nm, kind: "volume", shape: "bim", material: mat, bim: { part, script: null, params: r.params ?? pp, sha: r.sha, box: r.box, classes: r.classes, ...(spec.pad === false ? { nopad: true } : {}) }, _ran: r };
   }
   if (e?.kind === "construction") {
     const { kind, script, params = {}, material, ...rest } = e;
@@ -242,13 +244,13 @@ export async function prepare(e, site) {
     const { params, ...rest } = e, from = e.from || a.from, to = e.to || a.to;
     const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: a.on });
     const { r, p } = await placed(site, a.bim.part ? q => runPart(a.bim.part, q, a.name) : q => runBim(a.bim.script, q), p0, from, to, { on: a.on }, false);
-    return { ...rest, bim: a.bim.part ? { part: a.bim.part, script: null, params: r.params ?? p, sha: r.sha, box: r.box, classes: r.classes } : { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
+    return { ...rest, bim: a.bim.part ? { part: a.bim.part, script: null, params: r.params ?? p, sha: r.sha, box: r.box, classes: r.classes, ...(a.bim.nopad ? { nopad: true } : {}) } : { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
   }
   /* a construction as it was kept (a draft's edits shown again, or replayed into one's own version): its script and
      parameters are what count; the sha, box and classes are what the worker makes of them here, never what was sent */
   if ((e?.kind === "volume" || e?.kind === "reshape") && e.bim && typeof e.bim === "object") {
     if (e.bim.file) return { ...e, bim: importBim(e.bim) };
-    if (e.bim.part) { const r = await runPart(String(e.bim.part), e.bim.params || {}, e.name); return { ...e, bim: { part: e.bim.part, script: null, params: r.params, sha: r.sha, box: r.box, classes: r.classes } }; }
+    if (e.bim.part) { const r = await runPart(String(e.bim.part), e.bim.params || {}, e.name); return { ...e, bim: { part: e.bim.part, script: null, params: r.params, sha: r.sha, box: r.box, classes: r.classes, ...((await listParts().catch(() => ({})))[e.bim.part]?.pad === false ? { nopad: true } : {}) } }; }
     const { script, params = {} } = e.bim;
     if (typeof script !== "string" || !script.trim()) throw toolErr("bim trenger script");
     const r = await runBim(script, params);
