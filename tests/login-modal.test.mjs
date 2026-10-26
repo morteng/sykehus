@@ -39,9 +39,11 @@ test("the right code signs in: the person, a cookie, and /api/meg then names the
   assert.equal((await (await viaServer("api/meg")).json()).person, "lars"); assert.equal(FLAG, "sykehus-innlogget");
 });
 
-test("signed out the page shows nothing of Anton: the tab, the panel, the pill, the cards' ask button and the sheet are hidden by .anon, which early.js sets, and anton.js sets it before it fetches anything but /api/meg", () => {
+test("signed out the page shows nothing of Anton: the tab, the panel, the pill, the cards' ask button, the sheet and the feedback button are hidden by .anon, which early.js sets, and anton.js sets it before it fetches anything but /api/meg", async () => {
   const css = readFileSync(new URL("../public/sykehus.css", import.meta.url), "utf8"), early = readFileSync(new URL("../public/early.js", import.meta.url), "utf8"), a = readFileSync(new URL("../public/anton.js", import.meta.url), "utf8");
-  assert.match(css, /body\.anon #tab-chat, body\.anon #p-chat, body\.anon \[data-ask\], body\.anon #talk-form, body\.anon \.g-chat \{ display: none !important; \}/);
+  assert.match(css, /body\.anon #tab-chat, body\.anon #p-chat, body\.anon \[data-ask\], body\.anon #talk-form, body\.anon \.g-chat, body\.anon #mfb \{ display: none !important; \}/);
+  /* the button's route needs a sign-in, so signed out it is not shown */
+  assert.equal((await fetch(O + "api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: "bug", text: "x" }) })).status, 401);
   assert.match(early, /if \(!had\) \{ document\.body\.classList\.add\("anon"\)/);
   const out = a.slice(a.indexOf("if (!me.person) {"), a.indexOf("document.body.classList.remove(\"anon\")"));
   assert.match(out, /classList\.add\("anon"\)/); assert.ok(!/fetch\(|json\(|talk\(\)/.test(out), "nothing of Anton is fetched or started signed out");
