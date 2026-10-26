@@ -14,6 +14,7 @@ import { createKeys } from "./keys.js?v=20261026za";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
 import { ghostIds } from "./livetries.js";
+import { nextTree, treeTitle } from "./treemode.js";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
@@ -86,7 +87,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const panel = createPanel({ start: draft ? "changes" : null, onChange: t => dispatchEvent(new CustomEvent("sykehus:panel", { detail: t })) });
 const toCard = () => panel.show("selected", { quiet: true });   // a tap on the model or the strip shows its card, the sheet stays where it is
 
+const TREES = "sykehus-trær", treeStore = { get() { try { return localStorage.getItem(TREES); } catch { return null; } }, set(v) { try { localStorage.setItem(TREES, v); } catch { } } };   // the choice is kept per browser (U3676)
 const viewer = createViewer({
+  treeMode: treeStore.get(),
   container: $("view"), site: shown.site, floors: shown.floors,
   walkKeys: () => { try { return !series; } catch { return true; } },   // a shot series has the arrow keys (U3605)
   onPick: (id, how) => {
@@ -127,6 +130,9 @@ let sun = { ...SUN_DEFAULT }, gjengiCtl = null;   // gjengiCtl: the picture card
 function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
 setSunTo(sun);
 $("sunBtn").onclick = () => { const on = $("sunPop").hidden; $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
+/* the trees: full, simple, off (U3676); the choice is kept in this browser */
+{ const b = $("mtree"), put = m => { b.dataset.mode = m; b.title = treeTitle(m); b.setAttribute("aria-label", treeTitle(m)); }; put(viewer.treeMode());
+  b.onclick = () => { const m = nextTree(b.dataset.mode); viewer.treeMode(m); put(m); treeStore.set(m); }; }
 $("sunDay").oninput = $("sunHour").oninput = () => setSunTo(sunFromDay(+$("sunDay").value, +$("sunHour").value));
 $("sunReset").onclick = () => setSunTo(SUN_DEFAULT);
 document.addEventListener("pointerdown", e => { if (!$("sunPop").hidden && !e.target.closest("#sunPop, #sunBtn")) { $("sunPop").hidden = true; $("sunBtn").setAttribute("aria-expanded", "false"); } });

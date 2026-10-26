@@ -25,7 +25,7 @@ import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
 
-export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality(), walkKeys = () => true }) {
+export function createViewer({ container, site, floors = [], lat = 59.749, lon = 10.198, onPick = () => {}, onView = () => {}, quality = pickQuality(), walkKeys = () => true, treeMode: treeMode0 = null }) {
   const Q = quality; markStart(Q);   // how much this device carries (quality.js); the mark comes off at the first picture
   /* its own T: setTerrain swaps in the after's grid (U3566, a building's pad), base stays the before's lowest */
   const T = { ...site.terrain }, base = Math.min(...T.z.filter(v => v != null));
@@ -482,14 +482,17 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* drawn again in place when the after plants or fells (setTrees): the models grown once, the instances anew */
   const treeMeshes = [];
   let grown = null, treeGen = 0;   // EZ-Tree's three models, grown on the first draw; which setTrees is the last
+  /* U3676 (Morten 2026-10-26 16:54Z «a switch to change between trees off / simple / full»): off draws no tree or planted bush (the ground stays), simple the
+     trunk and crown solids the low tier has, full EZ-Tree's models. The page's choice, else the tier's: full where it carries them, simple where not. */
+  let treeMode = ["off", "simple", "full"].includes(treeMode0) ? treeMode0 : Q.ez ? "full" : "simple";
   let treeList = site.trees || [];   // the trees drawn last: the planted ones (a seventh item, their planting's id) are picked by their trunks
   function setTrees(list) {
     treeList = list || []; treeGen++; for (const m of treeMeshes.splice(0)) { scene.remove(m); m.dispose?.(); }
     drawTrees(list || []); ringTrees(treePicked, treeHov); dirty = true;
   }
   function drawTrees(trees) {
-    if (!trees.length) return;
-    if (!Q.ez) {
+    if (!trees.length || treeMode === "off") return;
+    if (treeMode === "simple") {
       /* on a slow device: a trunk and a crown of a few flat faces each, every tree in two draws */
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), n = trees.length;
       const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.25, 1, 6).translate(0, 0.5, 0), mat("#6b5a48"), n);
@@ -530,7 +533,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       tx.slice(0, 3).forEach(t => { if (t) t.wrapS = t.wrapT = THREE.RepeatWrapping; });
       const KIND = { oak: ["oak_medium", tx[0], tx[3]], aspen: ["aspen_medium", tx[1], tx[4]], pine: ["pine_medium", tx[2], tx[5]] }, models = {};
       for (const [kind, [preset, bark, leaf]] of Object.entries(KIND)) {
-        const json = structuredClone(EZ.PRESETS[preset]); json.leaves.count = Math.max(4, Math.round(json.leaves.count * Q.leaves));
+        const json = structuredClone(EZ.PRESETS[preset]); json.leaves.count = Math.max(4, Math.round(json.leaves.count * (Q.leaves || 0.35)));
         for (const k in json.branch.segments) json.branch.segments[k] = Math.min(json.branch.segments[k], [5, 4, 3, 3][k]);       // rounder than needed from 30 m away:
         for (const k in json.branch.sections) json.branch.sections[k] = Math.max(1, Math.round(json.branch.sections[k] * 0.6));  // about 6 000 triangles a tree
         const tree = new EZ.Tree(); tree.loadFromJson(json);
@@ -1141,6 +1144,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     /* the yellow band round a picked surface or path, out of the way while its points are dragged */
     bands(on) { if (groundRims.visible !== on) { groundRims.visible = on; dirty = true; } },
     setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
+    /* the trees: off, simple or full (drawn again in place); what is drawn now */
+    treeMode(m) { if (m && m !== treeMode && ["off", "simple", "full"].includes(m)) { treeMode = m; setTrees(treeList); } return treeMode; },
     setSun, select, setGone, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     /* the parts drawn see-through (ids of new parts), or none; and a small picture of the view as it is (free: the canvas, no server) */
