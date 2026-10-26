@@ -5,6 +5,7 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
+import { createKeys } from "./keys.js?v=20261026t";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
@@ -270,6 +271,14 @@ addEventListener("keydown", e => {
   } else return;
   e.preventDefault();
 });
+/* Backspace or Delete on the pick, Cmd/Ctrl-Z, and the redo (U3649, keys.js): the same acts as the card's «Riv» and the toast's «Angre» */
+const keys = createKeys({
+  edits: () => draft && !draft.missing && (mine() || ownDraft()) ? draft.edits : null,
+  undo: (n, expect) => undo(n, expect),
+  put: async e => !!await edit([e], "Fikk ikke gjort igjen", true),
+  say: text => toast(text), name: describe, riv: () => !!pickActs?.riv(),
+});
+addEventListener("keydown", e => { if (!e.target.closest?.(".g-levels")) keys.key(e); });
 /* the first visit: how to move about, once; gone at the first touch or after a while */
 const TAP = matchMedia("(pointer: coarse)").matches ? "trykk" : "klikk";   // a finger presses, a mouse clicks
 /* -2: shown once more when Shift and a drag stopped panning (U3569) */
@@ -619,7 +628,7 @@ async function show(j) {
   history.replaceState(null, "", u.href);
 }
 /* one change from the page, into where() (see there), shown in place; null when it did not go through (said in a toast) */
-async function edit(mine_, failed) {
+async function edit(mine_, failed, redoing = false) {
   if (busy) return null; busy = true;
   try {
     /* on someone else's draft or version, one's own starts from what is shown: its live part first (the rest of it,
@@ -632,6 +641,7 @@ async function edit(mine_, failed) {
     let j = await change({ ...where(), edits });
     if (j.error && !draftId && kept) { kept = null; j = await change({ edits }); }   // the kept draft is past its day
     if (j.error) { toast(`${failed}: ${j.error}`); return null; }
+    if (!redoing) keys.clear();   // a new change ends the redo
     await show(j); return { n: draft.edits.length, k: mine_.length };
   } finally { busy = false; }
 }
@@ -792,8 +802,8 @@ function showNew(a) {
    did not show (pm 22:08Z: an undo in a second tab took out Morten's three newest changes); then the page is shown
    again as it is */
 async function undo(n, expect = draft?.edits?.[n - 1]) {
-  if (busy) return; busy = true;
-  try { const j = await change({ ...where(), undo: n, expect }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return; } $("toast")?.remove(); await show(j); }
+  if (busy) return false; busy = true;
+  try { const j = await change({ ...where(), undo: n, expect }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return false; } $("toast")?.remove(); await show(j); return true; }
   finally { busy = false; }
 }
 function toast(text, act) {
@@ -804,7 +814,7 @@ function toast(text, act) {
   $("stage").append(t); setTimeout(() => t.isConnected && t.classList.add("gone"), 15000); setTimeout(() => t.remove(), 15800);
 }
 /* «Angre» on the toast takes back every edit the one «Riv» made, the last first */
-async function undoLast(n, k) { const was = draft.edits.slice(); for (let i = 0; i < k - 1; i++) { const j = await change({ ...where(), undo: n - i, expect: was[n - i - 1] }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return; } } undo(n - k + 1, was[n - k]); }
+async function undoLast(n, k) { const was = draft.edits.slice(); for (let i = 0; i < k - 1; i++) { const j = await change({ ...where(), undo: n - i, expect: was[n - i - 1] }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return; } keys.taken(was[n - i - 1]); } if (await undo(n - k + 1, was[n - k])) keys.taken(was[n - k]); }
 /* the IFC with the after's demolitions taken out (the server's ifcfilter.mjs) */
 function ifcLink() {
   if (!draft || draft.missing) return;
@@ -827,7 +837,7 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261026s").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+import("./float.js?v=20261026t").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: a => { syncBuild(); build.move(); }, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
@@ -839,6 +849,7 @@ import("./float.js?v=20261026s").then(m => pickActs = m.createFloat({ viewer, si
 const fixed = edits => JSON.stringify((edits || []).filter(e => !LIVE(e)));
 let base = fixed(draft?.edits);
 async function refresh() {
+  keys.clear();   // another tab or Anton changed it: what was taken back is not ours to put back
   const d = await fetchDraft(); if (d.missing) return;
   if (fixed(d.edits) !== base) { try { sessionStorage.setItem("sykehus-pose", JSON.stringify(viewer.pose())); } catch { } return location.reload(); }
   await show(versionId ? { version: versionId } : { draft: draftId });

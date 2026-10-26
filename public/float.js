@@ -189,5 +189,7 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
   addEventListener("sykehus:card", render);   // «Bygget»'s card drawn again: its #selActs is new
   phone.addEventListener("change", () => { dock(); size = null; render(); });
   addEventListener("sykehus:panel", () => { render(); viewer.redraw(); });
-  return { render, escape };
+  /* Backspace or Delete: the card's own «Riv» or «Fjern» for the pick, a folded card opened first; true when there was one */
+  function riv() { if (folded && !editing) { folded = false; render(); } const b = (el.hidden ? document.getElementById("selActs") : el)?.querySelector("[data-riv]"); if (!b) return false; b.click(); return true; }
+  return { render, escape, riv };
 }
