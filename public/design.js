@@ -299,7 +299,7 @@ export function placeBeside(site, w, at, length, width) {
   if (!(width >= 1 && width <= 120)) throw new Error("width er dybden i meter ut fra fasaden, mellom 1 og 120");
   const near = facadesOf(site, w.id).filter(f => f.length_m >= 6 && turn(f.bearing, b) <= 65).sort((x, y) => turn(x.bearing, b) - turn(y.bearing, b));
   if (!near.length) throw new Error(`${w.name} har ingen fasade mot ${at.side}; fasadene vender ${facadesOf(site, w.id).filter(f => f.length_m >= 6).map(f => `${f.bearing}° (${dirWord(f.bearing)}, ${fmt(f.length_m)} m)`).join(", ")}`);
-  if (near.length > 1 && turn(near[0].bearing, b) >= 25 && !near.slice(1).every(f => turn(f.bearing, near[0].bearing) <= 20))
+  if (near.length > 1 && turn(near[1].bearing, b) - turn(near[0].bearing, b) < 15 && turn(near[1].bearing, near[0].bearing) > 20)   // two faces about as near: ask; else the nearest
     throw new Error(`${w.name} står skjevt: mot ${at.side} vender ${near.slice(0, 2).map(f => `fasaden mot ${f.bearing}° (${fmt(f.length_m)} m lang)`).join(" og ")}. Si hvilken med side i grader, for eksempel side: ${near[0].bearing}`);
   const face = near[0].bearing, walls = [...facingWalls(site, w.id, "N", face)];
   const sn = walls.reduce((q, x) => [q[0] + x.n[0] * x.L, q[1] + x.n[1] * x.L], [0, 0]), sl = Math.hypot(...sn), n = [sn[0] / sl, sn[1] / sl], d = [n[1], -n[0]], dot = (p, v) => p[0] * v[0] + p[1] * v[1];   // d: along the facade with its left out

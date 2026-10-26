@@ -14,10 +14,14 @@ after(() => srv.kill());
 const call = async (name, args) => (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) })).json()).result;
 const put = at => call("try_change", { edits: [{ kind: "volume", name: "Drivhus", shape: "gable", at, length: 6, width: 4, height: 3, material: "glass", why: "test" }], include_screenshot: false });
 
-test("sør of Sentralblokka (turned: the long face is 120°, the end 210°) asks which, in plain Norwegian", async () => {
-  const r = await put({ wing: "Sentralblokka", side: "sør", gap_m: 4 });
-  const bad = r.structuredContent?.rejected?.[0]?.error ?? r.content.map(c => c.text).join(" ");
-  assert.match(bad, /står skjevt|ingen fasade/);
+test("sør on Sentralblokka (turned) takes the nearest facade, 210°, and says so", async () => {
+  const r = await put({ wing: "Sentralblokka", side: "sør", gap_m: 4.9 });
+  assert.match(JSON.stringify(r.structuredContent), /4,9 m fra Sentralblokkas sørvestfasade \(210°\)/);
+});
+
+test("a direction about as near two facades (165°: 45° from 210° and from 120°) asks which", async () => {
+  const r = await put({ wing: "Sentralblokka", side: 165, gap_m: 4 });
+  assert.match(r.structuredContent?.rejected?.[0]?.error ?? r.content.map(c => c.text).join(" "), /står skjevt/);
 });
 
 test("by bearing: the part is parallel to the facade, centred, gap_m off it, and the answer names facade and gap", async () => {
