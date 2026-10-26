@@ -368,6 +368,7 @@ const IC = {
   ute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-6"/><path d="M12 3l5 8H7z"/><path d="M12 8l6 8H6z"/></svg>',
   vei: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3L5 21M16 3l3 18"/><path d="M12 5v3M12 11v3M12 17v2"/></svg>',
   note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v12l-4 4H5z"/><path d="M8 9h8M8 13h5"/></svg>',
+  bin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
 };
 const GROUPS = [
   { k: "vei", name: "Veier fjernet", of: e => e.kind === "demolish" && ROAD_ID.test(e.building), tip: "Legg veistykket tilbake" },
@@ -398,7 +399,7 @@ function drawDraft() {
   const list = rowsOf.filter(x => x.rows.length).map(({ g, rows: rs }) => `<details class="dr-g"${rs.length > 5 ? "" : " open"}><summary><span class="dr-ic">${IC[g.k]}</span>${g.name} · ${rs.length}</summary><ul>${rs.map(([e, k]) =>
     `<li title="${esc(describe(e))}"><span>${esc(short(e))}</span>${may ? `<button type="button" class="dr-x" data-undo="${k}" title="${g.tip}" aria-label="${g.tip}: ${esc(short(e))}">${IC.back}</button>` : ""}</li>`).join("")}</ul></details>`).join("");
   $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h">${title}<span class="dr-s">${status}</span></div>
-    <div class="dr-acts">${acts}<a href="./?for">Se før</a></div>
+    <div class="dr-acts">${acts}${mine() ? `<button type="button" class="icon" data-vdel-open title="Slett forslaget" aria-label="Slett forslaget">${IC.bin}</button>` : ""}<a href="./?for">Se før</a></div>
     ${n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Angre siste: ta ut «${esc(short(draft.edits[n - 1]))}»">${IC.undo}<span>Ta ut «${esc(short(draft.edits[n - 1]))}»</span></button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`}</div>`;
   const R = $("draftRow");
   for (const b of R.querySelectorAll("[data-undo]")) b.onclick = () => undo(+b.dataset.undo);
@@ -410,6 +411,7 @@ function drawDraft() {
   });
   R.querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); nameIt(); toast(`Ny kopi: «${j.title}». Gi den et navn, eller jobb videre: endringene går inn i den.`); });
   R.querySelector("[data-ny]")?.addEventListener("click", fresh);
+  R.querySelector("[data-vdel-open]")?.addEventListener("click", () => askDelete([{ version: versionId, title: draft.title }]));
   const t = $("drTitle");
   if (t) {
     t.onkeydown = e => { if (e.key === "Enter") t.blur(); if (e.key === "Escape") { t.value = draft.title; t.blur(); } };
@@ -837,13 +839,48 @@ ifcLink();
 
 /* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
 const VIS = { privat: "privat", lenke: "bare de med lenken", offentlig: "offentlig" };
+let verRows = [], selecting = false; const picked = new Set();
 function listVersions() {
   fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
     versions = versions.filter(v => v.version !== versionId);   // the open one is the card above
+    verRows = versions; for (const id of [...picked]) if (!versions.some(v => v.version === id && v.mine)) picked.delete(id);
+    $("verBar").hidden = !versions.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
     if (!versions.length) { $("verList").innerHTML = `<li class="sel-empty">Ingen andre forslag ennå.</li>`; return; }
-    $("verList").innerHTML = versions.map(v => `<li><a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${v.version === versionId ? ' aria-current="page"' : ""}><span><span class="t">${esc(v.title)}</span><small>${v.mine ? "din" : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></span>${v.mine ? `<span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span>` : ""}</a></li>`).join("");
+    $("verList").innerHTML = versions.map(v => `<li>${selecting && v.mine ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}<a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${v.version === versionId ? ' aria-current="page"' : ""}><span><span class="t">${esc(v.title)}</span><small>${v.mine ? "din" : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></span>${v.mine ? `<span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span>` : ""}</a>${v.mine && !selecting ? `<button type="button" class="icon" data-vdel="${esc(v.version)}" title="Slett forslaget" aria-label="Slett forslaget: ${esc(v.title)}">${IC.bin}</button>` : ""}</li>`).join("");
   }).catch(() => {});
 }
+/* U3654: «Slett forslaget» and «Velg» + «Slett valgte (n)»: asked in the page first (no window.confirm), then one «Angre» for all */
+const drawBar = () => { $("verSel").setAttribute("aria-pressed", String(selecting)); $("verSel").textContent = selecting ? "Ferdig" : "Velg"; $("verDelSel").hidden = !selecting; $("verDelSel").textContent = `Slett valgte (${picked.size})`; $("verDelSel").disabled = !picked.size; };
+$("verSel").onclick = () => { selecting = !selecting; picked.clear(); closeAsk(); drawBar(); listVersions(); };
+$("verList").addEventListener("change", e => { const c = e.target.closest("input.vsel"); if (!c) return; c.checked ? picked.add(c.dataset.id) : picked.delete(c.dataset.id); drawBar(); });
+$("verList").addEventListener("click", e => { const b = e.target.closest("[data-vdel]"); if (b) askDelete([verRows.find(v => v.version === b.dataset.vdel)].filter(Boolean)); });
+$("verDelSel").onclick = () => askDelete(verRows.filter(v => picked.has(v.version)));
+let asking = [];
+const closeAsk = () => { asking = []; $("verConfirm").hidden = true; };
+function askDelete(rows) {
+  if (!rows.length) return; asking = rows;
+  $("verAsk").textContent = rows.length === 1 ? `Slette «${rows[0].title}»? Du kan angre i 30 dager.` : `Slette ${rows.length} forslag? Du kan angre i 30 dager.`;
+  $("verConfirm").hidden = false; $("verNo").focus(); $("verConfirm").scrollIntoView?.({ block: "nearest" });
+}
+$("verNo").onclick = closeAsk;
+$("verYes").onclick = async () => {
+  const rows = asking; closeAsk(); if (!rows.length || busy) return; busy = true;
+  try {
+    const ids = rows.map(r => r.version), j = await change({ delete: ids }); if (j.error) return toast(`Fikk ikke slettet: ${j.error}`);
+    const text = ids.length === 1 ? `«${rows[0].title}» er slettet.` : `${ids.length} forslag er slettet.`, was = versionId, wasOpen = ids.includes(was);
+    selecting = false; picked.clear();
+    if (wasOpen && !j.now_open) { try { sessionStorage.setItem(UNDO, JSON.stringify({ ids, text, reopen: was })); } catch { } location.href = "./?for"; return; }   // the open one is gone and no other is left: back to «Før»
+    if (wasOpen) await show({ version: j.now_open.version }); else listVersions();
+    toast(text, { label: "Angre", run: () => restoreVersions(ids, wasOpen ? was : null) });
+  } finally { busy = false; }
+};
+async function restoreVersions(ids, reopen) {
+  const j = await change({ undelete: ids }); if (j.error) return toast(`Fikk ikke hentet tilbake: ${j.error}`);
+  if (reopen && j.restored.some(r => r.version === reopen)) { await show({ version: reopen }); } else listVersions();
+  toast(ids.length === 1 ? "Forslaget er hentet tilbake." : `${ids.length} forslag er hentet tilbake.`);
+}
+const UNDO = "sykehus-slettet";   // the toast to show after the page went back to «Før»
+try { const u = JSON.parse(sessionStorage.getItem(UNDO) || "null"); if (u) { sessionStorage.removeItem(UNDO); toast(u.text, { label: "Angre", run: () => restoreVersions(u.ids, u.reopen) }); } } catch { }
 listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */

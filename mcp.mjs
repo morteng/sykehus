@@ -8,7 +8,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
-import { MAX_EDITS as MAX_VERSION_EDITS, SHARING } from "./versions.mjs";
+import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS } from "./versions.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,6 +38,7 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "The person can also build: try_change takes edits of these kinds: demolish and restore (whole buildings or alle), volume (a new building: box, gable, triangle, lean_to, pyramid, terraces; on a roof with on), reshape (move, turn, resize or re-fact one), wing and balconies, surface (a lawn, paving, a pool or pond with surface water), path, trees and fell, part (a ready-made BIM part: a pool basin, stair, railing, balcony or a greenhouse of 3–8 sides or a geodesic dome; list_parts says what each takes: USE A PART FIRST for these, before free geometry), and only where no part fits, construction: a Python script with IfcOpenShell that builds a structure as BIM (a glass greenhouse, a pavilion, a frame: members, plates, slab, door), run in a sandboxed worker and kept as its own IfcBuilding with named parameters that the person can change later; its script contract is in the construction kind's description. "
   + "look shows the model from any side, after the changes; show_draft lists the changes and the after. "
   + "Tell the person only what a tool result shows: a change is made only when it is in the result's added and the result names the version it went into; when it is rejected or refused, say so and what you do next. "
+  + "For people: a person deletes their own saved versions (delete_version, by id or name; several at once is fine) and gets them back within 30 days (undelete_version; list_versions with trash: true shows what is in the trash). Ask which ones when it is not plain, say what you deleted, and that «Angre» on the page or you can bring it back for 30 days; after that it is gone. Only their own: another person's version cannot be deleted. On the page it is the bin button on a row in Forslag, or «Velg» for several. "
   + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless they write otherwise, and cite drawings and documents by title with their link. "
   + "Say how each fact is known: read off a drawing, worked out (beregnet), assumed (antatt) or measured from the laser; areas measured between drawn walls are rough (about 15 %).";
 
@@ -133,6 +134,32 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const ownVersion = (id, req) => {
     const who = userOf(req); if (!who) throw toolErr("Å lagre en versjon krever innlogging: på sykehus.gulden.no via gulden.no, eller med et personlig token i MCP-klienten. Utkast (try_change uten version) virker uten.");
     const v = versionOf(id, req); if (v.owner !== who) throw toolErr(`Versjonen «${v.title}» er ${v.owner} sin; lag din egen med new_version (from: "${v.id}").`); return v;
+  };
+  /* U3654: the owner's delete and restore, by id or by name, all or nothing: a name that matches none or two stops it
+     before anything changes. Deleted goes to a 30-day trash (versions.mjs); the one marked work passes its mark to the
+     newest of the person's others, so the page and Anton have somewhere to go */
+  const pick = (refs, pool, what) => {
+    const list = (Array.isArray(refs) ? refs : [refs]).map(x => String(x ?? "").trim()).filter(Boolean); if (!list.length) throw toolErr(`Hvilke versjoner? Gi id eller navn.`);
+    const out = []; for (const r of list) {
+      const hits = pool.filter(v => v.id === r); const named = hits.length ? hits : pool.filter(v => v.title.trim().toLowerCase() === r.toLowerCase());
+      if (!named.length) throw toolErr(`Fant ingen ${what} «${r}». ${what === "slettet versjon" ? "list_versions med trash: true viser dem." : "list_versions viser dem."}`);
+      if (named.length > 1) throw toolErr(`«${r}» er navnet på ${named.length} versjoner; si hvilken med id (${named.map(v => v.id).join(", ")}).`);
+      if (!out.includes(named[0])) out.push(named[0]);
+    } return out;
+  };
+  const brief = v => ({ version: v.id, title: v.title });
+  const deleteVersions = (me, refs) => {
+    if (!me) throw toolErr("Å slette en versjon krever innlogging."); if (!versions) throw toolErr("Versions are not kept on this server.");
+    const gone = pick(refs, versions.list({ owner: me, viewer: me }), "versjon"), hadWork = gone.some(v => v.work);
+    for (const v of gone) versions.remove(v);
+    let work = null; if (hadWork) { const next = versions.list({ owner: me, viewer: me }).find(x => x.owner === me); if (next) { next.work = true; versions.save(next); work = brief(next); } }
+    return { deleted: gone.map(v => ({ ...brief(v), restorable_until: new Date(Date.parse(v.deleted) + TRASH_DAYS * 864e5).toISOString() })), ...(work ? { now_open: work } : {}), note: `Slettet. Versjonene ligger i papirkurven i ${TRASH_DAYS} dager; undelete_version henter dem tilbake.` };
+  };
+  const undeleteVersions = (me, refs) => {
+    if (!me) throw toolErr("Å hente en versjon tilbake krever innlogging."); if (!versions) throw toolErr("Versions are not kept on this server.");
+    const back = pick(refs, versions.trash(me).filter(v => versions.getTrashed(v.id)), "slettet versjon");
+    try { for (const v of back) versions.restore(v); } catch (e) { throw toolErr(e.message); }
+    return { restored: back.map(brief) };
   };
   /* its link as the asker may give it: plain when public; the share link when link-only; the owner's own when private */
   const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Offentlig: står i lista på forsiden og åpner for alle." };
@@ -493,11 +520,19 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const title = String(a.title || "").trim(); if (!title || title.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn).");
         bump(`new:${who}`, 20, 3600e3);
         try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from, req)) : []); return { ...versionOut(v, originOf(req), req), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
-    { name: "list_versions", title: "Versjonene", ro: true, schema: S({ owner: { type: "string", description: "Only this person's (a login name), or \"me\" for the asker's own; leave out for everyone's" } }),
+    { name: "list_versions", title: "Versjonene", ro: true, schema: S({ owner: { type: "string", description: "Only this person's (a login name), or \"me\" for the asker's own; leave out for everyone's" }, trash: { type: "boolean", description: "true: the asker's own deleted versions (30 days in the trash, undelete_version brings one back) instead" } }),
       description: "The saved versions of the after one may see, newest first: everyone's public ones and all the asker's own; title, owner, who sees it (sharing), how many changes, when, and the link to show it.",
       run: async (a, req) => { if (!versions) return { versions: [], note: "Versions are not kept on this server." };
+        if (a.trash) { const me = userOf(req); if (!me) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
+          return { versions: versions.trash(me).map(v => ({ ...brief(v), changes: v.edits.length, deleted: v.deleted, restorable_until: new Date(Date.parse(v.deleted) + TRASH_DAYS * 864e5).toISOString() })), you: me, trash: true }; }
         const me = userOf(req), owner = a.owner === "me" ? me : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
         return { versions: versions.list({ owner, viewer: me }).slice(0, 100).map(v => versionOut(v, originOf(req), req)), you: me }; } },
+    { name: "delete_version", title: "Slett versjoner", write: true, schema: S({ versions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "The person's own versions to delete: each a version id (v and 8 more) or its name, as the person calls it" } }, ["versions"]),
+      description: `Deletes one or more of the person's own versions (by id or name; never anyone else's). They go to the trash for ${TRASH_DAYS} days: nothing is lost at once, and undelete_version brings them back. Only after the person has said which ones to delete: name them in your question when it is not plain. If the deleted one was the one open on the website, the page moves to their newest other. All or nothing: a name that matches none or two stops it.`,
+      run: async (a, req) => deleteVersions(userOf(req), a.versions) },
+    { name: "undelete_version", title: "Hent slettede versjoner tilbake", write: true, schema: S({ versions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "Deleted versions to bring back: each an id or a name (list_versions with trash: true shows them)" } }, ["versions"]),
+      description: `Brings the person's own deleted versions back from the trash (within ${TRASH_DAYS} days of deleting them), with their changes, name and sharing as they were.`,
+      run: async (a, req) => undeleteVersions(userOf(req), a.versions) },
     { name: "set_sharing", tgt: "version", title: "Hvem ser versjonen", write: true, schema: S({ target: TARGET, version: OLD, sharing: { type: "string", enum: SHARING, description: "privat: only you. lenke («Bare de med lenken»): anyone you give its link, not listed. offentlig («Vis offentlig»): listed on the front page, open to all without a login" } }, ["sharing"]),
       description: "Chooses who sees one of the person's own versions: privat (only them; a new version is privat), lenke (anyone with its link, never listed) or offentlig (on the front page's list and open to everyone). Give the person the link from the answer.",
       run: async (a, req) => { const v = ownVersion(a.version, req); if (!SHARING.includes(a.sharing)) throw toolErr(`sharing er ${SHARING.join(", ")}`); v.sharing = a.sharing; versions.save(v); return { ...versionOut(v, originOf(req), req), saved: true }; } },
@@ -641,7 +676,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     floor_plan: O({ storey: "string", sheets: "array", per_wing: "object", rooms: "array" }),
     openings: O({ wing: "string", facades: "array" }),
     show_draft: O({ changes: "array", after: "object", saved: "boolean", saved_views: "array", ...TARGET_OUT }),
-    list_versions: O({ versions: "array", you: { type: ["string", "null"] } }),
+    list_versions: O({ versions: "array", you: { type: ["string", "null"] }, trash: "boolean" }),
+    delete_version: O({ deleted: "array", now_open: "object", note: "string" }),
+    undelete_version: O({ restored: "array" }),
     search_documents: O({ query: "string", documents: "array", more: "number" }),
     read_document: O({ id: { type: ["string", "number"] }, title: "string", pages: "array", next_page: { type: ["number", "null"] } }),
     list_documents: O({ documents: "array" }),
@@ -654,7 +691,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const ICONS = o => [{ src: `${o}/icons/icon-192.png`, mimeType: "image/png", sizes: ["192x192"] }, { src: `${o}/icons/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] }];
   const serverInfo = o => ({ ...SERVER_INFO, icons: ICONS(o), websiteUrl: o });
   /* destructive: what takes a change out; idempotent: the reads, and what sets a value to the same again */
-  const DESTRUCTIVE = new Set(["undo_change"]), IDEMPOTENT = new Set(["set_sharing", "rename_version"]);
+  const DESTRUCTIVE = new Set(["undo_change", "delete_version"]), IDEMPOTENT = new Set(["set_sharing", "rename_version"]);
   const toolList = (o = "") => TOOLS.map(t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.schema, ...(OUTPUT[t.name] ? { outputSchema: OUTPUT[t.name] } : {}), ...(o ? { icons: ICONS(o) } : {}),
     annotations: { title: t.title, readOnlyHint: !!t.ro, destructiveHint: !t.ro && DESTRUCTIVE.has(t.name), idempotentHint: !!t.ro || IDEMPOTENT.has(t.name), openWorldHint: false },
     ...(t.write ? { securitySchemes: [{ type: "oauth2", scopes: [SCOPE] }] } : t.writeIf ? { securitySchemes: [{ type: "noauth" }, { type: "oauth2", scopes: [SCOPE] }] } : {}),
@@ -799,8 +836,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (/^v.{8}$/.test(id)) ownVersion(id, req);
         const { views } = await makeShots(id, req); return send(res, 200, { views });
       }
-      if (a.adopt || a.copy || a.fresh || a.rename || a.share || a.unshare) {
+      if (a.adopt || a.copy || a.fresh || a.rename || a.share || a.unshare || a.delete || a.undelete) {
         if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
+        if (a.delete) return send(res, 200, deleteVersions(me, a.delete));   // «Slett forslaget»: ids, into the 30-day trash
+        if (a.undelete) { const r = undeleteVersions(me, a.undelete); return send(res, 200, { restored: r.restored.map(x => ({ ...x, nokkel: versions.get(x.version).own })) }); }   // the toast's «Angre»
         if (a.rename) {   // the title on the «Forslag» card, edited in place
           const v = ownVersion(String(a.rename), req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi forslaget et navn (høyst 120 tegn).");
           v.title = t; versions.save(v); return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
