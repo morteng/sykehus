@@ -5,6 +5,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { BIM, readGlb } from "../public/bimglb.js";
+import { gzipSync } from "node:zlib";
+import { MATERIALS } from "../public/renderkit/materials.js";
+import { parseIfc } from "../ifcfilter.mjs";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url), "utf8"));
 const read = f => readFileSync(new URL("../" + f, import.meta.url));
@@ -32,4 +35,36 @@ test("the high block's file: concrete and glass, in the wing's own heights, ever
 
 test("the reader refuses a file that is not a GLB 2", () => {
   assert.throws(() => readGlb(new Uint8Array(40).buffer), /not a GLB/);
+});
+
+/* the windows the IFC file holds for the wing (down the aggregates and the containment, as tests/envelope.test.mjs reads them),
+   so the file and the page's model cannot drift: regenerate hoyblokka.glb (tools/glb.py) when tools/ifc.py or bays.js change */
+function ifcWindows(wingName) {
+  const p = parseIfc(readFileSync(new URL("../public/data/sykehus.ifc", import.meta.url), "utf8")), ids = t => [...t.matchAll(/#(\d+)/g)].map(m => +m[1]), kids = new Map();
+  for (const [, e] of p.ents) {
+    let m, up, ks;
+    if (e.type === "IFCRELAGGREGATES" && (m = /^'[^']*',\$,\$,\$,#(\d+),\(([^)]*)\)/.exec(e.args))) [up, ks] = [+m[1], ids(m[2])];
+    if (e.type === "IFCRELCONTAINEDINSPATIALSTRUCTURE" && (m = /^'[^']*',\$,\$,\$,\(([^)]*)\),#(\d+)$/.exec(e.args))) [up, ks] = [+m[2], ids(m[1])];
+    if (up) kids.set(up, [...(kids.get(up) || []), ...ks]);
+  }
+  const down = id => (kids.get(id) || []).flatMap(k => [k, ...down(k)]);
+  const b = [...p.ents].find(([, e]) => e.type === "IFCBUILDING" && e.args.includes(`'${wingName}'`));
+  assert.ok(b, `the IFC has no building ${wingName}`);
+  return down(b[0]).filter(k => p.ents.get(k)?.type === "IFCWINDOW").length;
+}
+test("the GLB holds as many windows as the IFC file does for the wing (they cannot drift)", () => {
+  const parts = readGlb(buf("public/" + BIM.sentralblokka)), glass = parts.find(p => p.material === "glass"), n = ifcWindows("Sentralblokka");
+  assert.ok(n > 1000, `IFC windows: ${n}`);
+  assert.equal(parts.windows, n, "the count tools/glb.py wrote, against the IFC file's");
+  assert.equal(glass.indices.length / 3, n * 12, "a window is a box of 12 triangles: the glass in the file is the count it says");
+});
+test("the file is small: quantised, and under 1 MB the way the server sends it (gzip)", () => {
+  const f = read("public/" + BIM.sentralblokka);
+  assert.ok(f.length < 1.5e6, `raw ${f.length}`);
+  assert.ok(gzipSync(f).length < 1e6, `gzipped ${gzipSync(f).length}`);
+});
+
+test("every material in the file is a key of renderkit's materials.js (the one library), and the page takes no colour of its own", () => {
+  for (const p of readGlb(buf("public/" + BIM.sentralblokka))) assert.ok(MATERIALS[p.material], `GLB material ${p.material}`);
+  assert.ok(!/\bC\.pane\b/.test(read("public/viewer.js").toString()), "a local glass colour in viewer.js");
 });

@@ -24,9 +24,9 @@ export const MATERIALS = {
     density: 2400, density_from: "card", hatch: "concrete", texture: { set: "Concrete034", tile: [1.1, 1.1] }, look: { roughness: 0.9 }, category: "concrete",
   },
   glass: {
-    no: "Glass", en: "Glass", colour: "#cfe6e2", opaque: "#a8d8cf", kind: ["building"],   // opaque: drawn without see-through (look.js)
+    no: "Glass", en: "Glass", colour: "#4c6872", opaque: "#4c6872", kind: ["building"],   // blue-grey, dark enough to read on concrete and in plan (U3656); opaque: drawn without see-through (look.js)
     card: { uuid: "3e3a3e13-04a4-410e-8e36-bbd83ca66847", name: "Glass", file: "Standard/Glass/Glass-Generic.FCMat", author: "Przemo Firszt", license: "CC-BY-3.0", density: 2520, code: null },
-    density: 2520, density_from: "card", hatch: "glass", texture: null, look: { transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.1, depthWrite: false }, category: "glass",
+    density: 2520, density_from: "card", hatch: "glass", texture: null, look: { transparent: true, opacity: 0.92, roughness: 0.1, metalness: 0.4 }, category: "glass",
   },
   steel: {
     no: "Stål", en: "Steel", colour: "#8e9297", kind: ["building"],
