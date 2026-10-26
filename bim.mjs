@@ -64,18 +64,32 @@ export async function runBim(script, params) {
 /* a part (U3620): one of the worker's own, built from its name and settings (GET /parts lists them); the materials table
    (renderkit) goes with the job so the IFC carries the app's materials. Kept by the sha of the part and its settings, the
    settings as the worker settled them (its defaults filled in). ground is the foot's kote, not a setting of the part. */
-let partsAt = 0, partsList = null;
+let partsAt = 0, partsList = null, partsAtUrl = {};
+/* a part whose engine is FreeCAD (the stair) is built by the FreeCAD worker: the plain one lists it («here: false») and refuses
+   its jobs (U3620: «No such part here»), so each part is asked for where it is built (SYKEHUS_WORKER_FREECAD, as STEP is) */
+export const forgetParts = () => { partsList = null; };   // the list is kept a minute; a test or a changed worker asks again
+const freecadUrl = () => process.env.SYKEHUS_WORKER_FREECAD || process.env.GULDEN_WORKER_FREECAD;
 export async function listParts() {
   const W = workerUrl(); if (!W) throw toolErr("Deler bygges av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
   if (partsList && Date.now() - partsAt < 60000) return partsList;
-  try { const r = await fetch(`${W.replace(/\/+$/, "")}/parts`, { signal: AbortSignal.timeout(15000) }); partsList = (await r.json()).parts; partsAt = Date.now(); }
+  const get = async u => (await (await fetch(`${u.replace(/\/+$/, "")}/parts`, { signal: AbortSignal.timeout(15000) })).json()).parts || {};
+  try {
+    const list = await get(W), at = Object.fromEntries(Object.keys(list).map(k => [k, W])), F = freecadUrl();
+    if (F && F.replace(/\/+$/, "") !== W.replace(/\/+$/, "")) {
+      const more = await get(F).catch(() => ({}));
+      for (const [k, v] of Object.entries(more)) if (v.here !== false && (!list[k] || list[k].here === false)) { list[k] = v; at[k] = F; }
+    }
+    partsList = list; partsAtUrl = at; partsAt = Date.now();
+  }
   catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
   return partsList;
 }
 const materialTable = () => Object.fromEntries(Object.keys(MATERIALS).map(k => [k, { ...ifcMaterial(k), density: MATERIALS[k].density ?? null }]));
 export async function runPart(part, params, name) {
-  const { ground, ...own } = params || {}, W = workerUrl();
-  if (!W) throw toolErr("Deler bygges av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
+  const { ground, ...own } = params || {}, base = workerUrl();
+  if (!base) throw toolErr("Deler bygges av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
+  await listParts().catch(() => null);   // where each part is built
+  const W = partsAtUrl[part] || base;
   let j, bad = null;
   try {
     const r = await fetch(`${W.replace(/\/+$/, "")}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ part, params: own, ...(ground != null ? { ground: +ground } : {}), ...(name ? { name } : {}), materials: materialTable(), then: ["mesh", "glb"] }), signal: AbortSignal.timeout(360000) });

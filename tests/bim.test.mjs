@@ -211,3 +211,34 @@ test("prepare: a part runs in the worker with the app's materials, stands as a v
     await assert.rejects(prepare({ kind: "part", part: "nope", from: [0, -80], to: [10, -80] }, site), /Det finnes ingen del som heter «nope».*greenhouse/);
   } finally { w.close(); }
 });
+
+/* U3620: the plain worker lists the stair («here: false») and refuses its jobs; the FreeCAD worker builds it. A stair goes to the FreeCAD worker,
+   the greenhouse stays on the plain one. */
+function stairWorker(name, hasStair) {
+  const seen = [], spec = e => ({ no: "Trapp", say: "x", engine: e, classes: ["IfcStair"], params: { height: { type: "number", default: 2.8 }, width: { type: "number", default: 1.2 } } });
+  const SPECS = { greenhouse: { no: "Drivhus", say: "x", engine: "ifcopenshell", classes: ["IfcMember"], params: {} }, stair: { ...spec("freecad"), here: hasStair } };
+  const srv = createServer((req, res) => { let b = ""; req.on("data", c => b += c); req.on("end", () => {
+    if (req.method === "GET" && req.url === "/parts") return res.end(JSON.stringify({ parts: SPECS }));
+    if (req.method === "POST") { const j = JSON.parse(b); seen.push(j.part);
+      if (j.part === "stair" && !hasStair) { res.statusCode = 400; return res.end(JSON.stringify({ errors: [{ code: "bad_request", message: "No such part here; GET /parts lists them: greenhouse" }] })); }
+      return res.end(JSON.stringify({ state: "done", result: { part: j.part, params: { height: 1.5, width: 1.2, ...j.params } }, files: { "mesh.json": "/jobs/x/files/mesh.json", "model.ifc": "/jobs/x/files/model.ifc" } })); }
+    if (req.url.endsWith("/mesh.json")) return res.end(JSON.stringify({ box: { min: [0, -1, 0], max: [3, 1, 1.5] }, classes: { IfcStair: 1 }, buildings: 1, storeys: 1, triangles: 1, parts: [{ cls: "IfcStair", n: 1, pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], idx: [0, 1, 2] }] }));
+    res.end("ISO-10303-21;"); }); });
+  return new Promise(r => srv.listen(0, "127.0.0.1", () => r({ url: `http://127.0.0.1:${srv.address().port}`, seen, name, close: () => srv.close() })));
+}
+test("U3620: a stair job goes to the FreeCAD worker, the plain worker's refusal is never met; a part the plain worker builds stays there", async () => {
+  process.env.SYKEHUS_VERSIONS_DIR = mkdtempSync(join(tmpdir(), "bim-"));
+  const plain = await stairWorker("plain", false), fc = await stairWorker("freecad", true);
+  process.env.SYKEHUS_WORKER = plain.url; process.env.SYKEHUS_WORKER_FREECAD = fc.url;
+  try {
+    const { prepare, listParts, forgetParts } = await import("../bim.mjs"); forgetParts();
+    assert.equal((await listParts()).stair.here, true, "the stair is listed from the worker that builds it");
+    const v = await prepare({ kind: "part", part: "stair", from: [-10, -80], to: [-10, -78], params: { height: 1.5, width: 1.2 } }, site);
+    assert.equal(v.bim.part, "stair"); assert.ok(fc.seen.length > 0 && fc.seen.every(p => p === "stair")); assert.deepEqual(plain.seen, [], "the plain worker is never asked for a stair");
+    await prepare({ kind: "part", part: "greenhouse", from: [-10, -80], to: [10, -80] }, site);
+    assert.ok(plain.seen.length > 0 && plain.seen.every(p => p === "greenhouse"), "a greenhouse stays on the plain worker"); assert.ok(fc.seen.every(p => p === "stair"));
+    /* with no FreeCAD worker set, the refusal stays what the plain worker says */
+    delete process.env.SYKEHUS_WORKER_FREECAD; forgetParts();
+    await assert.rejects(prepare({ kind: "part", part: "stair", from: [-10, -80], to: [-10, -78] }, site), /No such part here/);
+  } finally { plain.close(); fc.close(); delete process.env.SYKEHUS_WORKER_FREECAD; }
+});
