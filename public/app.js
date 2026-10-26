@@ -13,6 +13,7 @@ import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
+import { ghostIds } from "./livetries.js";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
@@ -992,6 +993,23 @@ async function refresh() {
   if (fixed(d.edits) !== base) { try { sessionStorage.setItem("sykehus-pose", JSON.stringify(viewer.pose())); } catch { } return location.reload(); }
   await show(versionId ? { version: versionId } : { draft: draftId });
 }
+/* U3670: a try Anton makes while he works shows at once, in place: the new parts see-through, the camera eased to the newest, a free picture
+   of it for the chat. A change that needs the page again (a non-LIVE kind) waits for the end of the turn, as before. */
+let tryStart = null;
+const tries = {
+  async run() {
+    const d = await fetchDraft(); if (d.missing || fixed(d.edits) !== base) return null;
+    tryStart ??= new Set((site.added || []).map(a => a.id));
+    await show({ ...(versionId ? { version: versionId } : { draft: draftId }), shown: d });
+    const g = ghostIds(tryStart, (site.added || []).map(a => a.id)); viewer.ghost(g);
+    const n = (site.added || []).find(x => x.id === g.at(-1));   // the newest part: the camera eases to it (focus knows the model's buildings only)
+    if (n?.from && n?.to) viewer.look({ x: (n.from[0] + n.to[0]) / 2, y: (n.from[1] + n.to[1]) / 2, dist: Math.max(80, Math.hypot(n.to[0] - n.from[0], n.to[1] - n.from[1]) * 3 + (n.width || 0) * 2) }, 900);
+    await new Promise(r => setTimeout(r, 1000));   // the camera's glide, then the picture
+    return { thumb: viewer.thumb(), pose: viewer.pose() };
+  },
+  end() { tryStart = null; viewer.ghost(null); },   // the turn is over: the real edit stands, solid
+  back(p) { viewer.look(p, 700); },
+};
 /* the view Anton's show_building chose (mcp.mjs viewOf): a storey, a wing, the plan or a section */
 /* Anton's show_building through the pill, on this page in place (pm 21:20Z: «vis meg det fra fugleperspektiv» did
    not move the camera): a facade, a section, plan or 3D, a storey, a wing, and where the camera stands */
@@ -1031,7 +1049,7 @@ import("./tour.js").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261027e").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261027r").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
 import("./gjengi.js?v=20261027o").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
