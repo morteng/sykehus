@@ -38,8 +38,9 @@ import { BAY, windowsOn, kindOf } from "./bays.js";   // the window bays (U3624)
 import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
-export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
-export const MATERIALS = ["glass", "concrete", "steel", "wood", "brick"];
+import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360 } from "./renderkit/dirs.js";   // one copy of directions (DRY 5)
+import { BUILDING as MATERIALS } from "./renderkit/materials.js";   // glass, concrete, steel, wood, brick (U3618)
+import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
@@ -101,7 +102,7 @@ function facts(e, str, out) {
   /* U3566 (b): the side of its step-free entrance (N, Ø, S, V); "" or null takes it away */
   if (e.entrance !== undefined) {
     const k = e.entrance == null ? "" : String(e.entrance).trim().toUpperCase().replace(/^(O|E|ØST|OST|EAST)$/, "Ø").replace(/^(W|VEST|WEST)$/, "V").replace(/^(NORD|NORTH)$/, "N").replace(/^(SØR|SOR|SOUTH)$/, "S");
-    if (k && !SIDES_ENTRY.includes(k)) throw new Error("entrance er siden inngangen vender mot: N, Ø, S eller V");
+    if (k && !SIDE_KEYS.includes(k)) throw new Error("entrance er siden inngangen vender mot: N, Ø, S eller V");
     out.entrance = k || null;
   }
   if (e.storeys != null) { const n = +e.storeys; if (!Number.isInteger(n) || n < 1 || n > 30) throw new Error("Etasjene er et helt tall fra 1 til 30"); out.storeys = n; }
@@ -164,7 +165,7 @@ export function checkDesign(site, e, str) {
     case "balconies": {
       const w = (site.wings || []).find(x => x.id === String(e.wing ?? "").toLowerCase().trim() || x.name.toLowerCase() === String(e.wing ?? "").toLowerCase().trim());
       if (!w) throw new Error(`Ukjent fløy «${e.wing}»`);
-      const side = e.side == null && e.face != null ? ["N", "Ø", "S", "V"][Math.round(((+e.face % 360) + 360) % 360 / 90) % 4] : String(e.side ?? "").toUpperCase().replace("O", "Ø");
+      const side = e.side == null && e.face != null ? SIDE_KEYS[Math.round(norm360(+e.face) / 90) % 4] : String(e.side ?? "").toUpperCase().replace("O", "Ø");
       if (!SIDES[side]) throw new Error("side er N, Ø, S eller V: fasaden balkongene vender mot (eller face: retningen i grader)");
       const names = (w.levels || []).map(l => l.name), storey = (s, what) => { if (s == null) return undefined; const n = /^\d+$/.test(String(s).trim()) ? `${String(s).trim()}. etasje` : String(s).trim(); if (!names.includes(n)) throw new Error(`${what}: ${w.name} har ikke «${n}» (har ${names.join(", ")})`); return n; };
       const out = { kind: "balconies", wing: w.id, side, depth: num(e.depth, 0.8, 4, "Dybden", 1.8), railing: e.railing == null ? "glass" : String(e.railing), ...w_ };
@@ -251,8 +252,6 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
 /* a wing's outline walls that face side (within 45°), or, given face (a bearing, degrees from north), those within
    20° of it: each with its outward normal n, its bearing, and its axis a -> bb run so that its left is out (flip:
    that is the wall's own end to start); walls under 3 m left out */
-const bearingOf = n => (Math.round(Math.atan2(n[0], n[1]) * 180 / Math.PI) + 360) % 360;
-const turn = (a, b) => Math.abs(((a - b) % 360 + 540) % 360 - 180);
 const faceKey = deg => (Math.round(deg / 5) * 5) % 360;   // a facade's bearing, to 5°, so the walls on one face are one
 function* facingWalls(site, wing, side, face = null) {
   const [sx, sy] = SIDES[side];
@@ -276,7 +275,7 @@ export function facadesOf(site, wing) {
   for (const side of Object.keys(SIDES)) for (const { L, bearing } of facingWalls(site, wing, side)) { const k = faceKey(bearing); m.set(k, (m.get(k) || 0) + L); }
   return [...m].map(([bearing, L]) => ({ bearing, length_m: Math.round(L * 10) / 10 })).sort((a, b) => b.length_m - a.length_m);
 }
-const SIDE_DEG = { N: 0, "Ø": 90, S: 180, V: 270 }, SIDE_WORD = { N: "nord", "Ø": "øst", S: "sør", V: "vest" };
+const SIDE_DEG = Object.fromEntries(SIDE_KEYS.map(k => [k, bearingOf(SIDES[k])]));
 /* the facade a side means on this wing, or a refusal naming both when the wing stands turned so that two faces are
    each 25–65° from it (Sentralblokka, turned 30°: «sør» is the short end at 210° and the long face at 120°) */
 function faceFor(site, w, side) {
@@ -373,7 +372,7 @@ const PAD_M = 3, FALL = 1 / 50, WALL_M = 1.5, PAD_FAR = 3;
 /* U3566 (b), TEK17 § 8-6: a step-free entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn),
    then a ramp at most 1:20 (RAMP) to the ground, 1.8 m wide (ENTRY_W), with a rest for every 0.6 m it rises; past
    RAMP_MAX m of ramp it is said to need a lift or another door */
-const LANDING = 1.6, RAMP = 20, ENTRY_W = 1.8, REST_RISE = 0.6, RAMP_MAX = 80, SIDES_ENTRY = ["N", "Ø", "S", "V"], COMPASS = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
+const LANDING = 1.6, RAMP = 20, ENTRY_W = 1.8, REST_RISE = 0.6, RAMP_MAX = 80;
 /* write false: only the numbers, the grid left as it is (balancedFoot tries koter with it). keep (U3566 c): the cells
    of the pads laid before, each with whose it is: what stands under a building or in its fall stays as that one left
    it, and where this pad meets one, the step between them is said (meets) */
@@ -387,7 +386,7 @@ function padGround(site, a, base, write = true, keep = null, guard = null, lot =
   let cut = 0, fill = 0, reach = 0, lotStep = 0; const meets = new Map(), onto = new Map(), moved = new Map();
   /* the entrance's face: of the four, the one whose outward normal is nearest the side asked; f its normal in the
      building's own frame (along u, across n), off0 how far the face stands out from the middle */
-  const nv = [-u[1], u[0]], want = a.entrance && COMPASS[a.entrance];
+  const nv = [-u[1], u[0]], want = a.entrance && SIDES[a.entrance];
   const face = want && [[1, 0, L / 2], [-1, 0, L / 2], [0, 1, a.width / 2], [0, -1, a.width / 2]].map(([fu, fn, off0]) => ({ fu, fn, off0, dot: (fu * u[0] + fn * nv[0]) * want[0] + (fu * u[1] + fn * nv[1]) * want[1] })).sort((p, q) => q.dot - p.dot)[0];
   let entry = null;
   if (face) {
@@ -484,7 +483,6 @@ function pathCells(site) {
   }
   return out;
 }
-const segDist = (p, a, b) => { const d = [b[0] - a[0], b[1] - a[1]], L2 = d[0] * d[0] + d[1] * d[1] || 1, t = Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / L2)); return Math.hypot(p[0] - a[0] - t * d[0], p[1] - a[1] - t * d[1]); };
 /* U3566 (d): the ways there are today (roads, pavements, car parks: the server has them, gater.mjs) that a new
    building's slopes reach onto, from how far its pad reaches (reach_m): for try_change's fit */
 export function padFit(site, ways = []) {
@@ -514,7 +512,7 @@ export function entranceText(n) {
   return ` Trinnfri inngang mot ${s}: repos ${String(LANDING).replace(".", ",")} m i nivå med gulvet, så rampe 1:${RAMP} ${n.up ? "opp" : "ned"} til terrenget, ${m1(n.ramp_m)} m lang (${m1(n.rise)} m${n.rests ? `, ${n.rests} hvilerepos` : ""}).`;
 }
 
-const profArea = p => Math.abs(p.reduce((a, q, i) => { const r = p[(i + 1) % p.length]; return a + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
+const profArea = p => Math.abs(ringArea(p));
 const round1 = v => Math.round(v * 10) / 10;
 
 /* the after's changes laid over the model (copies, made by applyEdits): what is taken away goes, what is built is added */

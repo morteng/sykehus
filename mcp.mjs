@@ -18,6 +18,7 @@ import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good s
 import { groundAt } from "./public/renderkit/fit.js";
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
+import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
@@ -43,13 +44,9 @@ const err = (code, message) => Object.assign(new Error(message), { code });
 const toolErr = message => Object.assign(new Error(message), { tool: true });
 /* the store's search text is folded so "rontgen" finds "røntgen" (tools/ingest.py fold) */
 const fold = s => String(s).toLowerCase().replace(/æ/g, "ae").replace(/[øö]/g, "o").replace(/[åä]/g, "a").replace(/é/g, "e").replace(/ü/g, "u");
-/* a direction as a model writes it, folded (pm 21:41Z: «NØ» was refused, the map had «no» and no «nø»): any case, NFC
-   or NFD, Norwegian or English, short or whole */
-const DIRS = { n: 0, nord: 0, north: 0, no: 45, ne: 45, nordost: 45, northeast: 45, o: 90, e: 90, ost: 90, east: 90, so: 135, se: 135, sorost: 135, southeast: 135,
-  s: 180, sor: 180, south: 180, sv: 225, sw: 225, sorvest: 225, southwest: 225, v: 270, w: 270, vest: 270, west: 270, nv: 315, nw: 315, nordvest: 315, northwest: 315 };
-const dirKey = d => fold(String(d ?? "").normalize("NFC")).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9.-]/g, "");
-const dirDeg = d => { if (typeof d === "number") return d; const k = dirKey(d); if (/^-?\d+(\.\d+)?$/.test(k)) return +k;
-  return DIRS[k.replace(/-/g, "")] ?? (() => { throw toolErr(`Unknown direction "${d}". Use N, NØ, Ø, SØ, S, SV, V, NV or degrees.`); })(); };
+/* a direction as a model writes it (pm 21:41Z: «NØ» was refused): renderkit dirs.js reads it, any case, Norwegian or
+   English, short or whole, or degrees */
+const dirDeg = d => dirOf(d) ?? (() => { throw toolErr(`Unknown direction "${d}". Use N, NØ, Ø, SØ, S, SV, V, NV or degrees.`); })();
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
@@ -198,7 +195,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     }
     if (a.mode === "fasade") {
       if (!v.wing) throw toolErr(`Fasaden trenger wing: hvilken fløys fasade. Fløyene: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}. For eksempel {mode: "fasade", wing: "Sentralblokka", from_direction: "S"} for fasaden mot sør på Sentralblokka.`);
-      const deg = a.from_direction != null ? dirDeg(a.from_direction) : 0, side = ["N", "Ø", "S", "V"][Math.round(((deg % 360) + 360) % 360 / 90) % 4];
+      const deg = a.from_direction != null ? dirDeg(a.from_direction) : 0, side = SIDE_KEYS[Math.round(norm360(deg) / 90) % 4];
       Object.assign(v, { mode: "section", section: "fasade", side }); delete v.storey; delete v.yaw; return v;
     }
     if (a.mode === "tverrsnitt" || a.mode === "lengdesnitt") {
@@ -558,10 +555,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         let png = null;
         if (a.picture && view.x != null && view.y != null && view.mode !== "section") try { png = await shotPicture(model(on, req), view); } catch (e) { console.warn("show_building picture:", e.message); }
         const seen = !!png;
-        const SIDE_ = { N: "nord", Ø: "øst", S: "sør", V: "vest" }, deg = a.from_direction != null ? dirDeg(a.from_direction) : null;
-        const cam = view.mode === "section" || view.mode === "plan" ? "" : [deg != null ? `sett fra ${["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8]}` : "", a.tilt_deg != null ? `${Math.round(clamp(+a.tilt_deg, 5, 85))}° over bakken${a.tilt_deg >= 50 ? " (fugleperspektiv)" : ""}` : "", a.distance_m != null ? `${Math.round(clamp(+a.distance_m, 30, 1200))} m unna` : ""].filter(Boolean).join(", ");
+        const deg = a.from_direction != null ? dirDeg(a.from_direction) : null;
+        const cam = view.mode === "section" || view.mode === "plan" ? "" : [deg != null ? `sett fra ${dirWord(deg)}` : "", a.tilt_deg != null ? `${Math.round(clamp(+a.tilt_deg, 5, 85))}° over bakken${a.tilt_deg >= 50 ? " (fugleperspektiv)" : ""}` : "", a.distance_m != null ? `${Math.round(clamp(+a.distance_m, 30, 1200))} m unna` : ""].filter(Boolean).join(", ");
         const said = kept ? (a.saved_view ? `Den lagrede visningen «${kept.name}». ` : `Lagret som «${kept.name}» i ${/^v.{8}$/.test(on) ? `versjonen ${on}` : `utkastet ${on}`}; personen finner den under Visninger. `) : "";
-        const text = `${said}${guessed ? `Viser ${guessed}; si fra om du mente en annen fløy (wing). ` : ""}Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : eyeSaid ? `3D, ${eyeSaid}` : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}${seen ? ". The picture above is what you see of it (massing; the person's view also has the drawn facades)" : `. You have not seen this view (${view.cam === "eye" || kept ? "picture: true to see it" : "use look for a picture"})`}. On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
+        const text = `${said}${guessed ? `Viser ${guessed}; si fra om du mente en annen fløy (wing). ` : ""}Sykehustomta: ${view.storey ? `${view.storey}, snitt 1,2 m over gulv` : "hele anlegget"}${w ? `, ${w.name}` : ""}, ${view.mode === "plan" ? "plan" : view.section === "fasade" ? `fasaden mot ${SIDE_WORD[view.side]}, sett rett på` : view.mode === "section" ? (view.section === "lengde" ? "lengdesnitt" : "tverrsnitt") : eyeSaid ? `3D, ${eyeSaid}` : `3D${cam ? ` ${cam}` : ""}`}${view.draft ? `, utkast ${view.draft}` : ""}${seen ? ". The picture above is what you see of it (massing; the person's view also has the drawn facades)" : `. You have not seen this view (${view.cam === "eye" || kept ? "picture: true to see it" : "use look for a picture"})`}. On the web: ${originOf(req)}/${view.draft ? (isV ? `?versjon=${view.draft}` : `?utkast=${view.draft}`) : ""}${moved === true ? " The person's open page on the website has moved to this view." : moved === false ? " The person has no page of the website open, so nothing moved there; say so, and give the link." : ""}`;
         return { _result: { content: [...(png ? [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }] : []), { type: "text", text }], structuredContent: { app: "sykehus", view, ...(kept ? { saved_view: { id: kept.id, name: kept.name } } : {}) } } }; } },
   ];
   /* the writes one at a time, from Anton and from the page alike, and each one a line in the log (pm 23:31Z: two

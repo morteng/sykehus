@@ -6,6 +6,7 @@
    SYKEHUS_WORKER (or GULDEN_WORKER): the worker's address on the internal network (gulden-worker, its own repo since
    U3587: http://gulden-worker:8070); without it a construction is
    refused with a plain word. The folder: SYKEHUS_VERSIONS_DIR/bim, else the system's temp. */
+import { CLASS_MAT } from "./public/renderkit/materials.js";   // the IFC classes in the materials the page and the picture draw (U3618)
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
@@ -16,9 +17,6 @@ const workerUrl = () => process.env.SYKEHUS_WORKER || process.env.GULDEN_WORKER;
 const toolErr = message => Object.assign(new Error(message), { tool: true });
 const DIR = join(process.env.SYKEHUS_VERSIONS_DIR || tmpdir(), "bim");
 const FILES = { "mesh.json": "application/json", "model.ifc": "application/p21", "model.glb": "model/gltf-binary" };
-/* the IFC classes in the five colours the page and the picture have */
-export const CLASS_MAT = { IfcMember: "steel", IfcAnnotation: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass",
-  IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcStair: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood", IfcFurnishingElement: "wood" };
 
 export const shaOf = (script, params) => createHash("sha256").update(script + "\0" + JSON.stringify(Object.keys(params).sort().map(k => [k, params[k]]))).digest("hex");
 const meshOf = sha => { try { return JSON.parse(readFileSync(join(DIR, sha, "mesh.json"), "utf8")); } catch { return null; } };

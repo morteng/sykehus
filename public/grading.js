@@ -19,10 +19,10 @@
    they are (the neighbour's ground): the step there is lot_wall. */
 import { gradeRing, balanceKote, planeZ, rootsHit, cellsIn, SLOPE } from "./renderkit/grade.js";
 import { offsetRing, ringArea } from "./renderkit/paths2d.js";
+import { SIDES } from "./renderkit/dirs.js";
 import { groundAt } from "./renderkit/fit.js";
 
 export const POOL = { depth: 1.4, coping: 0.3, surround: 1, freeboard: 0.15 }, POND_DEPTH = 0.6;
-export const COMPASS = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
 export const TERRAIN_ID = /^terreng-\d+$/;
 
 /* the cells of the terrain inside the lot (site.lot.ring), or null when there is no lot; made once a grid and lot */
@@ -51,7 +51,7 @@ export function applyGrading(site, edits) {
   site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
   const T = site.terrain, lot = lotCells(site), keep = lot ? { has: i => !lot.has(i) } : null;
   site.grading = specs.map(s => {
-    const ring = s.ring, at = centre(ring), fall = s.fall ? { toward: COMPASS[s.fall_toward || "S"], per: s.fall } : null, edge = s.edge || "batter", slope = s.slope || SLOPE;
+    const ring = s.ring, at = centre(ring), fall = s.fall ? { toward: SIDES[s.fall_toward || "S"], per: s.fall } : null, edge = s.edge || "batter", slope = s.slope || SLOPE;
     const spec = k => ({ ring, z: planeZ({ kote: k, at, fall }), edge, slope, keep });
     const [lo, hi] = span(site, ring);
     const kote = s.kote ?? balanceKote(k => { const g = gradeRing(T, spec(k), false); return g.cut_m3 - g.fill_m3; }, lo, hi);

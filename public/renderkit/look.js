@@ -19,11 +19,12 @@
    aimAt(site, what): a wing (id or name), a building id, or an added one (id or name) → { name, ids, target, size } | null
    VIEWS: the named views (as FreeCAD's get_view): isometrisk, plan, N, Ø, S, V, NØ, SØ, SV, NV → { from, tilt } | { plan } */
 import { deflateSync } from "node:zlib";
+import { MATERIALS, BUILDING } from "./materials.js";
 
 const hex = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 const C = {
   sky: hex("#e6ecef"), ground: hex("#b3c58a"), lot: hex("#c8312b"), own: hex("#ddd2bd"), other: hex("#bdb9b1"), tree: hex("#6f8d4f"), edge: hex("#4a463f"), focus: hex("#ff7a00"),
-  glass: hex("#a8d8cf"), concrete: hex("#cfcac0"), steel: hex("#9fa8b2"), wood: hex("#bf9163"), brick: hex("#b7684c"), north: hex("#23211e"),
+  north: hex("#23211e"), ...Object.fromEntries(BUILDING.map(k => [k, hex(MATERIALS[k].opaque || MATERIALS[k].colour)])),   // materials.js's
 };
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];

@@ -18,6 +18,8 @@
    sixth item, the species id or name, and a seventh, its planting's id), site.plantings [{ id: tre-1, species, name,
    latin, count, height, crown }] (each trees change, picked and changed or taken away by its id, U3569),
    site.planted [{ species, name, count }] and site.felled (how many). */
+import { pointInRing as inRing, ringArea as signedArea } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
+import { SIDE_KEYS } from "./renderkit/dirs.js";
 import { PLANTS } from "./plants.js";
 
 export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"];
@@ -40,9 +42,8 @@ const num = (v, lo, hi, what, dflt) => {
   if (v == null) { if (dflt === undefined) throw new Error(`${what} mangler`); return dflt; }
   const x = +v; if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${what} må være et tall mellom ${lo} og ${hi}`); return Math.round(x * 100) / 100;
 };
-export const ringArea = r => Math.abs(r.reduce((a, q, i) => { const s = r[(i + 1) % r.length]; return a + q[0] * s[1] - s[0] * q[1]; }, 0)) / 2;
+const ringArea = r => Math.abs(signedArea(r));   // the m², either way round
 const lineLength = l => l.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - l[i][0], p[1] - l[i][1]), 0);
-const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
 const round1 = v => Math.round(v * 10) / 10;
 
 /* a species as hagekart knows it, or a Latin name it does not; banned ones refused */
@@ -96,12 +97,12 @@ export function checkLandscape(site, e, str) {
 }
 
 /* U3616: a planed area's settings (grading.js), checked; each only when given */
-const EDGES = ["batter", "wall"], SIDES = ["N", "Ø", "S", "V"];
+const EDGES = ["batter", "wall"];
 function groundOf(e) {
   const out = {};
   if (e.kote != null) out.kote = num(e.kote, -20, 200, "Koten");
   if (e.fall != null) out.fall = num(e.fall, 2, 500, "Fallet (1:fall)");
-  if (e.fall_toward != null) { if (!SIDES.includes(e.fall_toward)) throw new Error("fall_toward er N, Ø, S eller V"); out.fall_toward = e.fall_toward; }
+  if (e.fall_toward != null) { if (!SIDE_KEYS.includes(e.fall_toward)) throw new Error("fall_toward er N, Ø, S eller V"); out.fall_toward = e.fall_toward; }
   if (e.edge != null) { if (!EDGES.includes(e.edge)) throw new Error("edge er batter (skråning) eller wall (støttemur)"); out.edge = e.edge; }
   if (e.slope != null) out.slope = num(e.slope, 1, 10, "Skråningen (1:slope)");
   return out;

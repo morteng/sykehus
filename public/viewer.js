@@ -14,7 +14,9 @@
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
 import { ease } from "./renderkit/camera.js";
-import { offsetRing } from "./renderkit/paths2d.js";
+import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
+import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
+import { texturedMaterial, worldUV } from "./renderkit/materials-three.js";
 import { BAY, STOREY, WINDOWS, kindOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
@@ -86,7 +88,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a ring's box first, kept per ring: most points asked are far outside (pm 21:41Z: the page's main thread stood
      still seconds after a load; the floors asked every wall corner against every building) */
   const boxes = new WeakMap(), boxOf = r => { let b = boxes.get(r); if (!b) { b = [Infinity, Infinity, -Infinity, -Infinity]; for (const [x, y] of r) { if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y; } boxes.set(r, b); } return b; };
-  const inRing = ([x, y], r) => { const bx = boxOf(r); if (x < bx[0] || x > bx[2] || y < bx[1] || y > bx[3]) return false; let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
+  const inRing = (p, r) => { const bx = boxOf(r); return p[0] >= bx[0] && p[0] <= bx[2] && p[1] >= bx[1] && p[1] <= bx[3] && pointInRing(p, r); };
   const meshes = new Map(); let goneIds = new Set();   // goneIds: setGone
   function wallsTo(ring, b0, topAt, m) {
     const pos = [];
@@ -287,8 +289,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   /* ---------- the after: what a draft builds (design.js), each part a profile [across, kote] drawn along its axis,
      across to the left of the axis; glass seen through, as a greenhouse is ---------- */
-  const ADDED = { glass: mat("#cfe6e2", { transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.1, depthWrite: false }), concrete: mat("#ddd8cc"),
-    steel: mat(C.steel, { roughness: 0.5, metalness: 0.4 }), wood: mat("#b48a5a"), brick: mat("#a65b44") };
+  const ADDED = Object.fromEntries(BUILDING.map(k => [k, mat(MATERIALS[k].colour, MATERIALS[k].look)]));
   /* drawn again in place when the after changes (setAdded, U3556): the old ones taken away and freed */
   const addedGroups = new Map();
   function setAdded(list) {
@@ -299,7 +300,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     dirty = true;
   }
   /* a construction's triangles by IFC class (U3570: what the worker made from its script, mesh.json), once per sha */
-  const meshCache = new Map(), CLASS_MAT = { IfcMember: "steel", IfcAnnotation: "steel", IfcBeam: "steel", IfcColumn: "steel", IfcRailing: "steel", IfcPlate: "glass", IfcWindow: "glass", IfcCurtainWall: "glass", IfcSlab: "concrete", IfcWall: "concrete", IfcFooting: "concrete", IfcRoof: "concrete", IfcDoor: "wood", IfcCovering: "wood" };
+  const meshCache = new Map();
   const meshOf = sha => { if (!meshCache.has(sha)) meshCache.set(sha, fetch(`api/bim/${sha}/mesh.json`).then(r => r.ok ? r.json() : null).catch(() => null)); return meshCache.get(sha); };
   function drawBim(a, grp) {
     /* till it comes: its box, faint, so it stands, is picked and has its handles */
@@ -345,8 +346,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* the after's ground (landscape.js): each surface and path laid on the terrain, its triangles cut down to the
      terrain's grid so it follows the slope, each later one a little higher than the one before (a bed in a lawn, a
      path across it) */
-  const GROUND = { grass: "#a3c072", meadow: "#bcc47e", planting: "#6f8c4c", gravel: "#d3cab6", paving: "#bdb6aa", asphalt: "#66655f", water: "#7fa8c2", wood: "#a8825a" };
-  const groundMat = Object.fromEntries(Object.entries(GROUND).map(([k, c]) => [k, mat(c, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, ...(k === "water" ? { roughness: 0.15, metalness: 0.1 } : {}) })]));
+  const LIFTED = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
+  const groundMat = Object.fromEntries(Object.entries(MATERIALS).filter(([, m]) => m.kind.includes("ground")).map(([k, m]) => [k, mat(m.colour, { ...m.look, ...LIFTED })]));
+  /* U3618: on a tier that carries it, the surface in its material's picture (ambientCG, at true scale), once it has come */
+  const pictured = (m, surface) => { if (!Q.pbr || !MATERIALS[surface]?.texture) return;
+    texturedMaterial(surface, { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, ...LIFTED } }).then(({ material, tile }) => {
+      if (!m.parent) { material.dispose(); return; }
+      worldUV(m.geometry, tile, "x", "z"); const old = m.material; m.material = material; old.dispose(); dirty = true; }).catch(() => {}); };
   /* drawn again in place when the after changes (setLandscape, 21:07Z «when i edit the whole page reloads»: a pool is a surface) */
   const groundMeshes = [];
   function setLandscape(list) {
@@ -411,7 +417,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     for (const [i, j, k] of tris) split(ring[i], ring[j], ring[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
     /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
-    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = g.level; scene.add(m); groundMeshes.push(m);
+    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = g.level; scene.add(m); pictured(m, g.surface); groundMeshes.push(m);
   } }
   drawLandscape(site.landscape); drawGrading(gradingNow);
 

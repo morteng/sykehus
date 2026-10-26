@@ -10,11 +10,17 @@
    pads under new buildings) is one IfcGeographicElement TERRAIN on the site, the grid's squares that moved as triangles,
    with the m³ dug out and filled; each pool's or pond's water an IfcGeographicElement of its own (ObjectType Vann).
 
+   Each new element names its material (U3619): one IfcMaterial per material used, its Name the FreeCAD card's (renderkit
+   materials.js), its Category IFC4's, with Pset_MaterialCommon MassDensity and the card's UUID, and an
+   IfcRelAssociatesMaterial to the elements in it: a new building's body in its material, a balcony's slab in concrete
+   and its railing in its own, the moved ground in soil, a pool's water in water.
+
    GlobalIds come from the new building's id and the part's place in it, so the same after gives the same file and an
    export compares with the last one element by element. The STEP is written by hand, one entity a line, numbered on
    from the before's last. */
 import { createHash } from "node:crypto";
 import { stepText } from "./ifcfilter.mjs";
+import { ifcMaterial, MATERIALS } from "./public/renderkit/materials.js";   // U3619: the one list of materials
 
 const B64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$";
 /* ifcopenshell.guid.compress of the first 128 bits of a sha1 of key: 22 characters, the first of 2 bits */
@@ -82,6 +88,7 @@ export function addedLines(parsed, after, before) {
   };
   const box = a => { const h = a.width / 2, z0 = a.base_kote, z1 = a.top_kote; return [{ axis: [a.from, a.to], profile: [[-h, z0], [h, z0], [h, z1], [-h, z1]] }]; };
   const contain = (key, els, storey) => put(`IFCRELCONTAINEDINSPATIALSTRUCTURE('${gid(key + ":in")}',$,$,$,(${els.map(e => "#" + e).join(",")}),#${storey})`);
+  const byMat = new Map(), made = (key, el) => { if (MATERIALS[key]) (byMat.get(key) || byMat.set(key, []).get(key)).push(el); return el; };
   const newBuildings = [], wingName = id => before.wings?.find(w => w.id === id)?.name;
 
   for (const a of after.added || []) {
@@ -93,7 +100,7 @@ export function addedLines(parsed, after, before) {
       put(`IFCRELAGGREGATES('${gid(key + ":storeys")}',$,$,$,#${bld},(${sts.map(s => "#" + s).join(",")}))`);
       const parts = a.shape === "bim" || !a.parts?.some(p => p.profile || p.tris) ? box(a) : a.parts.filter(p => p.profile || p.tris);
       const el = put(`IFCBUILDINGELEMENTPROXY('${gid(key + ":body")}',$,${stepStr(a.name)},$,${stepStr(a.shape === "bim" ? "Konstruksjon" : a.shape)},#${placeAt(0)},#${shape(parts)},$,.ELEMENT.)`);
-      contain(key, [el], sts[0]);
+      contain(key, [el], sts[0]); made(a.material, el);
       pset(key, [bld], "Sykehustomta_Nytt", { Id: a.id, Bruk: a.use, Etasjer: a.storeys ? String(a.storeys) : null, Byggeår: a.built, Merknad: a.note, Hvorfor: a.why, Status: "NEW" });
       pset(key + ":body", [el], "Sykehustomta_Nytt", { Form: a.shape, Materiale: a.material, Fot: `kote +${a.base_kote}`, Topp: `kote +${a.top_kote}`, Grunnflate: a.footprint_m2 != null ? `${a.footprint_m2} m²` : null, Volum: a.volume_m3 != null ? `${a.volume_m3} m³` : null,
         ...(a.bim ? { Konstruksjon: a.bim.sha, Fil: `api/bim/${a.bim.sha}/model.ifc`, Kilde: a.bim.source?.url || a.bim.fetched_from, Lisens: a.bim.licence } : {}), ...(a.on ? { "Står på": wingName(a.on) } : {}) });
@@ -108,7 +115,7 @@ export function addedLines(parsed, after, before) {
         const ks = p.profile.map(q => q[1]), z = p.role === "railing" ? Math.min(...ks) : Math.max(...ks), st = sts.reduce((s, x) => x[1] <= z + 0.05 ? x : s, sts[0])[0];
         const cls = p.role === "railing" ? "IFCRAILING" : "IFCSLAB", type = p.role === "railing" ? ".BALUSTRADE." : ".FLOOR.";
         const el = put(`${cls}('${gid(`${key}:${i}`)}',$,${stepStr(p.role === "railing" ? "Rekkverk" : "Balkong")},$,$,#${placeAt(0)},#${shape([p])},$,${type})`);
-        (by.get(st) || by.set(st, []).get(st)).push(el); counts.elements++;
+        (by.get(st) || by.set(st, []).get(st)).push(el); made(p.mat, el); counts.elements++;
       });
       for (const [st, els] of by) contain(`${key}:${st}`, els, st);
       const all = [...by.values()].flat(); if (all.length) pset(key, all, "Sykehustomta_Nytt", { Hvorfor: a.why, Status: "NEW" });
@@ -128,7 +135,7 @@ export function addedLines(parsed, after, before) {
     if (tris.length) {
       const list = put(`IFCCARTESIANPOINTLIST3D((${xyz.map(pt).join(",")}),$)`), face = put(`IFCTRIANGULATEDFACESET(#${list},$,.F.,(${tris.map(t => `(${t.join(",")})`).join(",")}),$)`);
       const rep = put(`IFCSHAPEREPRESENTATION(#${A.body},'Body','Tessellation',(#${face}))`), shp = put(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`);
-      const el = put(`IFCGEOGRAPHICELEMENT('${gid("terrain")}',$,${stepStr("Terreng etter")},${stepStr("Bakken der etter-forslaget graver ut og fyller")},$,#${placeAt(0)},#${shp},$,.TERRAIN.)`); onSite.push(el);
+      const el = put(`IFCGEOGRAPHICELEMENT('${gid("terrain")}',$,${stepStr("Terreng etter")},${stepStr("Bakken der etter-forslaget graver ut og fyller")},$,#${placeAt(0)},#${shp},$,.TERRAIN.)`); onSite.push(el); made("soil", el);
       const sum = k => (after.grading || []).reduce((a, g) => a + (g[k] || 0), 0) + waters.reduce((a, w) => a + (w.basin[k] || 0), 0) + (after.added || []).reduce((a, x) => a + (x.ground?.[k] || 0), 0);
       pset("terrain", [el], "Sykehustomta_Terreng", { Utgraving: `${sum("cut_m3")} m³`, Fylling: `${sum("fill_m3")} m³`, Flater: (after.grading || []).map(g => `${g.name}: kote +${g.kote}`).join("; ") || null, Status: "NEW" });
       counts.elements++;
@@ -138,10 +145,19 @@ export function addedLines(parsed, after, before) {
     const bottom = w.basin.bottom ?? w.level - w.basin.depth, ps = w.ring.map(p => put(`IFCCARTESIANPOINT(${pt(p)})`)), poly = put(`IFCPOLYLINE((${[...ps, ps[0]].map(r => "#" + r).join(",")}))`);
     const prof = put(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,${stepStr("Vann")},#${poly})`), sol = put(`IFCEXTRUDEDAREASOLID(#${prof},IFCAXIS2PLACEMENT3D(IFCCARTESIANPOINT(${pt([0, 0, bottom])}),$,$),#${zUp},${num(w.level - bottom)})`);
     const rep = put(`IFCSHAPEREPRESENTATION(#${A.body},'Body','SweptSolid',(#${sol}))`), shp = put(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`);
-    const el = put(`IFCGEOGRAPHICELEMENT('${gid(w.id + ":water")}',$,${stepStr(w.name || (w.pool ? "Basseng" : "Dam"))},$,${stepStr("Vann")},#${placeAt(0)},#${shp},$,.USERDEFINED.)`); onSite.push(el);
+    const el = put(`IFCGEOGRAPHICELEMENT('${gid(w.id + ":water")}',$,${stepStr(w.name || (w.pool ? "Basseng" : "Dam"))},$,${stepStr("Vann")},#${placeAt(0)},#${shp},$,.USERDEFINED.)`); onSite.push(el); made("water", el);
     pset(w.id, [el], "Sykehustomta_Nytt", { Vannstand: `kote +${w.level}`, Dybde: `${w.basin.depth} m`, Kant: w.pool ? `kote +${w.basin.kote}` : null, Utgraving: `${w.basin.cut_m3} m³`, Hvorfor: w.why, Status: "NEW" });
     counts.elements++;
   }
+  for (const [key, els] of byMat) {
+    const m = ifcMaterial(key), mat = put(`IFCMATERIAL(${stepStr(m.name)},${stepStr(m.description)},${stepStr(m.category)})`), d = MATERIALS[key];
+    const props = [d.density && put(`IFCPROPERTYSINGLEVALUE('MassDensity',$,IFCMASSDENSITYMEASURE(${num(d.density)}),$)`)].filter(Boolean);
+    if (props.length) put(`IFCMATERIALPROPERTIES('Pset_MaterialCommon',$,(${props.map(v => "#" + v).join(",")}),#${mat})`);
+    const own = [m.card && put(`IFCPROPERTYSINGLEVALUE('FreeCAD_kort',$,IFCLABEL(${stepStr(m.card)}),$)`), d.density && d.density_from !== "card" && put(`IFCPROPERTYSINGLEVALUE('Densitet_kilde',$,IFCLABEL(${stepStr(d.density_from)}),$)`)].filter(Boolean);
+    if (own.length) put(`IFCMATERIALPROPERTIES('Sykehustomta_Materiale',$,(${own.map(v => "#" + v).join(",")}),#${mat})`);
+    put(`IFCRELASSOCIATESMATERIAL('${gid("material:" + key)}',$,${stepStr(m.description)},$,(${els.map(e => "#" + e).join(",")}),#${mat})`);
+  }
+  counts.materials = byMat.size;
   if (onSite.length) put(`IFCRELCONTAINEDINSPATIALSTRUCTURE('${gid("site:ground")}',$,$,$,(${onSite.map(e => "#" + e).join(",")}),#${A.site})`);
   /* the wings the after renames or gives new facts: their IfcBuilding under the new name, what changed in a set of its own */
   const renamed = new Map();

@@ -16,6 +16,7 @@
    - A drag is one change (onCommit), a run of keys one change too; a red place is not taken. Esc or a right click
      while moving puts it back.
    The pure part (no three.js) is exported for tests: bodyOf, toBody, cornersOf, snapBody, fitBody. */
+import { pointInRing as inRing } from "./paths2d.js";
 
 const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
 const wrap = a => ((a % 360) + 540) % 360 - 180;   // degrees into (-180, 180]
@@ -35,7 +36,6 @@ export function cornersOf(s) {
   return [[-l, -w], [l, -w], [l, w], [-l, w]].map(([p, q]) => [s.c[0] + u[0] * p + v[0] * q, s.c[1] + u[1] * p + v[1] * q]);
 }
 
-const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
 const edges = r => r.map((p, i) => [p, r[(i + 1) % r.length]]).filter(([p, q]) => p[0] !== q[0] || p[1] !== q[1]);
 function segHit(p, q, r, s) {
   const d = (q[0] - p[0]) * (s[1] - r[1]) - (q[1] - p[1]) * (s[0] - r[0]); if (Math.abs(d) < 1e-12) return false;

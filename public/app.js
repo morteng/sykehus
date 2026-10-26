@@ -5,7 +5,7 @@
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
-import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026r";
+import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
@@ -572,9 +572,9 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
     return `${was}: ${what.join(", ")}${why}`;
   }
   if (e.kind === "volume") return `${e.name}: ${{ box: "kasse", gable: "saltak", triangle: "trekant (A-form)", lean_to: "pulttak" }[e.shape]}, ${String(e.width).replace(".", ",")} × ${String(Math.round(Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) * 10) / 10).replace(".", ",")} m, ${String(e.height).replace(".", ",")} m høy, ${{ glass: "glass", concrete: "betong", steel: "stål", wood: "tre", brick: "tegl" }[e.material]}${why}`;
-  const SURF = { grass: "plen", meadow: "eng", planting: "beplantning", gravel: "grus", paving: "belegningsstein", asphalt: "asfalt", water: "vann", wood: "tre" };
-  if (e.kind === "surface") return `${e.name ? e.name + ": " : ""}${SURF[e.surface]}${e.plants?.length ? ` (${e.plants.join(", ")})` : ""}${why}`;
-  if (e.kind === "path") return `${e.name || "Sti"}: ${SURF[e.surface]}, ${String(e.width).replace(".", ",")} m bred${why}`;
+  const surf = k => (SURFACE_NO[k] || k).toLowerCase();   // valg.js's names, small
+  if (e.kind === "surface") return `${e.name ? e.name + ": " : ""}${surf(e.surface)}${e.plants?.length ? ` (${e.plants.join(", ")})` : ""}${why}`;
+  if (e.kind === "path") return `${e.name || "Sti"}: ${surf(e.surface)}, ${String(e.width).replace(".", ",")} m bred${why}`;
   if (e.kind === "trees") return `Planter ${e.points ? e.points.length : "en rekke"} ${e.species}${why}`;
   if (e.kind === "fell") return `Feller trærne i et område${why}`;
   if (e.kind === "ground") return `${e.name || "Terrenget"} planeres${e.kote != null ? ` på kote ${kote(e.kote)}` : ""}${e.fall ? `, fall 1:${e.fall}` : ""}${e.edge === "wall" ? ", med støttemur" : ""}${why}`;
@@ -827,7 +827,7 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261026a").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+import("./float.js?v=20261026s").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: a => { syncBuild(); build.move(); }, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));

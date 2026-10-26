@@ -16,7 +16,8 @@
      the ways the app brings ([{ name, ring }], e.g. OSM's footpaths made rings with paths2d.js pathRing).
    overlapArea(ring, convex, zs?, zc?) the m² two bodies share in plan, 0 when their [low, high] koter do not meet. */
 
-export const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
+import { pointInRing } from "./paths2d.js";
+export const inRing = pointInRing;   // paths2d.js's, the one point-in-ring
 
 /* the ground under a point, from the site's terrain grid (as the viewer reads it) */
 export function groundAt(site, [x, y]) {

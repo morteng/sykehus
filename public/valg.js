@@ -10,11 +10,11 @@
    connector's tools take (a wing's id, a storey's name, a room's code or name with its storey, a facade's id), so
    Anton can pass them straight on. Sent with a message as { items, ids, summary } (Fab's {ids, summary} and more). */
 import { groundAt } from "./renderkit/fit.js";
-const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
-const segDist = ([x, y], [ax, ay], [bx, by]) => { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(x - ax - t * dx, y - ay - t * dy); };
+import { MATERIALS } from "./renderkit/materials.js";
+import { pointInRing as inRing, segDist } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
 
 /* a surface's or a path's name: its own, else what it is */
-export const SURFACE_NO = { grass: "Plen", meadow: "Eng", planting: "Beplantning", gravel: "Grus", paving: "Belegningsstein", asphalt: "Asfalt", water: "Vann", wood: "Tre" };
+export const SURFACE_NO = Object.fromEntries(Object.entries(MATERIALS).map(([k, m]) => [k, m.no]));   // renderkit materials.js (U3618)
 export const groundName = g => g.kind === "trees" ? `${g.name || g.species}${g.count > 1 ? ` × ${g.count}` : ""}` : g.name || (g.kind === "path" ? `Sti (${(SURFACE_NO[g.surface] || g.surface).toLowerCase()})` : g.surface === "water" ? "Vann" : SURFACE_NO[g.surface] || "Flate");
 
 /* a road section's name: its street's and what it is (Welhavens gate, kjørevei), else what it is */

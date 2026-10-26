@@ -37,6 +37,15 @@ test("the after's IFC: a new building with its storeys and body, a pyramid, balc
   assert.deepEqual(names(p, "IFCBUILDINGSTOREY").filter(n => /^[1-4]\. etasje$/.test(n)).length >= 4, true);
   assert.ok([...p.ents.values()].some(e => e.type === "IFCTRIANGULATEDFACESET"), "the pyramid's faces");
   assert.ok(names(p, "IFCSLAB").filter(n => n === "Balkong").length > 10, "balconies");
+  /* U3619: one IfcMaterial a material used, named by its FreeCAD card, each element in one */
+  const mats = [...p.ents.values()].filter(e => e.type === "IFCMATERIAL" && /^'(Concrete|Glass|Steel-Generic|Wood|Brick|Soil)',/.test(e.args)).map(e => e.args);
+  assert.ok(mats.includes("'Glass','Glass','glass'") && mats.includes("'Concrete','Betong','concrete'") && mats.includes("'Soil','Jord','earth'"), mats.join(" | "));
+  assert.equal(counts.materials, 3, `glass (the office by default, the pyramid, the railings), concrete (the slabs) and soil (the pads moved the ground): ${JSON.stringify(counts)} ${mats.join(" | ")}`);
+  const rels = [...p.ents.values()].filter(e => e.type === "IFCRELASSOCIATESMATERIAL"), inRel = new Set(rels.flatMap(e => [...e.args.match(/\(([^)]*)\)/)[1].matchAll(/#(\d+)/g)].map(m => +m[1])));
+  const news = [...p.ents].filter(([, e]) => /^(IFCSLAB|IFCRAILING|IFCBUILDINGELEMENTPROXY)$/.test(e.type) && /^'[^']*',\$,'(Balkong|Rekkverk|Kontorbygg|Drivhus)'/.test(e.args));
+  assert.ok(news.length > 10 && news.every(([id]) => inRel.has(id)), "every new element is in a material");
+  assert.ok([...p.ents.values()].some(e => e.type === "IFCMATERIALPROPERTIES" && /'Pset_MaterialCommon'/.test(e.args)), "MassDensity");
+  assert.ok(text.includes("IFCMASSDENSITYMEASURE(2400.)") && text.includes("IFCLABEL('26042aa5-56e6-4d99-8b63-dd8b9ea5a37a')"), "the card's density and UUID");
   /* every reference points at something in the file, and no id is twice */
   const ids = new Set(); for (const l of p.lines) { const m = /^#(\d+)=/.exec(l); if (m) { assert.ok(!ids.has(m[1]), `#${m[1]} twice`); ids.add(m[1]); } }
   for (const [id, e] of p.ents) for (const r of e.args.replace(/'(?:[^']|'')*'/g, "''").matchAll(/#(\d+)/g)) assert.ok(p.ents.has(+r[1]), `#${id} points at #${r[1]}`);

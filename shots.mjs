@@ -9,16 +9,16 @@
      4. the plan, names on.
    Each view's state is the page's (saved.js VIEW_SPEC): the camera as the viewer's orbit (x, y, kote of the centre;
    yaw, pitch, dist), cam "eye" for the person's eye, and series, so a new series replaces the last. */
+import { bearing, dirWord } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
+import { pointInRing as inRing } from "./public/renderkit/paths2d.js";   // one copy (DRY 1)
 import { groundAt } from "./public/renderkit/fit.js";
 
 const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
 const m1 = v => String(r1(v)).replace(".", ",");
 const mid = ring => ring.reduce((a, p) => [a[0] + p[0] / ring.length, a[1] + p[1] / ring.length], [0, 0]);
-const DIRS = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"];
 /* the viewer's yaw for a camera standing toward deg (0 north, 90 east) of the centre */
 const yawFrom = deg => r3(Math.PI - deg * Math.PI / 180);
-/* deg of the direction from c to p */
-const degTo = (c, p) => ((Math.atan2(p[0] - c[0], p[1] - c[1]) * 180 / Math.PI) + 360) % 360;
+const degTo = bearing;   // renderkit dirs.js: deg of the direction from c to p
 const EYE_MIN = 30, EYE_MAX = 260;
 
 /* the nearest point of a named street or place to c, between EYE_MIN and EYE_MAX metres off, roads first, from where
@@ -37,7 +37,7 @@ export function nearestPlace(places, c, avoid = []) {
 export function streetsAround(places, c) {
   return (places || []).map(p => {
     const q = p.pts.reduce((b, q) => Math.hypot(q[0] - c[0], q[1] - c[1]) < Math.hypot(b[0] - c[0], b[1] - c[1]) ? q : b, p.pts[0]);
-    return { name: p.name, road: !!p.road, nearest_m: Math.round(Math.hypot(q[0] - c[0], q[1] - c[1])), side: DIRS[Math.round(degTo(c, q) / 45) % 8] };
+    return { name: p.name, road: !!p.road, nearest_m: Math.round(Math.hypot(q[0] - c[0], q[1] - c[1])), side: dirWord(degTo(c, q)) };
   }).sort((a, b) => a.nearest_m - b.nearest_m);
 }
 
@@ -50,10 +50,6 @@ export function clear(a, b, rings, near = 12) {
     const q = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; if (rings.some(r => inRing(q, r))) return false;
   }
   return true;
-}
-function inRing(p, ring) {
-  let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) if ((ring[i][1] > p[1]) !== (ring[j][1] > p[1]) && p[0] < (ring[j][0] - ring[i][0]) * (p[1] - ring[i][1]) / (ring[j][1] - ring[i][1]) + ring[i][0]) c = !c;
-  return c;
 }
 
 /* after: applyEdits(...).site; before: the before's site; places: [{ name, pts: [[east, north]], road }] */
@@ -77,8 +73,8 @@ export function planShots(after, before, places = []) {
     const free = [180, 225, 135, 270, 90, 315, 45, 0].map(g => [ac[0] + Math.sin(g * Math.PI / 180) * 70, ac[1] + Math.cos(g * Math.PI / 180) * 70]).find(q => !standing.some(r => inRing(q, r)) && clear(q, ac, standing));
     const at = near ? near.at : free || [ac[0], ac[1] - 70], d = Math.max(EYE_MIN, Math.hypot(at[0] - ac[0], at[1] - ac[1])), deg = degTo(ac, at);
     const facts = [a.storeys ? `${a.storeys} etasjer` : `${m1(H)} m høyt`, a.footprint_m2 ? `${Math.round(a.footprint_m2)} m² grunnflate` : null, a.use || null].filter(Boolean).join(", ");
-    shots.push({ name: near ? `${a.name} fra ${near.name}` : `${a.name} fra ${DIRS[Math.round(deg / 45) % 8]}`,
-      caption: `${a.name}${facts ? `, ${facts}` : ""}, slik en som står ${near ? `i ${near.name}` : `${Math.round(d)} m ${DIRS[Math.round(deg / 45) % 8]} for det`} ser det: øyehøyde 1,7 m, ${Math.round(d)} m unna, mot ${DIRS[Math.round(((deg + 180) % 360) / 45) % 8]}.`,
+    shots.push({ name: near ? `${a.name} fra ${near.name}` : `${a.name} fra ${dirWord(deg)}`,
+      caption: `${a.name}${facts ? `, ${facts}` : ""}, slik en som står ${near ? `i ${near.name}` : `${Math.round(d)} m ${dirWord(deg)} for det`} ser det: øyehøyde 1,7 m, ${Math.round(d)} m unna, mot ${dirWord(deg + 180)}.`,
       state: { mode: "3d", cam: "eye", x: r1(ac[0]), y: r1(ac[1]), kote: look, yaw: yawFrom(deg), pitch: r3(0.1), dist: r1(Math.min(EYE_MAX, d)) } });
   }
   const g = goneWings.sort((p, q) => q.bs.reduce((t, b) => t + (b.area_m2 || 0), 0) - p.bs.reduce((t, b) => t + (b.area_m2 || 0), 0))[0];
