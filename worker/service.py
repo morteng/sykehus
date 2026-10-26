@@ -5,7 +5,8 @@ what it made. One container on the stack's internal network; shared by sykehus (
   POST /blobs           the bytes of a file (a STEP, a KiCad part, an image) → {sha256, bytes}; kept a week
   GET  /blobs/<sha256>  the bytes
   POST /jobs[?wait=S]   {script, params?, inputs?: {name: sha256}, files?: {name: base64}, then?: ["mesh", "glb",
-                        "check"], mesh?: {linear_mm, angular_deg}, expect?: {...}, caps?: {s, mem_mb}, key?}
+                        "check"] (the KiCad image: "erc", "drc", "step", "outline", "render", with no script),
+                        mesh?: {linear_mm, angular_deg}, expect?: {...}, caps?: {s, mem_mb}, key?}
                         → 202 {id} or, with wait, the job when it is done (up to S seconds). key (or the
                         Idempotency-Key header): the same key within the hour is the same job, not a second run
   GET  /jobs/<id>       {id, state: queued|running|done|failed|refused, result, outputs: [{name, sha256, bytes, url}],
@@ -24,7 +25,9 @@ job's check): solids, valid, closed, volume, box, the solids that overlap (STEP,
 and each of expect's numbers against what was measured, so an app knows without opening the files whether the part
 is what was asked. A job whose check fails is still done: check.ok is false and check.failed says which. Errors carry a stable code and English words, for an app to
 put in its own language: script_error (with line), no_output, time_limit, memory_limit, network_refused,
-file_refused, too_big, bad_request, missing_input (an inputs sha the worker does not have: POST it to /blobs);
+file_refused, too_big, bad_request, missing_input (an inputs sha the worker does not have: POST it to /blobs),
+kicad_error (kicad-cli could not read the board or schematic, or none was sent; with step); the KiCad steps' findings
+in the job's kicad (steps/kicad.py);
 sandbox_unavailable when bubblewrap cannot make its namespaces here (its words
 in /health's sandbox_error).
 """
@@ -50,7 +53,8 @@ CAPS = {"s": 300, "mem_mb": 4096}
 SLOTS = threading.Semaphore(int(os.environ.get("WORKER_SLOTS", "1")))
 BLOBS = pathlib.Path(os.environ.get("WORKER_BLOBS", str(ROOT / ".blobs")))   # under ROOT: hidden from the jobs (a tmpfs there)
 BLOB_KEEP_S, BLOB_CAP, MAX_BLOB = 7 * 86400, 4 << 30, 64 << 20   # a week, 4 GB in all, 64 MB each
-STEPS = ("mesh", "glb", "check")
+KICAD = ("erc", "drc", "step", "outline", "render")   # steps/kicad.py <step>, in the KiCad image
+STEPS = ("mesh", "glb", "check") + (KICAD if shutil.which("kicad-cli") else ())
 DEV = os.environ.get("WORKER_UNSAFE_DEV") == "1"   # no bubblewrap: only on a developer's machine, never on the box
 jobs, lock = {}, threading.Lock()
 
@@ -68,6 +72,7 @@ def sandboxed(cmd, work, caps):
             "--tmpfs", "/proc", "--dev", "/dev", "--chdir", "/work", "--clearenv",
             "--setenv", "HOME", "/tmp", "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin:/opt/conda/bin",
             "--setenv", "MPLCONFIGDIR", "/tmp", "--setenv", "QT_QPA_PLATFORM", "offscreen", "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
+            *[x for k, v in os.environ.items() if k.startswith("KICAD") for x in ("--setenv", k, v)],
             "--"] + lim + cmd
 
 
@@ -109,8 +114,9 @@ def run_job(j):
         j["state"] = "running"; t0 = time.time()
         caps = {**CAPS, **{k: min(int(v), CAPS[k]) for k, v in (j.get("caps") or {}).items() if k in CAPS}}
         try:
+            # a job of steps alone (KiCad on a board) has no script to run
             p = subprocess.run(sandboxed([sys.executable, "-I", "script.py"], work, caps), cwd=work, capture_output=True,
-                               text=True, timeout=caps["s"] + 30)
+                               text=True, timeout=caps["s"] + 30) if (work / "script.py").exists() else subprocess.CompletedProcess([], 0, "", "")
             log, code, late = (p.stdout + p.stderr)[-20000:], p.returncode, False
         except subprocess.TimeoutExpired as e:
             log, code, late = ((e.stdout or b"").decode(errors="replace") + (e.stderr or b"").decode(errors="replace"))[-20000:] if isinstance(e.stdout, bytes) else str(e.stdout or ""), -1, True
@@ -129,22 +135,32 @@ def run_job(j):
             if j.get("mesh") is not None:
                 (work / ".mesh.json").write_text(json.dumps(j["mesh"]))
             for step in j.get("then") or []:
-                shutil.copy(HERE / "steps" / f"{step}.py", work / f".step-{step}.py")
-                q = subprocess.run(sandboxed([sys.executable, "-I", f".step-{step}.py"], work, caps), cwd=work, capture_output=True, text=True, timeout=caps["s"] + 30)
-                (work / f".step-{step}.py").unlink(missing_ok=True)
+                src = "kicad" if step in KICAD else step
+                shutil.copy(HERE / "steps" / f"{src}.py", work / f".step-{src}.py")
+                q = subprocess.run(sandboxed([sys.executable, "-I", f".step-{src}.py", *([step] if src == "kicad" else [])], work, caps), cwd=work, capture_output=True, text=True, timeout=caps["s"] + 30)
+                (work / f".step-{src}.py").unlink(missing_ok=True)
                 if q.returncode != 0:
-                    j["errors"] = [{"code": "no_output" if "no IFC" in q.stderr else "script_error", "message": (q.stderr.strip().splitlines() or ["the step failed"])[-1][:500], "step": step}]
+                    j["errors"] = [{"code": "kicad_error" if src == "kicad" else "no_output" if "no IFC" in q.stderr else "script_error", "message": (q.stderr.strip().splitlines() or ["the step failed"])[-1][:500], "step": step}]
                     j["state"] = "failed"; break
             else:
                 j["state"] = "done"
+        try:
+            unpacked = set(json.loads((work / ".unpacked").read_text())) if (work / ".unpacked").exists() else set()
+        except ValueError:
+            unpacked = set()
         j["files"] = {f.name: f"/jobs/{j['id']}/files/{f.name}" for f in sorted(work.iterdir())
-                      if f.is_file() and not f.name.startswith(".") and f.name not in ("script.py", "params.json") and f.name not in j["inputs"]}
+                      if f.is_file() and not f.name.startswith(".") and f.name not in ("script.py", "params.json") and f.name not in j["inputs"] and f.name not in unpacked}
         if sum((work / n).stat().st_size for n in j["files"]) > MAX_OUT:
             j["state"], j["errors"], j["files"] = "failed", [{"code": "too_big", "message": "What the script made is more than 64 MB."}], {}
         j["outputs"] = []
         for n in j["files"]:
             sha, size = put_blob(work / n)
             j["outputs"].append({"name": n, "sha256": sha, "bytes": size, "url": f"/blobs/{sha}"})
+        if "kicad.json" in j["files"]:
+            try:
+                j["kicad"] = json.loads((work / "kicad.json").read_text())
+            except ValueError:
+                j["kicad"] = None
         if "check.json" in j["files"] and "check" in (j.get("then") or []):
             try:
                 j["check"] = json.loads((work / "check.json").read_text())
@@ -169,11 +185,16 @@ def sweep():
 
 
 def view(j):
-    return {k: j.get(k) for k in ("id", "state", "result", "outputs", "files", "check", "errors", "log", "seconds")}
+    return {k: j.get(k) for k in ("id", "state", "result", "outputs", "files", "check", "kicad", "errors", "log", "seconds")}
 
 
 def versions():
     out = {"python": sys.version.split()[0]}
+    if shutil.which("kicad-cli"):
+        try:
+            out["kicad"] = subprocess.run(["kicad-cli", "version"], capture_output=True, text=True, timeout=30).stdout.strip()
+        except Exception:
+            pass
     for m in ("ifcopenshell", "FreeCAD"):
         try:
             mod = __import__(m)
@@ -208,7 +229,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/health":
-            return self.send(200 if not SANDBOX_ERR else 503, {"ok": not SANDBOX_ERR, "engine": "freecad" if "freecad" in (VERSIONS or {}) else "ifcopenshell", "steps": list(STEPS), "sandbox": "dev" if DEV else "bwrap", **({"sandbox_error": SANDBOX_ERR} if SANDBOX_ERR else {}), "versions": VERSIONS, "queue": sum(1 for j in jobs.values() if j["state"] in ("queued", "running"))})
+            return self.send(200 if not SANDBOX_ERR else 503, {"ok": not SANDBOX_ERR, "engine": "kicad" if "kicad" in (VERSIONS or {}) else "freecad" if "freecad" in (VERSIONS or {}) else "ifcopenshell", "steps": list(STEPS), "sandbox": "dev" if DEV else "bwrap", **({"sandbox_error": SANDBOX_ERR} if SANDBOX_ERR else {}), "versions": VERSIONS, "queue": sum(1 for j in jobs.values() if j["state"] in ("queued", "running"))})
         b = re.fullmatch(r"/blobs/([0-9a-f]{64})", path)
         if b:
             f = BLOBS / b.group(1)
@@ -241,7 +262,7 @@ class H(BaseHTTPRequestHandler):
             return self.send(413, {"errors": [{"code": "too_big", "message": "A job is at most 8 MB."}]})
         try:
             a = json.loads(self.rfile.read(n))
-            assert isinstance(a.get("script"), str) and a["script"].strip()
+            assert isinstance(a.get("script"), str) and a["script"].strip() or (a.get("script") is None and a.get("then"))
             assert all(s in STEPS for s in a.get("then") or [])
             mesh = a.get("mesh") or {}
             assert isinstance(mesh, dict) and set(mesh) <= {"linear_mm", "angular_deg"} and 0.001 <= float(mesh.get("linear_mm", 0.1)) <= 10 and 1 <= float(mesh.get("angular_deg", 15)) <= 90
@@ -249,7 +270,7 @@ class H(BaseHTTPRequestHandler):
             assert key is None or (isinstance(key, str) and 0 < len(key) <= 120)
             assert all(re.fullmatch(r"[A-Za-z0-9._-]{1,80}", k) and not k.startswith(".") and re.fullmatch(r"[0-9a-f]{64}", str(v)) for k, v in (a.get("inputs") or {}).items())
         except Exception:
-            return self.send(400, {"errors": [{"code": "bad_request", "message": "A job is JSON with a script (text), inputs as {name: sha256}, then from " + ", ".join(STEPS) + ", mesh as {linear_mm 0.001-10, angular_deg 1-90}, key a string."}]})
+            return self.send(400, {"errors": [{"code": "bad_request", "message": "A job is JSON with a script (text; none for steps alone), inputs as {name: sha256}, then from " + ", ".join(STEPS) + ", mesh as {linear_mm 0.001-10, angular_deg 1-90}, key a string."}]})
         wait = re.search(r"(?:^|&)wait=(\d+)", q)
         with lock:
             again = next((x for x in jobs.values() if key and x.get("key") == key), None)
@@ -262,7 +283,9 @@ class H(BaseHTTPRequestHandler):
         if missing:
             return self.send(400, {"errors": [{"code": "missing_input", "message": "Not here (POST them to /blobs first): " + ", ".join(missing), "names": missing}]})
         jid = uuid.uuid4().hex; work = ROOT / jid; work.mkdir(parents=True)
-        (work / "script.py").write_text(a["script"]); (work / "params.json").write_text(json.dumps(a.get("params") or {}))
+        if a.get("script"):
+            (work / "script.py").write_text(a["script"])
+        (work / "params.json").write_text(json.dumps(a.get("params") or {}))
         inputs = []
         for name, b64 in (a.get("files") or {}).items():
             if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name) or name.startswith("."):
