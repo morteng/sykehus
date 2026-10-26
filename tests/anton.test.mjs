@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-anton-")), secret = "proxy-secret-for-tests-0123456789", bearer = "door-token-0123456789";
 const seen = [], LINK = "L".repeat(32);
+let jobsNow = [];   // the fake door's background jobs (U3545)
 const door = createServer((req, res) => {
   let s = ""; req.on("data", c => s += c); req.on("end", () => {
     const b = s ? JSON.parse(s) : {}; seen.push({ path: req.url, auth: req.headers.authorization, device: req.headers["x-door-device"], body: b });
@@ -19,11 +20,18 @@ const door = createServer((req, res) => {
     if (req.url === "/internal/sykehus/chat") {
       if (req.headers["x-door-device"] === "revoked") return res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "device_revoked" } }));
       res.writeHead(200, { "content-type": "application/x-ndjson" });
+      if (b.message === "SJEKK") {   // U3545: the check starts and runs 300 ms
+        jobsNow = [{ job: "J1", tool: "check_drawing", state: "running", reported: false }]; setTimeout(() => { jobsNow[0].state = "done"; }, 300);
+        return res.end([{ type: "tool", key: "check_drawing", label: "Startet kontrollen av tegningen", kind: "read", receipt: { line: "Kontrollen kjører i bakgrunnen", step: null } }, { type: "text", delta: "Kontrollen kjører." }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n");
+      }
+      if (b.job) { jobsNow = jobsNow.map(j => j.job === b.job ? { ...j, reported: true } : j);
+        return res.end([{ type: "tool", key: "job_result", label: "Leste kontrollens funn", kind: "read", receipt: { line: "Kontrollen fant 1 avvik · 0,15 $", step: null } }, { type: "text", delta: "Fant ett avvik." }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n"); }
       if (b.message === "QR") return res.end([{ type: "qr", url: "https://evil.example/inn#" + LINK, minutes: 10 }, { type: "qr", url: "https://sykehus.gulden.no/inn#" + LINK, minutes: 10, label: "Skann med iPaden" }, { type: "done" }].map(l => JSON.stringify(l)).join("\n") + "\n");
       res.write(JSON.stringify({ type: "text", delta: "Jeg river " }) + "\n");
       setTimeout(() => { res.write(JSON.stringify({ type: "tool", key: "try_change", label: "Rev Vestfløy", kind: "write", receipt: { line: "Revet: Vestfløy", step: 3 } }) + "\n" + JSON.stringify({ type: "text", delta: "Vestfløy." }) + "\n" + JSON.stringify({ type: "done" }) + "\n"); res.end(); }, 50);
       return;
     }
+    if (req.url.startsWith("/internal/sykehus/jobs")) return res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ jobs: jobsNow }));
     if (req.url.startsWith("/internal/sykehus/history")) return res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ items: [{ type: "message", from: "lars", text: "hei" }] }));
     if (req.url === "/internal/sykehus/new-chat") return res.writeHead(200, { "content-type": "application/json" }).end("{}");
     res.writeHead(404).end("{}");
@@ -145,6 +153,24 @@ test("a qr line reaches the pages only when it points at this site's /inn/", asy
   await post("/api/anton", { text: "QR" }, { cookie });
   const qr = (await got).filter(e => e.event === "qr");
   assert.equal(qr.length, 1); assert.equal(qr[0].url, "https://sykehus.gulden.no/inn#" + LINK); assert.equal(qr[0].minutes, 10); assert.equal(qr[0].label, "Skann med iPaden");
+});
+
+test("a check runs in the background; when it is done Anton gets his own turn on it, with no message from the person (U3545)", async () => {
+  const got = events(cookie, o => o.some(e => e.event === "text" && e.delta === "Fant ett avvik.") && o.filter(e => e.event === "done").length >= 2, 6000);
+  await new Promise(ok => setTimeout(ok, 200));
+  const { id } = await (await post("/api/anton", { text: "SJEKK" }, { cookie })).json();
+  const ev = await got;
+  assert.deepEqual(ev.filter(e => e.event === "message").map(e => e.text), ["SJEKK"], "the job turn draws no person's message");
+  const result = ev.find(e => e.event === "tool" && e.key === "job_result");
+  assert.deepEqual(result.receipt, { line: "Kontrollen fant 1 avvik · 0,15 $", step: null });
+  assert.notEqual(result.reply_to, id, "Anton's answer on the job is its own turn");
+  assert.equal(ev.find(e => e.event === "text" && e.delta === "Fant ett avvik.").reply_to, result.reply_to);
+  const job = seen.filter(s => s.path === "/internal/sykehus/chat" && s.body.job);
+  assert.equal(job.length, 1, "one turn per finished job"); assert.equal(job[0].body.job, "J1"); assert.equal(job[0].body.message, undefined); assert.equal(job[0].device, "dev-1");
+  const asked = seen.filter(s => s.path.startsWith("/internal/sykehus/jobs")).at(-1);
+  assert.match(asked.path, /person=lars/); assert.match(asked.path, /session=sykehus%3Alars/); assert.equal(asked.device, "dev-1");
+  await fetch(O + "/api/anton/historikk", { headers: { cookie } }); await new Promise(ok => setTimeout(ok, 200));
+  assert.equal(seen.filter(s => s.path === "/internal/sykehus/chat" && s.body.job).length, 1, "a read job gets no second turn");
 });
 
 test("the history names the device in X-Door-Device, never in the query (U3544)", async () => {
