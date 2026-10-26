@@ -121,3 +121,12 @@ test("«fasaden mot sør på Sentralblokka» and «fra fugleperspektiv» through
   const bird = await call("show_building", { from_direction: "SV", tilt_deg: 65 });
   assert.ok(Math.abs(bird.data.view.pitch - 65 * Math.PI / 180) < 1e-9); assert.match(bird.content[0].text, /3D sett fra sørvest, 65° over bakken \(fugleperspektiv\)/);
 });
+
+test("U3620: the texts Anton reads send a stair down from a terrace to the stair part, not a script", async () => {
+  const i = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
+  assert.match(i.instructions, /every outdoor stair is the stair part, also one down from a terrace to the garden/);
+  const tools = (await rpc("tools/list")).tools, lp = tools.find(t => t.name === "list_parts"), tc = tools.find(t => t.name === "try_change");
+  assert.match(lp.description, /also one down from a terrace to the garden, is the stair part: from = its foot in the garden, to = towards the terrace, params\.height = the drop/);
+  const part = JSON.stringify(tc.inputSchema);
+  assert.match(part, /A stair that goes DOWN .* is the stair part too: .*put from in the garden and to at the terrace edge.*params\.height as the drop.*do not write a script for it/);
+});
