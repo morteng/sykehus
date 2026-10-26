@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
-import { planShots } from "./shots.mjs";   // U3527: a few good shots of a version
+import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fitOf, surfaceFit, groundText, padFit, lotText } from "./public/design.js";
 import { prepare, slim, withMeshes, handleBim, importFile } from "./bim.mjs";
@@ -28,6 +28,7 @@ const M = k => `io.modelcontextprotocol/${k}`;
 const SERVER_INFO = { name: "sykehus", title: "Sykehustomta", version: "0.2.0" };
 const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 3019 Drammen, gnr. 114 bnr. 272) for an architect working on reusing the existing buildings. "
   + "The hospital is described as its wings (about_site, about_wing): each with years, storeys and their kote per wing (storeys), drawn floor plans with rooms and areas (floor_plan), and windows from the drawn facades (openings). "
+  + "about_site also lists the named streets and places around the site (streets: Welhavens gate, Dronninggata …), the names show_building's from_place stands in. "
   + "A store of about 200 documents (building-case drawings, sections, facades, the 2026 area plan and its reports, heritage records) is searchable (search_documents, read_document). show_building shows the hospital in 3D or plan in the chat. "
   + "Changes go through try_change; the shared model, the before, is never changed. Every tool that reads or changes the after takes one target: a version id (v and 8 more) or a draft id (8); leave it out for the version the person has open on the website (signed in, their «Mitt etter»): that is nearly always right. "
   + "The person keeps camera views by name on a version (U3562): show_building with save_as keeps the view it shows under that name (when they say «husk denne», «lagre visningen»), saved_view goes to one; show_draft lists them. "
@@ -332,11 +333,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const shotPicture = (m, st, size = { width: 640, height: 400 }) => picture(withMeshes(st.era === "før" ? site : m.site), { ...viewOpts(st, m.site), ...size });
   const TOOLS = [
     { name: "about_site", tgt: "read", title: "Tomta og fløyene", ro: true, schema: S({ target: TARGET, draft: OLD }),
-      description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
+      description: "The site and the hospital as its wings (Sentralblokka, Østfløy, Østre nordfløy, Midtfløy …): each wing's years, storeys, construction, facade, footprint and kote from ground to roof, how sure the identification is, the storeys that have a drawn plan, and where the facts come from; the named streets and places around it (OpenStreetMap), each with how far and on which side of the lot it is. Positions are metres east and north of the site origin (EPSG:25833), heights NN2000.",
       run: async (a, req) => { const m = model(a.draft, req), names = [...new Set(m.floors.map(f => f.name))];
         return { name: site.name, address: "Dronninggata 28, 3019 Drammen", gnr_bnr: "114/272", lot_area_m2: site.lot.area_m2, heights: "NN2000", origin_utm33: site.origin,
           wings: (m.site.wings || []).map(w => { const o = wingOut(w, false); return { id: o.id, name: o.name, sure: o.sure, built: o.built, storeys: o.storeys, footprint_m2: o.footprint_m2, ground_kote: o.ground_kote, top_kote: o.top_kote, levels_known: o.levels.length }; }),
           drawn_storeys: names.map(n => ({ storey: n, sheets: m.floors.filter(f => f.name === n).map(f => f.source) })),
+          streets: streetsAround(places ? await places(3000) : [], site.lot.ring.reduce((a, p, i, r) => [a[0] + p[0] / r.length, a[1] + p[1] / r.length], [0, 0])),
           bim: "Last ned som BIM-modell: /data/sykehus.ifc (IFC4, FreeCAD/Revit/Solibri)", sources: site.sources, documents: docs ? docs.prepare("SELECT COUNT(*) n FROM docs").get().n : 0,
           ...(a.draft ? { draft: a.draft, notes: m.notes } : {}) }; } },
     { name: "about_wing", tgt: "read", title: "Én fløy", ro: true, schema: S({ wing: WING, target: TARGET, draft: OLD }, ["wing"]),
@@ -511,7 +513,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         distance_m: { type: "number", minimum: 30, maximum: 1200 },
         drawn_section: { type: "string", description: "A drawn section's id from about_wing (drawn_sections): the model cut where that sheet cuts, the sheet shown beside it" },
         eye_level: { type: "boolean", description: "As a person standing on the ground sees it: the eye 1.7 m over the terrain, a wider lens, looking at the wing or new building (wing). For «fra gata», «i øyehøyde», «slik en fotgjenger ser det». Takes from_direction and distance_m, or from_place" },
-        from_place: { type: "string", description: "Stand in this street or place by its name (OpenStreetMap: e.g. Dronninggata, Konggata, Tybrings gate, Wergelands gate, Bragernes gravlund), at its point nearest to what is looked at, at eye level. For «fra Dronninggata»" },
+        from_place: { type: "string", description: "Stand in this street or place by its name (OpenStreetMap: e.g. Welhavens gate, Dronninggata, Konggata, Tybrings gate, Bragernes gravlund; about_site's streets lists them all), at its point nearest to what is looked at, at eye level. For «fra Dronninggata»" },
         save_as: { type: "string", maxLength: 60, description: "Keep this view under this name on the version (the person's own, or a draft), e.g. «Fra Bragernes»; the same name again moves it. For «husk denne visningen» / «lagre visningen»" },
         saved_view: { type: "string", description: "Go to a saved view, by its name or id (show_draft lists saved_views); the other view fields are not needed" }, target: TARGET, draft: OLD }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With target: that version or draft; without, the version the person has open. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it. To see the model yourself, use look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link.",
@@ -570,7 +572,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const O = (props, d) => ({ type: "object", ...(d ? { description: d } : {}), properties: Object.fromEntries(Object.entries(props).map(([k, v]) => [k, typeof v === "string" ? { type: v } : v])), additionalProperties: true });
   const TARGET_OUT = { draft: "string", version: "string", link: "string" };
   const OUTPUT = {
-    about_site: O({ name: "string", address: "string", gnr_bnr: "string", lot_area_m2: "number", heights: "string", origin_utm33: "array", wings: "array", drawn_storeys: "array", bim: "string", sources: "array", documents: "number", notes: "array", ...TARGET_OUT }),
+    about_site: O({ name: "string", address: "string", gnr_bnr: "string", lot_area_m2: "number", heights: "string", origin_utm33: "array", wings: "array", streets: "array", drawn_storeys: "array", bim: "string", sources: "array", documents: "number", notes: "array", ...TARGET_OUT }),
     about_wing: O({ id: "string", name: "string", aliases: "array", sure: "boolean", built: { type: ["string", "null"] }, storeys: { type: ["string", "number", "null"] }, footprint_m2: "number", ground_kote: "number", top_kote: "number", levels: "array", drawn_storeys: "array", facades: "array", drawn_sections: "array", sources: "array", draft_changes: "array", notes: "array", ...TARGET_OUT }),
     storeys: O({ storeys: "array" }),
     floor_plan: O({ storey: "string", sheets: "array", per_wing: "object", rooms: "array" }),

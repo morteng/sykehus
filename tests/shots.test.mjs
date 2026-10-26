@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
-import { planShots, nearestPlace } from "../shots.mjs";
+import { planShots, nearestPlace, streetsAround } from "../shots.mjs";
 import { VIEW_SPEC } from "../public/saved.js";
 import { addView } from "../public/renderkit/views.js";
 
@@ -48,4 +48,8 @@ test("the nearest place: roads before paths, not inside a standing building, 30�
   assert.equal(nearestPlace(PLACES, [-31, -62]).name, "Dronninggata");
   assert.equal(nearestPlace([{ name: "Inne", road: true, pts: [[0, 0]] }], [0, 10]), null, "too near");
   assert.equal(nearestPlace([{ name: "Gate", road: true, pts: [[0, 50]] }], [0, 0], [[[-5, 45], [5, 45], [5, 55], [-5, 55]]]), null, "inside a building");
+});
+
+test("the streets around, for Anton to know by name: nearest first, how far, which side", () => {
+  assert.deepEqual(streetsAround(PLACES, [-31, -62]), [{ name: "Stien", road: false, nearest_m: 38, side: "sør" }, { name: "Dronninggata", road: true, nearest_m: 80, side: "sør" }]);
 });

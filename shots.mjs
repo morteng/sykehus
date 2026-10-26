@@ -32,6 +32,15 @@ export function nearestPlace(places, c, avoid = []) {
   }
   return all.sort((x, y) => x.score - y.score).find(x => clear(x.at, c, avoid)) || null;
 }
+/* the named streets and places around c, for Anton to know them by name (about_site): each one's nearest point, how
+   far and which way from c, nearest first */
+export function streetsAround(places, c) {
+  return (places || []).map(p => {
+    const q = p.pts.reduce((b, q) => Math.hypot(q[0] - c[0], q[1] - c[1]) < Math.hypot(b[0] - c[0], b[1] - c[1]) ? q : b, p.pts[0]);
+    return { name: p.name, road: !!p.road, nearest_m: Math.round(Math.hypot(q[0] - c[0], q[1] - c[1])), side: DIRS[Math.round(degTo(c, q) / 45) % 8] };
+  }).sort((a, b) => a.nearest_m - b.nearest_m);
+}
+
 /* the line on the ground from a toward b goes through none of the rings, to within near metres of b (what is looked at
    is not in the way of itself) */
 export function clear(a, b, rings, near = 12) {
