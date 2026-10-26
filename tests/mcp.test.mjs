@@ -21,7 +21,7 @@ test("initialize and the tool list", async () => {
   const i = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
   assert.equal(i.serverInfo.name, "sykehus"); assert.match(i.instructions, /wings/);
   const names = (await rpc("tools/list")).tools.map(t => t.name);
-  for (const n of ["about_site", "about_wing", "storeys", "floor_plan", "openings", "try_change", "show_draft", "undo_change", "show_building", "search_documents"]) assert.ok(names.includes(n), n);
+  for (const n of ["about_site", "about_wing", "storeys", "floor_plan", "openings", "try_change", "show_draft", "undo_change", "show_building", "search_documents", "list_parts"]) assert.ok(names.includes(n), n);
 });
 test("the site, a wing, the storeys", async () => {
   const s = (await call("about_site")).data;

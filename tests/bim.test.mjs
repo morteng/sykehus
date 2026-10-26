@@ -167,3 +167,47 @@ test("a DXF plan lies flat over the highest ground under it, with no pad", async
   const hi = Math.max(...[-6, 0, 6].flatMap(x => [-84, -80, -76].map(y => groundAt(site, [x, y]))));
   assert.ok(a.base_kote >= Math.round((hi + 0.05) * 10) / 10 - 0.05, `${a.base_kote} over ${hi}`);
 });
+
+/* a part (U3620): the worker's own, by name and settings; its answer as service.py's: 400 bad_params, or a done job whose result carries the settled params */
+function partWorker() {
+  const seen = [];
+  const SPECS = { greenhouse: { no: "Drivhus", say: "x", engine: "ifcopenshell", classes: ["IfcMember"], params: { sides: { type: "number", default: 6 }, radius: { type: "number", default: 2 }, frame: { type: "string", default: "aluminium" } } } };
+  const srv = createServer((req, res) => {
+    let b = ""; req.on("data", c => b += c); req.on("end", () => {
+      if (req.method === "GET" && req.url === "/parts") return res.end(JSON.stringify({ parts: SPECS }));
+      if (req.method === "POST") {
+        const j = JSON.parse(b); seen.push(j);
+        if (j.params?.sides > 8) { res.statusCode = 400; return res.end(JSON.stringify({ errors: [{ code: "bad_params", message: "sides: from 3 to 8", part: j.part }] })); }
+        return res.end(JSON.stringify({ state: "done", result: { part: j.part, params: { sides: 6, radius: 2, frame: "aluminium", ...j.params } }, files: { "mesh.json": "/jobs/x/files/mesh.json", "model.ifc": "/jobs/x/files/model.ifc" } }));
+      }
+      if (req.url.endsWith("/mesh.json")) return res.end(JSON.stringify({ box: { min: [-2, -2, 0], max: [2, 2, 3] }, classes: { IfcMember: 9 }, buildings: 1, storeys: 1, triangles: 1, parts: [{ cls: "IfcMember", n: 1, pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], idx: [0, 1, 2] }] }));
+      res.end("ISO-10303-21;");
+    });
+  });
+  return new Promise(r => srv.listen(0, "127.0.0.1", () => r({ url: `http://127.0.0.1:${srv.address().port}`, seen, close: () => srv.close() })));
+}
+test("prepare: a part runs in the worker with the app's materials, stands as a volume, and keeps its settled settings", async () => {
+  process.env.SYKEHUS_VERSIONS_DIR = mkdtempSync(join(tmpdir(), "bim-"));
+  const w = await partWorker(); process.env.SYKEHUS_WORKER = w.url;
+  try {
+    const { prepare, slim, listParts } = await import("../bim.mjs");
+    assert.deepEqual(Object.keys(await listParts()), ["greenhouse"]);
+    const { _ran, ...v } = await prepare({ kind: "part", part: "greenhouse", from: [-10, -80], to: [10, -80], params: { sides: 3, radius: 3.5 } }, site);
+    assert.equal(v.kind, "volume"); assert.equal(v.shape, "bim"); assert.equal(v.bim.part, "greenhouse"); assert.equal(v.name, "Drivhus");
+    const j = w.seen[0]; assert.equal(j.part, "greenhouse"); assert.deepEqual(j.params, { sides: 3, radius: 3.5 }, "ground is its own field, not a setting");
+    assert.ok(Number.isFinite(j.ground)); assert.deepEqual(j.then, ["mesh", "glb"]);
+    assert.ok(j.materials.glass.name.length > 0, "renderkit's table goes with the job"); assert.ok(j.materials.concrete.density > 0);
+    assert.equal(v.bim.params.frame, "aluminium", "the worker's defaults are kept with it"); assert.equal(v.bim.params.sides, 3);
+    assert.equal(slim(v).bim.part, "greenhouse");
+    const m = applyEdits(site, floors, add([], v)), a = m.site.added[0];
+    assert.equal(a.shape, "bim"); assert.equal(a.width, 4); assert.equal(a.bim.script, null);
+    const n = w.seen.length;
+    const r = await prepare({ kind: "reshape", id: a.id, params: { radius: 4 } }, m.site);
+    assert.equal(r.bim.params.radius, 4); assert.equal(r.bim.params.sides, 3); assert.equal(r.bim.part, "greenhouse");
+    assert.ok(w.seen.length > n, "a changed setting runs the part again");
+    const kept = await prepare({ ...v, bim: { ...v.bim, sha: "f".repeat(64) } }, site);
+    assert.notEqual(kept.bim.sha, "f".repeat(64), "a kept part's sha is the server's");
+    await assert.rejects(prepare({ kind: "part", part: "greenhouse", from: [0, -80], to: [10, -80], params: { sides: 9 } }, site), /tar ikke dette: sides: from 3 to 8/);
+    await assert.rejects(prepare({ kind: "part", part: "nope", from: [0, -80], to: [10, -80] }, site), /Det finnes ingen del som heter «nope».*greenhouse/);
+  } finally { w.close(); }
+});

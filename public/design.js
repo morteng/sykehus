@@ -66,6 +66,14 @@ function bimOf(b) {
     const t = (v, n) => v == null ? undefined : String(v).slice(0, n);
     return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(/^(step|glb|gltf|obj|stl|dxf|dwg)$/.test(b.format || "") ? { format: b.format } : {}), ...(b.format === "dxf" || b.format === "dwg" ? { plan: true } : {}), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
   }
+  /* a part (U3620): the worker's own, by name and settings (numbers, words, yes/no) */
+  if (b && typeof b === "object" && b.part != null) {
+    if (!/^[a-z_]{2,30}$/.test(String(b.part))) throw new Error("Delen har et ugyldig navn");
+    if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Delen er ikke bygget ennå: serveren bygger den først");
+    const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !(typeof v === "boolean" || typeof v === "string" && v.length <= 40 || Number.isFinite(+v) && typeof v !== "object")) throw new Error(`Innstillingen «${k}» må ha et navn av bokstaver og et tall, et ord eller ja/nei`); params[k] = typeof v === "number" || typeof v === "boolean" ? v : Number.isFinite(+v) && String(v).trim() !== "" ? +v : v; }
+    const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Delen har ingen form");
+    return { part: String(b.part), script: null, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}) };
+  }
   if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
   if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");
   const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !Number.isFinite(+v)) throw new Error(`Parameteren «${k}» må ha et navn av bokstaver og et tall`); params[k] = +v; }
