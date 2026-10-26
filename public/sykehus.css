@@ -497,8 +497,7 @@ body.tegner .g-chat { visibility: hidden; }
 .fb-sent h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
 
 /* U3662: signed out, nothing of Anton: no tab, no panel, no pill, no «Spør Anton» on a card (early.js and anton.js set .anon) */
-body.anon #tab-chat, body.anon #p-chat, body.anon #tab-photo, body.anon #p-photo, body.anon #pf, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat, body.anon #mfb { display: none !important; }   /* #mfb: /api/feedback needs a sign-in */
-body.anon .dock[data-tabs] { --tabs: 2; }
+body.anon #p-chat, body.anon #tab-photo, body.anon #p-photo, body.anon #pf, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat, body.anon #mfb { display: none !important; }   /* #mfb: /api/feedback needs a sign-in */
 .dock[data-tabs]:has(#tab-photo[hidden]) { --tabs: 3; }
 .login-form { display: grid; gap: var(--sp-3); }
 .login-sub { margin: 0; font-size: var(--fs-md); }
@@ -544,7 +543,8 @@ body.photo .nz .north { width: 40px; height: 40px; } body.photo .nz .north svg {
 body.m .pf-box { width: 104px; height: 104px; top: 8px; left: 8px; bottom: auto; } body.m .pf-bar { bottom: 112px; } body.m .pf-bar .pf-row { flex-wrap: wrap; max-width: 100%; justify-content: center; padding: 0 8px; } body.m .pf-bar .pf-row button { flex: 0 0 auto; padding: 4px 8px; min-height: 30px; }
 #p-photo label { display: grid; gap: 4px; margin: var(--sp-2) 0; color: var(--muted); font-size: var(--fs-sm); } #p-photo label input { font: inherit; color: var(--text); padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
 #p-photo .pf-go { margin: var(--sp-2) 0; }
-#tab-photo:disabled { opacity: .45; cursor: not-allowed; }   /* «Før»: greyed, with its reason in the title (U3666) */
+/* a tab that cannot be used now (Gjengi on «Før», U3666; Bygg and Anton signed out, U3677): greyed, with its reason as the title; one rule */
+.dock [data-tab]:disabled { opacity: .45; cursor: not-allowed; }   /* «Før»: greyed, with its reason in the title (U3666) */
 .pf-shutter small { max-width: 220px; white-space: normal; text-align: left; }
 .pf-x { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); pointer-events: auto; font: inherit; font-size: var(--fs-sm); padding: 5px 14px; min-height: 32px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; box-shadow: var(--shadow-sm); cursor: pointer; }
 body.m .pf-x { top: 8px; left: 50%; }

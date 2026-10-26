@@ -11,7 +11,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 export function createPanel({ start = null, onChange = () => {} } = {}) {
   const side = $("right"), phone = matchMedia("(max-width: 899px)"), SNAPS = ["peek", "half", "full"];
   let tab = null, prev = null, snap = "peek";
-  const tabs = () => [...document.querySelectorAll("#dock [data-tab]")].filter(b => !b.hidden);
+  const tabs = () => [...document.querySelectorAll("#dock [data-tab]")].filter(b => !b.hidden && !b.disabled);   // a greyed tab is not one to go to: the first one that is not is the fallback (U3677)
   function badge(t, n) {
     const b = $(`b-${t}`); if (b) { b.hidden = !n || (t === tab && open()); b.textContent = String(n || ""); }
     if (t === "chat") { const f = $("b-fold"); f.hidden = !n; f.textContent = String(n || ""); }

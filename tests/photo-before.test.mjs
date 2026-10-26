@@ -16,5 +16,5 @@ test("the tab is disabled, not hidden, with the reason as its title; the photo m
   assert.match(js, /tabBtn\.disabled = !ok/); assert.match(js, /tabBtn\.title = ok \? .+ : NEEDS_WORK/); assert.ok(!/tabBtn\.hidden/.test(js));
   assert.match(js, /if \(!ok && on\) panel\.show\(prevTab\)/, "open when the person goes to Før: leave for the earlier tab");
   assert.match(js, /if \(!hasWork\(work\(\)\)\) \{ panel\.show\(prevTab\); return; \}/, "it cannot be entered without work");
-  assert.match(css, /#tab-photo:disabled \{ opacity: \.45/);
+  assert.match(css, /\.dock \[data-tab\]:disabled \{ opacity: \.45/);
 });
