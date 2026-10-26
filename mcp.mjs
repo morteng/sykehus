@@ -22,6 +22,7 @@ import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, 
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc } from "./bim.mjs";
+import { createSiteFacts } from "./sitefacts.mjs";
 import { readPart } from "./partmerge.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { sunOf } from "./public/renderkit/sunpick.js";
@@ -45,6 +46,7 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "The person keeps camera views by name on a version (U3562): show_building with save_as keeps the view it shows under that name (when they say «husk denne», «lagre visningen»), saved_view goes to one; show_draft lists them. "
   + "The person can also build: try_change takes edits of these kinds: demolish and restore (whole buildings or alle), volume (a new building: box, gable, triangle, lean_to, pyramid, terraces; on a roof with on), reshape (move, turn, resize or re-fact one), wing and balconies, surface (a lawn, paving, a pool or pond with surface water), path, trees and fell, part (a ready-made BIM part: a pool basin, stair, railing, balcony or a greenhouse of 3–8 sides or a geodesic dome; list_parts says what each takes: USE A PART FIRST for these, before free geometry; every outdoor stair is the stair part, also one down from a terrace to the garden: its foot at from, climbing towards to, height = the drop), and only where no part fits, construction: a Python script with IfcOpenShell that builds a structure as BIM (a glass greenhouse, a pavilion, a frame: members, plates, slab, door), run in a sandboxed worker and kept as its own IfcBuilding with named parameters that the person can change later; its script contract is in the construction kind's description. "
   + "look shows the model from any side, after the changes; show_draft lists the changes and the after. "
+  + "site_facts gives what is known about the plot itself: flood, quick-clay, slide and radon hazard zones, heritage listings within 50 m, invasive plants near, zoning (not fetched for Drammen). Name these limits early when a change touches them (large excavation or fill, a new building or a demolition on a listed site, planting), before the person has spent time on it. "
   + "Tell the person only what a tool result shows: a change is made only when it is in the result's added and the result names the version it went into; when it is rejected or refused, say so and what you do next. "
   + "For people: a person deletes their own saved versions (delete_version, by id or name; several at once is fine) and gets them back within 30 days (undelete_version; list_versions with trash: true shows what is in the trash). Ask which ones when it is not plain, say what you deleted, and that «Angre» on the page or you can bring it back for 30 days; after that it is gone. Only their own: another person's version cannot be deleted. On the page it is the bin button on a row in Forslag, or «Velg» for several. "
   + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless they write otherwise, and cite drawings and documents by title with their link. "
@@ -254,6 +256,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const appHtml = origin => `<!doctype html><html lang="nb"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="${origin}/"><title>Sykehustomta</title></head><body><script type="module" src="${origin}/mcp-app.js"></script></body></html>`;
 
   // ---------- tools ----------
+  const siteFacts = createSiteFacts();   // U3673: Hagekart's site_report for the plot, kept a day
   const S = (props, required = []) => ({ type: "object", properties: props, required, additionalProperties: false });
   const WING = { type: "string", description: `Wing name or id: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}` };
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
@@ -418,6 +421,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           streets: streetsAround(places ? await places(3000) : [], site.lot.ring.reduce((a, p, i, r) => [a[0] + p[0] / r.length, a[1] + p[1] / r.length], [0, 0])),
           sources: site.sources, documents: docs ? docs.prepare("SELECT COUNT(*) n FROM docs").get().n : 0,
           ...(a.draft ? { draft: a.draft, notes: m.notes } : {}) }; } },
+    { name: "site_facts", title: "Tomtas fare og kulturminner", ro: true, schema: S({}),
+      description: "What is known about the plot itself (U3673): NVE hazard zones (flood, quick clay, snow and rock slides, soil and flood slides), NGU radon, heritage listings within 50 m (Riksantikvaren), invasive plants within 500 m, and zoning (not fetched for Drammen). From Hagekart, kept a day; each fact has its source. They are screening maps, not a decision: say what they mean and name the limits early when a change touches them (a big excavation or fill in a quick-clay zone, a demolition or new building on or beside a listed site, planting an invasive species).",
+      run: async () => siteFacts() },
     { name: "about_wing", tgt: "read", title: "Én fløy", ro: true, schema: S({ wing: WING, target: TARGET, draft: OLD }, ["wing"]),
       description: "One wing as on its card: names and aliases, years built, storeys, construction, facade, footprint, ground and roof kote, each storey's kote with how it is known (tegning = read off a drawing, beregnet = worked out, antatt = assumed) and its source, the storeys with a drawn plan, its drawn facades, and the documents it is identified from, with download links.",
       run: async (a, req) => { const m = model(a.draft, req), w = wingOf(m.site, a.wing) || wingOrErr(a.wing); return { ...wingOut(w, true), ...(a.draft ? { draft: a.draft, notes: m.notes.filter(n => n.wing === w.id) } : {}) }; } },
