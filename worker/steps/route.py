@@ -32,6 +32,36 @@ if len(pcbs) != 1 or not pcbs[0].is_file():
 pcb = pcbs[0]
 b = pcbnew.LoadBoard(str(pcb))
 dsn, ses = pcb.with_suffix(".dsn"), pcb.with_suffix(".ses")
+
+
+def edge_keepouts(b):
+    """the board's edge clearance as keepouts along each Edge.Cuts segment (no tracks, no vias; pads and parts may
+    stand there, as an edge connector does): the router keeps off them, and they go again once it has routed. The
+    router does not know KiCad's copper-to-edge rule, so without them it lays tracks up to the edge"""
+    ds = b.GetDesignSettings()
+    w = max(int(getattr(ds, "m_CopperEdgeClearance", 0) or 0), pcbnew.FromMM(0.5)) + pcbnew.FromMM(0.05)
+    segs = [d for d in b.GetDrawings() if d.GetLayer() == pcbnew.Edge_Cuts and d.GetClass() == "PCB_SHAPE" and d.GetShape() == pcbnew.SHAPE_T_SEGMENT]
+    bb = b.GetBoardEdgesBoundingBox(); cx, cy = bb.GetCenter().x, bb.GetCenter().y
+    out = []
+    for d in segs:
+        a, c = d.GetStart(), d.GetEnd(); dx, dy = c.x - a.x, c.y - a.y; L = (dx * dx + dy * dy) ** 0.5
+        if L == 0:
+            continue
+        nx, ny = -dy / L, dx / L
+        if (cx - a.x) * nx + (cy - a.y) * ny < 0:   # the normal into the board
+            nx, ny = -nx, -ny
+        z = pcbnew.ZONE(b); z.SetIsRuleArea(True)
+        z.SetDoNotAllowTracks(True); z.SetDoNotAllowVias(True); z.SetDoNotAllowPads(False); z.SetDoNotAllowFootprints(False)
+        (z.SetDoNotAllowZoneFills if hasattr(z, "SetDoNotAllowZoneFills") else z.SetDoNotAllowCopperPour)(False)
+        z.SetLayerSet(pcbnew.LSET.AllCuMask())
+        o = z.Outline(); o.NewOutline()
+        for x, y in ((a.x, a.y), (c.x, c.y), (c.x + nx * w, c.y + ny * w), (a.x + nx * w, a.y + ny * w)):
+            o.Append(int(x), int(y))
+        b.Add(z); out.append(z)
+    return out
+
+
+keep = edge_keepouts(b)
 if not pcbnew.ExportSpecctraDSN(b, str(dsn)):
     sys.exit("pcbnew could not write the Specctra DSN")
 opt = P.get("route") or {}
@@ -53,11 +83,13 @@ if not ses.is_file():
     sys.exit("Freerouting wrote no session: " + (" | ".join(log[-4:]) or f"exit {r.returncode}")[-400:])
 if not pcbnew.ImportSpecctraSES(b, str(ses)):
     sys.exit("pcbnew could not read the routed session back")
+for z in keep:
+    b.Remove(z)
 pcbnew.SaveBoard(str(pcb), b)
 tracks = [t for t in b.GetTracks()]
 f = HERE / "kicad.json"
 k = json.loads(f.read_text()) if f.exists() else {}
 k["route"] = {"board": pcb.name, "tracks": sum(1 for t in tracks if t.GetClass() == "PCB_TRACK"), "vias": sum(1 for t in tracks if t.GetClass() == "PCB_VIA"),
-              "seconds": round(time.time() - t0, 1), "log": log[-8:]}
+              "seconds": round(time.time() - t0, 1), "edge_keepouts": len(keep), "log": log[-8:]}
 f.write_text(json.dumps(k, indent=1))
 print(json.dumps(k["route"]))
