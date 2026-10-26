@@ -86,6 +86,15 @@ test("a new building gets a pad (U3566): level at its foot, slopes 1:2, cut and 
 });
 
 /* U3566 (f): on a slope the foot goes where what is dug out fills the rest, not on the lowest ground */
+
+test("a part that stands on the ground (a stair) digs no pad as a house does (U3690)", () => {
+  const bim = nopad => ({ part: "stair", params: {}, sha: "a".repeat(64), box: { min: [0, 0, 0], max: [4, 1.2, 3] }, ...(nopad ? { nopad: true } : {}) });
+  const v = nopad => ({ kind: "volume", id: "nSt1", name: "Trapp", shape: "bim", from: [-5, -62], to: [-1, -62], width: 1.2, height: 3, bim: bim(nopad) });
+  const dig = nopad => applyEdits(site, floors, add([], v(nopad))).site.added.find(x => x.name === "Trapp");
+  assert.ok(dig(false).ground, "without the flag it is treated as a house: a pad");
+  assert.equal(dig(true).ground, undefined, "with it, no pad, no cut and fill");
+  assert.equal(dig(true).bim.nopad, true, "the flag stays on the part");
+});
 test("a new building's foot balances its pad's cut and fill; a kote asked is kept", () => {
   const v = { kind: "volume", id: "nBal", name: "Hus", shape: "box", from: [50, 40], to: [70, 40], width: 12, height: 6 };
   const a = applyEdits(site, floors, add([], v)).site.added[0], g = a.ground;
