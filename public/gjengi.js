@@ -1,7 +1,8 @@
 /* «Gjengi» (U3526): the view as it is now, made a realistic picture by an image model (the server's gjengi.mjs). The
    price of one picture is said before it is made, with what the month has used of the household's cap; the pictures
    of the open version or draft are listed under, favourites first, each with a star and «Last ned» (full size). */
-import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, viewpointFor, lookFor, shotOf } from "./gjengicam.js";
+import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, viewpointFor, lookFor, shotOf } from "./renderkit/photo.js";
+import { VIEWPOINT_NO, LOOK_NO, SIZE_NO } from "./gjengi-no.js";
 const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];
@@ -9,15 +10,15 @@ const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "aug
 export function startGjengi({ btn, pop, viewer, work, toast, sun = () => null }) {
   const say = pop.querySelector("#gjSay"), go = pop.querySelector("#gjGo"), wish = pop.querySelector("#gjWish"), list = pop.querySelector("#gjList");
   let st = null, busy = false;
-  /* the camera of the picture (gjengicam.js): the person's choice, or null for what the view has by itself; lens and eye height
+  /* the camera of the picture (renderkit photo.js): the person's choice, or null for what the view has by itself; lens and eye height
      only from Anton (show_building camera, lens_mm, eye_height_m) */
   const pick = { viewpoint: null, look: null, size: null, lens: null, eyeh: null }, cam = pop.querySelector("#gjCam");
   const vpNow = () => pick.viewpoint || viewpointFor({ ...viewer.view(), dist: viewer.pose().dist }), lookNow = () => pick.look || lookFor(vpNow()), sizeNow = () => pick.size || st?.default_size || DEFAULT_SIZE;
   const priceOf = id => (st?.sizes || []).find(z => z.id === id)?.estimate_usd ?? st?.estimate_usd ?? 0;
   function drawCam() {
     const vp = vpNow(), lk = lookNow(), sz = sizeNow(), btns = (list, on, key) => Object.entries(list).map(([id, o]) => `<button type="button" data-${key}="${esc(id)}" aria-pressed="${id === on}" title="${esc(o.tip || "")}">${esc(o.no)}</button>`).join("");
-    cam.innerHTML = `<b>Synsvinkel</b><div class="gj-row">${btns(VIEWPOINTS, vp, "vp")}</div><b>Kamera og stil</b><div class="gj-row">${btns(LOOKS, lk, "lk")}</div>
-      <b>Størrelse og pris</b><div class="gj-row">${Object.entries(SIZES).map(([id, o]) => `<button type="button" data-sz="${id}" aria-pressed="${id === sz}" title="${esc(o.no)}: bildet lages i ${id}. Prisen er omtrent ${usd(priceOf(id))}">${esc(o.no)} ${usd(priceOf(id))}</button>`).join("")}</div>
+    cam.innerHTML = `<b>Synsvinkel</b><div class="gj-row">${btns(VIEWPOINT_NO, vp, "vp")}</div><b>Kamera og stil</b><div class="gj-row">${btns(LOOK_NO, lk, "lk")}</div>
+      <b>Størrelse og pris</b><div class="gj-row">${Object.keys(SIZES).map(id => `<button type="button" data-sz="${id}" aria-pressed="${id === sz}" title="${esc(SIZE_NO[id])}: bildet lages i ${id}. Prisen er omtrent ${usd(priceOf(id))}">${esc(SIZE_NO[id])} ${usd(priceOf(id))}</button>`).join("")}</div>
       <small>${pick.viewpoint || pick.look ? "Du har valgt selv." : "Valgt av seg selv etter det du ser."}</small>`;
     for (const b of cam.querySelectorAll("[data-vp]")) b.onclick = () => { pick.viewpoint = b.dataset.vp === viewpointFor({ ...viewer.view(), dist: viewer.pose().dist }) ? null : b.dataset.vp; pick.look = null; draw(); };
     for (const b of cam.querySelectorAll("[data-lk]")) b.onclick = () => { pick.look = b.dataset.lk === lookFor(vpNow()) ? null : b.dataset.lk; draw(); };

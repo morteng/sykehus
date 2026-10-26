@@ -13,7 +13,7 @@
    ui/notifications/tool-result with {structuredContent: {view}}. */
 import { createViewer } from "./viewer.js";
 import { applyEdits } from "./edits.js";
-import { SUN_DEFAULT, sunIn, sunDate } from "./sunpick.js";
+import { SUN_DEFAULT, sunIn, sunDate } from "./renderkit/sunpick.js";
 const $ = id => document.getElementById(id);
 
 /* ---------- talking to the chat app ---------- */

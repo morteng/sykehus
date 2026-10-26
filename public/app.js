@@ -6,8 +6,9 @@ import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
 import { tearAtOnce } from "./optimistic.js";
-import { createKeys } from "./keys.js?v=20261026t";
-import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate, sunLabel } from "./sunpick.js?v=20261026v";
+import { createKeys } from "./keys.js?v=20261026u";
+import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
+import { sunLabel } from "./gjengi-no.js";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
 import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
@@ -116,7 +117,7 @@ try { const p = JSON.parse(sessionStorage.getItem("sykehus-pose") || "null"); se
 /* what is picked in the model, to talk to Anton about (valg.js); the chips are in the pill (anton.js) */
 const valg = createSelection({ site, floors, viewer, onChange: items => { dispatchEvent(new CustomEvent("sykehus:valg", { detail: items })); dimStrip(); } });
 /* a high summer sun reads the forms best (21 June at 14); the date and the hour are chosen with the sun button, by a view
-   (v.sunM, v.sunD, v.sunH: a saved view keeps its light) or by Anton's show_building sun (U3651, sunpick.js) */
+   (v.sunM, v.sunD, v.sunH: a saved view keeps its light) or by Anton's show_building sun (U3651, renderkit sunpick.js) */
 let sun = { ...SUN_DEFAULT }, gjengiCtl = null;   // gjengiCtl: the picture card's hand (gjengi.js), set when it has loaded
 function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
 setSunTo(sun);

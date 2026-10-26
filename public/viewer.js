@@ -13,7 +13,7 @@
    The plan view looks straight down, north up, without perspective, so a scale bar holds. */
 import * as THREE from "./vendor/three.module.js";
 import { sunPosition } from "./renderkit/sun.js";
-import { fovFor, ratio } from "./gjengicam.js";
+import { fovFor, ratio } from "./renderkit/photo.js";
 import { ease } from "./renderkit/camera.js";
 import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
 import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
@@ -1137,7 +1137,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     kit() { return { THREE, scene, camera: () => camera, el, P, ground, groupOf, redraw: () => { dirty = true; } }; },
     /* where a site point at a kote is on the screen, and whether it is in front of the camera */
     project(p, kote) { const v = P(p, kote).project(camera); return [(v.x + 1) / 2 * container.clientWidth, (1 - v.y) / 2 * container.clientHeight, v.z <= 1]; },
-    /* a picture of the view (JPEG). With a shot (gjengicam.js shotOf: viewpoint, lens, aspect, eye height) the picture is
+    /* a picture of the view (JPEG). With a shot (renderkit photo.js shotOf: viewpoint, lens, aspect, eye height) the picture is
        taken by a camera of its own, built from the view's place and direction, in the shot's picture shape; the live camera and
        the canvas are as they were after (U3652) */
     snapshot(shot) {

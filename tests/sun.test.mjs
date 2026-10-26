@@ -5,7 +5,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { sunOf, sunIn, sunDate, sunFromDay, sunDay, sunLabel, SUN_DEFAULT } from "../public/sunpick.js";
+import { sunOf, sunIn, sunDate, sunFromDay, sunDay, SUN_DEFAULT } from "../public/renderkit/sunpick.js";
+import { sunLabel, sunError } from "../public/gjengi-no.js";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-sun-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9100 + Math.floor(Math.random() * 800);
 const O = `http://localhost:${PORT}`, lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
@@ -20,7 +21,8 @@ test("sunOf: an object or an Oslo-time ISO string; a date that is not one is ref
   assert.deepEqual(sunOf({ month: 12, day: 21, hour: 15 }), { sunM: 12, sunD: 21, sunH: 15 });
   assert.deepEqual(sunOf("2026-12-21T15:30:00+01:00"), { sunM: 12, sunD: 21, sunH: 15.5 });
   assert.deepEqual(sunOf({ month: 6, day: 21 }), SUN_DEFAULT);
-  assert.throws(() => sunOf({ month: 13, day: 1, hour: 1 }), /finnes ikke/); assert.throws(() => sunOf("i morgen"), /Sola kan ikke leses/);
+  assert.throws(() => sunOf({ month: 13, day: 1, hour: 1 }), { code: "sun_range" }); assert.throws(() => sunOf("i morgen"), { code: "sun_unreadable" });
+  assert.match(sunError({ code: "sun_range" }), /finnes ikke/); assert.match(sunError({ code: "sun_unreadable" }), /Sola kan ikke leses/);
   const winter = sunDate({ sunM: 12, sunD: 21, sunH: 15 }, 2026); assert.equal(winter.toISOString(), "2026-12-21T14:00:00.000Z", "15 in Oslo is 14 UTC in winter");
   assert.equal(sunDate(SUN_DEFAULT, 2026).toISOString(), "2026-06-21T12:00:00.000Z", "14 in Oslo is 12 UTC in summer");
   assert.deepEqual(sunFromDay(sunDay({ sunM: 12, sunD: 21 }), 15), { sunM: 12, sunD: 21, sunH: 15 }); assert.equal(sunLabel({ sunM: 12, sunD: 21, sunH: 15.5 }), "21. desember kl. 15:30");

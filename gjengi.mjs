@@ -19,8 +19,8 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { lightLine } from "./public/sunpick.js";
-import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/gjengicam.js";
+import { lightLine } from "./public/renderkit/sunpick.js";
+import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/renderkit/photo.js";
 
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
@@ -92,7 +92,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     /* the aspect nearest the view's (a JPEG's or PNG's size from its header) */
     const dim = shot[1] === "png" ? [bytes.readUInt32BE(16), bytes.readUInt32BE(20)] : jpegSize(bytes);
     const near = dim ? ASPECTS.map(([k, r]) => [k, Math.abs(Math.log(dim[0] / dim[1] / r))]).sort((a, b) => a[1] - b[1])[0][0] : "16:9";
-    /* the camera (gjengicam.js): the viewpoint and look the page took the picture with, said to the model in one line; the shape asked for is the picture's */
+    /* the camera (renderkit photo.js): the viewpoint and look the page took the picture with, said to the model in one line; the shape asked for is the picture's */
     const cam = VIEWPOINTS[body.viewpoint] ? shotOf({ viewpoint: body.viewpoint, look: body.look, lens: body.lens, eyeh: body.eyeh }) : null;
     const ar = cam && ASPECTS.some(([k]) => k === cam.aspect) ? cam.aspect : near;
     const google = model.startsWith("google/");

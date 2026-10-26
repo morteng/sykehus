@@ -11,6 +11,6 @@ export const VIEW_SPEC = {
   one: { mode: ["3d", "plan", "section"], section: ["tverr", "lengde", "fasade"], side: ["N", "Ø", "S", "V"],
     /* U3527: a person's eye, the before or the after of a pair, names on the picture, one of a series of shots */
     cam: ["eye"], era: ["før", "etter"], names: [true, false], series: [true],
-    /* U3652: the picture's camera, look and size (gjengicam.js) */
+    /* U3652: the picture's camera, look and size (renderkit photo.js) */
     camera: ["øyehøyde", "fugleperspektiv", "aksonometri", "fasade", "froskeperspektiv"], look: ["arkitektfoto", "blåtime", "konkurransebilde", "drone", "hvitmodell", "skisse"], gsize: ["1K", "2K", "4K"] },
 };

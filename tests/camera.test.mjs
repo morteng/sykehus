@@ -7,9 +7,15 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { VIEWPOINTS, LOOKS, SIZES, viewpointFor, lookFor, shotOf, fovFor, promptLine } from "../public/gjengicam.js";
-import { lightLine } from "../public/sunpick.js";
+import { VIEWPOINTS, LOOKS, SIZES, viewpointFor, lookFor, shotOf, fovFor, promptLine } from "../public/renderkit/photo.js";
+import { lightLine } from "../public/renderkit/sunpick.js";
+import { VIEWPOINT_NO, LOOK_NO, SIZE_NO } from "../public/gjengi-no.js";
 import { createRenderings } from "../gjengi.mjs";
+
+test("every preset has its Norwegian name and tooltip on this page", () => {
+  assert.deepEqual(Object.keys(VIEWPOINT_NO), Object.keys(VIEWPOINTS)); assert.deepEqual(Object.keys(LOOK_NO), Object.keys(LOOKS)); assert.deepEqual(Object.keys(SIZE_NO), Object.keys(SIZES));
+  for (const o of [...Object.values(VIEWPOINT_NO), ...Object.values(LOOK_NO)]) assert.ok(o.no && o.tip.length > 20);
+});
 
 test("the viewpoint and the look a view has by itself, and never froskeperspektiv", () => {
   assert.equal(viewpointFor({ mode: "3d", eye: true, dist: 30 }), "øyehøyde"); assert.equal(viewpointFor({ mode: "3d", dist: 90 }), "øyehøyde");

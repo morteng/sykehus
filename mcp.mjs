@@ -22,8 +22,9 @@ import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes, handleBim, importFile, listParts } from "./bim.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
-import { sunOf } from "./public/sunpick.js";
-import { VIEWPOINTS, LOOKS, SIZES } from "./public/gjengicam.js";
+import { sunOf } from "./public/renderkit/sunpick.js";
+import { sunError } from "./public/gjengi-no.js";
+import { VIEWPOINTS, LOOKS, SIZES } from "./public/renderkit/photo.js";
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
 /* MCP 2026-07-28 (stateless: each request names its version in _meta, server/discover instead of the handshake),
@@ -597,7 +598,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           const m = model(on, req), isWing = a.wing && wingOf(site, a.wing);
           const { wing: _w, ...rest } = a, e = await eyeView(m, a.wing, a); view = { ...viewOf(isWing ? a : rest, req), ...e.view }; eyeSaid = e.said;
         } else view = viewOf(a, req);
-        if (a.sun != null) { try { Object.assign(view, sunOf(a.sun)); } catch (e) { throw toolErr(e.message); } }   // the light of the view (U3651): with the view it moves, and a saved view keeps it
+        if (a.sun != null) { try { Object.assign(view, sunOf(a.sun)); } catch (e) { throw toolErr(sunError(e)); } }   // the light of the view (U3651): with the view it moves, and a saved view keeps it
         /* and the picture's camera, look, lens and size: kept with the view; the page sets the Gjengi card to them (the picture is the person's to press) */
         if (a.camera != null) { if (!VIEWPOINTS[a.camera]) throw toolErr(`Kamera «${a.camera}» finnes ikke. Velg blant: ${Object.keys(VIEWPOINTS).join(", ")}.`); view.camera = a.camera; }
         if (a.look != null) { if (!LOOKS[a.look]) throw toolErr(`Stilen «${a.look}» finnes ikke. Velg blant: ${Object.keys(LOOKS).join(", ")}.`); view.look = a.look; }
