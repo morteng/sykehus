@@ -144,7 +144,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
       const rid = `ny-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       let r = await json("api/anton/ny", { request_id: rid });
       if (!r || r.status === 502 || r.status === 503) { await new Promise(ok => setTimeout(ok, 2500)); r = await json("api/anton/ny", { request_id: rid }); }
-      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Logg inn på nytt." : j.error || CODES.unavailable); }
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Anton kan ikke svare akkurat nå. Prøv igjen senere." : j.error || CODES.unavailable); }
     };
     for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
@@ -164,7 +164,9 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
     }
     $("talkTegn").onclick = () => import("./tegn.js?v=20261025b").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
-    function signedOut() { if (gone) return; gone = true; if (me.via === "gulden.no") { line("err", "Anton kan ikke jobbe for denne innloggingen akkurat nå."); return; } json("api/logg-ut").finally(() => location.reload()); }
+    /* U3668: an Anton refusal (401: a device gulden-ai does not know, a revoked one, a restart) says so and leaves the page
+       signed in: it never logs the person out of sykehus or reloads (pm 16:13Z); the line shows once a half minute */
+    function signedOut() { if (gone) return; gone = true; setTimeout(() => { gone = false; }, 30000); line("err", "Anton kan ikke svare akkurat nå. Prøv igjen senere."); }
     /* a question that needs a yes: in the log, and over the pill while the chat is shut; either answers both */
     function card(a) {
       const make = () => { const li = document.createElement("li"); li.className = "talk-item card";

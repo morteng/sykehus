@@ -77,7 +77,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     } catch (e) { console.error("anton", path, whyOf(e)); return [503, { error: { code: "unavailable" } }]; }
   };
   const codeOf = (j, d) => typeof j?.error?.code === "string" ? j.error.code : typeof j?.code === "string" ? j.code : d;
-  /* gulden-ai refused the device (revoked in Settings › People): sign the person out on every page */
+  /* gulden-ai refused the device (revoked in Settings › People, or one it does not know): every page says Anton cannot answer; the person stays signed in to sykehus (U3668) */
   const refusedDevice = (st, j) => st === 401 || codeOf(j, "") === "device_revoked";
 
   /* POST /chat and hand each NDJSON line on; [200] after done or error, else the status and body */
