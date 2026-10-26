@@ -687,6 +687,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* U3527: a person's eye (eye): the camera stands on the ground dist metres from the centre, toward yaw, EYE_M over the
      ground there, and looks at the centre through a wider lens; turning walks round it, the wheel walks to and from it */
   const EYE_M = 1.7, FOV = 40, FOV_EYE = 55;
+  let lensFov = null;   // photo mode (U3663): the view's own vertical field of view, so the frame drawn over it holds exactly a lens' picture
   function place() {
     const t = new THREE.Vector3(O.x, O.h, -O.y), cp = Math.cos(O.pitch);
     if (mode === "section") {
@@ -710,7 +711,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       } else { O.x = Math.max(T.x0 + mx, Math.min(T.x0 + T.w * T.res - mx, O.x)); O.y = Math.max(T.y1 - T.h * T.res + my, Math.min(T.y1 - my, O.y)); }
       t.x = O.x; t.z = -O.y;
       const tg = ground(O.x, O.y) - base + 1; if (O.h < tg && !O.eye) { O.h = tg; t.y = tg; }
-      const fov = O.eye ? FOV_EYE : FOV; if (persp.fov !== fov) { persp.fov = fov; persp.updateProjectionMatrix(); }
+      const fov = lensFov ?? (O.eye ? FOV_EYE : FOV); if (persp.fov !== fov) { persp.fov = fov; persp.updateProjectionMatrix(); }
       if (O.eye) {
         const ex = t.x + O.dist * Math.sin(O.yaw), ez = t.z + O.dist * Math.cos(O.yaw);
         camera.position.set(ex, ground(ex, -ez) - base + EYE_M, ez); camera.lookAt(t);
@@ -1091,6 +1092,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     c.position.set(t.x + O.dist * cp * Math.sin(O.yaw), t.y + O.dist * Math.sin(pitch), t.z + O.dist * cp * Math.cos(O.yaw)); c.lookAt(t); return c;
   }
 
+  /* photo mode (U3663): the picture is the view's own camera, where it stands and looks, through the lens' frame: what is framed is what is sent */
+  function liveCamera(shot, asp) {
+    const c = new THREE.PerspectiveCamera(fovFor(shot.mm, [asp, 1]), asp, 1, 4000); camera.updateMatrixWorld();
+    c.position.copy(camera.position); c.quaternion.copy(camera.quaternion); c.updateMatrixWorld(); return c;
+  }
   /* ---------- drawing ---------- */
   function size() { const w = container.clientWidth || 600, h = container.clientHeight || 400; renderer.setSize(w, h, false); persp.aspect = w / h; persp.updateProjectionMatrix(); place(); }
   new ResizeObserver(size).observe(container); size(); place();
@@ -1124,6 +1130,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
     setSun, select, setGone, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
+    /* photo mode: the view's vertical field of view (degrees), or null for its own; the frame over the view is drawn for it (renderkit photoframe.js) */
+    lens(fov) { lensFov = Number.isFinite(fov) ? fov : null; place(); },
     home() { setStorey(null); O.eye = false; glide(home); },
     /* the view as it opened, the storey left as it is */
     reset() { hand(); O.eye = false; glide(home); },
@@ -1183,7 +1191,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       land();
       if (!shot) { renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); }
       const [aw, ah] = ratio(shot.aspect), asp = aw / ah, LONG = 1280, W = aw >= ah ? LONG : Math.round(LONG * asp), H = aw >= ah ? Math.round(LONG / asp) : LONG;
-      const sc = shotCamera(shot, asp);
+      const sc = shot.live ? liveCamera(shot, asp) : shotCamera(shot, asp);
       renderer.setSize(W, H, false); renderer.render(scene, sc);
       const url = renderer.domElement.toDataURL("image/jpeg", 0.85);
       size(); dirty = true; return url;

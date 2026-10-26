@@ -26,3 +26,13 @@ export const sunError = e => ({
   sun_missing: "Sola trenger en dato og et klokkeslett: {month, day, hour} eller en tid som 2026-12-21T15:00.",
   sun_range: "Datoen eller klokkeslettet for sola finnes ikke (måned 1-12, dag i måneden, time 0-24).",
 }[e?.code] || "Sola kan ikke leses.");
+/* the lenses and picture shapes of the photo mode (U3663): the ids are renderkit photoframe.js'; the words are this page's */
+export const LENS_NO = {
+  "24": { no: "24 mm", tip: "Vidvinkel: mye av stedet med, gode rette linjer. Til bygget fra gata og til rom." },
+  "35": { no: "35 mm", tip: "Litt vid, som øyet ser det: det vanlige valget." },
+  "50": { no: "50 mm", tip: "Normal: lite vridning, rolig bilde av én fasade." },
+  "85": { no: "85 mm", tip: "Tele: trekker bygget nær og flater ut dybden. Til detaljer og siluett." },
+  "iphone": { no: "iPhone", tip: "Som hovedkameraet på en iPhone (26 mm): bildet slik et vanlig mobilbilde ser ut." },
+  "drone": { no: "Drone", tip: "Fra lufta, vid linse (24 mm): tomta og omgivelsene i ett bilde." },
+};
+export const ASPECT_NO = { "3:2": "3:2 foto", "16:9": "16:9 bred", "1:1": "1:1 kvadrat", "4:5": "4:5 stående", "2:3": "2:3 høy" };

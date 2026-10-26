@@ -24,7 +24,7 @@ import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./pu
 
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
-const ASPECTS = [["1:1", 1], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
+const ASPECTS = [["1:1", 1], ["4:5", 4 / 5], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
 const ID = /^[a-z0-9]{16}$/, MAX_IN = 6 * 1024 * 1024;
 /* The view is the only geometry the model gets (U3526: the first prompt let it invent hills and houses behind the site) */
 const PROMPT = "This image is a view of a 3D model of a site in Bragernes, Drammen, Norway. It is the only geometry: make it a photorealistic architectural rendering of exactly this view. "
@@ -34,6 +34,17 @@ const PROMPT = "This image is a view of a 3D model of a site in Bragernes, Dramm
   + "Materials: the existing hospital wings in concrete, brick and render; new buildings in the material their colour suggests; asphalt, kerbs, grass. "
   + "Planting: trees and shrubs only where the model has trees or green areas. People: a few small pedestrians on the paths and pavements. "
   + "No text or labels.";   // the light is said apart, from the view's sun (lightLine)
+/* a photo spot (U3665): where a picture was taken from and with what, kept beside the picture so it can be taken again; only numbers and short
+   ids come in, whatever the page sent */
+const num = (v, lo, hi) => Number.isFinite(+v) && v !== null && v !== "" ? Math.min(hi, Math.max(lo, +v)) : null;
+export function spotOf(b) {
+  if (!b || typeof b !== "object" || !b.pose) return null;
+  const p = b.pose, pose = { x: num(p.x, -1e5, 1e5), y: num(p.y, -1e5, 1e5), h: num(p.h, -1e4, 1e4), yaw: num(p.yaw, -1e3, 1e3), pitch: num(p.pitch, -4, 4), dist: num(p.dist, 0, 1e5), eye: !!p.eye };
+  if ([pose.x, pose.y, pose.h, pose.yaw, pose.pitch, pose.dist].some(v => v == null)) return null;
+  const inR = (v, lo, hi) => Number.isFinite(+v) && v !== null && +v >= lo && +v <= hi, sun = b.sun && inR(b.sun.sunM, 1, 12) && inR(b.sun.sunD, 1, 31) && inR(b.sun.sunH, 0, 24) ? { sunM: num(b.sun.sunM, 1, 12), sunD: num(b.sun.sunD, 1, 31), sunH: num(b.sun.sunH, 0, 24) } : null;
+  return { pose, mm: num(b.mm, 10, 200), fov: num(b.fov, 1, 170), aspect: ASPECTS.some(([k]) => k === b.aspect) ? b.aspect : null, look: LOOKS[b.look] ? b.look : null, viewpoint: VIEWPOINTS[b.viewpoint] ? b.viewpoint : null,
+    sun, eyeh: num(b.eyeh, 0.3, 50), lens: typeof b.lens === "string" ? b.lens.slice(0, 12) : null, version: typeof b.version === "string" ? b.version.slice(0, 16) : null, n: num(b.n, 0, 1e5) };
+}
 const WISH = " The person also asks for this; it may change only materials, light, people and planting, never the geometry: ";
 
 export function createRenderings({ SECURITY = {}, readJson, login, versions, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
@@ -77,8 +88,12 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     if (q.utkast && /^[A-Za-z0-9_-]{6,16}$/.test(q.utkast)) return { key: `utkast:${q.utkast}`, owner: null };
     return null;
   }
-  const pub = r => ({ id: r.id, at: r.at, by: r.by, fav: !!r.fav, wish: r.wish || null, cost_usd: r.cost_usd, url: `api/gjengi/${r.id}.${r.ext}`, download: `api/gjengi/${r.id}.${r.ext}?last-ned` });
-  const state = async who => ({ signed_in: !!who, on: !!key, model, estimate_usd: await estimate(), default_size: size, sizes: await Promise.all(Object.entries(SIZES).map(async ([id, z]) => ({ id, name: z.no, estimate_usd: await estimate(id) }))), month_usd: money(spent()), cap_usd: cap, left_usd: money(Math.max(0, cap - spent() - onWay())) });
+  const pub = (r, who = null) => ({ id: r.id, at: r.at, by: r.by, mine: !!who && r.by === who, fav: !!r.fav, spot: r.spot || null, retake_of: r.retake_of || null, stale: staleOf(r), wish: r.wish || null, cost_usd: r.cost_usd, url: `api/gjengi/${r.id}.${r.ext}`, download: `api/gjengi/${r.id}.${r.ext}?last-ned` });
+  /* the model changed since the picture: the version was saved after it (a draft has no clock here: the page compares the change count in the spot) */
+  const staleOf = r => { const [kind, wid] = String(r.work).split(":"), v = kind === "versjon" ? versions?.get(wid) : null; return v ? String(v.updated) > r.at : null; };
+  const proposals = new Map();   // who → {ids, at}: Anton's «lag nye bilder fra disse stedene», waiting for the person to confirm on the page
+  const spotsOf = who => all.filter(r => r.by === who && r.spot && !r.failed && !r.retake_of).sort((a, b) => b.at.localeCompare(a.at));
+  const state = async who => ({ signed_in: !!who, on: !!key, model, estimate_usd: await estimate(), default_size: size, sizes: await Promise.all(Object.entries(SIZES).map(async ([id, z]) => ({ id, name: z.no, estimate_usd: await estimate(id) }))), retake: who && proposals.get(who) && Date.now() - proposals.get(who).t < 1800e3 ? { ids: proposals.get(who).ids } : null, month_usd: money(spent()), cap_usd: cap, left_usd: money(Math.max(0, cap - spent() - onWay())) });
 
   async function make(body, who) {
     const shot = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image || ""));
@@ -94,7 +109,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     const near = dim ? ASPECTS.map(([k, r]) => [k, Math.abs(Math.log(dim[0] / dim[1] / r))]).sort((a, b) => a[1] - b[1])[0][0] : "16:9";
     /* the camera (renderkit photo.js): the viewpoint and look the page took the picture with, said to the model in one line; the shape asked for is the picture's */
     const cam = VIEWPOINTS[body.viewpoint] ? shotOf({ viewpoint: body.viewpoint, look: body.look, lens: body.lens, eyeh: body.eyeh }) : null;
-    const ar = cam && ASPECTS.some(([k]) => k === cam.aspect) ? cam.aspect : near;
+    const ar = ASPECTS.some(([k]) => k === body.aspect) ? body.aspect : cam && ASPECTS.some(([k]) => k === cam.aspect) ? cam.aspect : near;
     const google = model.startsWith("google/");
     pending.set(who, est);
     try {
@@ -113,7 +128,8 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
       }
       const ext = pic[1] === "jpeg" ? "jpg" : pic[1], id = newId(), out = Buffer.from(pic[2], "base64");
       writeFileSync(join(dir, `${id}.${ext}`), out);
-      const rec = { id, at: now().toISOString(), by: who, work: body.work, model, size: sz, ...(cam ? { viewpoint: cam.viewpoint, look: cam.look } : {}), ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: j.provider || null };
+      const spot = spotOf(body.spot), prior = body.retake_of && all.find(r => r.id === body.retake_of && r.by === who && r.spot);
+      const rec = { id, at: now().toISOString(), by: who, work: body.work, ...(spot ? { spot: { ...spot, aspect: spot.aspect || ar } } : {}), ...(prior ? { retake_of: prior.id } : {}), model, size: sz, ...(cam ? { viewpoint: cam.viewpoint, look: cam.look } : {}), ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: j.provider || null };
       all.push(rec); save();
       console.log(`gjengi ${id} ${body.work} ${who} $${(cost ?? est).toFixed(4)}${cost == null ? " (estimert)" : ""} ${j.provider || ""} ${ar} ${sz} ${cam ? cam.viewpoint + "/" + cam.look : ""} ${out.length} B`);
       return rec;
@@ -122,13 +138,15 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
 
   const json = (res, n, o) => res.writeHead(n, { ...SECURITY, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }).end(JSON.stringify(o));
   return {
-    estimate, spent, make, get all() { return all; },
+    estimate, spent, make, spotsOf, staleOf, get all() { return all; },
+    /* Anton's proposal: the ids of the person's spots to take again; nothing is made until the person confirms on the page (U3665) */
+    propose(who, ids) { proposals.set(who, { ids, t: Date.now() }); },
     async route(req, res, path, url) {
       if (path !== "/api/gjengi" && !path.startsWith("/api/gjengi/")) return false;
       const who = login.personOf(req)?.person ?? null, q = Object.fromEntries(url.searchParams);
       try {
         if (path === "/api/gjengi" && req.method === "GET") {
-          const w = workOf(q, who), list = w ? all.filter(r => r.work === w.key).sort((a, b) => (b.fav - a.fav) || b.at.localeCompare(a.at)).map(pub) : [];
+          const w = workOf(q, who), list = w ? all.filter(r => r.work === w.key).sort((a, b) => (b.fav - a.fav) || b.at.localeCompare(a.at)).map(r => pub(r, who)) : [];
           return json(res, 200, { ...(await state(who)), pictures: list });
         }
         if (path === "/api/gjengi" && req.method === "POST") {
@@ -139,8 +157,9 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
           const w = workOf({ versjon: body.versjon, nokkel: body.nokkel, utkast: body.utkast }, who);
           if (!w) return json(res, 400, { error: "Åpne forslaget du vil gjengi, eller gjør en endring først." });
           const rec = await make({ ...body, work: w.key }, who);
-          return json(res, 200, { picture: pub(rec), ...(await state(who)) });
+          proposals.delete(who); return json(res, 200, { picture: pub(rec, who), ...(await state(who)) });
         }
+        if (path === "/api/gjengi/proposal" && req.method === "POST") { if (who) proposals.delete(who); return json(res, 200, { ok: true }); }
         const m = /^\/api\/gjengi\/([a-z0-9]{16})(?:\/(favoritt)|\.(jpg|png|webp))$/.exec(path);
         if (!m) return json(res, 404, { error: "Ikke funnet" });
         const r = all.find(x => x.id === m[1] && !x.failed); if (!r) return json(res, 404, { error: "Fant ikke bildet." });
@@ -154,7 +173,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
           const [kind, wid] = String(r.work).split(":"), v = kind === "versjon" ? versions?.get(wid) : null;
           if (!who || (r.by !== who && v?.owner !== who)) return json(res, 403, { error: "Bare den som laget bildet, eller eieren av forslaget, kan endre favorittene." });
           const b = await readJson(req, 1024); r.fav = !!b.on; save();
-          return json(res, 200, { picture: pub(r) });
+          return json(res, 200, { picture: pub(r, who) });
         }
         return json(res, 405, { error: "Ikke tillatt" });
       } catch (e) { return json(res, e.status || 500, { error: e.status ? e.message : "Noe gikk galt.", ...(e.estimate_usd ? { estimate_usd: e.estimate_usd } : {}) }); }

@@ -99,11 +99,11 @@ const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   /
 /* the person's open pages, as Anton's tools need them: the version the pill has open (assistant.mjs sets it with each
    turn) and a way to move those pages to a view (show_building); one object, filled in by both */
 const pages = { open: new Map(), show: () => false };
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
+const gjengi = createRenderings({ SECURITY, readJson, login, versions });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages, photos: gjengi, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
 const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 mcp.setNotifier((person, event, data) => anton.publish(person, event, data));   // a sketch Anton shows reaches the person's page (U3635)
 const streets = createStreets({ site, SECURITY });
-const gjengi = createRenderings({ SECURITY, readJson, login, versions });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
 
 createServer(async (req, res) => {
   try {

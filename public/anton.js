@@ -37,12 +37,13 @@ export async function start({ viewer, version, refresh, showView, panel, valg })
   const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
   if (!me.person) {
     /* not signed in (U3662): nothing of Anton, no tab, no pill, no chips; only «Logg inn» in the bar, with the code in a dialog */
-    unmark(); document.body.classList.add("anon");
+    unmark(); document.body.classList.add("anon"); $("tab-photo").hidden = true;
     panel.show(["changes", "selected"].find(t => !$(`tab-${t}`).hidden), { quiet: true });
     if (me.login) { chip.innerHTML = `<button type="button" class="me" id="meBtn"><i></i>Logg inn</button>`; chip.hidden = false; import("./login.js").then(m => m.startLogin({ button: $("meBtn") })).catch(e => console.error("login:", e)); }
     return;
   }
   document.body.classList.remove("anon");
+  $("tab-photo").hidden = false;   // Gjengi costs money: only for a signed-in person (U3663)
   chip.innerHTML = `<button type="button" class="me" id="meBtn" aria-haspopup="true" aria-expanded="false" title="Logget inn som ${esc(me.person)}"><i></i>${esc(me.person)}</button>`;
   chip.hidden = false; chip.style.position = "relative";
   if (me.via !== "gulden.no") {   // signed in on gulden.no: signed out there, not here

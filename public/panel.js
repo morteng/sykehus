@@ -20,7 +20,7 @@ export function createPanel({ start = null, onChange = () => {} } = {}) {
   const open = () => phone.matches ? snap !== "peek" : !document.body.classList.contains("side-off");
   function show(t, { quiet = false } = {}) {
     if (!tabs().some(b => b.dataset.tab === t)) t = tabs()[0]?.dataset.tab;
-    tab = t; if (t !== "selected") store.set("sykehus-fane", t);   // a reload never opens an empty «Bygget»
+    tab = t; if (t !== "selected" && t !== "photo") store.set("sykehus-fane", t);   // a reload never opens an empty «Bygget», nor the photo mode
     for (const b of tabs()) b.setAttribute("aria-selected", String(b.dataset.tab === t));
     for (const p of document.querySelectorAll(".tabp")) p.hidden = p.dataset.tab !== t;
     side.dataset.tab = t; badge(t, 0);
@@ -72,5 +72,5 @@ export function createPanel({ start = null, onChange = () => {} } = {}) {
   phone.addEventListener("change", () => grip.refresh());
   const kept = store.get("sykehus-fane"), t0 = start ?? (kept && kept !== "wish" ? kept : "chat");   // «Ønsker» is a button in the bar now (U3660)
   show(t0, { quiet: true });
-  return { show, reveal, badge, open, fold, get tab() { return tab; }, get phone() { return phone.matches; }, peek(html) { $("peekhead").innerHTML = html; } };
+  return { show, reveal, badge, open, fold, snap: setSnap, get tab() { return tab; }, get phone() { return phone.matches; }, peek(html) { $("peekhead").innerHTML = html; } };
 }

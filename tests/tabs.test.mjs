@@ -9,17 +9,20 @@ import { KINDS, WORDS } from "../public/feedback.js";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
-test("the tabs are Forslag, Bygg, Anton, in that order, and Ønsker is no tab", () => {
+test("the tabs are Forslag, Bygg, Anton, Gjengi, in that order, and Ønsker is no tab", () => {
   const tabs = [...html.matchAll(/<button type="button" role="tab" data-tab="(\w+)"/g)].map(m => m[1]);
-  assert.deepEqual(tabs, ["changes", "selected", "chat"]);
-  assert.match(html, /<nav class="dock" id="dock" data-tabs="3"/); assert.ok(!/id="p-wish"|id="tab-wish"/.test(html));
+  assert.deepEqual(tabs, ["changes", "selected", "chat", "photo"]);
+  assert.match(html, /<nav class="dock" id="dock" data-tabs="4"/); assert.ok(!/id="p-wish"|id="tab-wish"/.test(html));
 });
 
-test("the bar has «Tilbakemelding» where Gjengi was, and Gjengi sits in the tool column with the sun", () => {
+test("the bar has «Tilbakemelding» where Gjengi was, and Gjengi is a tab after Anton (U3663): no button in the tool column, no card beside the sun", () => {
   assert.match(html, /<button type="button" class="ab-ic" id="mfb" aria-label="Tilbakemelding" title="Gi tilbakemelding">/);
-  const bar = html.slice(html.indexOf("<header"), html.indexOf("</header>")), col = html.slice(html.indexOf('<div class="zoom2">'), html.indexOf('<div class="sun-pop"'));
-  assert.ok(!bar.includes('id="mgj"') && !bar.includes('id="gjPop"')); assert.ok(col.includes('id="sunBtn"') && col.includes('id="mgj"'));
+  assert.ok(!html.includes('id="mgj"') && !html.includes('id="gjPop"'), "the map column's Gjengi button and its card are gone");
+  assert.match(html, /id="tab-photo"[^>]*hidden>/, "signed out the tab is not there (anton.js shows it for a person)");
+  assert.ok(html.indexOf('id="tab-chat"') < html.indexOf('id="tab-photo"'), "after Anton");
+  for (const id of ["p-photo", "pf", "pfFrame", "pfInset", "pfLens", "pfAspect", "pfShot", "pfResult", "gjSpots", "gjRetake"]) assert.ok(html.includes(`id="${id}"`), id);
 });
+
 
 function route(person) {
   const w = createWishes({ dir: mkdtempSync(join(tmpdir(), "fb-")), readJson: async req => req.body, personOf: () => person ? { person } : null });

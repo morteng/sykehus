@@ -124,7 +124,7 @@ const valg = createSelection({ site, floors, viewer, onChange: items => { dispat
 let sun = { ...SUN_DEFAULT }, gjengiCtl = null;   // gjengiCtl: the picture card's hand (gjengi.js), set when it has loaded
 function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
 setSunTo(sun);
-$("sunBtn").onclick = () => { const on = $("sunPop").hidden; if (on && !$("gjPop").hidden) $("mgj").click(); $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
+$("sunBtn").onclick = () => { const on = $("sunPop").hidden; $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
 $("sunDay").oninput = $("sunHour").oninput = () => setSunTo(sunFromDay(+$("sunDay").value, +$("sunHour").value));
 $("sunReset").onclick = () => setSunTo(SUN_DEFAULT);
 document.addEventListener("pointerdown", e => { if (!$("sunPop").hidden && !e.target.closest("#sunPop, #sunBtn")) { $("sunPop").hidden = true; $("sunBtn").setAttribute("aria-expanded", "false"); } });
@@ -966,6 +966,7 @@ async function refresh() {
 /* Anton's show_building through the pill, on this page in place (pm 21:20Z: «vis meg det fra fugleperspektiv» did
    not move the camera): a facade, a section, plan or 3D, a storey, a wing, and where the camera stands */
 function showView(v) {
+  if (v.retake) return gjengiCtl?.proposal();   // Anton proposed new pictures from some photo spots: the Gjengi tab shows the card with the price (U3665)
   const b = v.building && site.buildings.find(x => x.id === v.building);
   if (v.mode === "section" && b) {
     if (v.section === "fasade") return facade(b, v.side || "S");
@@ -1001,7 +1002,8 @@ import("./tour.js").then(({ createTour }) => {
 }).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261027a").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
-import("./gjengi.js?v=20261026s").then(m => gjengiCtl = m.startGjengi({ btn: $("mgj"), pop: $("gjPop"), viewer, toast, sun: () => sun,
+import("./gjengi.js?v=20261027j").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
+  rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
 requestAnimationFrame(() => import("./streets.js?v=20261026r").then(m => m.addStreets({ viewer, site })).then(h => { streetsOn = h; h?.setRemoved(((showingBefore ? site0 : site).roads_removed || []).map(r => r.id)); }).catch(e => console.warn("gater:", e)));

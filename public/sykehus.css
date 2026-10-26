@@ -313,7 +313,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 #malPop .mal-sp small { color: var(--muted); }
 .imp-pop button:disabled { opacity: .6; cursor: progress; }
 /* «Gjengi» (U3526): the «Hent fil» pop's look, with the pictures of the open work under it */
-.gj-pop { width: min(340px, calc(100vw - 132px)); max-height: min(70vh, 640px); overflow: auto; }
 .gj-cam { display: grid; gap: var(--sp-2); }
 .gj-cam b { font-weight: 600; font-size: var(--fs-xs, 11px); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .gj-cam .gj-row { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -420,8 +419,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .bygg-acts .tgl[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
 .bygg-acts .imp { position: static; display: contents; }
 .bygg-acts .imp-pop { position: static; width: 100%; box-shadow: none; }
-/* «Gjengi» sits in the header now: its pop opens from the right edge */
-header .gj .gj-pop { left: auto; right: 0; z-index: 30; }
 header .gj .ab-ic[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); }
 /* a phone: the bar over the model stops short of the north arrow and the zoom (at 390 px the arrow covered «Navn»),
    and what does not fit goes to a second row */
@@ -471,19 +468,56 @@ body.tegner .g-chat { visibility: hidden; }
 
 /* U3660: «Gjengi» in the map's tool column beside the sun, its card to the left of it as the sun's; three tabs in the dock */
 .dock[data-tabs="3"] { --tabs: 3; }
-.nz .zoom2 #mgj svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.nz .zoom2 #mgj[aria-expanded=true] { background: var(--accent-panel); }
-.nz .gj-pop { position: absolute; right: calc(100% + 8px); bottom: 0; top: auto; left: auto; z-index: 30; width: min(340px, calc(100vw - 132px)); }
+.dock[data-tabs="4"] { --tabs: 4; }
 #mfb { position: relative; }
 .g-modal .fb-sent { margin-top: var(--sp-3); border-top: 1px solid var(--border); padding-top: var(--sp-2); }
 .fb-sent h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
 
 /* U3662: signed out, nothing of Anton: no tab, no panel, no pill, no «Spør Anton» on a card (early.js and anton.js set .anon) */
-body.anon #tab-chat, body.anon #p-chat, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat, body.anon #mfb { display: none !important; }   /* #mfb: /api/feedback needs a sign-in */
+body.anon #tab-chat, body.anon #p-chat, body.anon #tab-photo, body.anon #p-photo, body.anon #pf, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat, body.anon #mfb { display: none !important; }   /* #mfb: /api/feedback needs a sign-in */
 body.anon .dock[data-tabs] { --tabs: 2; }
+.dock[data-tabs]:has(#tab-photo[hidden]) { --tabs: 3; }
 .login-form { display: grid; gap: var(--sp-3); }
 .login-sub { margin: 0; font-size: var(--fs-md); }
 .login-l { display: grid; gap: 6px; color: var(--muted); }
 .login-code { font: inherit; font-size: 28px; letter-spacing: .5em; text-align: center; padding: 10px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); max-width: 12rem; }
 .login-err { margin: 0; color: var(--danger-text); }
 .login-note { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+
+/* U3663: «Gjengi» as a photo mode: the view is the viewfinder (frame, thirds, horizon), a small plan shows the camera and its
+   frustum, the lens and shape chips and the one big shutter sit at the bottom; the rest of the tools step aside */
+.pf { position: absolute; inset: 0; z-index: var(--z-canvas); pointer-events: none; }
+.pf[hidden] { display: none; }
+.pf-over, .pf-over svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pf-dim { fill: rgba(10, 12, 16, .55); } .pf-edge { fill: none; stroke: #fff; stroke-width: 1.5; }
+.pf-third { stroke: rgba(255, 255, 255, .45); stroke-width: 1; fill: none; } .pf-horizon { stroke: #ffd24a; stroke-width: 1.5; stroke-dasharray: 8 5; fill: none; }
+.pf-tag { position: absolute; font-size: var(--fs-sm); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); white-space: nowrap; }
+.pf-box { position: absolute; left: 12px; bottom: 104px; width: 150px; height: 150px; pointer-events: auto; touch-action: none; cursor: grab; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.pf-box svg { display: block; width: 100%; height: 100%; }
+.pf-ring { fill: var(--border); stroke: var(--muted); stroke-width: .6; } .pf-wedge { fill: rgba(255, 190, 40, .28); stroke: none; } .pf-ray { stroke: #e0a100; stroke-width: 1.4; fill: none; }
+.pf-target { fill: none; stroke: var(--text); stroke-width: 1.4; } .pf-cam { fill: #e0a100; stroke: var(--text); stroke-width: 1.2; }
+.pf-bar { position: absolute; left: 0; right: 0; bottom: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.pf-row { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; pointer-events: auto; }
+.pf-bar .pf-row button, .gj-cam button, .pf-spot-d button, .pf-retake button, .pf-res button, .pf-go { font: inherit; font-size: var(--fs-sm); padding: 5px 10px; min-height: 32px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.pf-bar .pf-row button[aria-pressed=true], .pf-res button[aria-pressed=true] { background: var(--accent-panel); border-color: var(--accent-panel-edge); color: var(--accent); font-weight: 600; }
+.pf-shutter { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; padding: 8px 18px 8px 10px; border-radius: 999px; border: 2px solid #fff; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-sm); }
+.pf-shutter i { width: 28px; height: 28px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); box-shadow: 0 0 0 2px #fff; }
+.pf-shutter small { font-weight: 400; opacity: .85; } .pf-shutter:disabled, .pf-go:disabled { opacity: .55; cursor: not-allowed; }
+.pf-go { width: 100%; font-weight: 600; background: var(--accent); color: var(--on-accent); }
+.pf-head { display: flex; align-items: center; justify-content: space-between; }
+.pf-result { position: absolute; inset: 0; pointer-events: auto; display: grid; place-items: center; background: rgba(10, 12, 16, .72); padding: var(--sp-3); }
+.pf-res { display: grid; gap: var(--sp-2); width: min(100%, 880px); max-height: 100%; justify-items: center; }
+.pf-cmp { position: relative; width: 100%; max-height: calc(100vh - 220px); overflow: hidden; border-radius: var(--radius); background: #000; }
+.pf-cmp img { display: block; width: 100%; height: 100%; object-fit: contain; } .pf-cmp .pf-before { position: absolute; inset: 0; }
+.pf-cmp input[type=range] { position: absolute; left: 0; right: 0; bottom: 6px; width: 100%; margin: 0; } .pf-l, .pf-r { position: absolute; top: 6px; padding: 2px 8px; font-size: var(--fs-sm); color: #fff; background: rgba(0,0,0,.55); border-radius: var(--radius); } .pf-l { left: 6px; } .pf-r { right: 6px; }
+.pf-dl { color: #fff; align-self: center; }
+.pf-spots { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 6px; } .pf-spot { position: relative; flex: 0 0 auto; width: 72px; height: 54px; padding: 0; overflow: hidden; border: 2px solid var(--border); border-radius: var(--radius); background: var(--panel); cursor: pointer; }
+.pf-spot[aria-pressed=true] { border-color: var(--accent); } .pf-spot img { width: 100%; height: 100%; object-fit: cover; display: block; } .pf-new { position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; border-radius: 50%; background: #e0a100; border: 1px solid #fff; }
+.pf-stale { margin: 2px 0; color: var(--accent); font-weight: 600; font-size: var(--fs-sm); } .pf-spot-t { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--muted); }
+.pf-retake { border: 1px solid var(--accent-panel-edge); background: var(--accent-panel); border-radius: var(--radius); padding: var(--sp-2); margin: var(--sp-2) 0; } .pf-retake p { margin: 0 0 var(--sp-2); }
+/* in photo mode what the picture does not need steps aside: the storey rail, the view switch, the map's tools but the compass and the sun, the conversation, the bar's extras */
+body.photo .levels, body.photo .vt, body.photo .shot, body.photo #scale, body.photo #talk-form, body.photo .g-chat, body.photo #mfb, body.photo #tourBtn, body.photo #print, body.photo .nz .zoom2 > :not(#sunBtn) { display: none !important; }
+body.photo .nz .north { width: 40px; height: 40px; } body.photo .nz .north svg { width: 28px; height: 28px; }
+body.m .pf-box { width: 104px; height: 104px; top: 8px; left: 8px; bottom: auto; } body.m .pf-bar { bottom: 112px; } body.m .pf-bar .pf-row { flex-wrap: wrap; max-width: 100%; justify-content: center; padding: 0 8px; } body.m .pf-bar .pf-row button { flex: 0 0 auto; padding: 4px 8px; min-height: 30px; }
+#p-photo label { display: grid; gap: 4px; margin: var(--sp-2) 0; color: var(--muted); font-size: var(--fs-sm); } #p-photo label input { font: inherit; color: var(--text); padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+#p-photo .pf-go { margin: var(--sp-2) 0; }
