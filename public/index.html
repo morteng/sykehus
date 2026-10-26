@@ -117,9 +117,11 @@
         <div class="chatpill" id="chat-pill"></div>
       </section>
       <section class="tabp" id="p-changes" data-tab="changes" role="tabpanel" aria-labelledby="tab-changes" hidden>
+        <div class="ver-confirm" id="verConfirm" role="alertdialog" aria-labelledby="verAsk" hidden><span id="verAsk"></span><button type="button" id="verYes" class="dr-p">Slett</button><button type="button" id="verNo">Avbryt</button></div>
         <div id="draftRow"></div>
         <h2>Forslag til «etter»</h2>
         <p class="sub">Tegnet med Anton over modellen av bygningene i dag. Bare du ser et forslag, til du deler det. Hvert åpner i 3D.</p>
+        <div class="ver-bar" id="verBar" hidden><button type="button" id="verSel" aria-pressed="false">Velg</button><button type="button" id="verDelSel" hidden>Slett valgte (0)</button></div>
         <ul class="ver-list" id="verList"><li class="sel-empty">Ingen forslag å vise ennå.</li></ul>
       </section>
       <section class="tabp" id="p-wish" data-tab="wish" role="tabpanel" aria-labelledby="tab-wish" hidden></section>
