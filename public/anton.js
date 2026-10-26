@@ -13,7 +13,7 @@
    same place (after the reply is done, so nothing is cut off). */
 import { pick } from "./kit/pick.js";
 import { toolLine } from "./toolline.js";
-import { setMd } from "./md.js?v=20261027a";   // U3680: Anton's answers are markdown; the person's own lines stay plain
+import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
 const NEEDS_LOGIN = "Logg inn for å bygge og snakke med Anton";
 

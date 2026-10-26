@@ -1,5 +1,5 @@
 {
-  "kits": "eb6fc7b6bf65fc93c6aeea29235e3a498cdce1e5",
+  "kits": "8847919f6f1604f2f41f0a11790047f922c9b971",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
@@ -14,6 +14,7 @@
     "chat.js": "01797fe2d00642ee69dd462f8a4213a620dd109c",
     "tour.js": "de60d76b3ba8e83117f53374df228d1609768806",
     "modal.js": "a6ea717bf76cfc11cf12dd901e7da482f949efb3",
-    "feedback.js": "f2c8d9a7d14e7b400bd3a39ea118462c0d4efad3"
+    "feedback.js": "f2c8d9a7d14e7b400bd3a39ea118462c0d4efad3",
+    "markdown.js": "231f66da83a8dd5b9501650b95c01831664c9f28"
   }
 }
