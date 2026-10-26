@@ -43,7 +43,7 @@ test("the after's IFC: a new building with its storeys and body, a pyramid, balc
   assert.ok(kinds("IFCPROPERTYSET").some(e => /'Pset_SlabCommon'/.test(e.args)) && kinds("IFCPROPERTYSET").some(e => /'Pset_RailingCommon'/.test(e.args)), "property sets");
   assert.ok(kinds("IFCELEMENTQUANTITY").some(e => /'Qto_SlabBaseQuantities'/.test(e.args)) && kinds("IFCQUANTITYAREA").some(e => /'GrossArea'/.test(e.args)) && kinds("IFCQUANTITYVOLUME").length > 10, "quantities");
   assert.ok(kinds("IFCRELAGGREGATES").some(e => e.args.split("#").length === 4 + 0 && /\(#\d+,#\d+\)/.test(e.args)), "the assembly holds slab and railing");
-  assert.ok(kinds("IFCELEMENTASSEMBLYTYPE").length >= 1 && kinds("IFCELEMENTASSEMBLYTYPE").length < asms.length && kinds("IFCRELDEFINESBYTYPE").length === kinds("IFCELEMENTASSEMBLYTYPE").length, "one type a size, the balconies its occurrences");
+  assert.ok(kinds("IFCELEMENTASSEMBLYTYPE").length >= 1 && kinds("IFCELEMENTASSEMBLYTYPE").length < asms.length && kinds("IFCRELDEFINESBYTYPE").length === kinds("IFCELEMENTASSEMBLYTYPE").length + kinds("IFCWINDOWTYPE").length, "one type a size, the balconies its occurrences");
   /* U3619: one IfcMaterial a material used, named by its FreeCAD card, each element in one */
   const mats = [...p.ents.values()].filter(e => e.type === "IFCMATERIAL" && /^'(Concrete|Glass|Steel-Generic|Wood|Brick|Soil)',/.test(e.args)).map(e => e.args);
   assert.ok(mats.includes("'Glass','Glass','glass'") && mats.includes("'Concrete','Betong','concrete'") && mats.includes("'Soil','Jord','earth'"), mats.join(" | "));
