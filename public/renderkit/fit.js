@@ -13,7 +13,8 @@
      to pass on: «på bakken», «på bakken i skråning: …», «på taket til X, kote …», «på ingenting: … (svever)», «under bakken: …».
    surfaceFit(site, ways) does the same for what is laid on the ground (site.landscape [{ id, kind: "surface", name,
      surface, ring }]): { id, name, surface, area_m2, overlaps: [{ with, m2 }], on_lot? }, over the buildings standing and
-     the ways the app brings ([{ name, ring }], e.g. OSM's footpaths made rings with paths2d.js pathRing). */
+     the ways the app brings ([{ name, ring }], e.g. OSM's footpaths made rings with paths2d.js pathRing).
+   overlapArea(ring, convex, zs?, zc?) the m² two bodies share in plan, 0 when their [low, high] koter do not meet. */
 
 export const inRing = ([x, y], r) => { let o = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const [a, b] = r[i], [e, f] = r[j]; if ((b > y) !== (f > y) && x < (e - a) * (y - b) / (f - b) + a) o = !o; } return o; };
 
@@ -47,6 +48,12 @@ function clip(subject, convex) {
 const segDist = (p, a, b) => { const d = [b[0] - a[0], b[1] - a[1]], t = Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2 || 1))); return Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t); };
 const ringGap = (r, s) => Math.min(...r.flatMap((p, i) => s.map((q, j) => Math.min(segDist(p, q, s[(j + 1) % s.length]), segDist(q, r[i], r[(i + 1) % r.length])))));
 const open = r => r.length > 1 && r[0][0] === r.at(-1)[0] && r[0][1] === r.at(-1)[1] ? r.slice(0, -1) : r;
+/* the overlap of two bodies (U3628, the clash check's one test): the area two rings share in plan, m² (the second
+   convex: a slab, a balcony, a box), and, given each body's [low, high] kote, 0 when they do not meet in height */
+export function overlapArea(ring, convex, zs = null, zc = null) {
+  if (zs && zc && (zs[1] <= zc[0] || zc[1] <= zs[0])) return 0;
+  const c = clip(open(ring), open(convex)); return c.length > 2 ? ringArea(c) : 0;
+}
 /* the buildings standing, one entry a wing (its pieces' rings together), else one a building */
 const thingsOf = site => [...site.buildings.reduce((m, b) => { const k = b.wing || b.id, w = (site.wings || []).find(x => x.id === b.wing);
     const name = w ? w.name : b.own ? `bygning ${b.id} på tomta` : `nabobygg ${b.id}`; if (!m.has(k)) m.set(k, { name, rings: [], top: -Infinity }); const t = m.get(k); t.rings.push(open(b.ring)); t.top = Math.max(t.top, b.top ?? b.base); return m; }, new Map()).values()];

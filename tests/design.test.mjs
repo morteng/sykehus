@@ -163,3 +163,13 @@ test("the lot line: the slope stops there and the ground outside stays (a wall),
   const far = applyEdits(site, floors, add([], { kind: "volume", id: "nMidt", name: "Midt", shape: "box", from: [-10, 20], to: [10, 20], width: 12, height: 6 })).site.added[0];
   assert.equal(lotText(far.lot), "", "well inside: nothing to say");
 });
+
+test("U3628: a balcony that would stand inside the low wing in front is not made, and the result says how many and why", () => {
+  const e = { kind: "balconies", wing: "sentralblokka", side: "Ø", depth: 1.5, railing: "glass", from_storey: "2. etasje", bay: 4, gap: 0.6 };
+  const b = applyEdits(site, floors, [e]).site.added[0], at = k => b.parts.filter(p => p.role === "slab" && p.profile[3][1] === k).length;
+  assert.deepEqual([at(20.28), at(24.24), at(28.01)], [10, 10, 21], "storeys 2 and 3 lose the bays over the side wing; storey 4 is over its roof");
+  assert.deepEqual(b.skipped, [{ by: "Sentralblokka, sidebygg", count: 22 }]);
+  assert.match(b.say, /^22 balkonger er ikke satt opp fordi de ville stått inne i Sentralblokka, sidebygg/);
+  const torn = applyEdits(site, floors, [{ kind: "demolish", building: "sentralblokka-sidebygg" }, e]).site.added[0];
+  assert.equal(torn.skipped, undefined, "with the side wing torn down, every bay is made");
+});

@@ -34,7 +34,7 @@ import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./la
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { batterZ, balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
-import { fitOf, surfaceFit, groundAt, inRing } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
+import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
 
 export const SIDES = { N: [0, 1], "Ø": [1, 0], S: [0, -1], V: [-1, 0] };
@@ -203,8 +203,12 @@ export function roofUnder(site, e) {
   return top;
 }
 
-/* balconies: every outline wall of the wing that faces the side, at each storey it stands over */
-function balconyParts(site, e) {
+/* balconies: every outline wall of the wing that faces the side, at each storey it stands over. U3628: a balcony
+   that would stand inside another building (a lower wing in front, under its roof) is not made; skipped says which
+   building took how many, for Anton to say */
+function balconyParts(site, e, gone = new Set(), skipped = new Map()) {
+  const others = site.buildings.filter(b => b.wing !== e.wing && !gone.has(b.id)).flatMap(b => (b.blocks?.length ? b.blocks : [{ p: b.ring, top: b.top }]).filter(k => k.top != null)
+    .map(k => ({ p: k.p, z: [b.lift ?? b.base, k.top], name: (site.wings || []).find(w => w.id === b.wing)?.name || b.name || `bygning ${b.id}` })));
   const w = site.wings.find(x => x.id === e.wing), bs = site.buildings.filter(b => b.wing === e.wing);
   const lv = (w.levels || []).slice().sort((a, b) => a.kote - b.kote), ground = Math.min(...bs.map(b => b.base));
   const i0 = e.from_storey ? lv.findIndex(l => l.name === e.from_storey) : lv.findIndex(l => l.kote > ground + 2);
@@ -228,6 +232,8 @@ function balconyParts(site, e) {
         if (z < lo_ + 1 || z > hi - 1) continue;
         for (const [t0, t1] of runs) {
           const p = t => [a[0] + dd[0] * t, a[1] + dd[1] * t], ax = [p(t0), p(t1)];
+          const body = [...ax, ...ax.slice().reverse().map(q => [q[0] + n[0] * e.depth, q[1] + n[1] * e.depth])], hit = others.find(o => overlapArea(o.p, body, o.z, [z - 0.2, z + 1.1]) > 0.05);
+          if (hit) { skipped.set(hit.name, (skipped.get(hit.name) || 0) + 1); continue; }
           parts.push({ axis: ax, profile: [[0, z - 0.2], [e.depth, z - 0.2], [e.depth, z], [0, z]], mat: "concrete", role: "slab" });
           const rail = e.railing === "concrete" ? 0.12 : 0.04;
           parts.push({ axis: ax, profile: [[e.depth - rail, z], [e.depth, z], [e.depth, z + 1.1], [e.depth - rail, z + 1.1]], mat: e.railing, role: "railing" });
@@ -467,9 +473,9 @@ export function applyDesign(site, floors, edits) {
     else if (e.kind === "restore") for (const id of targets(site, e.building)) gone.delete(id);
     else if (e.kind === "reshape") { const v = vols.get(e.id); if (v) { const { kind, id, why, ...set } = e; Object.assign(v, set); if (set.storeys != null && set.height == null) v.height = Math.round(set.storeys * STOREY_M * 100) / 100; } }
     else if (e.kind === "balconies") {
-      const parts = balconyParts(site, e), slabs = parts.filter(p => p.role === "slab");
+      const skipped = new Map(), parts = balconyParts(site, e, gone, skipped), slabs = parts.filter(p => p.role === "slab");
       added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${e.side}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
-        count: slabs.length, footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
+        count: slabs.length, ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */

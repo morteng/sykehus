@@ -1,5 +1,5 @@
 {
-  "renderkit": "fb8b73eafaa8f19feabce933854f95c80363937a",
+  "renderkit": "d8ff36cab0ae6126195a63188306787591d1d3e4",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
@@ -20,7 +20,7 @@
     "streetnorms.js": "4a0b1d3854c558731496e71362a7b9b55f3e31d7",
     "paths2d.js": "b7a0b55a629a25fb996a60b50d652faa722d90cc",
     "look.js": "58e48b44fdd0afa2cbf4c60ff7cbb7f33f7cd97d",
-    "fit.js": "e10ae61e5965478385ab791c53f71122c3118976",
+    "fit.js": "2ebe50840349687557dbc2a36ec73ad76272926d",
     "views.js": "27feb79e202d7b15432b10a02bf539452c3e4fab",
     "select.js": "ccb48dbd13e700bca8fcc64d64ce18067d0391e5",
     "build.js": "0920e2be951823cbb4bde6c1d1953c8728cf0f1e",
