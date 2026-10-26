@@ -243,13 +243,14 @@ function commitLocal({ rings, mode, kind, areas, lot, buildings, known, minM2, e
    rings: the ghost (UTM). mode "add" paints `kind` and takes the ground from the other surfaces under it; "erase" rubs `kind` out.
    areas: the plan's areas as { id, kind, st, ring, holes (UTM) }; only those of the same st (planned or exists) are touched.
    A surface is an outline with holes: a bed painted inside a lawn makes a hole in the lawn, an erase in the middle of a lawn a hole too.
+   kinds: the surface kinds a stroke replaces (default SURFACES; an app with more surfaces gives its own list, U3664).
    Returns { remove: ids, add: [{ id?, kind, ring, holes, src }], m2: net change of `kind` }. */
-export function commit({ rings, mode = "add", kind = "lawn", st = "exists", areas, lot, buildings = [], known = null, minM2 = 1, local = true }) {
+export function commit({ rings, mode = "add", kind = "lawn", st = "exists", areas, lot, buildings = [], known = null, minM2 = 1, local = true, kinds = SURFACES }) {
   const none = { remove: [], add: [], m2: 0 };
   const pts = rings.flat(); if (pts.length < 3) return none;
   const pb = bboxOfPts(pts), edges = known?.edges || [];
   const near = a => { const b = bboxOfPts(a.ring); return !(b[2] < pb[0] - 1 || b[0] > pb[2] + 1 || b[3] < pb[1] - 1 || b[1] > pb[3] + 1); };
-  const touched = areas.filter(a => a.st === st && near(a) && (mode === "erase" ? a.kind === kind : SURFACES.includes(a.kind)));
+  const touched = areas.filter(a => a.st === st && near(a) && (mode === "erase" ? a.kind === kind : kinds.includes(a.kind)));
   if (mode === "erase" && !touched.length) return none;
   if (local) { const l = commitLocal({ rings, mode, kind, areas: touched, lot, buildings, known, minM2, edges, pb }); if (l) return l; }
   const box = bboxOfPts([...pts, ...touched.flatMap(a => a.ring)]), res = resFor(box, 2), g = gridOver(box, res, 2);
