@@ -62,12 +62,14 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   if (pages) pages.show = (person, view) => { const t = threads.get(person); if (!t?.subs.size) return false; publish(person, "show", { type: "show", ...view }); return true; };
   versions?.watch?.(v => publish(v.owner, "steps", { type: "steps", version: v.id, title: v.title, changes: v.edits.length, updated: v.updated }));
 
+  /* why a fetch to gulden-ai failed: undici's "fetch failed" hides it in e.cause (ECONNREFUSED, UND_ERR_SOCKET, a reset) */
+  const whyOf = e => [e.name, e.message, e.cause?.code, e.cause?.message].filter(Boolean).join(" / ");
   const call = async (path, body, query, device) => {
     const q = query ? "?" + new URLSearchParams(query) : "";
     try {
       const r = await fetchImpl(door + path + q, { method: body ? "POST" : "GET", headers: { authorization: `Bearer ${login.bearer}`, accept: "application/json", "x-door-device": device, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
       return [r.status, await r.json().catch(() => ({}))];
-    } catch (e) { console.error("anton", path, e.message); return [503, { error: { code: "unavailable" } }]; }
+    } catch (e) { console.error("anton", path, whyOf(e)); return [503, { error: { code: "unavailable" } }]; }
   };
   const codeOf = (j, d) => typeof j?.error?.code === "string" ? j.error.code : typeof j?.code === "string" ? j.code : d;
   /* gulden-ai refused the device (revoked in Settings › People): sign the person out on every page */
@@ -90,8 +92,11 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
           if (line && typeof line.type === "string") { onLine(line); if (line.type === "done" || line.type === "error") return [200, {}]; }
         }
       }
+      console.error("anton chat: the stream ended with no done line");
       return [502, { error: { code: "unavailable" } }];
-    } catch (e) { return stop.stopped ? [200, {}] : [e.name === "AbortError" ? 504 : 503, { error: { code: e.name === "AbortError" ? "timeout" : "unavailable" } }]; }
+    } catch (e) {
+      if (!stop.stopped) console.error("anton chat", e.name === "AbortError" ? `no line in ${SILENCE / 1000} s` : whyOf(e));
+      return stop.stopped ? [200, {}] : [e.name === "AbortError" ? 504 : 503, { error: { code: e.name === "AbortError" ? "timeout" : "unavailable" } }]; }
     finally { clearTimeout(timer); }
   }
 

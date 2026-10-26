@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { bimPlace, baseOf } from "./public/design.js";
+import { bimPlace, baseOf, bimBody } from "./public/design.js";
 
 const toolErr = message => Object.assign(new Error(message), { tool: true });
 const DIR = join(process.env.SYKEHUS_VERSIONS_DIR || tmpdir(), "bim");
@@ -38,6 +38,8 @@ function errorOf(j) {
 }
 
 /* run (or find) a construction: { sha, box, classes, buildings, storeys, triangles, result } */
+/* JSON for the script: a whole ground (12) as 12.0, since IfcOpenShell refuses an int in a point's coordinates */
+const asJson = o => JSON.stringify(o).replace(/"ground":(-?\d+)(?=[,}])/, '"ground":$1.0');
 export async function runBim(script, params) {
   const sha = shaOf(script, params), have = meshOf(sha);
   if (have) return { sha, ...summary(have), result: have.result ?? null };
@@ -45,7 +47,7 @@ export async function runBim(script, params) {
   if (!W) throw toolErr("Konstruksjoner bygges av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
   let j;
   try {
-    const r = await fetch(`${W.replace(/\/+$/, "")}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ script, params, then: ["mesh", "glb"] }), signal: AbortSignal.timeout(360000) });
+    const r = await fetch(`${W.replace(/\/+$/, "")}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: asJson({ script, params, then: ["mesh", "glb"] }), signal: AbortSignal.timeout(360000) });
     j = await r.json();
   } catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
   if (j.state !== "done") throw toolErr(errorOf(j));
@@ -55,11 +57,26 @@ export async function runBim(script, params) {
   const mesh = JSON.parse((await get("mesh.json")).toString("utf8")); mesh.result = j.result ?? null;
   const tmp = join(DIR, `.${sha}.${process.pid}`); mkdirSync(tmp, { recursive: true });
   writeFileSync(join(tmp, "mesh.json"), JSON.stringify(mesh)); writeFileSync(join(tmp, "model.ifc"), await get(ifc)); if (glb) writeFileSync(join(tmp, "model.glb"), await get(glb));
-  writeFileSync(join(tmp, "script.py"), script); writeFileSync(join(tmp, "params.json"), JSON.stringify(params));
+  writeFileSync(join(tmp, "script.py"), script); writeFileSync(join(tmp, "params.json"), asJson(params));
   if (!existsSync(join(DIR, sha))) renameSync(tmp, join(DIR, sha));
   return { sha, ...summary(mesh), result: mesh.result };
 }
 const summary = m => ({ box: m.box, classes: m.classes, buildings: m.buildings, storeys: m.storeys, triangles: m.triangles });
+
+/* the kote design.js stands a construction on: the lowest ground under its box's footprint over from -> to, or the
+   roof it is on, or the kote asked */
+const footOf = (site, from, to, box, at = {}) => Math.round(baseOf(site, { ...bimBody(from, to, box), on: at.on, base_kote: at.base_kote }) * 100) / 100;
+/* run it so its IFC stands where the page draws it (pm 00:58Z: the script was given 12.7 from a guess at its width, the
+   page stood its 30 m foot on 11.6): once its box is known, the foot under that box, and once more if it moved; and
+   say so if the script did not put its foot at params.ground */
+async function placed(site, script, p, from, to, at, asked) {
+  let r = await runBim(script, p);
+  if (!asked && r.box) { const g = footOf(site, from, to, r.box, at); if (Math.abs(g - p.ground) > 0.05) { p = { ...p, ground: g }; r = await runBim(script, p); } }
+  const foot = r.box?.min?.[2];
+  r = { ...r, foot_kote: p.ground, top_kote: r.box ? Math.round((p.ground + r.box.max[2] - r.box.min[2]) * 100) / 100 : null,
+    ...(Number.isFinite(foot) && Math.abs(foot - p.ground) > 0.1 ? { warning: `The script's lowest point is at z ${foot}, not at params.ground ${p.ground}: the page stands it at ${p.ground}, the IFC has it at ${foot}. Put its foot at P['ground'].` } : {}) };
+  return { r, p };
+}
 
 /* what the agent sends (construction; reshape with params) made into what design.js checks (volume shape bim; reshape
    with bim), after the worker ran it. site: the model as it stands (for the ground and the construction's script) */
@@ -70,17 +87,22 @@ export async function prepare(e, site) {
     /* ground: where design.js will stand its foot (the lowest ground under it, or the roof it is on), its from -> to
        taken as its width too until the script has said how wide it is */
     const pts = [e.from, e.to].every(q => Array.isArray(q) && q.length === 2 && q.every(Number.isFinite)), L = pts ? Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) : 0;
-    const p = { ...params }; if (p.ground == null && L > 0) p.ground = Math.round(baseOf(site, { from: e.from, to: e.to, width: L, on: e.on, base_kote: e.base_kote }) * 100) / 100;
-    const r = await runBim(script, p);
+    const p = { ...params }; if (p.ground == null && pts) p.ground = Math.round(baseOf(site, { from: e.from, to: e.to, width: Math.max(1, L), on: e.on, base_kote: e.base_kote }) * 100) / 100;
+    const { r, p: pp } = await placed(site, script, p, e.from, e.to, { on: e.on, base_kote: e.base_kote }, params.ground != null || !pts);
+    Object.assign(p, pp);
     if (!r.buildings) throw toolErr(`Skriptet laget ${Object.entries(r.classes || {}).map(([k, n]) => `${n} ${k}`).join(", ") || "ingenting"}, men ingen IfcBuilding: legg det under IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`);
     const mat = material || (r.classes?.IfcPlate || r.classes?.IfcWindow ? "glass" : "concrete");
+    /* a ground the agent set itself is the kote the page stands it on too */
+    if (params.ground != null && e.on == null && e.base_kote == null) rest.base_kote = p.ground;
     return { ...rest, kind: "volume", shape: "bim", material: mat, bim: { script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
   }
-  if (e?.kind === "reshape" && e.params && typeof e.params === "object") {
+  /* a construction's parameters changed, or it moved or turned: its script again, its foot where it now stands */
+  if (e?.kind === "reshape" && ((e.params && typeof e.params === "object") || e.from || e.to)) {
     const a = (site.added || []).find(x => x.id === String(e.id) && x.shape === "bim");
     if (!a) return e;
-    const { params, ...rest } = e, p = { ...a.bim.params, ...params, ground: Math.round(a.base_kote * 100) / 100 };   // where it stands now
-    const r = await runBim(a.bim.script, p);
+    const { params, ...rest } = e, from = e.from || a.from, to = e.to || a.to;
+    const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: a.on });
+    const { r, p } = await placed(site, a.bim.script, p0, from, to, { on: a.on }, false);
     return { ...rest, bim: { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
   }
   /* a construction as it was kept (a draft's edits shown again, or replayed into one's own version): its script and

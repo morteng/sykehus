@@ -62,7 +62,7 @@ function fakeWorker(answer) {
   return new Promise(r => srv.listen(0, "127.0.0.1", () => r({ url: `http://127.0.0.1:${srv.address().port}`, seen, close: () => srv.close() })));
 }
 
-test("prepare: a construction runs in the worker once, becomes a bim volume, and a parameter change runs it again", async () => {
+test("prepare: a construction runs in the worker, stands where the page draws it, and runs again on a parameter change or a move", async () => {
   process.env.SYKEHUS_VERSIONS_DIR = mkdtempSync(join(tmpdir(), "bim-"));
   const w = await fakeWorker(() => ({ state: "done", result: { ok: 1 }, files: { "mesh.json": "/jobs/x/files/mesh.json", "model.ifc": "/jobs/x/files/model.ifc" } }));
   process.env.SYKEHUS_WORKER = w.url;
@@ -71,15 +71,21 @@ test("prepare: a construction runs in the worker once, becomes a bim volume, and
     const e = { kind: "construction", name: "Drivhus", use: "drivhus", from: [-10, -80], to: [10, -80], script: "print(1)", params: { base: 30, module: 3 } };
     const p = await prepare(e, site), { _ran, ...v } = p;
     assert.equal(v.kind, "volume"); assert.equal(v.shape, "bim"); assert.equal(v.material, "glass");
-    assert.ok(Number.isFinite(v.bim.params.ground), "the ground under its middle goes in as a parameter");
-    assert.equal(w.seen.length, 1); assert.deepEqual(w.seen[0].then, ["mesh", "glb"]);
-    await prepare(e, site); assert.equal(w.seen.length, 1, "the same script and parameters: the kept result");
+    assert.ok(Number.isFinite(v.bim.params.ground), "the ground under it goes in as a parameter");
+    assert.ok(w.seen.length <= 2, "once, and once more when its own footprint stands lower than the guess"); assert.deepEqual(w.seen[0].then, ["mesh", "glb"]);
+    assert.ok(_ran.warning, "the fake's foot is at z 0, not at ground: said"); assert.equal(_ran.foot_kote, v.bim.params.ground);
+    const n0 = w.seen.length;
+    await prepare(e, site); assert.equal(w.seen.length, n0, "the same script and parameters: the kept result");
     assert.equal(slim(v).bim.script, undefined); assert.equal(slim(v).bim.script_chars, 8);
     const ed = add([], v), m = applyEdits(site, floors, ed);
+    assert.equal(m.site.added[0].base_kote, Math.round(v.bim.params.ground * 10) / 10, "the IFC's foot is the page's foot (pm 00:58Z)");
     const r = await prepare({ kind: "reshape", id: v.id ?? m.site.added[0].id, params: { module: 2 } }, m.site);
-    assert.equal(w.seen.length, 2); assert.equal(r.bim.params.module, 2); assert.equal(r.bim.params.base, 30); assert.equal(r.params, undefined);
+    assert.equal(w.seen.length, n0 + 1); assert.equal(r.bim.params.module, 2); assert.equal(r.bim.params.base, 30); assert.equal(r.params, undefined);
+    const mv = await prepare({ kind: "reshape", id: m.site.added[0].id, from: [-10, -40], to: [10, -40] }, m.site);
+    assert.ok(mv.bim, "a move runs it again where it now stands"); assert.equal(mv.bim.params.module, 3);
+    const n1 = w.seen.length;
     const kept = await prepare({ ...v, bim: { ...v.bim, sha: "f".repeat(64), box: { min: [0, 0, 0], max: [1, 1, 1] } } }, site);
-    assert.equal(kept.bim.sha, v.bim.sha, "a kept construction's sha and box are the server's, not what was sent"); assert.deepEqual(kept.bim.box, BOX); assert.equal(w.seen.length, 2);
+    assert.equal(kept.bim.sha, v.bim.sha, "a kept construction's sha and box are the server's, not what was sent"); assert.deepEqual(kept.bim.box, BOX); assert.equal(w.seen.length, n1);
     const look = withMeshes(m.site).added[0];
     assert.equal(look.parts.length, 1); assert.equal(look.parts[0].mat, "glass"); assert.equal(look.parts[0].tris.length, 1);
   } finally { w.close(); }
