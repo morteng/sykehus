@@ -16,6 +16,11 @@ ENV PATH=/opt/conda/bin:$PATH QT_QPA_PLATFORM=offscreen HOME=/tmp MPLCONFIGDIR=/
 # `import FreeCAD` from plain python (and so under -I in a job): FreeCAD.so sits in the prefix's lib
 RUN python -c "import FreeCAD" 2>/dev/null \
  || echo /opt/conda/lib > "$(python -c 'import site; print(site.getsitepackages()[0])')/freecad.pth"
+# FreeCAD 26 deletes names from __main__ at its first import (pm 02:45Z: json, math, pathlib, struct … gone from a
+# script that imported them first; os and sys stay): it is imported once as each python starts, before any script or
+# step, so their own `import FreeCAD` finds it loaded and takes nothing away
+RUN printf '%s\n' '# gulden-worker: FreeCAD loaded before __main__ runs (its first import deletes names from __main__)' 'try:' '    import FreeCAD  # noqa: F401' 'except Exception:' '    pass' \
+      >> "$(python -c 'import site; print(site.getsitepackages()[0])')/sitecustomize.py"
 # uid 1000 by name: FreeCAD reads its home from getpwuid, not $HOME, and will not start without it (pm 02:25Z: «Getting
 # HOME path from system failed!»); the sandbox binds / read-only, so the line reaches each job
 RUN getent passwd 1000 >/dev/null || echo worker:x:1000:1000::/tmp:/usr/sbin/nologin >> /etc/passwd \
@@ -27,7 +32,8 @@ COPY selftest.py /srv/worker/
 ENTRYPOINT []
 USER 1000:1000
 # the build fails unless the worker's own user can import it all, as each job does
-RUN python -I -c "import FreeCAD, Part, Import, MeshPart, Spreadsheet, TechDraw, ifcopenshell, ifcopenshell.api, ifcopenshell.geom; print(FreeCAD.Version()[:3], ifcopenshell.version)"
+RUN python -I -c "import FreeCAD, Part, Import, MeshPart, Spreadsheet, TechDraw, ifcopenshell, ifcopenshell.api, ifcopenshell.geom; print(FreeCAD.Version()[:3], ifcopenshell.version)" \
+ && python -I -c "import json, math, pathlib, struct; import FreeCAD; print(json.dumps([math.pi > 3, pathlib.Path('.').name, struct.calcsize('<I')]))"
 # conda's binaries find their libraries at $ORIGIN/../lib, which needs /proc/self/exe: the sandbox has an empty /proc
 ENV WORKER_JOBS=/jobs PORT=8070 WORKER_LD_LIBRARY_PATH=/opt/conda/lib
 EXPOSE 8070
