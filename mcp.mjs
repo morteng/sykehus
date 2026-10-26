@@ -972,7 +972,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
     setNotifier: f => { notify = f; },
     /* GET /api/skisse/<id>.png: a plan Anton showed this person */
-    handleSketch: (req, res, rest, person) => { const m = /^([A-Za-z0-9_-]{8})\.png$/.exec(rest), k = m && sketchMeta(m[1]);
+    handleSketch: (req, res, rest, person) => {
+      /* POST /api/skisse/<id>/sendt: «Bygg det» went to Anton; kept with the plan so a reload shows «Sendt til Anton.» again (U3661) */
+      const sent = req.method === "POST" && /^([A-Za-z0-9_-]{8})\/sendt$/.exec(rest);
+      if (sent) { const k = sketchMeta(sent[1]), ok = !!k && !!person && k.person === person;
+        if (ok && !k.sent) writeFileSync(join(SK, sent[1] + ".json"), JSON.stringify({ ...k, sent: true }));
+        res.writeHead(ok ? 200 : 404, { ...SECURITY, "content-type": "application/json" }); return res.end(JSON.stringify(ok ? { sent: true } : { error: "Finnes ikke." })); }
+      const m = /^([A-Za-z0-9_-]{8})\.png$/.exec(rest), k = m && sketchMeta(m[1]);
       if (!k || !person || k.person !== person) { res.writeHead(404, { ...SECURITY, "content-type": "application/json" }); return res.end(JSON.stringify({ error: "Finnes ikke." })); }
       res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(readFileSync(join(SK, m[1] + ".png"))); },
     /* GET /api/skisser: the plans shown to this person lately, oldest first, for the page to show again after a reload */

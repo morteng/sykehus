@@ -27,6 +27,13 @@ test("propose_sketch draws the proposal, saves nothing, tells the page, and the 
   assert.match(e.data.legend, /^Nytt: .*Drivhus/, "a legend says what is new");
   const list = (person) => { const o = {}; mcp.handleSketches({}, { writeHead: c => { o.code = c; }, end: b => { o.body = JSON.parse(b); } }, person); return o; };
   assert.equal(list("testperson").body.sketches.at(-1).id, id, "a reload shows it again, from disk"); assert.equal(list("an-other").body.sketches.length, 0); assert.equal(list(null).code, 401);
+  /* U3661: «Bygg det» sent: kept with the plan, so a reload shows the receipt; only the owner can mark it */
+  const mark = (id, person) => { const o = { }; mcp.handleSketch({ method: "POST" }, { writeHead: c => { o.code = c; }, end: b => { o.body = JSON.parse(b); } }, `${id}/sendt`, person); return o; };
+  assert.equal(list("testperson").body.sketches.at(-1).sent, undefined, "not sent before");
+  assert.equal(mark(id, "an-other").code, 404); assert.equal(mark(id, null).code, 404); assert.equal(list("testperson").body.sketches.at(-1).sent, undefined, "another person cannot mark it");
+  assert.deepEqual(mark(id, "testperson"), { code: 200, body: { sent: true } });
+  const after = list("testperson").body.sketches.at(-1); assert.equal(after.sent, true, "a reload shows it sent"); assert.equal(after.id, id); assert.equal(after.title, "Drivhus på plenen", "the rest of the plan is kept");
+  assert.equal(get(id, "testperson").code, 200, "the picture is still there");
   const bad = await tool.run({ title: "x", edits: [{ kind: "volume" }, { kind: "volume", name: "Hus", shape: "box", from: [-46, -62], to: [-16, -62], width: 14, height: 4 }] }, { who: "testperson" });
   assert.equal(bad._result.structuredContent.not_drawn.length, 1, "what could not be drawn is said, the rest is shown");
   await assert.rejects(tool.run({ title: "x", edits: [{ kind: "volume" }] }, { who: "testperson" }), /Ingen av endringene/);
