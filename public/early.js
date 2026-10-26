@@ -8,7 +8,7 @@
   const keep = () => { if (!t.value.trim()) return; f.dataset.queued = "1"; busy.textContent = "Sendes når Anton er klar …"; };
   f.addEventListener("submit", e => { if (f.classList.contains("wait")) { e.preventDefault(); keep(); } });
   let had = false; try { had = localStorage.getItem("sykehus-anton") === "1"; } catch { }
-  if (!had) return;
+  if (!had) { document.body.classList.add("anon"); return; }   // never signed in here: no Anton until anton.js has asked (U3662)
   /* not ready, where it is looked at (pm 21:53Z: the placeholder still said «Spør Anton»): the field, the line under it
      (a status, read out) and the button's name */
   f.hidden = false; f.classList.add("wait"); document.body.classList.add("talk-on");   // talk-on: its width, as anton.js gives it

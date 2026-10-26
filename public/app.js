@@ -934,6 +934,8 @@ function showView(v) {
   else if (Object.keys(cam).length) viewer.look(cam, v.glide);
   pressMode();
 }
+/* back from «Logg inn» (login.js): said once */
+try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeItem("sykehus-innlogget"); toast("Du er logget inn."); } } catch { }
 /* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Forslag" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
