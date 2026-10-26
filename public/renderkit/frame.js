@@ -1,7 +1,7 @@
 /* A building's own frame (U3831): the axis of its outline and a rectangle set along it, inside it.
    ringFrame(ring)  the minimum-area rectangle of an outline: u along its long side, v across, centre, full length and width
                     (ported from hagekart's roof.js minRect: «u along the ridge, v across it»; hagekart is frozen)
-   fitInRing(ring, want)  a rectangle { c, length, width } turned to the outline's axis and kept inside it: the nearest
+   fitInRing(ring, want)  (want.within: a set of rings, blocks side by side, that is the room; ring then only gives the axis)  a rectangle { c, length, width } turned to the outline's axis and kept inside it: the nearest
                     centre to want.c where it fits, else a smaller one. Pure: no three.js, no DOM. */
 import { pointInRing } from "./paths2d.js";
 
@@ -33,17 +33,18 @@ export function ringFrame(ring) {
 
 /* the rectangle's edge, a point every half metre, all inside the ring (with margin: the rectangle made that much larger) */
 function inside(ring, c, u, v, L, W, margin) {
+  const ok = Array.isArray(ring[0]?.[0]) ? q => ring.some(r => pointInRing(q, r) || [[.02, 0], [-.02, 0], [0, .02], [0, -.02]].some(d => pointInRing([q[0] + d[0], q[1] + d[1]], r))) : q => pointInRing(q, ring);   // a set of rings (blocks side by side) is one roof
   const hl = L / 2 + margin, hw = W / 2 + margin, nu = Math.max(1, Math.ceil(2 * hl / 0.5)), nv = Math.max(1, Math.ceil(2 * hw / 0.5));
   const at = (s, t) => [c[0] + u[0] * s + v[0] * t, c[1] + u[1] * s + v[1] * t];
-  for (let i = 0; i <= nu; i++) { const s = -hl + 2 * hl * i / nu; if (!pointInRing(at(s, -hw), ring) || !pointInRing(at(s, hw), ring)) return false; }
-  for (let j = 0; j <= nv; j++) { const t = -hw + 2 * hw * j / nv; if (!pointInRing(at(-hl, t), ring) || !pointInRing(at(hl, t), ring)) return false; }
+  for (let i = 0; i <= nu; i++) { const s = -hl + 2 * hl * i / nu; if (!ok(at(s, -hw)) || !ok(at(s, hw))) return false; }
+  for (let j = 0; j <= nv; j++) { const t = -hw + 2 * hw * j / nv; if (!ok(at(-hl, t)) || !ok(at(hl, t))) return false; }
   return true;
 }
 
 /* want { c?: [x, y] (default the outline's middle), length, width, along?: false keeps want.u, shrink?: true, margin?: 0.1 }
    → { c, u, v, length, width, angle, shifted_m (centre moved from want.c), shrunk (length or width made smaller), fits } */
 export function fitInRing(ring, want) {
-  const F = ringFrame(ring), margin = want.margin ?? 0.1, shrink = want.shrink !== false;
+  const rings = want.within, F = ringFrame(ring), margin = want.margin ?? 0.1, shrink = want.shrink !== false;
   const u = F.u, v = F.v, c0 = want.c || F.c;
   let L = want.length, W = want.width, shrunk = false;
   if (shrink) { if (L > F.length - 2 * margin) { L = Math.max(1, F.length - 2 * margin); shrunk = true; } if (W > F.width - 2 * margin) { W = Math.max(1, F.width - 2 * margin); shrunk = true; } }
@@ -53,7 +54,7 @@ export function fitInRing(ring, want) {
   for (let k = 0; k < 25; k++) {
     const f = shrink ? Math.pow(0.95, k) : (k ? 0 : 1); if (!f) break;
     const l = L * f, w = W * f;
-    const hit = cs.find(c => inside(ring, c, u, v, l, w, margin));
+    const hit = cs.find(c => inside(rings || ring, c, u, v, l, w, margin));
     if (hit) return { c: hit, u, v, length: l, width: w, angle: F.angle, shifted_m: Math.hypot(hit[0] - c0[0], hit[1] - c0[1]), shrunk: shrunk || k > 0, fits: true };
   }
   return { c: c0, u, v, length: L, width: W, angle: F.angle, shifted_m: 0, shrunk, fits: false };

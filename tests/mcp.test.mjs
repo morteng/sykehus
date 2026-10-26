@@ -140,4 +140,9 @@ test("U3831: a greenhouse put on Høyblokka's roof by guess is set along the bui
   assert.equal(t.rejected.length, 0, JSON.stringify(t.rejected)); assert.match(t.added[0].on_roof, /På taket: snudd .*byggets egen akse/);
   const f = (await call("try_change", { edits: [{ kind: "reshape", id: "ndrivhus", align: "free", from: [4, 6], to: [20, 30] }, { kind: "reshape", id: "ndrivhus", align: "building" }], include_screenshot: false, draft: t.draft })).data;
   assert.equal(f.rejected.length, 0, JSON.stringify(f.rejected)); assert.equal(f.added[0].on_roof, undefined, "free: nothing is set right"); assert.match(f.added[1].on_roof, /På taket/);
+  /* U3831b: a skew greenhouse that stood free, set right in a later call, says what was done (the result once said nothing) */
+  const g = (await call("try_change", { edits: [{ kind: "volume", id: "ndrivhus", name: "Drivhus", shape: "gable", material: "glass", on: "Sentralblokka", from: [4, 6], to: [20, 30], width: 6, height: 4, align: "free" }], include_screenshot: false })).data;
+  const r = (await call("try_change", { edits: [{ kind: "reshape", id: "ndrivhus", align: "building" }], include_screenshot: false, draft: g.draft })).data;
+  assert.equal(r.rejected.length, 0, JSON.stringify(r.rejected)); assert.match(r.added[0].on_roof, /På taket: snudd .*byggets egen akse/);
+  const d = tools.find(t => t.name === "try_change").description; assert.match(d, /Quote it to the person word for word/);
 });
