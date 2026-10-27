@@ -23,6 +23,7 @@ import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, 
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
+import { loadCosts, summarize as areaSummary } from "./area.mjs";   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
 import { createSiteFacts } from "./sitefacts.mjs";
 import { readPart } from "./partmerge.mjs";
@@ -695,6 +696,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "measure", tgt: "read", title: "Mål og les tilbake", ro: true, schema: S({ a: REF, b: { ...REF, description: "Leave out to read a back alone" }, target: TARGET, draft: OLD }, ["a"]),
       description: "The page's «Mål» in numbers, and the read-back of what was placed. a alone: its corners [east, north], axis bearing, length × width, foot and top kote, m², what it stands on. With b: distance, height difference and run from the middle of each footprint at its foot (a wing: its biggest roof level), and for two things with an axis the angle between them (parallel = under 0.5°), the offset to b's axis, and, for a part and a wing, how far the part sticks out past the roof edge. Quote the say.",
       run: async (a, req) => { const m = model(a.draft, req); try { return measureParts(m.site, a.a, a.b, wingOf); } catch (e) { throw toolErr(e.message); } } },
+    { name: "summary", tgt: "read", title: "Areal og kostnad", ro: true, schema: S({ target: TARGET, draft: OLD }),
+      description: "Areas and a cost range for the after (a version or draft), in one read: BTA per new volume (storeys × footprint, «beregnet»; BRA only when a sourced factor is in rules/costs.json), what is demolished (m², m³), the ground surfaces laid (m² per kind), earthwork (cut, fill, net m³), and a cost range where every price carries its source and is «antatt». With no prices in rules/costs.json the cost is «ikke målt»: say so, never guess a price. Quote the note.",
+      run: async (a, req) => { const m = model(a.draft, req); let costs; try { costs = loadCosts(); } catch (e) { throw toolErr(e.message); } return areaSummary(m.site, costs); } },
     { name: "check_fit", tgt: "read", title: "Passer delene sammen", ro: true, schema: S({ wing: { ...WING, description: "Only the roof of this wing" }, target: TARGET, draft: OLD }),
       description: "Do the new parts sit right: pairs that meet on one roof (names, m²), what sticks out past a roof's edge, what is off the lot, what overlaps a wing that stands. Nothing changed; quote the say, and when ok, say none.",
       run: async (a, req) => { const m = model(a.draft, req); return checkFit(m.site, a.wing ? wingOrErr(a.wing) : null); } },

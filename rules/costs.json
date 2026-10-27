@@ -1,0 +1,4 @@
+{
+  "_about": "T6 PLACEHOLDER: the price list is empty on purpose. No price here has a source yet. Add entries { item, quantity (bta_m2 | demolished_m3 | demolished_m2 | ground_m2 | cut_m3 | fill_m3), unit, nok_low, nok_high, source (a document or URL, required) }. loadCosts in area.mjs refuses a price without a source. Optional: bra_factor { value, source }.",
+  "prices": []
+}
