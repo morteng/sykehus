@@ -20,6 +20,7 @@ import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // 
 import { texturedMaterial, worldUV, skyEnvironment } from "./renderkit/materials-three.js";
 import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace } from "./design.js";
+import { planAdded, addedKey } from "./added-cache.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
 import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
@@ -339,11 +340,13 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
      across to the left of the axis; glass seen through, as a greenhouse is ---------- */
   const ADDED = Object.fromEntries(BUILDING.map(k => [k, mat(MATERIALS[k].colour, MATERIALS[k].look)]));
   /* drawn again in place when the after changes (setAdded, U3556): the old ones taken away and freed */
-  const addedGroups = new Map();
+  const addedGroups = new Map(); let addedKeys = new Map();
   function setAdded(list) {
-    for (const g of addedGroups.values()) { scene.remove(g); g.traverse(o => o.geometry?.dispose()); }
-    addedGroups.clear();
-    for (const a of list || []) drawAdded(a);
+    /* the same one as before keeps its group (added-cache.js); only what changed is drawn again */
+    const plan = planAdded(addedKeys, list);
+    for (const id of plan.drop) { const g = addedGroups.get(id); if (g) { scene.remove(g); g.traverse(o => o.geometry?.dispose()); addedGroups.delete(id); } }
+    for (const a of list || []) if (plan.draw.includes(a.id)) drawAdded(a);
+    addedKeys = plan.keys;
     applyGhost();
     if (selected && !meshes.has(selected) && !addedGroups.has(selected)) selected = null;
     dirty = true;
@@ -401,7 +404,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       mesh.castShadow = p.mat !== "glass"; mesh.receiveShadow = true; grp.add(mesh);
       if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
     }
-    grp.userData.added = a.id; grp.userData.id = a.id; grp.traverse(o => { o.userData.id = a.id; }); scene.add(grp); addedGroups.set(a.id, grp);
+    grp.userData.added = a.id; grp.userData.id = a.id; grp.traverse(o => { o.userData.id = a.id; }); scene.add(grp); addedGroups.set(a.id, grp); addedKeys.set(a.id, addedKey(a));
   }
   for (const a of site.added || []) drawAdded(a);
   /* the after's ground (landscape.js): each surface and path laid on the terrain, its triangles cut down to the
@@ -1152,6 +1155,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const rings = [...goneIds].map(id => site.buildings.find(b => b.id === id)?.ring).filter(Boolean);
     const inside = p => rings.some(r => inRing(p, r));
     for (const [id, g] of meshes) g.visible = !goneIds.has(id);
+    for (const [id, g] of addedGroups) g.visible = !goneIds.has(id);   // a new building or a construction goes at once, with its parts (they are the group's children)
     for (const [id, p] of plates) if (goneIds.has(id)) p.visible = false;
     for (const g of floorGroups.values()) for (const w of g.children) w.visible = !inside(w.userData.at);
     for (const list of roomTags.values()) for (const t of list) t.gone = inside(t.xy);

@@ -707,9 +707,12 @@ export function applyDesign(site, floors, edits) {
   site.wings_gone = (site.wings || []).filter(w => whole.has(w.id));
   site.wings = (site.wings || []).filter(w => !whole.has(w.id));
   site.facades = (site.facades || []).filter(f => !whole.has(f.building));
+  /* each ring's box first: a point outside the box is outside the ring (applyEdits took ~0.3 s of its ~0.7 s here with 24 buildings torn down, for every plan's every wall) */
+  const boxed = rings.map(g => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const [x, y] of g) { if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y; } return { g, a, b, c, d }; });
+  const inGone = p => boxed.some(({ g, a, b, c, d }) => p[0] >= a && p[0] <= c && p[1] >= b && p[1] <= d && inRing(p, g));
   for (const f of floors) {   // the drawn plans' walls and rooms inside what is gone go with it
-    f.walls = f.walls.filter(r => !rings.some(g => inRing(r[0], g)));
-    f.rooms = (f.rooms || []).filter(r => !rings.some(g => inRing(r.at, g)));
+    f.walls = f.walls.filter(r => !inGone(r[0]));
+    f.rooms = (f.rooms || []).filter(r => !inGone(r.at));
   }
   for (let i = floors.length - 1; i >= 0; i--) if (whole.has(floors[i].wing) || gone.size && !floors[i].walls.length && !floors[i].rooms.length) floors.splice(i, 1);
   site.added = added;

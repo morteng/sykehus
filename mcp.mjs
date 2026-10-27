@@ -495,15 +495,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             d.edits.push(c); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (replaced) ok[ok.length - 1] = { ...ok[ok.length - 1], replaced }; if (placed) ok[ok.length - 1] = { ...ok[ok.length - 1], placed }; if (c.kind === "volume" || c.kind === "reshape") { const prev = c.kind === "reshape" ? (m.site.added || []).find(x => x.id === c.id) : null, on = c.on ?? prev?.on, say = on && (c.align ?? prev?.align) !== "free" && alignSay(alignDelta(m.site, prev ? { ...prev, ...e } : e, prev ? { ...prev, ...c } : c)); if (say) ok[ok.length - 1] = { ...ok[ok.length - 1], on_roof: say }; }   /* U3831: what setting it along the roof's own axis did */ if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
         /* U3678: the building rules held against what this call put in (a part's own measures come with it) */
-        const was = new Set(ok.length ? applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site.added?.map(x => x.id) : []);
+        /* the page's own change (handleChange, fromPage) shows none of the fit or the rules (only Anton reads them): surfaceFit alone took ~0.7 s of the answer with 12 surfaces */
+        const quiet = a.fromPage === true;
+        const was = new Set(ok.length && !quiet ? applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site.added?.map(x => x.id) : []);
         const tried = new Set([...(m.site.added || []).map(x => x.id).filter(id => id && !was.has(id)), ...ok.filter(e => e.kind === "reshape" && e.id).map(e => e.id)]);
-        const checks = tried.size ? checkRules(m.site, { ids: tried, printed: Object.fromEntries((m.site.added || []).filter(x => tried.has(x.id)).map(x => [x.id, ok.find(e => e.worker?.printed && e.name === x.name)?.worker.printed]).filter(([, p]) => p)) }) : [];
+        const checks = tried.size && !quiet ? checkRules(m.site, { ids: tried, printed: Object.fromEntries((m.site.added || []).filter(x => tried.has(x.id)).map(x => [x.id, ok.find(e => e.worker?.printed && e.name === x.name)?.worker.printed]).filter(([, p]) => p)) }) : [];
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
         /* and the slopes of a new building's pad onto those ways (U3566 d) */
-        const wayRings = ways && ((m.site.landscape || []).some(l => l.kind === "surface") || (m.site.added || []).some(a => a.ground?.reach_m)) ? (await ways()).filter(w => !(m.site.roads_removed || []).some(r => r.id === w.id)) : [];   // a removed road section is no way (U3543)
-        const fit0 = fitOf(m.site);
+        const wayRings = !quiet && ways && ((m.site.landscape || []).some(l => l.kind === "surface") || (m.site.added || []).some(a => a.ground?.reach_m)) ? (await ways()).filter(w => !(m.site.roads_removed || []).some(r => r.id === w.id)) : [];   // a removed road section is no way (U3543)
+        const fit0 = quiet ? [] : fitOf(m.site);
         for (const f of fit0) { const a = (m.site.added || []).find(x => x.id === f.id && x.on); if (!a) continue; const r = roofSay(m.site, a); if (r) f.roof = { on: r.on, kote: r.kote, levels: r.levels, overhang_m: r.overhang_m, outside_m2: r.outside_m2, ...(r.say ? { say: r.say } : {}) }; const col = roofCollisions(m.site, a); if (col.length) (f.roof ||= {}).overlap = col.map(c => ({ with: c.name, m2: c.m2 })); }   /* T2: kept with allow_overlap, listed here */
-        const fit = [...fit0, ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit({ ...m.site, landscape: m.site.landscape.filter(l => !l.on) }, wayRings) : []), ...padFit(m.site, wayRings)];
+        const fit = quiet ? [] : [...fit0, ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit({ ...m.site, landscape: m.site.landscape.filter(l => !l.on) }, wayRings) : []), ...padFit(m.site, wayRings)];
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
         let out;
@@ -1089,7 +1091,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (JSON.stringify(at) !== JSON.stringify(a.expect)) return send(res, 409, { stale: true, error: `forslaget er endret et annet sted siden siden ble tegnet${at ? `; nr. ${+a.undo} er nå en annen endring` : ""}. Siden er oppdatert; se over og prøv igjen.` });
       }
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
-      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
+      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, fromPage: true, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
       if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing", "import", "paint", "terrain", "trees"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg, byggenes navn og opplysninger, maling, terreng og planting.");   // the rest goes through Anton
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
