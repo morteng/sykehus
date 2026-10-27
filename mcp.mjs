@@ -16,6 +16,8 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
+import { withGarden, frame as lookFrame, say as lookSay, annotate } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
+const withMeshes = s => withGarden(meshesIn(s));
 import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
@@ -23,7 +25,7 @@ import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   //
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, roofOf, roofSay, roofCollisions, measureParts, checkFit } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
-import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
+import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
 import { loadCosts, summarize as areaSummary } from "./area.mjs";   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
 import { createSiteFacts } from "./sitefacts.mjs";
@@ -407,12 +409,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (a.focus && !f) throw toolErr(`Fant ikke «${a.focus}» å se på: en fløy, en bygnings id eller et nytt bygg (id eller navn).`);
     if (a.from_direction != null) { v.from = dirDeg(a.from_direction); if (v.plan) delete v.plan; v.tilt ??= 30; }
     if (a.tilt_deg != null && !v.plan) v.tilt = a.tilt_deg;
-    const dist = a.distance_m ?? (f ? Math.max(50, f.size * 2.6) : v.plan ? 220 : 330);
+    const fr = lookFrame(s, a, f, v), dist = fr.dist ?? (v.plan ? 220 : 330), tilt = fr.tilt ?? v.tilt, W = a.width || 1024, H = a.height || 640;
     /* a new building's pad (U3566), as the picture shows it: what is dug out and filled, and at which side */
     const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground || fa?.lot ? `${fa.name}: ${fa.ground ? groundText(fa.ground) : ""}${lotText(fa.lot) ? ` ${lotText(fa.lot)}` : ""}`.trim() : "";
-    const png = await picture(s, { ...v, target: f ? f.target : hospital, dist, focus: f ? f.ids : [], width: a.width || 1024, height: a.height || 640 });
-    const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8];
-    return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(v.tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, ${f.name} i oransje` : ""}. Nordpilen øverst til høyre.${pad ? " " + pad : ""}` };
+    let png = await picture(fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: f ? fr.target : hospital, dist, focus: fr.focus, accent: fr.accent, width: W, height: H });
+    png = annotate(png, { plan: !!v.plan, dist, target: fr.target, levels: fr.levels, width: W, height: H });
+    const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8], seen = f ? lookSay(s, { ...fr, dist }, f, v, fr) : "";
+    return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, midt i bildet ${f.name}` : ""}. Nordpilen øverst til høyre${v.plan ? "; målestokken nederst til venstre er 50 m" : ""}.${seen ? " I bildet: " + seen : ""}${pad ? " " + pad : ""}` };
   }
   /* a saved view (the page's camera, saved.js) as the server's picture takes it (U3527): the orbit's yaw, pitch and
      dist; the person's eye as a camera 1,7 m over the ground there looking at the centre (the picture's narrower lens);
