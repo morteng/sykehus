@@ -98,7 +98,8 @@ test("the start purged the one deleted 31 days ago and kept the one deleted 29 d
 
 test("versions.mjs with an injected clock: kept for 30 days, then gone for good; restore after that fails", () => {
   let now = Date.parse("2026-10-01T10:00:00Z"); const d = mkdtempSync(join(tmpdir(), "sykehus-clock-")), vs = createVersions(d, () => now);
-  const v = vs.create("lars", "Prøve"), w = vs.create("lars", "Blir"); vs.remove(v);
+  // «Blir» carries one edit: an empty version a week old goes to the trash by itself (U3667 sweepEmpty), which would count here
+  const v = vs.create("lars", "Prøve"), w = vs.create("lars", "Blir", [{ kind: "demolish" }]); vs.remove(v);
   assert.equal(vs.get(v.id), null); assert.equal(vs.list({ owner: "lars", viewer: "lars" }).length, 1); assert.equal(vs.trash("lars").length, 1);
   now += (TRASH_DAYS - 1) * DAY; assert.equal(vs.trash("lars").length, 1, "day 29: still there"); assert.ok(vs.getTrashed(v.id));
   now += 2 * DAY; assert.equal(vs.trash("lars").length, 0, "day 31: purged"); assert.equal(vs.getTrashed(v.id), null);
