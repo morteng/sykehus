@@ -10,7 +10,7 @@ import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { nearWays } from "./public/paint-edit.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS, isPerson } from "./versions.mjs";
-import { createThumbs } from "./thumbs.mjs";   // the Prosjekter tab's card pictures
+import { createThumbs, drawCard } from "./thumbs.mjs";   // the Prosjekter tab's card pictures
 import { encodeJpeg } from "./jpeg.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +20,7 @@ import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the aft
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { withGarden, frame as lookFrame, say as lookSay, annotate, decode as decodePng } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
 const withMeshes = s => withGarden(meshesIn(s));
-import { tryShot } from "./tryshot.mjs";   // try_change's picture: aimed at what the call changed
+import { tryShot, changeArea } from "./tryshot.mjs";   // try_change's picture: aimed at what the call changed
 import { cameraProps, aimCamera, cameras, usedCamera } from "./camera.mjs";   // one camera for look and try_change's picture
 import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
 import { edgeRail, compactRail } from "./public/roofedge.js";   // edge_rail: a railing round a roof level's edge, as many railing parts   // T5: draw_plan, draw_section
@@ -1122,16 +1122,16 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const mine = v => !!me && v.owner === me, shown = (versions?.list({ viewer: me }) || []).filter(v => mine(v) || (v.sharing === "offentlig" && isPerson(v.owner)));
     shown.sort((a, b) => mine(b) - mine(a) || b.updated.localeCompare(a.updated));
     return send(res, 200, { versions: shown.slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated, sharing: v.sharing,
-      ...(mine(v) ? { mine: true, ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
+      thumb: photos?.favoriteOf(v.id)?.id || v.updated, ...(mine(v) ? { mine: true, ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
   }
   /* GET /api/versjon/<id>/bilde.jpg: the card's picture (thumbs.mjs), seen by whoever may see the version itself */
-  const thumbs = versions ? createThumbs({ render: async v => { const { png } = await look(applyEdits(site, floors, v.edits).site, { view_name: "isometrisk", width: 480, height: 300 }), { px, W, H } = decodePng(png); return encodeJpeg(px, W, H, 78); } }) : null;
+  const thumbs = versions ? createThumbs({ render: async v => { const after = applyEdits(site, floors, v.edits).site, s = withMeshes(after), area = changeArea(site, s, v.edits), png = await drawCard({ site, s, area, picture }), { px, W, H } = decodePng(png); return encodeJpeg(px, W, H, 78); } }) : null;
   async function handleThumb(req, res, id) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
     if (!v0 || !versions.visible(v0, userOf(req), key)) return send(res, 404, { error: "Versjonen finnes ikke." }, { "access-control-allow-origin": "*" });
-    try { const bytes = await thumbs.get(v0);
-      res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "content-length": bytes.length, "cache-control": "private, max-age=3600", vary: "cookie" }); return res.end(bytes);
+    try { const fav = photos?.favoriteOf(id), bytes = fav ? fav.bytes : await thumbs.get(v0);   // the starred Gjengi picture as it is stored; else the drawn one
+      res.writeHead(200, { ...SECURITY, "content-type": fav ? { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[fav.ext] || "image/jpeg" : "image/jpeg", "content-length": bytes.length, "cache-control": "private, max-age=3600", vary: "cookie" }); return res.end(bytes);
     } catch (e) { console.error("thumb:", id, e.message); return send(res, 500, { error: "Bildet kunne ikke lages." }); }
   }
   /* POST /api/endring: the page's «Riv» and «Angre» (U3542), the same as try_change and undo_change: {edits, draft?,

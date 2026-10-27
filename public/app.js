@@ -465,7 +465,7 @@ let detailsOpen = false;
 const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "offentlig" };
 let verRows = [], selecting = false; const picked = new Set();
 const savedAt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? `i dag ${clock(t)}` : d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" }); };
-const thumbSrc = v => `api/versjon/${encodeURIComponent(v.version)}/bilde.jpg?t=${encodeURIComponent(v.updated)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}`;
+const thumbSrc = v => `api/versjon/${encodeURIComponent(v.version)}/bilde.jpg?t=${encodeURIComponent(v.thumb || v.updated)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}`;
 function drawDraft() {
   drawWhere();
   if (!draft) { $("draftRow").innerHTML = ""; drawList(); return; }

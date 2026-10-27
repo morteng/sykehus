@@ -138,6 +138,12 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
 
   const json = (res, n, o) => res.writeHead(n, { ...SECURITY, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }).end(JSON.stringify(o));
   return {
+    /* the project's card picture: its newest favourite render (fav true, not failed), the stored bytes; null when none */
+    favoriteOf(versionId) {
+      const r = all.filter(x => x.work === `versjon:${versionId}` && x.fav && !x.failed).sort((a, b) => b.at.localeCompare(a.at))[0];
+      if (!r) return null;
+      try { return { id: r.id, ext: r.ext, bytes: readFileSync(join(dir, `${r.id}.${r.ext}`)) }; } catch { return null; }
+    },
     estimate, spent, make, spotsOf, staleOf, get all() { return all; },
     /* Anton's proposal: the ids of the person's spots to take again; nothing is made until the person confirms on the page (U3665) */
     propose(who, ids) { proposals.set(who, { ids, t: Date.now() }); },

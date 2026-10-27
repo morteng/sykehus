@@ -7,7 +7,7 @@ import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { createThumbs, LIMIT } from "../thumbs.mjs";
+import { createThumbs, LIMIT, V } from "../thumbs.mjs";
 import { createVersions, isPerson } from "../versions.mjs";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-forslag-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9900 + Math.floor(Math.random() * 90);
@@ -55,7 +55,7 @@ test("(c) the picture: 404 for what the viewer may not see, a JPEG for what they
   const key = (await listed("morten")).find(v => v.version === ids.mortenPriv).nokkel;
   assert.equal((await get(ids.mortenPriv, {}, `?nokkel=${key}`)).status, 200);
   assert.equal((await get(ids.farPub, {})).status, 200);
-  assert.ok(readdirSync(join(dir, "v", "_state", "thumbs")).includes(ids.mortenPriv + ".jpg"));
+  assert.ok(readdirSync(join(dir, "v", "_state", "thumbs")).includes(`${ids.mortenPriv}.v${V}.jpg`));
 });
 
 test("(d) concurrent requests for one version share one drawing; at most two at once; a new save draws again", async () => {
