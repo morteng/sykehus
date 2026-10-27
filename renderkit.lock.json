@@ -1,5 +1,5 @@
 {
-  "kits": "9df5af07535faab9c7fa2aa297c8249e5a41ef6a",
+  "kits": "d606baa3dfb88d7454a11610ca6db80377ec48f8",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -25,7 +25,7 @@
     "look.js": "d6ffbe5c2663b559eb4962becca9af3c64a0b393",
     "fit.js": "476f22c5a8d4032393e7fc33be5ae9037b990028",
     "views.js": "0de40109de70b91115a9d1a78ee2a4e27c361229",
-    "select.js": "ccb48dbd13e700bca8fcc64d64ce18067d0391e5",
+    "select.js": "8cd11aadd7c2110c834a59a31836f570b0508172",
     "build.js": "c7cde0532d433c6bfb4f42c81fe2481354b23b12",
     "shape.js": "3943c293d8f331f786fafb3bb14fa3a9179151aa",
     "grade.js": "34a5a56933754484f4a87a16d4f240dbfc52cb8c",
@@ -85,6 +85,7 @@
     "frame.js": "d0792e955f8a7c5e6a6f9aa06317b77859d18331",
     "infer.js": "e1a1fae0759c072530969cf8b1965cace5413d2d",
     "dragsnap.js": "348a591aaf26f5f90ae410eaec69bc02b9c0da25",
-    "guidelines.js": "4353b2403cf4bc12846274d092957b2fb4df31a4"
+    "guidelines.js": "4353b2403cf4bc12846274d092957b2fb4df31a4",
+    "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78"
   }
 }

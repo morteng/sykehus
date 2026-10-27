@@ -22,6 +22,8 @@ import { GROUND_ID } from "./landscape.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
+import { createMeasure } from "./renderkit/measure.js";
+import { inferPoint } from "./renderkit/infer.js";
 import { createDragType } from "./dragtype.js?v=20261027zh";
 import { baseOf, groundText, lotText } from "./design.js";
 import { PLANTS } from "./plants.js";
@@ -1099,7 +1101,7 @@ try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeIt
 /* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Forslag" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
-import("./tour.js?v=20261027zk").then(({ createTour }) => {
+import("./tour.js?v=20261027zl").then(({ createTour }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");
   const tour = createTour({
     home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },
@@ -1142,8 +1144,20 @@ function cardFor(keys) {
   const rd = i.kind === "road" && viewer.roadOf(i.id);
   if (rd) showRoad(rd); else if (a) showNew(a); else if (g) showGround(g); else if (b) showInfo(b);
 }
+/* «Mål» (renderkit measure.js, U3879): two clicks give the distance, the height difference and the run on the ground; Shift and
+   several clicks give an area. A point catches a corner, a midpoint or an edge of a building (infer.js) within 0.8 m in the plan, and keeps the
+   height of the face under the pointer. M turns it on, Esc off (the module takes the key first). */
+const measure = createMeasure({ el: K.el, host: $("stage"), locale: "nb-NO",
+  hit: (x, y) => viewer.hit(x, y), project: ([x, y, k]) => viewer.project([x, y], k),
+  follow: f => viewer.follow(f),
+  snap: ([x, y, k]) => { const s = inferPoint([x, y], { rings: site.buildings.filter(b => b.ring?.length > 2).map(b => b.ring), reach: 0.8, kinds: ["endpoint", "midpoint", "edge"] }); return [s.p[0], s.p[1], k]; },
+  words: { distance: "Avstand", horizontal: "Vannrett", area: "Areal", perimeter: "Omkrets", hint: "Trykk punkt A, så punkt B. Hold Shift og trykk flere punkter for areal. Esc avslutter." },
+  onChange: (m, on = measure.active) => $("mal").setAttribute("aria-pressed", String(on)) });
+const setMal = on => { if (on) { if (placing) { aim(null); $("toast")?.remove(); } measure.on(); } else measure.off(); $("mal").setAttribute("aria-pressed", String(measure.active)); };
+$("mal").onclick = () => setMal(!measure.active);
+addEventListener("keydown", e => { if ((e.key === "m" || e.key === "M") && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) { e.preventDefault(); setMal(!measure.active); } });
 const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
-  under: e => { if (placing || build?.busy || shapeEd?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
+  under: e => { if (placing || measure.active || build?.busy || shapeEd?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
   windowKeys: (r, inside) => { lastHit = null; return valg.windowKeys(r, inside, viewer.project, windowTest); },
   onChange: (keys, l, how) => { if (how === "sync") return; valg.setKeys(keys); cardFor(keys); },
   onHover: keys => viewer.hover(keys.flatMap(idsOf)) });

@@ -75,7 +75,8 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
 
   /* the window's rectangle */
   const box = doc?.createElement("div");
-  if (box) { box.className = "rk-pick-win"; box.hidden = true; box.style.cssText = "position:absolute;pointer-events:none;z-index:5;border:1px solid var(--accent,#2b6cb0);background:color-mix(in srgb,var(--accent,#2b6cb0) 10%,transparent)"; host?.append(box); }
+  // Stacking: the window rectangle sits on the canvas layer (--z-canvas); the pick-other menu one step above (--z-sticky); both stay below the dock (--z-dock).
+  if (box) { box.className = "rk-pick-win"; box.hidden = true; box.style.cssText = "position:absolute;pointer-events:none;z-index:var(--z-canvas);border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)"; host?.append(box); }
   const rel = e => { const b = el.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
 
   function onDown(e) {
@@ -142,7 +143,7 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
     const items = (other(e, lvl) || []).slice(0, 8); if (!items.length || !doc) return;
     const hb = (host || el).getBoundingClientRect(), p = rel(e);
     menu = doc.createElement("div"); menu.className = "pmenu rk-pick-other"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Velg en annen");
-    menu.style.cssText = `position:absolute;z-index:6;left:${Math.min(e.clientX - hb.left, hb.width - 220)}px;top:${e.clientY - hb.top}px`;
+    menu.style.cssText = `position:absolute;z-index:var(--z-sticky);left:${Math.min(e.clientX - hb.left, hb.width - 220)}px;top:${e.clientY - hb.top}px`;
     for (const it of items) {
       const b = doc.createElement("button"); b.type = "button"; b.className = "pmi"; b.textContent = it.label; b.setAttribute("role", "menuitem");
       b.onpointerenter = () => hover(it.keys);
