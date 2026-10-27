@@ -487,7 +487,7 @@ const nameIt = () => { detailsOpen = true; drawList(); const t = $("drTitle"); i
    one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
 let nyttForslag = null;
 function fresh() {
-  nyttForslag ||= import("./nytt-forslag.js?v=20261027d").then(({ startNew }) => startNew({
+  nyttForslag ||= import("./nytt-forslag.js?v=20261027dp").then(({ startNew }) => startNew({
     signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et prosjekt."); $("meBtn")?.click(); },
     mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
     fx: b => fxBox("leaves", b),
@@ -1151,7 +1151,7 @@ try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeIt
 /* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Prosjekter" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
-import("./tour.js?v=20261027zm").then(({ createTour }) => {
+import("./tour.js?v=20261027zmp").then(({ createTour }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");
   const tour = createTour({
     home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },
@@ -1162,9 +1162,9 @@ import("./tour.js?v=20261027zm").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261027p").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261027pr").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
-import("./gjengi.js?v=20261027u3814").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
+import("./gjengi.js?v=20261027u3814p").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
