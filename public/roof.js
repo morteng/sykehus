@@ -161,7 +161,15 @@ export function roofHold(site, e, only = null) {   // only: a kote: the overhang
   const by = new Map(), outs = [];
   for (const p of samples) { const t = levelAt(p); if (t == null) outs.push([p, cell]); else by.set(t, (by.get(t) || 0) + cell); }
   for (const p of extra) if (levelAt(p) == null) outs.push([p, 0]);
-  const levels = [...by].map(([kote, m2]) => ({ kote, m2: r1(m2) })).sort((a, b) => b.m2 - a.m2 || b.kote - a.kote), kote = levels.length ? levels[0].kote : null;
+  const levels = [...by].map(([kote, m2]) => ({ kote, m2: r1(m2) })).sort((a, b) => b.m2 - a.m2 || b.kote - a.kote);
+  let kote = levels.length ? levels[0].kote : null;
+  /* a shape (a railing piece) belongs to the level whose ring edge it follows, not the one under most of its cells: at a step between two levels the same line is both
+     levels' edge (the lower one's a wall edge), and the higher level's edge is used. The level with the least mean distance from the piece to its ring edges, a tie (within 5 cm) the higher. */
+  if (F && levels.length > 1) {
+    const dist = k => { const rs = pcs.filter(c => Math.abs(c.top - k) < 0.06).map(c => c.p); return samples.reduce((s, p) => s + nearestOn(p, rs)[1], 0) / samples.length; };
+    const ds = levels.map(l => [l.kote, dist(l.kote)]), least = Math.min(...ds.map(d => d[1]));
+    kote = Math.max(...ds.filter(d => d[1] <= least + 0.05).map(d => d[0]));
+  }
   /* what is off: a rectangle off the whole roof; a shape off the level it stands on (its pieces at that kote) */
   const mine = only != null ? pcs.filter(k => Math.abs(k.top - only) < 0.06) : F && kote != null ? pcs.filter(k => Math.abs(k.top - kote) < 0.06) : pcs, rings = mine.map(k => k.p), off = [];
   if (F) { for (const p of samples) { if (mine.some(k => inRing(p, k.p))) continue; const [q, dist] = nearestOn(p, rings); if (dist > 0.02) off.push([p, cell, q, dist]); } }

@@ -58,9 +58,9 @@ export function aimCamera(c, base, ctx) {
 }
 
 /* the camera as it was used: in the caption (Norwegian) and as numbers for structuredContent */
-export function usedCamera(cam, era) {
+export function usedCamera(cam, era, eraNote) {
   const r1 = v => Math.round(v * 10) / 10, side = SIDES[Math.round(((cam.from ?? 0) % 360 + 360) % 360 / 45) % 8];
   const num = { target: cam.target.map(r1), distance_m: Math.round(cam.dist), plan: !!cam.plan, ...(cam.plan ? {} : { from_deg: Math.round(cam.from), tilt_deg: r1(cam.tilt) }), ...(cam.framed ? { frame: cam.framed.map(p => p.map(r1)) } : {}), ...(cam.eye ? { eye: cam.eye } : {}), era: era === "før" ? "før" : "etter" };
-  const say = `Kamera: mot [øst ${com(r1(cam.target[0]))}, nord ${com(r1(cam.target[1]))}, kote ${com(r1(cam.target[2]))}], ${Math.round(cam.dist)} m unna, ${cam.plan ? "rett ovenfra" : `fra ${Math.round(cam.from)}° (${side}), ${com(r1(cam.tilt))}° over bakken`}${cam.framed ? ", rammen passet inn" : ""}${cam.eye ? `, øyet ${com(cam.eye.height_m)} m over bakken` : ""}${era === "før" ? ", modellen slik den var før" : ""}.`;
+  const say = `Kamera: mot [øst ${com(r1(cam.target[0]))}, nord ${com(r1(cam.target[1]))}, kote ${com(r1(cam.target[2]))}], ${Math.round(cam.dist)} m unna, ${cam.plan ? "rett ovenfra" : `fra ${Math.round(cam.from)}° (${side}), ${com(r1(cam.tilt))}° over bakken`}${cam.framed ? ", rammen passet inn" : ""}${cam.eye ? `, øyet ${com(cam.eye.height_m)} m over bakken` : ""}${era === "før" ? eraNote || ", modellen slik den var før" : ""}.`;
   return { num, say };
 }
