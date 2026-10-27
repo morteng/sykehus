@@ -472,9 +472,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const ring = g.ring.slice(); if (ringArea2(ring) < 0) ring.reverse();
     const holes = (g.holes || []).map(h => { const q = h.slice(); if (ringArea2(q) > 0) q.reverse(); return q; }), all = ring.concat(...holes), v2 = r => r.map(([x, y]) => new THREE.Vector2(x, y));   // a painted surface has holes (U3655)
     const tris = THREE.ShapeUtils.triangulateShape(v2(ring), holes.map(v2)), pos = [], lim = Math.max(1, T.res) * 1.4;
-    const lift = 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
-    const flat = g.level != null;   // water lies flat at its own level (U3616), whatever the ground under it
-    const put = p => { const v = P(p, flat ? g.level : ground(...p) + lift); pos.push(v.x, v.y, v.z); };
+    const roof = g.on != null && g.kote != null;   // T4: a garden on a roof lies flat at the roof's kote, a hair above it
+    const lift = roof ? 0.03 + 0.02 * n + (g.kind === "path" ? 0.02 : 0) : 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
+    const lvl = g.level ?? (roof ? g.kote + lift : null), flat = lvl != null;   // water lies flat at its own level (U3616), whatever the ground under it
+    const put = p => { const v = P(p, flat ? lvl : ground(...p) + lift); pos.push(v.x, v.y, v.z); };
     if (g.pool && g.basin) drawBasin(ring, g.basin);
     const split = (a, b, c, d) => {
       const e = [[a, b], [b, c], [c, a]].map(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1])), m = Math.max(...e);
@@ -487,7 +488,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     for (const [i, j, k] of tris) split(all[i], all[j], all[k], 0);
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals(); smoothNormals(geo);
     /* its own material, to light up alone when picked (U3569: a pool, a lawn or a path is picked like a building) */
-    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = g.level; scene.add(m); pictured(m, g.surface); groundMeshes.push(m);
+    const m = new THREE.Mesh(geo, (groundMat[g.surface] || groundMat.grass).clone()); m.receiveShadow = true; m.userData.added = g.id; m.userData.id = g.id; m.userData.ring = ring; m.userData.lift = lift; if (flat) m.userData.level = lvl; scene.add(m); pictured(m, g.surface); groundMeshes.push(m);
   } }
   drawLandscape(site.landscape); drawGrading(gradingNow);
 
@@ -502,6 +503,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* U3676 (Morten 2026-10-26 16:54Z «a switch to change between trees off / simple / full»): off draws no tree or planted bush (the ground stays), simple the
      trunk and crown solids the low tier has, full EZ-Tree's models. The page's choice, else the tier's: full where it carries them, simple where not. */
   let treeMode = ["off", "simple", "full"].includes(treeMode0) ? treeMode0 : Q.ez ? "full" : "simple";
+  const zOf = t => t[7] ?? ground(t[0], t[1]);   // a tree on a roof has its kote as an eighth item (T4)
   let treeList = site.trees || [];   // the trees drawn last: the planted ones (a seventh item, their planting's id) are picked by their trunks
   function setTrees(list) {
     treeList = list || []; treeGen++; for (const m of treeMeshes.splice(0)) { scene.remove(m); m.dispose?.(); }
@@ -509,7 +511,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   }
   /* the soft shade on the ground under each crown (atmosphere.js shade: one instanced mesh, one draw) */
   function shadeUnder(trees) {
-    const m = atm.shade(trees.map(([x, y, , r]) => { const g0 = ground(x, y); return [x, -y, Math.max(1, r), g0 - base]; }));
+    const m = atm.shade(trees.map(t => { const [x, y, , r] = t, g0 = zOf(t); return [x, -y, Math.max(1, r), g0 - base]; }));
     scene.add(m); treeMeshes.push(m);
   }
   function drawTrees(trees) {
@@ -519,8 +521,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), n = trees.length;
       const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.25, 1, 6).translate(0, 0.5, 0), mat("#6b5a48"), n);
       const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), mat("#7f9a5c", { flatShading: true, side: THREE.FrontSide }), n);
-      trees.forEach(([x, y, h, r, form], i) => {
-        const g0 = ground(x, y), cone = form === "cone", ch = cone ? h * 0.8 : Math.min(h * 0.7, r * 2.2);
+      trees.forEach((t, i) => {
+        const [x, y, h, r, form] = t, g0 = zOf(t), cone = form === "cone", ch = cone ? h * 0.8 : Math.min(h * 0.7, r * 2.2);
         m4.compose(P([x, y], g0), q.identity(), new THREE.Vector3(1, h - ch * 0.6, 1)); trunk.setMatrixAt(i, m4);
         m4.compose(P([x, y], g0 + h - ch / 2), q.setFromAxisAngle(up, treeHash(y, x) * 6.28), new THREE.Vector3(cone ? r * 0.8 : r, ch / 2, cone ? r * 0.8 : r)); crown.setMatrixAt(i, m4);
       });
@@ -539,9 +541,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         if (!list.length) continue;
         const { bg, lg, Ht, R, barkMat, leafMat, depthMat } = models[kind];
         const bm = new THREE.InstancedMesh(bg, barkMat, list.length), lm = new THREE.InstancedMesh(lg, leafMat, list.length); lm.customDepthMaterial = depthMat;
-        list.forEach(([x, y, h, r], i) => {
-          const sy = h / Ht, sxz = Math.min(1.4 * sy, Math.max(0.6 * sy, r / R));
-          m4.compose(P([x, y], ground(x, y)), q.setFromAxisAngle(up, treeHash(y, x) * Math.PI * 2), new THREE.Vector3(sxz, sy, sxz));
+        list.forEach((t, i) => {
+          const [x, y, h, r] = t, sy = h / Ht, sxz = Math.min(1.4 * sy, Math.max(0.6 * sy, r / R));
+          m4.compose(P([x, y], zOf(t)), q.setFromAxisAngle(up, treeHash(y, x) * Math.PI * 2), new THREE.Vector3(sxz, sy, sxz));
           bm.setMatrixAt(i, m4); lm.setMatrixAt(i, m4);
         });
         for (const m of [bm, lm]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); treeMeshes.push(m); }
@@ -1044,7 +1046,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function ringTrees(picked, hov) {
     for (const o of treeRings.children) o.geometry.dispose(); treeRings.clear();
     for (const [ids, color] of [[hov, "#fff6d6"], [picked, "#ffcf33"]]) for (const t of treeList) if (t[6] && ids.includes(t[6])) {
-      const g0 = ground(t[0], t[1]) + 0.3, pts = []; for (let k = 0; k <= 32; k++) { const a = k / 32 * Math.PI * 2; pts.push(P([t[0] + Math.cos(a) * t[3], t[1] + Math.sin(a) * t[3]], g0)); }
+      const g0 = zOf(t) + 0.3, pts = []; for (let k = 0; k <= 32; k++) { const a = k / 32 * Math.PI * 2; pts.push(P([t[0] + Math.cos(a) * t[3], t[1] + Math.sin(a) * t[3]], g0)); }
       const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true })); l.renderOrder = 15; treeRings.add(l);
     }
     dirty = true;
@@ -1229,7 +1231,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       /* a planted tree in front of that: the ray within most of its crown of its trunk's line (U3569) */
       let tree = null; const near = new THREE.Vector3();
       for (const t of treeList) if (t[6]) {
-        const g0 = ground(t[0], t[1]), d2 = ray.ray.distanceSqToSegment(P([t[0], t[1]], g0), P([t[0], t[1]], g0 + t[2]), near);
+        const g0 = zOf(t), d2 = ray.ray.distanceSqToSegment(P([t[0], t[1]], g0), P([t[0], t[1]], g0 + t[2]), near);
         const along = near.distanceTo(ray.ray.origin);
         if (d2 < (t[3] * 0.8) ** 2 && (!h || along < h.distance + 1) && (!tree || along < tree.along)) tree = { along, t, p: near.clone() };
       }

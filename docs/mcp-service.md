@@ -110,6 +110,21 @@ check cannot run and gives no result. The whole IFC is checked, the old wings to
 Claude: Settings → Connectors → Add custom connector → `https://sykehus.gulden.no/mcp`, no login. Adding it to
 Morten's or his father's account is their own act.
 
+## A garden on a roof (T4)
+
+`try_change` kinds `surface`, `path`, `trees`, `paint` and `fell` take `on` (a wing, by name or id) and `kote` (one of that
+roof's levels from `about_wing` roof.levels; left out, the level under most of the shape). What is laid stands flat at that
+kote, inside that level's rectangles (`public/roof.js`), as its own layer: a roof's surfaces never join, block or take from
+the ground's, and a ground `fell` leaves a roof's trees. A surface, path or tree past the roof edge is refused with the metres
+and m²; a brush stroke is cut at the edge and `after.roof_say` says by how many m². Water is not laid on a roof (use the pool
+part). Each roof record has `on`, `kote` and `soil_depth_m` (assumed: a lawn 0.2 m, a bed 0.4 m, a tree by its height 0.3 to
+1.2 m; for the engineer's load check, not a calculation). Its trees carry the kote as an eighth item and the wing as a ninth.
+A new volume on the same roof whose foot is at that kote and covers the garden shows it as `under` (a greenhouse over a
+lawn). The viewer draws roof surfaces and trees at the kote. The IFC export carries ground landscape only where it changes the
+ground (a pool's basin and the terrain); a roof garden has no ground to change, so it adds no IFC element: the same rule.
+**For people:** say to Anton «lag en plen med sti og tre på taket av Sentralblokka» (a greenhouse over it is a second step,
+on the same roof); the lawn shows on the roof in 3D. When it sticks out past the edge, Anton says by how many metres.
+
 ## For people: drag with faint lines and typed numbers (U3878)
 
 - When you drag a new building or a corner of a lawn, pool or path, faint dashed lines show what it lines up with: the middle of a wall, square to a wall, along a building's own direction, the mirror of a corner («symmetri») or half way between two walls («lik avstand»). Let go where a line shows and it stays exactly there.

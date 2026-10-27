@@ -150,8 +150,8 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     if (editing && editing !== key) editing = null;
     if (inPane()) { el.hidden = true; box = null; if (slot) fill(slot, groups, false); return; }
     if (slot) slot.innerHTML = "";
-    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.rd).flatMap(g => g.rd.ring.filter((p, n) => n % 4 === 0).map(p => [p[0], p[1], groundAt(site, p)])), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr?.ring).flatMap(g => g.gr.ring.map(p => [p[0], p[1], groundAt(site, p)])),
-      ...groups.filter(g => g.gr?.kind === "trees").flatMap(g => (site.trees || []).filter(t => t[6] === g.gr.id).flatMap(t => [[t[0] - t[3], t[1], groundAt(site, t)], [t[0] + t[3], t[1], groundAt(site, t) + t[2]]]))];
+    box = [...corners(groups.flatMap(g => g.bs)), ...groups.filter(g => g.rd).flatMap(g => g.rd.ring.filter((p, n) => n % 4 === 0).map(p => [p[0], p[1], groundAt(site, p)])), ...groups.filter(g => g.a).flatMap(g => cornersNew(g.a)), ...groups.filter(g => g.gr?.ring).flatMap(g => g.gr.ring.map(p => [p[0], p[1], g.gr.on ? g.gr.kote : groundAt(site, p)])),
+      ...groups.filter(g => g.gr?.kind === "trees").flatMap(g => (site.trees || []).filter(t => t[6] === g.gr.id).flatMap(t => [[t[0] - t[3], t[1], t[7] ?? groundAt(site, t)], [t[0] + t[3], t[1], (t[7] ?? groundAt(site, t)) + t[2]]]))];
     el.classList.toggle("folded", folded && !editing);
     if (folded && !editing) chip(groups); else fill(el, groups, true);
     el.hidden = false; size = null; dock(); place();

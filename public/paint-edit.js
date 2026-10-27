@@ -47,29 +47,36 @@ export function checkTerrain(e, { pts, num, name, w_ }) {
    the stroke is stamped on a grid, made into the rings the brush would paint (stopped by what is blocked, pulled the last
    0.8 m to its edge), and committed against the surfaces there are. gone: the buildings the after has torn down already.
    Returns { land, m2 }: the surfaces after, and the net change of that surface in m². */
-export function applyPaint(land, e, site, gone, nextId) {
-  const plan = paintPlan(land, e, site, gone); if (!plan) return { land, m2: 0 };
+export function applyPaint(land0, e, site, gone, nextId) {
+  /* T4: a roof's surfaces and the ground's are two layers: a stroke joins, takes from and is blocked by only its own */
+  const land = land0.filter(x => mineOf(e, x)), others = land0.filter(x => !mineOf(e, x));
+  const plan = paintPlan(land, e, site, gone); if (!plan) return { land: land0, m2: 0 };
   const { rings, blocked, lot, kind, erase } = plan;
-  if (!rings.length) return { land, m2: 0 };
+  if (!rings.length) return { land: land0, m2: 0 };
   const areas = land.filter(x => x.kind === "surface" && KIND[x.surface]).map(x => ({ id: x.id, kind: KIND[x.surface], st: "exists", ring: closed(x.ring), holes: (x.holes || []).map(closed) }));
   const res = commit({ rings, mode: erase ? "erase" : "add", kind, st: "exists", areas, lot, buildings: blocked, known: { edges: blocked }, kinds: Object.values(KIND) });
   const out = land.filter(x => !res.remove.includes(x.id));
   for (const a of res.add) {
     const was = a.id && land.find(x => x.id === a.id), ring = a.ring.slice(0, -1), holes = (a.holes || []).map(h => h.slice(0, -1));
     const item = { id: a.id || nextId(), kind: "surface", name: was?.name ?? e.name ?? null, surface: BACK[a.kind] || e.surface, points: ring, ring, ...(holes.length ? { holes } : {}),
-      area_m2: r1(ringArea(ring) - holes.reduce((s, h) => s + ringArea(h), 0)), plants: was?.plants || [], painted: true, why: e.why };
+      area_m2: r1(ringArea(ring) - holes.reduce((s, h) => s + ringArea(h), 0)), plants: was?.plants || [], painted: true, ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[BACK[a.kind] || e.surface] } : {}), why: e.why };
     const at = was ? out.findIndex(x => x.id === a.id) : -1; if (at >= 0) out[at] = item; else out.push(item);
   }
-  return { land: out, m2: res.m2 };
+  return { land: [...others, ...out], m2: res.m2 };
 }
+/* the soil a surface needs on a roof, m (assumed, «antatt»: for the engineer's load check) */
+export const SOIL = { grass: 0.2, meadow: 0.15, planting: 0.4, soil: 0.3, gravel: 0.1, paving: 0.1, asphalt: 0.1, wood: 0.1 };
+/* the layer a stroke works in: the roof level it is on (on, kote), else the ground (what has no on) */
+const mineOf = (e, x) => e.on ? x.on === e.on && x.kote === e.kote : !x.on;
 
 /* a square far wider than any site: what the brush's «inside the lot» is now */
 const OPEN = [[-3000, -3000], [3000, -3000], [3000, 3000], [-3000, 3000]];
 const closed = r => r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1] ? r : [...r, r[0]];
 /* what the brush would paint, before it is committed: the rings of the stroke stopped by what is blocked and pulled the last
    0.8 m to its edge. The page draws these while one drags (mal.js); applyPaint commits them: one function, one answer */
-export function paintPlan(land, e, site, gone = new Set()) {
-  const lot = OPEN;   // the plot line (tomtegrense) is not a wall: it is not exact to the ground, and the brush may cross it (Morten 2026-10-26)
+export function paintPlan(land0, e, site, gone = new Set()) {
+  const land = land0.filter(x => mineOf(e, x));
+  const lot = e.lot || OPEN;   // a roof's stroke: the level's rectangle (applyLandscape), a wall of its own   // the plot line (tomtegrense) is not a wall: it is not exact to the ground, and the brush may cross it (Morten 2026-10-26)
   const blocked = [...site.buildings.filter(b => !gone.has(b.id) && !gone.has(b.wing)).map(b => b.ring), ...(e.around || []),
     ...land.filter(g => g.kind === "path" || (g.kind === "surface" && (g.surface === "water" || !KIND[g.surface]))).map(g => g.ring)].map(closed);
   const erase = e.mode === "erase", L = e.line;
