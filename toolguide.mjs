@@ -10,8 +10,8 @@ export const FAMILY = {
   about_site: "Les", about_wing: "Les", storeys: "Les", floor_plan: "Les", openings: "Les", site_facts: "Les", about_ground: "Les",
   try_change: "Endre", propose_sketch: "Endre", undo_change: "Endre", redo_change: "Endre",
   list_parts: "Deler", find_models: "Deler", fetch_model: "Deler",
-  check_design: "Mål", check_model: "Mål", measure: "Mål", check_fit: "Mål",
-  look: "Vis", show_building: "Vis", make_shots: "Vis", photo_spots: "Vis", retake_photos: "Vis",
+  check_design: "Mål", check_model: "Mål", measure: "Mål", check_fit: "Mål", summary: "Mål",
+  look: "Vis", draw_plan: "Vis", draw_section: "Vis", show_building: "Vis", make_shots: "Vis", photo_spots: "Vis", retake_photos: "Vis",
   search_documents: "Dokument", read_document: "Dokument", list_documents: "Dokument",
   show_draft: "Versjon", new_version: "Versjon", list_versions: "Versjon", rename_version: "Versjon", delete_version: "Versjon", undelete_version: "Versjon", set_sharing: "Versjon",
   send_wish: "Ønske", list_wishes: "Ønske", ask_point: "Ønske", find_tool: "Finn",
@@ -105,6 +105,7 @@ export const TOOL_WORDS = {
   look: "se look bilde picture", show_building: "vis show 3d plan snitt section fasade sol sun kamera camera lagre visning", make_shots: "bildeserie shots", photo_spots: "bildesteder photos", retake_photos: "ta på nytt retake bilder",
   search_documents: "søk search dokument tegning", read_document: "les read dokument side page", list_documents: "dokumenter documents liste", show_draft: "utkast draft endringer changes ifc lenke link",
   new_version: "ny versjon new version alternativ", list_versions: "versjoner versions liste", rename_version: "gi nytt navn rename", delete_version: "slett delete papirkurv", undelete_version: "gjenopprett undelete", set_sharing: "del share lenke offentlig privat",
+  summary: "areal kostnad cost bta bra kvadratmeter area oppsummering", draw_plan: "tegn plan planbilde mål dimensjoner draw plan zoom hjørne", draw_section: "snitt section tegn mål kote høyde fasade",
   send_wish: "ønske wish feil bug send", list_wishes: "ønsker wishes status sendt", ask_point: "pek pin sted point sett", find_tool: "finn find verktøy tool hjelp help",
 };
 
