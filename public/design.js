@@ -43,8 +43,8 @@ export { fitOf, surfaceFit, groundAt };
 import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360, dirDeg, dirWord } from "./renderkit/dirs.js";   // one copy of directions (DRY 5)
 import { BUILDING as MATERIALS } from "./renderkit/materials.js";   // glass, concrete, steel, wood, brick (U3618)
 import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
-import { roofHold, roofSay, roofOf, placeOnRoof, roofCollisions, collisionSay, measureParts, footRing } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
-export { roofHold, roofSay, roofOf, placeOnRoof, roofCollisions, measureParts, footRing };
+import { roofHold, roofSay, overSay, roofOf, placeOnRoof, roofCollisions, collisionSay, measureParts, footRing, bimXY, levelRingsOf, roofKotes } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
+export { roofHold, roofSay, overSay, roofOf, placeOnRoof, roofCollisions, measureParts, footRing, bimXY, levelRingsOf, roofKotes };
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
@@ -61,6 +61,11 @@ export function freeId(asked, site) {
   for (let k = 2; taken.has(id); k++) id = "n" + core.slice(0, 12 - String(k).length) + k;
   return id;
 }
+/* the footprint bim.mjs made of the mesh (roof.js footSet): { cell, x0, y0, q, p: whole units of q }, checked for form; none when it is not well formed (the box is used then) */
+function footField(f) {
+  if (!f || typeof f !== "object" || !Array.isArray(f.p) || f.p.length < 2 || f.p.length % 2 || f.p.length > 20000 || !f.p.every(Number.isInteger) || ![f.cell, f.x0, f.y0, f.q].every(Number.isFinite) || !(f.cell > 0 && f.q > 0)) return {};
+  return { foot: { cell: f.cell, x0: f.x0, y0: f.y0, q: f.q, p: f.p } };
+}
 /* a construction's script and what it made, as the server filled it in: checked for form here (the server ran it) */
 function bimOf(b) {
   /* a file brought in (U3571): no script, its sha the file's; where it came from and its licence go on its card */
@@ -68,7 +73,7 @@ function bimOf(b) {
     if (!/^[0-9a-f]{64}$/.test(String(b.file)) || b.sha !== b.file) throw new Error("Fila er ikke lastet opp ennå: serveren leser den først");
     const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Fila har ingen form");
     const t = (v, n) => v == null ? undefined : String(v).slice(0, n);
-    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), filename: t(b.filename, 120), ...(/^(step|glb|gltf|obj|stl|dxf|dwg)$/.test(b.format || "") ? { format: b.format } : {}), ...(b.format === "dxf" || b.format === "dwg" ? { plan: true } : {}), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
+    return { file: b.file, sha: b.file, script: null, params: {}, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), ...footField(b.foot), filename: t(b.filename, 120), ...(/^(step|glb|gltf|obj|stl|dxf|dwg)$/.test(b.format || "") ? { format: b.format } : {}), ...(b.format === "dxf" || b.format === "dwg" ? { plan: true } : {}), ...(b.source ? { source: t(b.source, 300) } : {}), licence: t(b.licence, 120) };
   }
   /* a part (U3620): the worker's own, by name and settings (numbers, words, yes/no) */
   if (b && typeof b === "object" && b.part != null) {
@@ -76,21 +81,20 @@ function bimOf(b) {
     if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Delen er ikke bygget ennå: serveren bygger den først");
     const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !(typeof v === "boolean" || typeof v === "string" && v.length <= 40 || Number.isFinite(+v) && typeof v !== "object")) throw new Error(`Innstillingen «${k}» må ha et navn av bokstaver og et tall, et ord eller ja/nei`); params[k] = typeof v === "number" || typeof v === "boolean" ? v : Number.isFinite(+v) && String(v).trim() !== "" ? +v : v; }
     const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Delen har ingen form");
-    return { part: String(b.part), script: null, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), ...(b.nopad ? { nopad: true } : {}) };   // nopad: a part that stands on the ground (a stair, a railing) cuts no pad as a house does
+    return { part: String(b.part), script: null, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), ...footField(b.foot), ...(b.nopad ? { nopad: true } : {}) };   // nopad: a part that stands on the ground (a stair, a railing) cuts no pad as a house does
   }
   if (!b || typeof b !== "object" || typeof b.script !== "string" || !b.script.trim() || b.script.length > 100000) throw new Error("bim er { script, params } fra serveren: skriptet mangler");
   if (!/^[0-9a-f]{64}$/.test(String(b.sha))) throw new Error("Konstruksjonen er ikke bygget ennå: serveren kjører skriptet først");
   const params = {}; for (const [k, v] of Object.entries(b.params || {})) { if (!/^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(k) || !Number.isFinite(+v)) throw new Error(`Parameteren «${k}» må ha et navn av bokstaver og et tall`); params[k] = +v; }
   if (Object.keys(params).length > 30) throw new Error("Høyst 30 parametre");
   const mn = b.box?.min, mx = b.box?.max; if (![mn, mx].every(v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) throw new Error("Konstruksjonen har ingen form");
-  return { script: b.script, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}) };
+  return { script: b.script, params, sha: b.sha, box: { min: mn, max: mx }, ...(b.classes ? { classes: b.classes } : {}), ...footField(b.foot) };
 }
 /* where a construction's own points go on the site: its box's middle on plan to the middle of from -> to, its x along
    from -> to, its foot (the box's bottom) at base. local [x, y, z] → [east, north, kote] */
 export function bimPlace(e, base) {
-  const { min, max } = e.bim.box, bc = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2], c = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2];
-  const a = Math.atan2(e.to[1] - e.from[1], e.to[0] - e.from[0]), k = Math.cos(a), s = Math.sin(a);
-  return ([x, y, z]) => { const u = x - bc[0], v = y - bc[1]; return [c[0] + u * k - v * s, c[1] + u * s + v * k, base + z - min[2]]; };
+  const xy = bimXY(e), z0 = e.bim.box.min[2];   // the plan part is roof.js's, one copy (the roof checks place a construction's footprint the same way)
+  return ([x, y, z]) => [...xy([x, y]), base + z - z0];
 }
 /* from -> to as long as the box and through the same middle and direction; width and height the box's */
 export function bimBody(from, to, box) {
@@ -120,7 +124,7 @@ function roofCheck(site, v, w) {
   if (!h || !h.on_roof) throw new Error(`${name} står ikke på taket til ${w.name}: ingen del av grunnflaten ligger på taket. about_wing roof har takets hjørner og kote i meter`);
   const ok = Number(v.overhang_m) || 0;
   if (v.align === "free") return;   // «free» is a placement on purpose (U3831): from and to as given; fit.roof still says how far it sticks out
-  if (h.overhang_m > ok + EDGE_SLACK) throw new Error(`${name} stikker ${String(h.overhang_m).replace(".", ",")} m (${String(h.outside_m2).replace(".", ",")} m²) ut over takkanten til ${w.name}${ok ? `, mer enn de ${String(ok).replace(".", ",")} m som overhang_m tillater` : ""}. Flytt det inn, gjør det mindre, eller si hvor mye det får stikke ut med overhang_m (minst ${Math.ceil(h.overhang_m * 10) / 10}). about_wing roof har takets kant i meter`);
+  if (h.overhang_m > ok + EDGE_SLACK) throw new Error(`${name} ${overSay(h, w.name)}${ok ? `, mer enn de ${String(ok).replace(".", ",")} m som overhang_m tillater` : ""}. Flytt det inn, gjør det mindre, eller si hvor mye det får stikke ut med overhang_m (minst ${Math.ceil(h.overhang_m * 10) / 10}). about_wing roof har takets kant i meter`);
 }
 /* T2: two new parts that meet on one roof (in plan and in height) are refused with both names and the m², unless allow_overlap is true (then kept, listed in the result's overlap) */
 function collideCheck(site, v, w) {
@@ -134,9 +138,9 @@ export function checkFit(site, wing = null) {
   const vols = (site.added || []).filter(a => a.kind === "volume" && (!wing || a.on === wing.id)), name = id => (site.wings || []).find(w => w.id === id)?.name || id, com = v => String(v).replace(".", ",");
   const collisions = [], overhangs = [];
   vols.forEach((a, i) => { for (const c of roofCollisions(site, a)) { const j = vols.findIndex(v => v.id === c.id); if (j > i) collisions.push({ a: a.name, b: c.name, roof: name(a.on), m2: c.m2, kept: !!(a.allow_overlap || vols[j].allow_overlap) }); }
-    if (a.on) { const r = roofSay(site, a); if (r && r.overhang_m > 0.05) overhangs.push({ part: a.name, roof: r.on, overhang_m: r.overhang_m, outside_m2: r.outside_m2, allowed_m: a.overhang_m ?? 0 }); } });
+    if (a.on) { const r = roofSay(site, a); if (r && r.overhang_m > 0.05) overhangs.push({ part: a.name, roof: r.on, overhang_m: r.overhang_m, outside_m2: r.outside_m2, allowed_m: a.overhang_m ?? 0, over: r.over, judged_on: r.judged_on ?? null, say: overSay(r, r.on) }); } });
   const fit = fitOf(site).filter(f => vols.some(v => v.id === f.id)), off_lot = fit.filter(f => f.on_lot && f.on_lot !== "helt på tomta").map(f => ({ part: f.name, says: f.on_lot })), overlaps = fit.filter(f => !vols.find(v => v.id === f.id).on).flatMap(f => f.overlaps.map(o => ({ part: f.name, with: o.with, m2: o.m2 })));
-  const said = [...collisions.map(c => `«${c.a}» og «${c.b}» overlapper ${com(c.m2)} m² på taket til ${c.roof}${c.kept ? " (lagt slik med vilje)" : ""}`), ...overhangs.map(o => `«${o.part}» stikker ${com(o.overhang_m)} m (${com(o.outside_m2)} m²) ut over takkanten til ${o.roof}`), ...off_lot.map(o => `«${o.part}» står ikke helt på tomta (${o.says})`), ...overlaps.map(o => `«${o.part}» overlapper ${o.with} med ${o.m2} m²`)];
+  const said = [...collisions.map(c => `«${c.a}» og «${c.b}» overlapper ${com(c.m2)} m² på taket til ${c.roof}${c.kept ? " (lagt slik med vilje)" : ""}`), ...overhangs.map(o => `«${o.part}» ${o.say}`), ...off_lot.map(o => `«${o.part}» står ikke helt på tomta (${o.says})`), ...overlaps.map(o => `«${o.part}» overlapper ${o.with} med ${o.m2} m²`)];
   return { collisions, overhangs, off_lot, overlaps, ok: !said.length, say: said.length ? said.join("; ") + "." : vols.length ? `Ingen kollisjoner${wing ? ` på taket til ${wing.name}` : ""}: ${vols.length} ${vols.length === 1 ? "del" : "deler"} sjekket.` : "Forslaget har ingen nye deler å sjekke." };
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */

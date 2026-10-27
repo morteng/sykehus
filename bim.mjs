@@ -113,7 +113,36 @@ export async function runPart(part, params, name) {
 }
 /* a part's IFC text, run (or found) for these settings: for partmerge.mjs */
 export async function partIfc(part, params) { const r = await runPart(part, params); return readFileSync(join(DIR, r.sha, "model.ifc"), "utf8"); }
-const summary = m => ({ box: m.box, classes: m.classes, buildings: m.buildings, storeys: m.storeys, triangles: m.triangles });
+const summary = m => ({ box: m.box, classes: m.classes, buildings: m.buildings, storeys: m.storeys, triangles: m.triangles, foot: footOfMesh(m) });
+
+/* a construction's footprint as the shape it has (Anton 2026-10-27: a railing round a roof edge was tested as its 97 × 28 m box): the cells of its plan the mesh
+   covers, each by a point the mesh really has (a triangle's edges walked every half cell, and the cell centres inside a triangle with area), as whole units of 5 cm
+   from the box's corner: { cell, x0, y0, q, p: [i, j, ...] }. Left out (undefined: the box is the footprint) when the shape fills 60 % or more of its box (at least 1 m each way): a house.
+   The cell is 25 cm to a few m, as the shape is big, coarser until at most 1500 cells. roof.js footSet reads it. */
+const Q = 0.05, ft = r => r.foot ? { foot: r.foot } : {};
+export function footOfMesh(m, maxCells = 1500) {
+  const mn = m?.box?.min, mx = m?.box?.max; if (!mn || !mx || !m.parts?.length) return undefined;
+  const dx = mx[0] - mn[0], dy = mx[1] - mn[1], span = Math.max(dx, dy, 1e-6), tris = [];
+  for (const p of m.parts) for (let k = 0; k + 2 < p.idx.length; k += 3) tris.push([0, 1, 2].map(j => [p.pos[3 * p.idx[k + j]], p.pos[3 * p.idx[k + j] + 1]]));
+  if (!tris.length) return undefined;
+  for (let cell = Math.min(2, Math.max(0.25, span / 300)); cell <= 8; cell *= 1.5) {
+    const got = new Map(), mark = (x, y) => { const k = Math.floor((x - mn[0]) / cell) * 100003 + Math.floor((y - mn[1]) / cell); if (!got.has(k)) got.set(k, [x, y]); };
+    const step = Math.max(cell, span / 200);
+    for (const [a, b, c] of tris) {
+      for (const [p, q] of [[a, b], [b, c], [c, a]]) { const n = Math.max(1, Math.ceil(Math.hypot(q[0] - p[0], q[1] - p[1]) / (cell / 2))); for (let i = 0; i <= n; i++) mark(p[0] + (q[0] - p[0]) * i / n, p[1] + (q[1] - p[1]) * i / n); }
+      const area = Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2; if (area <= cell * cell) continue;
+      const x0 = Math.min(a[0], b[0], c[0]), x1 = Math.max(a[0], b[0], c[0]), y0 = Math.min(a[1], b[1], c[1]), y1 = Math.max(a[1], b[1], c[1]), det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+      for (let x = x0 + step / 2; x < x1; x += step) for (let y = y0 + step / 2; y < y1; y += step) {
+        const l1 = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / det, l2 = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / det;
+        if (l1 >= 0 && l2 >= 0 && l1 + l2 <= 1) mark(x, y);
+      }
+    }
+    if (got.size > maxCells) continue;
+    if (got.size * cell * cell >= 0.6 * Math.max(dx, 1) * Math.max(dy, 1)) return undefined;   // the box (at least 1 m each way, as design.js's bimBody makes it) is the footprint
+    return { cell: Math.round(cell * 1000) / 1000, x0: mn[0], y0: mn[1], q: Q, p: [...got.values()].flatMap(([x, y]) => [Math.round((x - mn[0]) / Q), Math.round((y - mn[1]) / Q)]) };
+  }
+  return undefined;
+}
 
 /* a file brought in (U3571): an IFC (or a STEP, glTF, OBJ, STL made one) a person uploaded (a manufacturer's
    greenhouse, a window), kept by the sha of its bytes in the same folder (model.ifc as it came or as the worker made
@@ -219,13 +248,13 @@ function importBim(e) {
 
 /* the kote design.js stands a construction on: the lowest ground under its box's footprint over from -> to, or the
    roof it is on, or the kote asked */
-const footOf = (site, from, to, box, at = {}) => Math.round(baseOf(site, { ...bimBody(from, to, box), on: at.on, base_kote: at.base_kote }) * 100) / 100;
+const footOf = (site, from, to, box, at = {}, foot) => Math.round(baseOf(site, { ...bimBody(from, to, box), on: at.on, base_kote: at.base_kote, ...(foot ? { bim: { box, foot } } : {}) }) * 100) / 100;
 /* run it so its IFC stands where the page draws it (pm 00:58Z: the script was given 12.7 from a guess at its width, the
    page stood its 30 m foot on 11.6): once its box is known, the foot under that box, and once more if it moved; and
    say so if the script did not put its foot at params.ground */
 async function placed(site, run, p, from, to, at, asked) {
   let r = await run(p);
-  if (!asked && r.box) { const g = footOf(site, from, to, r.box, at); if (Math.abs(g - p.ground) > 0.05) { p = { ...p, ground: g }; r = await run(p); } }
+  if (!asked && r.box) { const g = footOf(site, from, to, r.box, at, r.foot); if (Math.abs(g - p.ground) > 0.05) { p = { ...p, ground: g }; r = await run(p); } }
   const foot = r.box?.min?.[2];
   r = { ...r, foot_kote: p.ground, top_kote: r.box ? Math.round((p.ground + r.box.max[2] - r.box.min[2]) * 100) / 100 : null,
     ...(Number.isFinite(foot) && Math.abs(foot - p.ground) > 0.1 ? { warning: `The script's lowest point is at z ${foot}, not at params.ground ${p.ground}: the page stands it at ${p.ground}, the IFC has it at ${foot}. Put its foot at P['ground'].` } : {}) };
@@ -254,7 +283,7 @@ export async function prepare(e, site) {
     if (params.ground != null && e.on == null && e.base_kote == null) rest.base_kote = pp.ground;
     if (r.box?.min?.[2] < -0.01 && e.on == null && rest.base_kote == null) rest.base_kote = Math.round((pp.ground + r.box.min[2]) * 100) / 100;
     const mat = material || (MATERIALS[r.params?.material] ? r.params.material : r.classes?.IfcPlate && !r.classes?.IfcSlab ? "glass" : "concrete");
-    return { ...rest, name: nm, kind: "volume", shape: "bim", material: mat, bim: { part, script: null, params: r.params ?? pp, sha: r.sha, box: r.box, classes: r.classes, ...(spec.pad === false ? { nopad: true } : {}) }, _ran: r };
+    return { ...rest, name: nm, kind: "volume", shape: "bim", material: mat, bim: { part, script: null, params: r.params ?? pp, sha: r.sha, box: r.box, classes: r.classes, ...ft(r), ...(spec.pad === false ? { nopad: true } : {}) }, _ran: r };
   }
   if (e?.kind === "construction") {
     const { kind, script, params = {}, material, ...rest } = e;
@@ -269,7 +298,7 @@ export async function prepare(e, site) {
     const mat = material || (r.classes?.IfcPlate || r.classes?.IfcWindow ? "glass" : "concrete");
     /* a ground the agent set itself is the kote the page stands it on too */
     if (params.ground != null && e.on == null && e.base_kote == null) rest.base_kote = p.ground;
-    return { ...rest, kind: "volume", shape: "bim", material: mat, bim: { script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
+    return { ...rest, kind: "volume", shape: "bim", material: mat, bim: { script, params: p, sha: r.sha, box: r.box, classes: r.classes, ...ft(r) }, _ran: r };
   }
   /* a construction's parameters changed, or it moved or turned: its script again, its foot where it now stands */
   if (e?.kind === "reshape" && ((e.params && typeof e.params === "object") || e.from || e.to || e.on)) {
@@ -278,28 +307,29 @@ export async function prepare(e, site) {
     /* a file brought in has no script: it moves and turns as it is */
     if (a.bim.file) { if (e.params) throw toolErr(`${a.name} er en innhentet fil: den har ingen parametre å endre`); return e; }
     const { params, ...rest } = e, from = e.from || a.from, to = e.to || a.to;
-    const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: e.on ?? a.on });
+    const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: e.on ?? a.on }, a.bim.foot);
     const { r, p } = await placed(site, a.bim.part ? q => runPart(a.bim.part, q, a.name) : q => runBim(a.bim.script, q), p0, from, to, { on: e.on ?? a.on }, false);
-    return { ...rest, bim: a.bim.part ? { part: a.bim.part, script: null, params: r.params ?? p, sha: r.sha, box: r.box, classes: r.classes, ...(a.bim.nopad ? { nopad: true } : {}) } : { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
+    return { ...rest, bim: a.bim.part ? { part: a.bim.part, script: null, params: r.params ?? p, sha: r.sha, box: r.box, classes: r.classes, ...ft(r), ...(a.bim.nopad ? { nopad: true } : {}) } : { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes, ...ft(r) }, _ran: r };
   }
   /* a construction as it was kept (a draft's edits shown again, or replayed into one's own version): its script and
      parameters are what count; the sha, box and classes are what the worker makes of them here, never what was sent */
   if ((e?.kind === "volume" || e?.kind === "reshape") && e.bim && typeof e.bim === "object") {
     if (e.bim.file) return { ...e, bim: importBim(e.bim) };
-    if (e.bim.part) { const r = await runPart(String(e.bim.part), e.bim.params || {}, e.name); return { ...e, bim: { part: e.bim.part, script: null, params: r.params, sha: r.sha, box: r.box, classes: r.classes, ...((await listParts().catch(() => ({})))[e.bim.part]?.pad === false ? { nopad: true } : {}) } }; }
+    if (e.bim.part) { const r = await runPart(String(e.bim.part), e.bim.params || {}, e.name); return { ...e, bim: { part: e.bim.part, script: null, params: r.params, sha: r.sha, box: r.box, classes: r.classes, ...ft(r), ...((await listParts().catch(() => ({})))[e.bim.part]?.pad === false ? { nopad: true } : {}) } }; }
     const { script, params = {} } = e.bim;
     if (typeof script !== "string" || !script.trim()) throw toolErr("bim trenger script");
     const r = await runBim(script, params);
-    return { ...e, bim: { script, params, sha: r.sha, box: r.box, classes: r.classes } };
+    return { ...e, bim: { script, params, sha: r.sha, box: r.box, classes: r.classes, ...ft(r) } };
   }
   return e;
 }
 /* an edit as the agent is told of it: the script left out (it has it), what the worker made in */
 export function slim(e) {
-  if (!e?.bim || e.bim.file) return e;
-  if (e.bim.part) return e;
-  const { script, ...b } = e.bim;
-  return { ...e, bim: { ...b, script_chars: script.length } };
+  if (!e?.bim) return e;
+  const { foot, ...nofoot } = e.bim, hint = foot ? { foot_cells: foot.p.length / 2 } : {};   // the footprint's cells are for the roof checks, not for the agent to read
+  if (e.bim.file || e.bim.part) return foot ? { ...e, bim: { ...nofoot, ...hint } } : e;
+  const { script, ...b } = nofoot;
+  return { ...e, bim: { ...b, script_chars: script.length, ...hint } };
 }
 
 /* the model with each construction's triangles in place, for the server's picture (look.js draws tris) */
