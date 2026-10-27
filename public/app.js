@@ -14,6 +14,7 @@ import { createKeys } from "./keys.js?v=20261026za";
 import { burst, burstAt } from "./kit/effects.js";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
+import { lngLatToUtm } from "./utm.js";
 import { ghostIds } from "./livetries.js";
 import { nextTree, treeTitle } from "./treemode.js";
 import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261027zn";
@@ -134,7 +135,12 @@ const valg = createSelection({ site, floors, viewer, onChange: items => { dispat
 /* a high summer sun reads the forms best (21 June at 14); the date and the hour are chosen with the sun button, by a view
    (v.sunM, v.sunD, v.sunH: a saved view keeps its light) or by Anton's show_building sun (U3651, renderkit sunpick.js) */
 let sun = { ...SUN_DEFAULT }, gjengiCtl = null;   // gjengiCtl: the picture card's hand (gjengi.js), set when it has loaded
-function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
+/* snow (U3886): NVE seNorge's depth on the ground today (server snow.mjs), laid on the model while the chosen day is within three days of today;
+   a summer sun on a winter day shows no snow. ?snow=<mm> in the address forces it (the viewer reads it). */
+let snowMm = 0;
+const showSnow = () => viewer.setSnow(Math.abs(+sunDate(sun) - Date.now()) < 3 * 864e5 ? snowMm : 0);
+{ const [x, y] = lngLatToUtm([viewer.lon, viewer.lat]); fetch(`api/snoe?x=${Math.round(x)}&y=${Math.round(y)}`).then(r => r.ok ? r.json() : null).then(j => { if (typeof j?.mm === "number") { snowMm = j.mm; showSnow(); } }).catch(() => {}); }
+function setSunTo(s) { sun = { ...s }; viewer.setSun(sunDate(sun)); showSnow(); $("sunText").textContent = sunLabel(sun); $("sunDay").value = sunDay(sun); $("sunHour").value = sun.sunH; $("sunBtn").title = `Sola: ${sunLabel(sun)}`; }
 setSunTo(sun);
 $("sunBtn").onclick = () => { const on = $("sunPop").hidden; $("sunPop").hidden = !on; $("sunBtn").setAttribute("aria-expanded", String(on)); };
 /* the trees: full, simple, off (U3676); the choice is kept in this browser */

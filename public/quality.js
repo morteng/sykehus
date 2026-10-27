@@ -4,14 +4,15 @@
      mid   iPads and other touch devices: the same with a 2048 px shadow map and fewer leaves
      low   iPhones, weak phones, software rendering: flat facade pictures, trees as plain solids, no antialiasing, pixel
            ratio 1, materials as flat colours
+   wind: the trees sway (atmosphere.js; off for the lowest tier and under prefers-reduced-motion)
    Always overridable: ?q=low|mid|high in the address. */
 import { qualityKit } from "./renderkit/quality.js";
 
 export { TIERS, pickTier, chooseTier, browserEnv } from "./renderkit/quality.js";
 export const QUALITY = {
-  high: { dpr: 2, aa: true, shadow: 4096, relief: true, ez: true, leaves: 0.65, pbr: true },
-  mid: { dpr: 1.5, aa: true, shadow: 2048, relief: true, ez: true, leaves: 0.45, pbr: true },
-  low: { dpr: 1, aa: false, shadow: 1024, relief: false, ez: false, leaves: 0, pbr: false },
+  high: { dpr: 2, aa: true, shadow: 4096, relief: true, ez: true, leaves: 0.65, pbr: true, wind: true },
+  mid: { dpr: 1.5, aa: true, shadow: 2048, relief: true, ez: true, leaves: 0.45, pbr: true, wind: true },
+  low: { dpr: 1, aa: false, shadow: 1024, relief: false, ez: false, leaves: 0, pbr: false, wind: false },
 };
 export const MARK = "sk.try", PREF = "sk.q", CAP = "sk.cap";
 export const { pickQuality, markStart, markDone, lowerNow, choose } = qualityKit({ table: QUALITY, keys: { mark: MARK, pref: PREF, cap: CAP } });

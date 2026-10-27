@@ -22,6 +22,7 @@ import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the windo
 import { bimPlace } from "./design.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
+import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
@@ -47,6 +48,12 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const sunL = new THREE.DirectionalLight("#fff6e8", 2.2); sunL.castShadow = true; sunL.shadow.mapSize.set(Q.shadow, Q.shadow);
   Object.assign(sunL.shadow.camera, { left: -260, right: 260, top: 260, bottom: -260, near: 10, far: 1500 }); sunL.shadow.bias = -0.0004; sunL.shadow.normalBias = 0.6;
   scene.add(sunL, sunL.target);
+  /* the weather (renderkit atmosphere.js, U3886): Neutral tone mapping, haze #dfe8ee from 100 to 1000 m, a sky by the sun's height, snow and wind in the
+     materials' own shaders. ?snow=<mm> forces a snow depth; the shadow map is drawn when the picture changed, not when only the wind did. */
+  const atm = createAtmosphere({ THREE, renderer, scene, hemi: sky, sun: sunL, reduced: !!matchMedia?.("(prefers-reduced-motion: reduce)").matches }).install();
+  renderer.shadowMap.autoUpdate = false;
+  const snowParam = new URLSearchParams(location.search).get("snow"); if (snowParam != null) atm.setSnow(+snowParam);
+  const drawNow = cam => { renderer.shadowMap.needsUpdate = true; renderer.render(scene, cam); };
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide, ...o });
 
   /* the area is the terrain's grid: what stands or runs past its edge (a road, a neighbour's wing) is cut there and the cut is
@@ -54,7 +61,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
      earth round its edge so it does not end as a sheet. ?nocut switches it off. */
   const E = 0.02;   // the terrain's own edge and its earth wall stand on the rectangle: a hair out, or float noise drops their fragments
   const clip = createAreaClip({ rect: [T.x0 + T.res / 2 - E, -T.y1 + T.res / 2 - E, T.x0 + (T.w - 0.5) * T.res + E, -(T.y1 - (T.h - 0.5) * T.res) + E], THREE });
-  clip.on = !new URLSearchParams(location.search).has("nocut"); clip.watch(scene);
+  clip.on = !new URLSearchParams(location.search).has("nocut"); clip.watch(scene); atm.watch(scene);
 
   /* ---------- terrain ---------- */
   let terrainGeo = null;
@@ -500,6 +507,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     treeList = list || []; treeGen++; for (const m of treeMeshes.splice(0)) { scene.remove(m); m.dispose?.(); }
     drawTrees(list || []); ringTrees(treePicked, treeHov); dirty = true;
   }
+  /* the soft shade on the ground under each crown (atmosphere.js shade: one instanced mesh, one draw) */
+  function shadeUnder(trees) {
+    const m = atm.shade(trees.map(([x, y, , r]) => { const g0 = ground(x, y); return [x, -y, Math.max(1, r), g0 - base]; }));
+    scene.add(m); treeMeshes.push(m);
+  }
   function drawTrees(trees) {
     if (!trees.length || treeMode === "off") return;
     if (treeMode === "simple") {
@@ -513,8 +525,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         m4.compose(P([x, y], g0 + h - ch / 2), q.setFromAxisAngle(up, treeHash(y, x) * 6.28), new THREE.Vector3(cone ? r * 0.8 : r, ch / 2, cone ? r * 0.8 : r)); crown.setMatrixAt(i, m4);
       });
       for (const m of [trunk, crown]) { m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); scene.add(m); treeMeshes.push(m); }
-      return;
+      shadeUnder(trees); return;
     }
+    shadeUnder(trees);
     grown ??= growTrees();
     const gen = treeGen;   // a list drawn late, after a newer setTrees, is not added
     grown.then(models => {
@@ -550,9 +563,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         const bg = tree.branchesMesh.geometry, lg = tree.leavesMesh.geometry; bg.computeBoundingBox(); lg.computeBoundingBox();
         const Ht = Math.max(bg.boundingBox.max.y, lg.boundingBox.max.y), R = Math.max(-lg.boundingBox.min.x, lg.boundingBox.max.x, -lg.boundingBox.min.z, lg.boundingBox.max.z, 1);
         if (bark && json.bark?.textureScale) bark.repeat.set(json.bark.textureScale.x, 1 / json.bark.textureScale.y);
-        models[kind] = { bg, lg, Ht, R, barkMat: new THREE.MeshStandardMaterial({ map: bark, color: json.bark?.tint ?? 0xffffff, roughness: 0.95 }),
+        models[kind] = { bg, lg, Ht, R, barkMat: new THREE.MeshStandardMaterial({ map: bark, color: json.bark?.tint ?? 0xffffff, roughness: 0.95 }),   // userData: atmosphere.js sways it by its height and lays snow on its up-facing faces
           leafMat: new THREE.MeshStandardMaterial({ map: leaf, color: kind === "pine" ? "#c9d6c0" : "#d7e3c2", alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 }),
           depthMat: new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leaf, alphaTest: 0.5 }) };
+        Object.assign(models[kind].barkMat.userData, { sway: Ht, snow: 0.3 }); Object.assign(models[kind].leafMat.userData, { sway: Ht, snow: kind === "pine" ? 0.6 : 0.35 });
         tree.branchesMesh.material.dispose?.(); tree.leavesMesh.material.dispose?.();
       }
       return models;
@@ -1024,7 +1038,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* the road sections around (streets.js, U3543): each way a group, picked like a path, its own materials to light up alone */
   let roadGroups = new Map();
   const shownRoads = () => [...roadGroups.values()].filter(g => g.visible);
-  function setRoads(map) { roadGroups = map; for (const g of map.values()) g.traverse(o => { if (o.isMesh && o.material) o.material = o.material.clone(); }); dirty = true; }
+  function setRoads(map) { roadGroups = map; for (const g of map.values()) g.traverse(o => { if (o.isMesh && o.material) { o.material.userData.snow = 0.3; o.material = o.material.clone(); } }); dirty = true; }   // a road is ploughed: a third of the snow, and the clone keeps the note
   /* a planting picked or under the pointer: a ring on the ground round each of its trees (they share their materials) */
   const treeRings = new THREE.Group(); scene.add(treeRings);
   function ringTrees(picked, hov) {
@@ -1089,7 +1103,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function setSun(date) {
     const s = sunPosition(date, lat, lon), az = s.azimuth * Math.PI / 180, el = Math.max(s.elevation, 1) * Math.PI / 180, d = 700;
     sunL.position.set(O.x + d * Math.cos(el) * Math.sin(az), d * Math.sin(el), -O.y - d * Math.cos(el) * Math.cos(az)); sunL.target.position.set(O.x, 0, -O.y);
-    sunL.intensity = s.elevation > 0 ? 2.2 : 0.15; dirty = true; return s;
+    atm.setSun(s.elevation); dirty = true; return s;
   }
 
   /* the camera for one picture (snapshot): two-point views (øyehøyde, froskeperspektiv) look level and the frame is
@@ -1147,8 +1161,12 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const followers = new Set();   // what the page keeps over a point of the model (app.js float.js: the card over a wing), placed with the names
   /* the shaders compiled before the first frame, off the main thread where the browser can (KHR_parallel_shader_compile;
      pm 21:41Z: the first frame held the page ~0,7 s at full speed, many times that on a slow machine); the frame waits */
+  atm.patch(scene);   // the clones and the pictures made since the scene was filled take the weather too (a clone does not keep the patch)
   (renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve()).catch(e => console.warn("shaders:", e)).finally(() => { compiled = true; dirty = true; if (later.length) requestAnimationFrame(() => idle(paintNext)); });
-  renderer.setAnimationLoop(() => { if (dirty && compiled) { renderer.render(scene, camera); placeTags(); for (const f of followers) f(); dirty = false; markDone(Q); } });
+  renderer.setAnimationLoop(() => {
+    /* wind: a throttled picture of the trees swaying (no shadow map, no new patch), only while a person is about and the page shows */
+    if (!dirty && compiled && Q.wind && atm.windDue()) { renderer.shadowMap.needsUpdate = false; renderer.render(scene, camera); return; }
+    if (dirty && compiled) { atm.patch(scene); drawNow(camera); placeTags(); for (const f of followers) f(); dirty = false; markDone(Q); } });
 
   const home = { ...O };
   return {
@@ -1159,12 +1177,14 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
     /* the trees: off, simple or full (drawn again in place); what is drawn now */
     treeMode(m) { if (m && m !== treeMode && ["off", "simple", "full"].includes(m)) { treeMode = m; setTrees(treeList); } return treeMode; },
-    setSun, select, setGone, setHidden, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    /* snow depth in mm on the ground (NVE seNorge, app.js); ?snow=<mm> in the address beats it */
+    setSnow(mm) { if (snowParam == null && atm.setSnow(mm)) dirty = true; },
+    lat, lon, setSun, select, setGone, setHidden, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     /* the parts drawn see-through (ids of new parts), or none; and a small picture of the view as it is (free: the canvas, no server) */
     ghost(ids) { ghostIds = new Set(ids || []); applyGhost(); },
     thumb(w = 168) {
-      renderer.render(scene, camera); const src = renderer.domElement, h = Math.round(w * src.height / Math.max(1, src.width)), c = document.createElement("canvas"); c.width = w; c.height = h;
+      drawNow(camera); const src = renderer.domElement, h = Math.round(w * src.height / Math.max(1, src.width)), c = document.createElement("canvas"); c.width = w; c.height = h;
       c.getContext("2d").drawImage(src, 0, 0, w, h); return c.toDataURL("image/jpeg", 0.7);
     },
     /* photo mode: the view's vertical field of view (degrees), or null for its own; the frame over the view is drawn for it (renderkit photoframe.js) */
@@ -1235,10 +1255,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
        the canvas are as they were after (U3652) */
     snapshot(shot) {
       land();
-      if (!shot) { renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); }
+      if (!shot) { drawNow(camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); }
       const [aw, ah] = ratio(shot.aspect), asp = aw / ah, LONG = 1280, W = aw >= ah ? LONG : Math.round(LONG * asp), H = aw >= ah ? Math.round(LONG / asp) : LONG;
       const sc = shot.live ? liveCamera(shot, asp) : shotCamera(shot, asp);
-      renderer.setSize(W, H, false); renderer.render(scene, sc);
+      renderer.setSize(W, H, false); drawNow(sc);
       const url = renderer.domElement.toDataURL("image/jpeg", 0.85);
       size(); dirty = true; return url;
     },

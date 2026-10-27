@@ -34,6 +34,7 @@ import { createAuth } from "./auth.mjs";
 import { createLogin } from "./login.mjs";
 import { createAssistant } from "./assistant.mjs";
 import { createStreets } from "./gater.mjs";
+import { createSnow } from "./snow.mjs";
 import { createWishes } from "./wishes.mjs";
 import { createGuide } from "./guide.mjs";
 import { importFile, MAX_IMPORT } from "./bim.mjs";
@@ -104,13 +105,14 @@ const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, 
 const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 mcp.setNotifier((person, event, data) => anton.publish(person, event, data));   // a sketch Anton shows reaches the person's page (U3635)
 const streets = createStreets({ site, SECURITY });
+const snow = createSnow({ SECURITY });   // the snow on the ground today, NVE seNorge (U3886)
 
 createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x"), path = decodeURIComponent(url.pathname);
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (path === "/mcp/server-card") return mcp.handleCard(req, res);
-    if (await auth.route(req, res, url) || await streets.route(req, res, path, url)) return;
+    if (await auth.route(req, res, url) || await streets.route(req, res, path, url) || await snow.route(req, res, path, url)) return;
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path) || await guide?.route(req, res, path)) return;
     // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc") req.webUser = login.personOf(req)?.person ?? null;

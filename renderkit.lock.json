@@ -1,5 +1,5 @@
 {
-  "kits": "d8ecfd72730044cc2d6a098fad66f9b7f3831318",
+  "kits": "34e674230a6b73c1ba3ffe86310db6d9094d1809",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -8,6 +8,7 @@
     "./three.js": "../vendor/three.module.js"
   },
   "files": {
+    "atmosphere.js": "2a6e286b18027e91a11f675191f238b5bfe5e282",
     "sun.js": "2caa173fdc3adcc0a12d2e2fbf28a4dfd9fdd492",
     "quality.js": "fa251f11621def68ddada3c47032a99dc21584f6",
     "ez-tree.js": "1ea19545e4ba1bbbc92f62ef66c781f741aac524",
