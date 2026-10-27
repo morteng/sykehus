@@ -36,13 +36,13 @@ export function cubeMatrix(yaw, pitch) {
    camera looks straight at the Front: the tilt turns it about the screen's vertical (the right side comes round) and its horizontal
    (the top comes up). It is part of the picture, so the pick uses the same matrix: what is under the pointer is what is drawn. */
 export const mul3 = (a, b) => a.map(r => [0, 1, 2].map(j => r[0] * b[0][j] + r[1] * b[1][j] + r[2] * b[2][j]));
-export const tiltMatrix = (ay = -0.5, ax = -0.3) => mul3([[1, 0, 0], [0, Math.cos(ax), -Math.sin(ax)], [0, Math.sin(ax), Math.cos(ax)]], [[Math.cos(ay), 0, Math.sin(ay)], [0, 1, 0], [-Math.sin(ay), 0, Math.cos(ay)]]);
+export const tiltMatrix = (ay = 0, ax = 0) => mul3([[1, 0, 0], [0, Math.cos(ax), -Math.sin(ax)], [0, Math.sin(ax), Math.cos(ax)]], [[Math.cos(ay), 0, Math.sin(ay)], [0, 1, 0], [-Math.sin(ay), 0, Math.cos(ay)]]);
 const TILT = tiltMatrix();
 /* The extra tilt fades out as the camera comes to straight down or up (|pitch| from 70° to 90°, smoothstep), so a straight-down Topp
    face is square on with its label upright and north at the top, as in the AutoCAD ViewCube. At 90° viewMatrix is cubeMatrix. */
 const TILT_FADE = 20 * Math.PI / 180;
 export const tiltScale = pitch => { const t = Math.max(0, Math.min(1, (Math.PI / 2 - Math.abs(pitch)) / TILT_FADE)); return t * t * (3 - 2 * t); };
-export const viewMatrix = (yaw, pitch) => { const k = tiltScale(pitch); return mul3(k === 1 ? TILT : tiltMatrix(-0.5 * k, -0.3 * k), cubeMatrix(yaw, pitch)); };   // what is drawn
+export const viewMatrix = (yaw, pitch) => { const k = tiltScale(pitch); return mul3(k === 1 ? TILT : tiltMatrix(0, 0), cubeMatrix(yaw, pitch)); };   // what is drawn
 
 /* the css matrix3d (column-major) of that turn */
 export function cssMatrix(m) {
