@@ -50,8 +50,8 @@
 .flr-key i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .vt .tgl[aria-pressed=true] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
 
-/* S5 north and zoom, top right, clear of the fold tab */
-.nz { position: absolute; z-index: var(--z-canvas); top: 12px; right: 40px; display: flex; flex-direction: column; gap: var(--sp-2); align-items: center; }
+/* S5 north and zoom, top right, clear of the fold tab; the column starts under the toolbar row (U3911: --vt-bottom is the toolbar's bottom edge, set from app.js, so a wrapped toolbar pushes it down) */
+.nz { position: absolute; z-index: var(--z-canvas); top: calc(var(--vt-bottom, 12px) + var(--sp-3)); right: 40px; display: flex; flex-direction: column; gap: var(--sp-2); align-items: center; }
 .nz .north { width: 56px; height: 56px; border-radius: 50%; background: var(--panel); border: 1px solid var(--border); display: grid; place-items: center; box-shadow: var(--shadow-sm); color: var(--text); }
 .nz .north svg { width: 40px; height: 40px; transition: transform .1s; }
 .nz .zoom2 { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-sm); }

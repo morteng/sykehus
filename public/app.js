@@ -1193,6 +1193,9 @@ const cube = createViewCube({ host: document.querySelector(".nz"), inline: true,
   labels: { top: "Topp", front: "Front", back: "Bak", left: "Venstre", right: "Høyre", cube: "Visningskube" },
   onPick: v => viewer.look({ yaw: v.yaw, pitch: v.pitch, eye: false }) });   // no home button of its own: the column's ⌂ (zhome) is the same move, viewer.reset()
 document.querySelector(".nz").prepend(cube.el);
+{ const vt = document.querySelector(".vt"), stage = vt.parentElement;   // U3911: the nav column (cube, compass, zoom stack) starts below the toolbar row, wrapped or not
+  const under = () => stage.style.setProperty("--vt-bottom", vt.offsetTop + vt.offsetHeight + "px");
+  new ResizeObserver(under).observe(vt); under(); }
 viewer.follow(() => { const p = viewer.pose(), three = viewer.view().mode === "3d"; cube.el.hidden = !three; if (three) cube.set(p.yaw, p.pitch); });
 addEventListener("sykehus:valg", () => picker.set(valg.items.map(valg.key), undefined, "sync"));
 
