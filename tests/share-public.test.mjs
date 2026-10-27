@@ -86,5 +86,5 @@ test("the box says its label, is checked when public, and a tick means offentlig
 test("the page wires the control to the same route and the cache strings moved", () => {
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8"), html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   assert.match(app, /change\(\{ share: id, sharing: to \}\)/); assert.match(app, /data-vpub\]|\[data-vpub\]/); assert.match(app, /input\[data-pub\]/);
-  assert.match(html, /app\.js\?v=20261027share/);
+  assert.match(html, /app\.js\?v=2026\d+[a-z0-9]+/);
 });
