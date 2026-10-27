@@ -34,5 +34,5 @@ test("the tool is on the connector, read only, takes nothing, and the instructio
     docs: null, docUrl: f => f, SECURITY: {}, readJson: async () => ({}), auth: { userOf: () => null }, pages: { open: new Map(), show: () => false } });
   const t = mcp.TOOLS.find(x => x.name === "site_facts"); assert.ok(t && t.ro && !t.tgt && t.schema.required.length === 0);
   assert.match(t.description, /name the limits early/);
-  assert.match(readFileSync(new URL("../mcp.mjs", import.meta.url), "utf8"), /site_facts gives what is known about the plot itself[^"]*Name these limits early when a change touches them/);
+  assert.match(readFileSync(new URL("../mcp.mjs", import.meta.url), "utf8"), /site_facts gives [^"]*name these limits early when a change touches them/);
 });

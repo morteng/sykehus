@@ -126,8 +126,9 @@ test("U3620: the texts Anton reads send a stair down from a terrace to the stair
   const i = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
   assert.match(i.instructions, /every outdoor stair is the stair part, also one down from a terrace to the garden/);
   const tools = (await rpc("tools/list")).tools, lp = tools.find(t => t.name === "list_parts"), tc = tools.find(t => t.name === "try_change");
-  assert.match(lp.description, /also one down from a terrace to the garden, is the stair part: from = its foot in the garden, to = towards the terrace, params\.height = the drop/);
-  const part = JSON.stringify(tc.inputSchema);
+  assert.match((await call("find_tool", { tool: "list_parts" })).data.description, /also one down from a terrace to the garden, is the stair part: from = its foot in the garden, to = towards the terrace, params\.height = the drop/);
+  const part = JSON.stringify((await call("find_tool", { kind: "part" })).data);   // T3: the long text of a kind is its guide, find_tool kind=part
+  assert.match(tc.description, /A ready-made part first \(list_parts\)/);
   assert.match(part, /A stair that goes DOWN .* is the stair part too: .*put from in the garden and to at the terrace edge.*params\.height as the drop.*do not write a script for it/);
 });
 
@@ -144,7 +145,8 @@ test("U3831: a greenhouse put on Høyblokka's roof by guess is set along the bui
   const g = (await call("try_change", { edits: [{ kind: "volume", id: "ndrivhus", name: "Drivhus", shape: "gable", material: "glass", on: "Sentralblokka", from: [4, 6], to: [20, 30], width: 6, height: 4, align: "free" }], include_screenshot: false })).data;
   const r = (await call("try_change", { edits: [{ kind: "reshape", id: "ndrivhus", align: "building" }], include_screenshot: false, draft: g.draft })).data;
   assert.equal(r.rejected.length, 0, JSON.stringify(r.rejected)); assert.match(r.added[0].on_roof, /På taket: snudd .*byggets egen akse/);
-  const d = tools.find(t => t.name === "try_change").description; assert.match(d, /Quote it to the person word for word/);
+  const d = (await call("find_tool", { tool: "try_change" })).data.description; assert.match(d, /Quote it to the person word for word/);   // T3: the full text is find_tool tool=try_change; the short one and the instructions say to quote on_roof
+  assert.match(tools.find(t => t.name === "try_change").description, /on_roof/);
 });
 test("T4: a lawn, a path and a tree on Sentralblokka's roof come back at the roof's kote; a lawn past the edge is refused with its metres", async () => {
   const R = (await call("about_wing", { wing: "Sentralblokka" })).data.roof, lv = R.blocks.find(b => b.kote === 69.91).corners;   // its biggest piece at that level (a level need not fill its bounding rectangle), site metres

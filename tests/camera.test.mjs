@@ -92,7 +92,8 @@ const text = r => r.content.filter(c => c.type === "text").map(c => c.text).join
 
 test("show_building: camera, look, lens and size in the event; the description names all five cameras and six looks", async () => {
   const tool = (await rpc("tools/list")).tools.find(t => t.name === "show_building");
-  for (const w of ["øyehøyde", "fugleperspektiv", "aksonometri", "fasade", "froskeperspektiv", "arkitektfoto", "blåtime", "konkurransebilde", "drone", "hvitmodell", "skisse", "Trykk Gjengi for bildet", "utkast"]) assert.ok(tool.description.includes(w), w);
+  const full = JSON.stringify((await rpc("tools/call", { name: "find_tool", arguments: { tool: "show_building" } })).structuredContent);   // T3: the list is short; the whole text is find_tool tool=show_building
+  for (const w of ["øyehøyde", "fugleperspektiv", "aksonometri", "fasade", "froskeperspektiv", "arkitektfoto", "blåtime", "konkurransebilde", "drone", "hvitmodell", "skisse", "Trykk Gjengi for bildet", "utkast"]) assert.ok(full.includes(w), w);
   assert.deepEqual(tool.inputSchema.properties.camera.enum, Object.keys(VIEWPOINTS)); assert.deepEqual(tool.inputSchema.properties.look.enum, Object.keys(LOOKS));
   const r = await rpc("tools/call", { name: "show_building", arguments: { wing: "Sentralblokka", from_direction: "S", camera: "froskeperspektiv", look: "blåtime", lens_mm: 20, eye_height_m: 0.5, picture_size: "stor", sun: { month: 12, day: 21, hour: 15 } } });
   assert.ok(!r.isError, text(r)); const v = r.structuredContent.view;
