@@ -114,6 +114,7 @@ function footOf(site, e, out, num) {
     if (e.overhang_m != null && String(e.align) === "building") throw new Error("overhang_m og align building går ikke sammen: building krymper og flytter det inn, overhang_m legger det som det står");
     if (out.align !== "free" && e.overhang_m == null) { const f = alignOnRoof(site, out); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width }); }   // U3831
     if (e.allow_overlap != null) out.allow_overlap = e.allow_overlap === true;
+    if (e.drop_m != null) out.drop_m = num(e.drop_m, 0, 10, "Senkingen (drop_m)");   // sunk into the roof: the water inside a roof pool basin (pool_basin params.water sets it; not a field Anton sends)
     roofCheck(site, out, w); collideCheck(site, out, w);   // after the align: what still sticks out is refused with its metres, not placed with «taket er for lite»
   } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
   return out;
@@ -198,6 +199,8 @@ export function checkDesign(site, e, str) {
       if (!a) { const n = (site.added || []).filter(x => x.kind === "volume"); throw new Error(`Fant ikke det nye bygget «${e.id}». reshape endrer et nytt bygg som alt står i prosjektet${n.length ? ` (${n.slice(0, 8).map(x => `«${x.id}»`).join(", ")})` : "; prosjektet har ingen nye bygg ennå"}. Et nytt bygg er kind volume; et basseng, en plass eller en plen er kind surface (surface: "water" for vann) med ring.`); }
       const out = facts(e, str, { kind: "reshape", id });
       if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
+      /* material: the same list a volume takes, water and glass too (Anton 2026-10-27: «reshape tar ikke material»); a part's or script's own mesh keeps its IFC materials, this is its card's and tint */
+      if (e.material != null) { const m = String(e.material); if (!MATERIALS.includes(m)) throw new Error(`material er ${MATERIALS.join(", ")}`); out.material = m; }
       if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");
       const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]), maxL = a.bim?.plan ? 1000 : 250; if (L < 1 || L > maxL) throw new Error(`Lengden må være mellom 1 og ${maxL} m`);
       if (a.shape === "bim") {
@@ -208,7 +211,7 @@ export function checkDesign(site, e, str) {
         if (out.from || out.to || out.bim) Object.assign(out, bimBody(out.from || a.from, out.to || a.to, (out.bim || a.bim).box));
       } else {
         if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
-        if (e.height != null) out.height = num(e.height, 1, 80, "Høyden");
+        if (e.height != null) out.height = num(e.height, ["water", "glass"].includes(out.material ?? a.material) ? 0.1 : 1, 80, "Høyden");   // a slab of water or glass from 0.1, as a volume
       }
       /* on / overhang_m: a reshape may put it on a roof or say how far it may stick out; the roof it already stands on is kept (never silently the ground) */
       if (e.on != null) { const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k); if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`); out.on = w.id; }
@@ -460,7 +463,7 @@ export function baseOf(site, e) {
   }
   const lowest = () => Math.min(...corners.map(c => groundAt(site, c)), groundAt(site, [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]));
   const roof = e.on ? roofUnder(site, e) : null;
-  if (roof != null) return roof;
+  if (roof != null) return roof - (+e.drop_m || 0);
   if (e.base_kote != null) return e.base_kote;
   /* U3566 (f): a new building of its own shape stands where its pad's cut and fill are the same (what is dug out
      fills the rest), not on the lowest ground, which dug it deep into a slope; a construction or a file brought in
@@ -690,7 +693,7 @@ export function applyDesign(site, floors, edits) {
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
-  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan && !e.bim?.nopad ? baseOf(site, { ...e, base_kote: undefined }) : null]);
+  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan && !e.bim?.nopad && !(e.material === "water" && e.base_kote != null) ? baseOf(site, { ...e, base_kote: undefined }) : null]);
   if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
   const keep = new Map(), guard = pathCells(site), lot = feet.some(([, e]) => e.on == null) ? lotCells(site) : null;
   for (const [id, e, { parts, base }, free] of feet) {

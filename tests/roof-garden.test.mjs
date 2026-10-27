@@ -38,7 +38,7 @@ test("a path and water on a roof", () => {
   const p = after([{ kind: "path", on: "tw", kote: 14, line: [X(22, 5), X(38, 5)], width: 2, surface: "paving" }]).landscape[0];
   assert.equal(p.kote, 14); assert.equal(p.kind, "path"); assert.equal(p.soil_depth_m, 0.1);
   assert.throws(() => checkEdit(site, [], { kind: "path", on: "tw", kote: 14, line: [X(22, 5), X(44, 5)], width: 2 }), /stikker 4(,0\d)? m/);
-  assert.throws(() => checkEdit(site, [], { kind: "surface", surface: "water", on: "tw", ring: box(4, 2, 16, 8) }), /Vann legges ikke på et tak/);
+  assert.throws(() => checkEdit(site, [], { kind: "surface", surface: "water", on: "tw", ring: box(4, 2, 16, 8) }), /Vann legges ikke på et tak.*material water.*pool_basin/);
   assert.throws(() => checkEdit(site, [], { kind: "path", kote: 14, line: [X(22, 5), X(38, 5)] }), /kote gjelder en sti på et tak/);
 });
 

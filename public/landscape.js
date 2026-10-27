@@ -128,7 +128,7 @@ export function checkLandscape(site, e, str) {
       const out = { kind: "surface", ring, surface, ...corners, ...w_ }, n = name(); if (n) out.name = n;
       if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
       if (e.on != null) {   // T4: on a roof; kote is the roof's level, and water has a level of its own
-        if (surface === "water") throw new Error("Vann legges ikke på et tak som flate: et basseng på taket er en ferdig del (list_parts, pool) satt med on");
+        if (surface === "water") throw new Error("Vann legges ikke på et tak som flate. Bruk et volum med material water på taket ({kind: volume, material: water, at: {wing, roof: true, u, v}, length, width, height fra 0.1}), eller delen pool_basin med params {water: true} og on = fløyen.");
         Object.assign(out, onOf(roofPlace(site, e, sampleRing(outlineOf(ring, corners.radius, corners.smooth)), "flaten")));
       } else Object.assign(out, waterOf(e, surface));
       return out;
