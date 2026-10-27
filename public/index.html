@@ -143,6 +143,20 @@
         </div>
         <p class="sel-empty">Trykk på en fløy eller velg en etasje.</p>
         <section class="objcard" id="info" hidden></section>
+        <section class="ph" id="phPanel" aria-labelledby="phH">
+          <h3 id="phH">Bilder</h3>
+          <p class="imp-say">Dine egne bilder av bygget slik det står nå. Bare du ser dem. Anton kan se på dem og foreslå endringer i modellen.</p>
+          <form id="phForm">
+            <label>Bilder (JPEG, PNG eller WebP)<input type="file" id="phFile" accept="image/*" multiple required></label>
+            <label>Fløy<select id="phWing" required></select></label>
+            <label>Fasade<select id="phSide"><option value="ukjent">Ukjent</option><option value="nord">Nord</option><option value="øst">Øst</option><option value="sør">Sør</option><option value="vest">Vest</option></select></label>
+            <label>Merknad (valgfritt)<input id="phNote" maxlength="300" placeholder="tatt fra parkeringen" autocomplete="off"></label>
+            <label>År (valgfritt)<input id="phYear" type="number" min="1800" max="2100" inputmode="numeric" autocomplete="off"></label>
+            <p class="imp-say" id="phSay" hidden></p>
+            <button type="submit" id="phGo">Legg til</button>
+          </form>
+          <ul class="ph-list" id="phList"></ul>
+        </section>
       </section>
       <section class="tabp" id="p-photo" data-tab="photo" role="tabpanel" aria-labelledby="tab-photo" hidden>
         <div class="pf-head"><h2>Gjengi</h2><button type="button" class="sm quiet" id="pfExit" title="Avslutt fotomodus (Esc)">Avslutt</button></div>

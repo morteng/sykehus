@@ -22,11 +22,11 @@ const list = async () => (await rpc("tools/list")).tools;
 const seen = t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema, outputSchema: t.outputSchema });
 const tokens = o => JSON.stringify(o).length / 4;
 
-test("the budget: the whole list 12 500 tokens (12 000 at T3; summary, draw_plan and draw_section came after), try_change 3 700 (3 500 at T3; edge_rail is a new kind), any other tool 800, the instructions 1 000", async () => {
+test("the budget: the whole list 12 750 tokens (12 000 at T3; summary, draw_plan and draw_section came after, then list_site_photos and look_at_site_photo), try_change 3 700 (3 500 at T3; edge_rail is a new kind), any other tool 800, the instructions 1 000", async () => {
   const tools = await list(), per = Object.fromEntries(tools.map(t => [t.name, tokens(seen(t))]));
   const total = Object.values(per).reduce((a, b) => a + b, 0);
   console.log(`budget: total ${Math.round(total)} tokens, ${tools.length} tools, try_change ${Math.round(per.try_change)}, largest other ${Object.entries(per).filter(([n]) => n !== "try_change").sort((a, b) => b[1] - a[1])[0].map(x => typeof x === "number" ? Math.round(x) : x).join(" ")}`);
-  assert.ok(total <= 12500, `the list is ${Math.round(total)} tokens`);
+  assert.ok(total <= 12750, `the list is ${Math.round(total)} tokens`);
   assert.ok(per.try_change <= 3700, `try_change is ${Math.round(per.try_change)} tokens`);
   for (const [n, v] of Object.entries(per)) if (n !== "try_change") assert.ok(v <= 800, `${n} is ${Math.round(v)} tokens`);
   const i = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });

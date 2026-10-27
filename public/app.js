@@ -1188,6 +1188,7 @@ function showView(v) {
 /* back from «Logg inn» (login.js): said once */
 try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeItem("sykehus-innlogget"); toast("Du er logget inn."); } } catch { }
 /* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
+if (me.person) import("./sitephotos.js").then(m => m.startSitePhotos({ root: $("phPanel"), toast: t => toast(t) })).catch(e => console.error("sitephotos:", e));   // «Bilder» under Bygg: the person's own photos of the building
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Prosjekter" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
 import("./tour.js?v=20261027zmp").then(({ createTour }) => {
