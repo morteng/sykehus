@@ -35,6 +35,8 @@ import { baseOf, groundText, lotText, buildingWords } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
+import { sharedOpen, firstView, prospektOpen, renderProspekt, bindLightbox, PRIVATE_HTML } from "./prospekt-pane.js?v=1";
+import { figures } from "./prospekt-view.js";
 
 /* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
    wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
@@ -68,6 +70,7 @@ if (draft && !draft.missing && !qs.has(versionId ? "versjon" : "utkast")) {   //
   const u = new URL(location.href); u.searchParams.delete("nokkel"); u.searchParams.set(versionId ? "versjon" : "utkast", versionId || draftId); history.replaceState(null, "", u.href);
 }
 const mine = () => !!versionId && !!draft?.version && !!me.person && draft.owner === me.person;
+let pkOn = false;   // the viewing area shows the Prospekt, not the model (pkShow)
 const ownDraft = () => !versionId && !!draftId && draftId === kept;   // a draft this browser made; another's came by its link
 /* the drawn sections, by hand from the sheets (data/sections.json) */
 const thumbs = await fetch("data/ark/index.json").then(r => r.ok ? r.json() : {}).catch(() => ({}));   // small pictures of the sheets (tools/thumbs.py)
@@ -223,7 +226,7 @@ function plainSource(f) {
 function setMode(m) {
   viewer.setMode(m); pressMode();
 }
-function pressMode() { const m = viewer.view().mode, eye = viewer.view().eye; $("m3d").setAttribute("aria-pressed", String(m === "3d" && !eye)); $("meye").setAttribute("aria-pressed", String(!!eye)); $("mplan").setAttribute("aria-pressed", String(m === "plan")); $("print").hidden = m === "3d"; document.body.classList.toggle("plan", m !== "3d"); }
+function pressMode() { const m = viewer.view().mode, eye = viewer.view().eye; $("m3d").setAttribute("aria-pressed", String(m === "3d" && !eye && !pkOn)); $("meye").setAttribute("aria-pressed", String(!!eye && !pkOn)); $("mplan").setAttribute("aria-pressed", String(m === "plan" && !pkOn)); $("print").hidden = m === "3d"; document.body.classList.toggle("plan", m !== "3d"); }
 /* the plan or the section as a sheet to print: the picture with its names, a title block with what it is, a scale
    bar and the scale it prints at on A4 across, north, and the drawings it is made from */
 async function printSheet() {
@@ -276,6 +279,26 @@ $("m3d").onclick = () => { setMode("3d"); viewer.eye(false); pressMode(); }; $("
 const EYE_KEYS = "Gateplan: dra for å se deg rundt · W A S D eller piltastene for å gå · Shift går fortere · rull for å gå nærmere";
 const eyeSay = () => { if (!matchMedia("(pointer: coarse)").matches) toast(EYE_KEYS); };
 $("meye").onclick = () => { setMode("3d"); viewer.eye(true); pressMode(); eyeSay(); };
+/* «Prospekt» beside 3D, top left: the brochure of a shared project in the viewing area. A visitor, or anyone who is not the owner, opens on it; the owner opens on 3D. */
+let pkFigs = [], pkAsk = 0;
+const pkShared = () => !!versionId && sharedOpen(draft), pkCan = () => !!versionId && prospektOpen(draft, mine());
+/* fetched at each opening and again after every change to the project (show(), the owner's picks): the page is the visitor's, drawn from the same answer */
+async function pkShow(on) {
+  pkOn = on && pkCan(); document.body.classList.toggle("pk-on", pkOn); $("pkPane").hidden = !pkOn; $("mpk").setAttribute("aria-pressed", String(pkOn)); pressMode();
+  if (!pkOn) return; const ask = ++pkAsk, id = versionId, pane = $("pkPane"), top = pane.scrollTop;
+  if (!pkShared()) { $("pkBody").innerHTML = PRIVATE_HTML; pkFigs = []; return; }
+  const j = await renderProspekt($("pkBody"), { id, nokkel, explore: `?versjon=${encodeURIComponent(id)}&vis=3d` });
+  if (ask === pkAsk) { pkFigs = j ? figures(j) : []; pane.scrollTop = top; }
+}
+const pkRefresh = () => { if (pkOn) pkShow(true); };
+let pkSharing;
+function pkSync() { $("mpk").hidden = !pkCan(); if (pkOn && !pkCan()) pkShow(false); else if (pkOn && draft?.sharing !== pkSharing) pkRefresh(); pkSharing = draft?.sharing; }
+bindLightbox($("pkPane"), () => pkFigs);
+$("mpk").onclick = () => pkShow(true);
+$("pkPane").addEventListener("click", e => { const b = e.target.closest("[data-explore]"); if (b) { e.preventDefault(); pkShow(false); } });
+document.querySelector(".vt .seg2").addEventListener("click", e => { const b = e.target.closest("button"); if (b && b.id !== "mpk" && pkOn) pkShow(false); });   // 3D, Gateplan and Plan leave the Prospekt (their own handlers ran first)
+pkSync(); pkShow(firstView({ shared: pkShared(), owner: mine(), asked: qs.get("vis") }) === "prospekt");
+
 /* U3606: the person by the zoom: dragged onto the model, a ring shows where it lands, and a drop stands there in
    «Gateplan»; a press without a drag (a finger, the keyboard) waits for a tap on the spot */
 {
@@ -464,11 +487,11 @@ function bindDetails(R) {
 /* the open one's «Detaljer», folded, under its card in the list: its name to change, the changes with «Ta ut …», and «Se før» (the only home of these since the tab became a plain list) */
 const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${mine() ? `<div class="fc-pub">${publicBox({ version: versionId, sharing: draft.sharing, mine: true }, esc)}</div>` : ""}${mine() ? `<div class="fc-pkp" id="pkPick">${pkHtml()}</div>` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
 /* the Prospekt page of a shared project: a link-only one carries its link key (prospekt.mjs); a public one needs none */
-const prospektHref = (v, stay) => `prospekt.html?v=${encodeURIComponent(v.version)}${v.sharing === "lenke" && v.pkey ? `&nokkel=${encodeURIComponent(v.pkey)}` : ""}${stay ? "&se=1" : ""}`;
+const prospektHref = v => `?versjon=${encodeURIComponent(v.version)}${v.sharing === "lenke" && v.pkey ? `&nokkel=${encodeURIComponent(v.pkey)}` : ""}&vis=prospekt`;
 let detailsOpen = false;
 /* «Bilder i prospektet»: the open project's Gjengi pictures, each with a tick (shown in the Prospekt) and «Hovedbilde» (the first, large one); owner only, through POST /api/endring { prospekt } */
 let pkList = { id: null, pics: [] };
-const pkHtml = () => pkList.id !== versionId || !pkList.pics.length ? "" : `<b class="pk-h">Bilder i prospektet</b><ul class="pk-list">${pkList.pics.map(p => `<li><label><input type="checkbox" data-pkshow="${esc(p.id)}"${p.prospekt ? " checked" : ""}><img src="${esc(p.url)}" alt="" loading="lazy" width="96" height="64"></label><button type="button" class="pk-hero" data-pkhero="${esc(p.id)}" aria-pressed="${!!p.hero}" title="Det store bildet øverst i prospektet">${p.hero ? "Hovedbilde" : "Velg hovedbilde"}</button></li>`).join("")}</ul>`;
+const pkHtml = () => pkList.id !== versionId || !pkList.pics.length ? "" : `<b class="pk-h">Bilder i prospektet</b><ul class="pk-list">${pkList.pics.map(p => `<li><label><input type="checkbox" data-pkshow="${esc(p.id)}"${p.prospekt ? " checked" : ""}><img src="${esc(p.url)}" alt="" loading="lazy" width="96" height="64"></label><button type="button" class="pk-pickhero" data-pkhero="${esc(p.id)}" aria-pressed="${!!p.hero}" title="Det store bildet øverst i prospektet">${p.hero ? "Hovedbilde" : "Velg hovedbilde"}</button></li>`).join("")}</ul>`;
 async function pkLoad() {
   if (!mine()) return; const id = versionId;
   const j = await fetch(`api/gjengi?versjon=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -478,7 +501,7 @@ async function pkLoad() {
 async function pkSet(render, body) {
   const j = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prospekt: { render, ...body } }) }).then(r => r.ok ? r.json() : null).catch(() => null);
   if (!j) return toast("Fikk ikke endret prospektet. Prøv igjen.");
-  pkLoad();
+  pkLoad(); pkRefresh();
 }
 const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "delt åpent" };
 let verRows = [], selecting = false; const picked = new Set();
@@ -727,7 +750,7 @@ async function show(j) {
   paint();
   storeys = [...new Set([...wings.flatMap(w => (w.levels || []).map(l => l.name)), ...floors.map(f => f.name)])].sort((a, b) => order(a) - order(b));
   if (storeyOn && !storeys.includes(storeyOn)) pickStorey(null); else if (storeyOn) showStorey(storeyOn);
-  dimStrip(); drawDraft(); drawViews(); ifcLink(); dispatchEvent(new CustomEvent("sykehus:versjoner"));
+  dimStrip(); drawDraft(); drawViews(); ifcLink(); pkRefresh(); dispatchEvent(new CustomEvent("sykehus:versjoner"));
   dispatchEvent(new CustomEvent("sykehus:valg", { detail: valg.items }));   // the card over the pick shows the new facts
   const open = cardOf && (cardOf.kind === "new" ? (site.added || []).find(a => a.id === cardOf.id) : null); if (open) showNew(open);
   const openG = cardOf?.kind === "ground" && [...(site.landscape || []), ...(site.plantings || [])].find(g => g.id === cardOf.id); if (openG) showGround(openG);
@@ -1051,21 +1074,15 @@ ifcLink();
 function versionCard(v) {
   const open = v.version === versionId, sel = selecting && v.mine;
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
-  const pk = v.sharing !== "privat" && !selecting && me.person ? `<a class="fc-pk" href="${esc(prospektHref(v, true))}" title="Åpne prospektet: bilder og tall, uten innlogging" aria-label="Prospekt: ${esc(v.title)}">Prospekt</a>` : "";
+  const pk = v.sharing !== "privat" && !selecting && me.person ? `<a class="fc-pk" href="${esc(prospektHref(v))}" title="Åpne prospektet: bilder og tall, uten innlogging" aria-label="Prospekt: ${esc(v.title)}">Prospekt</a>` : "";
   const acts = v.mine && !selecting ? `<div class="fc-acts">${pk}${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
-    + `<a class="fc-a" href="${!me.person && v.sharing !== "privat" ? esc(prospektHref(v)) : `?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}`}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
+    + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
     + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts || (pk ? `<div class="fc-acts">${pk}</div>` : "")}</div>`
     + `${open && draft && !draft.missing ? openDetails() : ""}</li>`;
 }
-/* «Tilbake til prospekt» (Morten 2026-10-27): from the project view of a shared project, for a visitor, and for anyone who came from its Prospekt */
-function drawBack() {
-  const a = $("pkBack"); if (!a) return;
-  const v = draft?.version && !draft.missing && versionId && draft.sharing !== "privat";
-  a.hidden = !(v && (!me.person || new URLSearchParams(location.search).has("fra"))); if (!a.hidden) a.href = prospektHref({ version: versionId, sharing: draft.sharing, pkey: nokkel }, !!me.person);
-}
 function drawList() {
-  drawBack();
+  pkSync();
   const rows = verRows.map(v => v.version === versionId && draft?.version ? { ...v, title: draft.title ?? v.title, sharing: draft.sharing ?? v.sharing, updated: draft.updated ?? v.updated } : v);
   if (draft?.version && !draft.missing && versionId && !rows.some(v => v.version === versionId)) rows.unshift({ version: versionId, title: draft.title, owner: draft.owner, updated: draft.updated, sharing: draft.sharing, mine: mine(), ...(nokkel ? { nokkel } : {}) });
   $("verBar").hidden = !rows.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();

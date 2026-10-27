@@ -4,6 +4,8 @@ export const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;"
 const nb = (n, d = 0) => Number(n).toLocaleString("nb-NO", { maximumFractionDigits: d });
 const kote = k => (k == null ? "" : `+${nb(k, 1)}`);
 const day = t => new Date(t).toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
+/* the picture viewer's markup, once: the viewing area mounts it beside the page (prospekt-pane.js) */
+export const LIGHTBOX_HTML = `<div class="pk-lb" data-pklb hidden role="dialog" aria-modal="true" aria-label="Bilde"><button type="button" class="pk-lb-x" data-x aria-label="Lukk">×</button><button type="button" class="pk-lb-n pk-lb-p" data-p aria-label="Forrige bilde">‹</button><img data-img alt=""><button type="button" class="pk-lb-n pk-lb-f" data-n aria-label="Neste bilde">›</button><div class="pk-lb-b"><span data-cap></span><a data-dl download>Last ned</a></div></div>`;
 export const GONE = `<div class="pk-gone"><h1>Fant ikke prospektet</h1><p>Prosjektet finnes ikke, eller det er ikke delt. Be eieren om en lenke, eller se <a href="./">de delte prosjektene</a>.</p></div>`;
 
 /* every picture in the order the lightbox steps through: the renders (hero first), then the stills of the model */
@@ -39,7 +41,7 @@ export function prospektHtml(j, { links = {} } = {}) {
   const renders = all.filter((f, i) => f.kind === "render" && i !== heroAt), stills = all.filter((f, i) => f.kind === "still" && i !== heroAt), at = f => all.indexOf(f);
   return `<header class="pk-hero${hero ? "" : " none"}">${hero ? `<button type="button" class="pk-hero-img" data-lb="${heroAt}" aria-label="Se bildet større"><img src="${esc(hero.url)}" alt="${esc(hero.caption)}"></button>` : ""}`
       + `<div class="pk-hero-t"><p class="pk-kick">Prospekt · Gamle Drammen sykehus</p><h1>${esc(j.title)}</h1><p class="pk-by">Av ${esc(j.owner)}</p>`
-      + `<p class="pk-go">${links.explore ? `<a class="pk-btn" href="${esc(links.explore)}">Utforsk i 3D</a>` : ""}${links.edit ? `<a class="pk-btn quiet" href="${esc(links.edit)}">Åpne i redigering</a>` : ""}</p></div></header>`
+      + `<p class="pk-go">${links.explore ? `<a class="pk-btn" data-explore href="${esc(links.explore)}">Utforsk i 3D</a>` : ""}${links.edit ? `<a class="pk-btn quiet" href="${esc(links.edit)}">Åpne i redigering</a>` : ""}</p></div></header>`
     + `<div class="pk-body"><aside class="pk-side"><h2>Fakta</h2>${factsHtml(j)}<p class="pk-how">${esc(j.numbers?.how)}</p></aside>`
     + `<div class="pk-main">`
     + (renders.length ? `<section class="pk-sec"><h2>Bilder</h2><div class="pk-gal">${renders.map((f, k) => fig(f, at(f), k === 0 && renders.length % 2 === 1 ? " wide" : "")).join("")}</div></section>` : "")
