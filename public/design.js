@@ -168,14 +168,14 @@ const pt = (v, what) => {
 };
 
 /* the buildings a demolish names: a wing's pieces, one building, or all the hospital's */
-export function targets(site, key) {   // on a model where some are torn down already, those count too (a restore names them)
+export function targets(site, key, have = (site.added || []).map(a => a.id)) {   // have: the new buildings the version has, named in the refusal (an undone or deleted one is not there)   // on a model where some are torn down already, those count too (a restore names them)
   const k = String(key ?? "").toLowerCase().trim(), was = site.demolished || [];
   if (k === "alle" || k === "all") return [...site.buildings.filter(b => b.own), ...was.filter(d => d.own)].map(b => b.id);
   const w = [...(site.wings || []), ...(site.wings_gone || [])].find(x => x.id === k || x.name.toLowerCase() === k || (x.aliases || []).some(a => a.toLowerCase() === k));
   if (w) return [...site.buildings, ...was].filter(b => b.wing === w.id).map(b => b.id);
   const b = [...site.buildings, ...was].find(x => String(x.id).toLowerCase() === k);
   if (b) return [b.id];
-  throw new Error(`Fant ikke «${key}». Bruk en fløy (${(site.wings || []).map(x => x.name).join(", ")}), en bygnings id eller «alle»`);
+  throw new Error(`Fant ikke «${key}». Bruk en fløy (${(site.wings || []).map(x => x.name).join(", ")}), en bygnings id eller «alle». ${have.length ? `Nye bygg i denne versjonen nå: ${have.slice(0, 12).map(x => `«${x}»`).join(", ")}` : "Denne versjonen har ingen nye bygg nå"} (et nytt bygg kan være angret eller slettet).`);
 }
 
 /* one of the after's changes, checked: its tidy form, or an error that says what is wrong (in Norwegian, for the agent to pass on) */
@@ -670,8 +670,8 @@ export function applyDesign(site, floors, edits) {
     if ((e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id)) continue;   // landscape.js's
     if ((e.kind === "demolish" || e.kind === "restore") && ROAD_ID.test(e.building)) continue;   // roads.js's
     if (e.kind === "demolish" && vols.has(e.building)) vols.delete(e.building);
-    else if (e.kind === "demolish") for (const id of targets(site, e.building)) gone.add(id);
-    else if (e.kind === "restore") for (const id of targets(site, e.building)) gone.delete(id);
+    else if (e.kind === "demolish") for (const id of targets(site, e.building, [...vols.keys()])) gone.add(id);
+    else if (e.kind === "restore") for (const id of targets(site, e.building, [...vols.keys()])) gone.delete(id);
     else if (e.kind === "reshape") { const v = vols.get(e.id); if (v) { const { kind, id, why, ...set } = e; Object.assign(v, set); if (set.storeys != null && set.height == null) v.height = Math.round(set.storeys * STOREY_M * 100) / 100; } }
     else if (e.kind === "balconies") {
       const skipped = new Map(), faces = new Map(), parts = balconyParts(site, e, gone, skipped, faces), slabs = parts.filter(p => p.role === "slab");

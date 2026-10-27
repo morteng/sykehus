@@ -618,3 +618,6 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 #scale { bottom: calc(20px + env(safe-area-inset-bottom)); right: max(40px, env(safe-area-inset-right)); }
 .pf-bar { bottom: calc(12px + env(safe-area-inset-bottom)); }
 .pf-box { bottom: calc(104px + env(safe-area-inset-bottom)); left: max(12px, env(safe-area-inset-left)); }
+#tegnErr { margin: 0; color: var(--danger, #b3261e); font-size: var(--fs-sm, .85rem); }
+#tegnErr[hidden] { display: none; }
+.talk-item a:has(> .snap) { display: block; width: fit-content; cursor: zoom-in; }

@@ -61,7 +61,9 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   const door = login.base + prefix, ready = login.anton;
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   const threads = new Map();   // person → { queue: [turn], running, subs: Set<res>, approvals: Map, sent: [times], stop }
-  const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), sent: [], stop: null, jobs: new Set(), polling: null }; threads.set(p, t); } return t; };
+  const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), pics: [], sent: [], stop: null, jobs: new Set(), polling: null }; threads.set(p, t); } return t; };
+  /* the drawing a person sent is kept (the last 20) and served from here: the page's policy lets pictures come from its own origin only, so a data: URL in the chat line would show nothing */
+  const picUrl = id => `api/anton/tegning/${id}`;
   const session = p => `sykehus:${p}`;
   const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   function publish(person, event, data) { const t = threads.get(person); if (!t) return; for (const r of t.subs) r.write(sse(event, data)); }
@@ -140,7 +142,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     if (t.running) return;
     while (t.queue.length) {
       const turn = t.running = t.queue.shift();
-      if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: turn.drawing.image } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
+      if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: picUrl(turn.id) } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
         : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
@@ -191,6 +193,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       const selection = selectionOf(b?.selection);
       const picked = selection?.items.find(i => i.kind === "wing" || i.kind === "building")?.id ?? null;
       const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection, point: pointOf(b?.point), picked };
+      if (drawing) { t.pics.push({ id: turn.id, text, image: drawing.image }); if (t.pics.length > 20) t.pics.shift(); }
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
       /* the wing or building picked when it was sent: a facade asked for with no wing named is that one's (mcp.mjs viewOf) */
       if (pages) { pages.picked ??= new Map(); const p = selection?.items.find(i => i.kind === "wing" || i.kind === "building"); if (p) pages.picked.set(me.person, p.id); else pages.picked.delete(me.person); }
@@ -236,6 +239,12 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     const [st, j] = await call("/history", null, { person: me.person, session: session(me.person) }, me.device);
     if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
     const items = JSON.parse(JSON.stringify(Array.isArray(j.items) ? j.items : Array.isArray(j) ? j : []).replace(HIDDEN, ""));
+    /* the person's own lines get their drawing back: by the turn's id when the door gives one, else by the words, oldest first */
+    const pics = thread(me.person).pics, used = new Set();
+    for (const it of items) if (it?.type === "message" && it.from !== "assistant" && !it.image) {
+      const p = pics.find(x => !used.has(x.id) && (x.id === (it.request_id ?? it.id) || ((it.request_id ?? it.id) == null && x.text === it.text)));
+      if (p) { used.add(p.id); it.image = picUrl(p.id); }
+    }
     if (st === 200) watchJobs(me.person, me.device);   // a job that finished while no page was open, or before a restart of this server
     return send(res, st === 200 ? 200 : 502, { items: items.slice(-50), queue: queueView(thread(me.person)), ...(st === 200 ? {} : { error: codeOf(j, "unavailable") }) });
   }
@@ -248,6 +257,13 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     if (!me) { send(res, 401, { error: "signed_out" }); return true; }
     if (path === "/api/anton/strom" && req.method === "GET") { stream(req, res, me); return true; }
     if (path === "/api/anton/historikk" && req.method === "GET") { await history(res, me); return true; }
+    const pic = req.method === "GET" && /^\/api\/anton\/tegning\/([0-9a-f-]{36})$/.exec(path);
+    if (pic) {
+      const p = thread(me.person).pics.find(x => x.id === pic[1]);
+      if (!p) send(res, 404, { error: "Tegningen er ikke lenger her." });
+      else { res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, max-age=3600" }); res.end(Buffer.from(p.image.slice(23), "base64")); }
+      return true;
+    }
     if (req.method === "POST") { await post(req, res, me, path); return true; }
     send(res, 404, { error: "Ikke funnet" }); return true;
   }

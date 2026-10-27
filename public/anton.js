@@ -119,7 +119,11 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (who) li.append(Object.assign(document.createElement("span"), { className: "talk-who", textContent: who }));
       const b = document.createElement("div"); b.className = "talk-body";
       if (about) b.append(Object.assign(document.createElement("span"), { textContent: `Om ${about}`, className: "about" }));
-      if (image) b.append(Object.assign(document.createElement("img"), { src: image, alt: "Tegningen", className: "snap" }));
+      if (image) {   /* the drawing sent: a thumbnail that opens large in a tap; a picture that does not load says so */
+        const a = Object.assign(document.createElement("a"), { href: image, target: "_blank", rel: "noopener", title: "Åpne tegningen stor" }), im = Object.assign(document.createElement("img"), { src: image, alt: "Tegningen du sendte", className: "snap" });
+        im.onerror = () => a.replaceWith(Object.assign(document.createElement("span"), { className: "about", textContent: "Tegningen vises ikke her, men Anton fikk den." }));
+        a.append(im); b.append(a);
+      }
       const t = document.createElement(cls === "from-asst" ? "div" : "span"); if (cls === "from-asst") { t.raw = text; setMd(t, text); } else t.textContent = text; b.append(t); li.append(b);
       log.append(li); empty(); if (cls === "from-me" || cls === "err") toEnd();
       /* a failed turn shows in the pill's card too, not only in the tab (pm 21:20Z: the pill showed nothing) */
@@ -173,14 +177,15 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const sel = valg.forMessage();
       const r = await json("api/anton", { text, version: version(), ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
-      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error || CODES.unavailable); return false; }
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; const why = j.error || CODES.unavailable; line("err", why); return drawn ? { error: why } : false; }   // a drawing's window shows the reason too
       if (!drawn) { input.value = ""; input.oninput(); }
       /* the stream must show the turn taken (queued or running); else the text comes back with a word (pm 21:31Z: the
          first message after load went away and reached no one) */
       const { id } = await r.json().catch(() => ({})); if (id && !seen.has(id)) setTimeout(() => { if (seen.has(id)) return; line("err", "Fikk ikke bekreftet at Anton fikk meldingen; den står i feltet igjen om du vil sende den på nytt."); if (!input.value.trim() && !drawn) { input.value = text; input.oninput(); } }, 8000);
-      lastStep = ""; said(); panel.reveal("chat"); return true;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
+      try { lastStep = ""; said(); panel.reveal("chat"); } catch (x) { console.error(x); }   // the message is taken: nothing after it may keep the drawing's window open
+      return true;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
     }
-    $("talkTegn").onclick = () => import("./tegn.js?v=20261025b").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
+    $("talkTegn").onclick = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
     /* U3668: an Anton refusal (401: a device gulden-ai does not know, a revoked one, a restart) says so and leaves the page
        signed in: it never logs the person out of sykehus or reloads (pm 16:13Z); the line shows once a half minute */
@@ -226,7 +231,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (!h) return null;
       log.textContent = ""; replies.clear(); sketchShown.clear(); sketchCards.clear();
       for (const it of h.items || []) {
-        if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
+        if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null, it.image);
         else if (it.type === "tool") line("tool", toolLine(it));
         else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }

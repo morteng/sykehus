@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 const UNDO = `<svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 010 10h-3"/></svg>`;
 const SEND = `<svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
 
-/* opens the drawing over the page; send(text, drawing) hands it on, and resolves true when it went */
+/* opens the drawing over the page; send(text, drawing) hands it on, and resolves true when it went, else {error} with the reason (the window stays and shows it) */
 export function startDrawing({ viewer, labels, send, host = document.body }) {
   const R = host.getBoundingClientRect(), W = host.clientWidth || innerWidth, H = host.clientHeight || innerHeight, picture = viewer.snapshot(), camera = viewer.pose(), mode = viewer.view().mode;
   const names = [...labels.children].filter(e => e.style.display !== "none").map(e => { const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(e.style.transform); return m && { x: +m[1], y: +m[2], w: e.offsetWidth, h: e.offsetHeight, text: e.innerText, big: e.style.fontWeight === "600" }; }).filter(Boolean);
@@ -21,7 +21,7 @@ export function startDrawing({ viewer, labels, send, host = document.body }) {
       ${COLOURS.map(([n, c], i) => `<button class="dot" data-c="${c}" aria-label="${n}" aria-pressed="${i === 0}"><i style="background:${c}"></i></button>`).join("")}
       <span class="sep"></span><button id="tegnUndo">${UNDO}Angre</button><button id="tegnClear">Tøm</button><button id="tegnCancel">Avbryt</button></div>
     <form id="tegnSend" class="card"><textarea id="tegnText" rows="2" placeholder="Skriv hva du vil, med pennen eller tastaturet"></textarea>
-      <button type="submit" class="pri">${SEND}Send til Anton</button></form>`;
+      <p id="tegnErr" role="alert" hidden></p><button type="submit" class="pri">${SEND}Send til Anton</button></form>`;
   host.append(box);   // over the view only: the panel stays as it is
   const cv = $("tegnInk"), dpr = Math.min(2, devicePixelRatio || 1);
   cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + "px"; cv.style.height = H + "px";
@@ -69,7 +69,9 @@ export function startDrawing({ viewer, labels, send, host = document.body }) {
     const out = document.createElement("canvas"), k = Math.min(1, 1280 / W); out.width = Math.round(W * k); out.height = Math.round(H * k);
     out.getContext("2d").drawImage(cv, 0, 0, out.width, out.height);
     const image = out.toDataURL("image/jpeg", 0.82);
-    const ok = await send(text || "Se tegningen.", { image, strokes: site, camera, mode, size: [W, H] });
-    if (ok) close(); else btn.disabled = false;
+    const err = $("tegnErr"); err.hidden = true;
+    let ok; try { ok = await send(text || "Se tegningen.", { image, strokes: site, camera, mode, size: [W, H] }); } catch (x) { console.error(x); ok = { error: "Noe gikk galt. Prøv igjen." }; }
+    if (ok === true) close();   // sent: the picture is in the chat line now
+    else { btn.disabled = false; err.textContent = ok?.error || "Tegningen ble ikke sendt. Prøv igjen."; err.hidden = false; }   // it stays, with the reason
   };
 }

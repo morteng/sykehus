@@ -1082,6 +1082,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       } catch (e) {
         if (e.auth) return send(res, 401, { jsonrpc: "2.0", id: m.id ?? null, error: { code: -32001, message: "Logg inn for å lagre egne versjoner (koble til Sykehustomta)." } }, { "www-authenticate": auth ? auth.challenge(req) : "Bearer" });
         console.error("mcp", m.method, m.params?.name || "", e.message);
+        /* a tool's own check that threw a plain Error (design.js: «Fant ikke «volum-32»…») is a refusal Anton can read, not «Internal error»; a TypeError, ReferenceError or RangeError is a bug and stays one */
+        if (m.method === "tools/call" && e.constructor === Error && !e.code && typeof e.message === "string" && e.message && e.message.length <= 800) { out.push({ jsonrpc: "2.0", id: m.id ?? null, result: { resultType: "complete", content: [{ type: "text", text: e.message }], isError: true } }); continue; }
         const known = Number.isInteger(e.code) && e.code < 0;
         out.push({ jsonrpc: "2.0", id: m.id ?? null, error: { code: known ? e.code : -32603, message: known ? e.message : "Internal error", ...(known && e.data ? { data: e.data } : {}) } });
       }
