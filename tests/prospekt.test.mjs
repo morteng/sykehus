@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import vm from "node:vm";
 import { PROSPEKT_KEYS, numbersOf, limitsOf } from "../prospekt.mjs";
 import { prospektHtml, GONE } from "../public/prospekt-view.js";
-import { firstView, sharedOpen, prospektOpen, PRIVATE_HTML, renderProspekt } from "../public/prospekt-pane.js";
+import { firstView, sharedOpen, prospektOpen, PREVIEW_NOTE, renderProspekt } from "../public/prospekt-pane.js";
 
 const secret = "proxy-secret-for-tests-0123456789", as = who => ({ "remote-user": who, "x-sykehus-proxy-auth": secret });
 const dir = mkdtempSync(join(tmpdir(), "sykehus-prospekt-")), vdir = join(dir, "v");
@@ -46,14 +46,27 @@ s = await boot(); after(() => s.stop());
 const get = (p, h) => fetch(s.O + p, { headers: h }).then(async r => ({ status: r.status, type: r.headers.get("content-type"), text: await r.text(), r }));
 const gone = await get("/api/prospekt/vzzzzzzzz");
 
-test("privat, an unknown id and a lenke without its key all answer the same 404, for the JSON and for the pictures; even to the owner of the privat one", async () => {
+test("privat, an unknown id and a lenke without its key all answer the same 404, for the JSON and for the pictures; and a stranger who is signed in or holds another project\'s key; only the owner previews a privat one (next test)", async () => {
   for (const p of [`/api/prospekt/${priv}`, `/api/prospekt/${lnk.version}`, `/api/prospekt/${lnk.version}?nokkel=feil`, `/api/prospekt/${priv}/bilde/${R.v1}.jpg`, `/api/prospekt/${lnk.version}/bilde/${R.l1}.jpg`, `/api/prospekt/vzzzzzzzz/bilde/${R.p1}.jpg`, `/api/prospekt/${priv}?nokkel=${KEY}`]) {
     const r = await get(p); assert.equal(r.status, 404, p); assert.equal(r.text, gone.text, `${p}: same body as an unknown id`);
   }
-  assert.equal((await get(`/api/prospekt/${priv}`, lars)).status, 404, "the owner too: privat has no prospekt");
   assert.equal((await get(`/api/prospekt/${priv}`, kari)).status, 404);
 });
 
+test("the owner previews an unshared project: the full data and its pictures; a stranger, a visitor and a link-key holder still get the same 404", async () => {
+  const own = await get(`/api/prospekt/${priv}`, lars); assert.equal(own.status, 200); const j = JSON.parse(own.text);
+  assert.deepEqual(Object.keys(j).sort(), [...PROSPEKT_KEYS].sort(), "the same keys a visitor gets once it is shared"); assert.equal(j.sharing, "privat"); assert.equal(j.owner, "lars");
+  assert.deepEqual(j.renders.map(r => r.id), [R.v1]); assert.ok(!j.renders[0].url.includes("nokkel"), "no key in a privat one's picture URLs");
+  const pic = await fetch(`${s.O}/${j.renders[0].url}`, { headers: lars }); assert.equal(pic.status, 200); assert.deepEqual(Buffer.from(await pic.arrayBuffer()), bytes(R.v1));
+  assert.equal((await fetch(`${s.O}/${j.renders[0].url}`)).status, 404, "its picture is not served to a visitor"); assert.equal((await fetch(`${s.O}/${j.renders[0].url}`, { headers: kari })).status, 404);
+  const still = await fetch(`${s.O}/${j.stills[0].url}`, { headers: lars }); assert.equal(still.status, 200, "the owner's still too");
+  for (const [p, h] of [[`/api/prospekt/${priv}`, undefined], [`/api/prospekt/${priv}`, kari], [`/api/prospekt/${priv}?nokkel=${KEY}`, undefined], [`/api/prospekt/${priv}?nokkel=${KEY}`, kari], [`/api/prospekt/${priv}/modell/sorvest.jpg`, kari]]) {
+    const r = await get(p, h); assert.equal(r.status, 404, p); assert.equal(r.text, gone.text, "the same body as an unknown id");
+  }
+  const el = { innerHTML: "" }, d = await renderProspekt(el, { id: priv, fetch: u => fetch(`${s.O}/${u}`, { headers: lars }) });
+  assert.equal(d.sharing, "privat"); assert.ok(el.innerHTML.startsWith(PREVIEW_NOTE), "the preview says so on top"); assert.ok(el.innerHTML.includes(prospektHtml(d, { links: {} })));
+  const pub2 = await renderProspekt(el, { id: pub, fetch: u => fetch(`${s.O}/${u}`) }); assert.ok(!el.innerHTML.includes("pk-preview"), `a shared one carries no note (${pub2.sharing})`);
+});
 test("offentlig opens for a visitor and is listed; lenke opens with its key (and for its owner), and is never listed to a visitor or another person", async () => {
   const r = await get(`/api/prospekt/${pub}`); assert.equal(r.status, 200);
   const list = async h => (await (await fetch(s.O + "/api/versjoner", { headers: h })).json()).versions;
@@ -175,7 +188,7 @@ test("the viewing area mounts the one content builder: the real server's answer 
 test("the owner has the Prospekt while working: open for their own project shared or not, for another's only when shared; and it follows the project (the same answer, drawn again after a pick changes)", async () => {
   const v = sharing => ({ version: "v1", sharing }), tbl = [[v("offentlig"), false, true], [v("lenke"), false, true], [v("privat"), false, false], [v("privat"), true, true], [v("offentlig"), true, true], [{ ...v("privat"), missing: true }, true, false], [null, true, false]];
   for (const [d, owner, want] of tbl) assert.equal(prospektOpen(d, owner), want, JSON.stringify([d, owner]));
-  assert.match(PRIVATE_HTML, /Prosjektet er privat/);
+  assert.equal(PREVIEW_NOTE, `<p class="pk-preview">Slik ser besøkende det når du deler det</p>`);
   /* the owner's flow in the page: show() and the picks both call pkRefresh, which draws the Prospekt again when it is the open view */
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
   assert.match(app, /ifcLink\(\); pkRefresh\(\);/, "after every change to the project (show)"); assert.match(app, /pkLoad\(\); pkRefresh\(\);/, "after the owner's picks");
@@ -191,7 +204,7 @@ test("one copy: only the pane module builds the brochure; the main page and the 
   const rd = f => readFileSync(new URL(`../public/${f}`, import.meta.url), "utf8"), app = rd("app.js"), html = rd("index.html");
   for (const f of ["app.js", "prospekt.js", "me-hint.js"]) assert.ok(!/prospektHtml|factsHtml|limitsHtml|volumesHtml/.test(rd(f)), `${f} builds no brochure`);
   assert.match(rd("prospekt-pane.js"), /prospektHtml\(data/); assert.match(app, /import \{[^}]*renderProspekt[^}]*\} from "\.\/prospekt-pane\.js/);
-  assert.ok(!/location\.replace/.test(rd("me-hint.js")), "me-hint.js no longer redirects");
+  assert.ok(!/location\.replace/.test(rd("me-hint.js")), "me-hint.js no longer redirects"); assert.match(rd("me-hint.js"), /add\("pk-wait"\)/); assert.match(app, /classList\.remove\("pk-wait"\)/, "the hint is lifted when the view is chosen"); assert.match(rd("sykehus.css"), /html\.pk-wait \.loading \{ visibility: hidden/);
   assert.ok(!/pkBack|drawBack|fra=|prospekt\.html|&se=1/.test(app + html), "the full-page «Tilbake til prospekt» and its links are gone");
   const group = /<span class="seg2" role="group" aria-label="Visning">(.*?)<\/span>/s.exec(html)[1], ids = [...group.matchAll(/id="(\w+)"/g)].map(m => m[1]);
   assert.deepEqual(ids.slice(0, 2), ["mpk", "m3d"], "«Prospekt» is the first view button, next to 3D"); assert.match(group, /id="mpk" hidden[^>]*>Prospekt<\/button>/);

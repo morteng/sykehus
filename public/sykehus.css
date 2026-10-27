@@ -665,3 +665,4 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 /* the Prospekt in the viewing area (prospekt-pane.js, prospekt.css): only the view buttons stay over it */
 body.pk-on .nz, body.pk-on #scale, body.pk-on #bstack, body.pk-on #tip, body.pk-on .vt > :not(.seg2) { display: none !important; }
 #mpk[hidden] { display: none; }
+html.pk-wait .loading { visibility: hidden; }

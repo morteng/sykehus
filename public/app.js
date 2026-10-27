@@ -35,7 +35,7 @@ import { baseOf, groundText, lotText, buildingWords } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
-import { sharedOpen, firstView, prospektOpen, renderProspekt, bindLightbox, PRIVATE_HTML } from "./prospekt-pane.js?v=1";
+import { sharedOpen, firstView, prospektOpen, renderProspekt, bindLightbox, } from "./prospekt-pane.js?v=1";
 import { figures } from "./prospekt-view.js";
 
 /* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
@@ -286,7 +286,6 @@ const pkShared = () => !!versionId && sharedOpen(draft), pkCan = () => !!version
 async function pkShow(on) {
   pkOn = on && pkCan(); document.body.classList.toggle("pk-on", pkOn); $("pkPane").hidden = !pkOn; $("mpk").setAttribute("aria-pressed", String(pkOn)); pressMode();
   if (!pkOn) return; const ask = ++pkAsk, id = versionId, pane = $("pkPane"), top = pane.scrollTop;
-  if (!pkShared()) { $("pkBody").innerHTML = PRIVATE_HTML; pkFigs = []; return; }
   const j = await renderProspekt($("pkBody"), { id, nokkel, explore: `?versjon=${encodeURIComponent(id)}&vis=3d` });
   if (ask === pkAsk) { pkFigs = j ? figures(j) : []; pane.scrollTop = top; }
 }
@@ -297,7 +296,7 @@ bindLightbox($("pkPane"), () => pkFigs);
 $("mpk").onclick = () => pkShow(true);
 $("pkPane").addEventListener("click", e => { const b = e.target.closest("[data-explore]"); if (b) { e.preventDefault(); pkShow(false); } });
 document.querySelector(".vt .seg2").addEventListener("click", e => { const b = e.target.closest("button"); if (b && b.id !== "mpk" && pkOn) pkShow(false); });   // 3D, Gateplan and Plan leave the Prospekt (their own handlers ran first)
-pkSync(); pkShow(firstView({ shared: pkShared(), owner: mine(), asked: qs.get("vis") }) === "prospekt");
+pkSync(); pkShow(firstView({ shared: pkShared(), owner: mine(), asked: qs.get("vis") }) === "prospekt"); document.documentElement.classList.remove("pk-wait");
 
 /* U3606: the person by the zoom: dragged onto the model, a ring shows where it lands, and a drop stands there in
    «Gateplan»; a press without a drag (a finger, the keyboard) waits for a tap on the spot */

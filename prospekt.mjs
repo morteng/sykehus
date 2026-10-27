@@ -7,7 +7,7 @@
    GET /prospekt/<versionId> and /prospekt.html?v=<id>             the page (public/prospekt.html), by server.mjs
 
    Who may open it is decided from the version's sharing on EVERY request: offentlig: anyone; lenke: with the link's key (v.key), or its owner;
-   privat, a missing id and a wrong key: the same 404, so nothing tells them apart. The JSON carries no owner address, no chat, no wishes, no
+   privat (to anyone but its owner, who previews it), a missing id and a wrong key: the same 404, so nothing tells them apart. The JSON carries no owner address, no chat, no wishes, no
    other id than the version's and its renders'. The renders are gjengi.mjs's own (kept per version in <dir>/index.json, <dir>/<id>.<ext>). */
 import { applyEdits } from "./public/edits.js";
 import { loadCosts, summarize } from "./area.mjs";
@@ -36,7 +36,8 @@ export function limitsOf(f) {
 export function createProspekt({ SECURITY = {}, login, versions, photos, site, floors = [], siteFacts = async () => ({}), stills = { list: [], of: async () => new Map() }, costs = () => loadCosts() }) {
   const json = (res, n, o) => res.writeHead(n, { ...SECURITY, "content-type": "application/json; charset=utf-8", "cache-control": "no-store", vary: "cookie" }).end(JSON.stringify(o));
   const none = res => json(res, 404, { error: "Fant ikke prospektet." });   // one answer for a private, a missing and a wrongly keyed project
-  const open = (v, key, who) => !!v && (v.sharing === "offentlig" || (v.sharing === "lenke" && ((typeof key === "string" && key === v.key) || (!!who && who === v.owner))));
+  /* the owner opens their own project's Prospekt shared or not (the preview while working, Morten 2026-10-28); nobody else gets a privat one, and a link key never opens it */
+  const open = (v, key, who) => !!v && (!!who && who === v.owner || v.sharing === "offentlig" || (v.sharing === "lenke" && typeof key === "string" && key === v.key));
   const urlOf = (v, r, key) => `api/prospekt/${v.id}/bilde/${r.id}.${r.ext}${v.sharing === "lenke" && key ? `?nokkel=${encodeURIComponent(key)}` : ""}`;
   return {
     open,

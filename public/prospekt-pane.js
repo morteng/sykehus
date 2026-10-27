@@ -10,8 +10,8 @@ export function firstView({ shared, owner, asked }) {
   return owner ? "3d" : "prospekt";
 }
 
-/* the owner's own project that is not shared yet: there is no Prospekt to show a visitor, and the page says how to get one */
-export const PRIVATE_HTML = `<div class="pk-gone"><h1>Prosjektet er privat</h1><p>Et prospekt finnes først når prosjektet er delt. Del det med lenke eller åpent under «Detaljer» i Prosjekter, så vises det her slik andre ser det.</p></div>`;
+/* an unshared project's preview, which only its owner is served */
+export const PREVIEW_NOTE = `<p class="pk-preview">Slik ser besøkende det når du deler det</p>`;
 /* the Prospekt can be opened for a shared project, and for the owner's own while working, shared or not */
 export const prospektOpen = (draft, owner) => sharedOpen(draft) || (!!draft?.version && !draft.missing && !!owner);
 
@@ -20,7 +20,7 @@ export async function renderProspekt(el, { id, nokkel, explore, fetch: get = fet
   const r = await get(`api/prospekt/${encodeURIComponent(id)}${nokkel ? `?nokkel=${encodeURIComponent(nokkel)}` : ""}`).catch(() => null);
   if (!r) { el.innerHTML = `<p class="pk-gone">Fikk ikke kontakt med tjeneren. Prøv igjen om litt.</p>`; return null; }
   if (!r.ok) { el.innerHTML = GONE; return null; }
-  const data = await r.json(); el.innerHTML = prospektHtml(data, { links: { explore } });
+  const data = await r.json(); el.innerHTML = (data.sharing === "privat" ? PREVIEW_NOTE : "") + prospektHtml(data, { links: { explore } });
   return data;
 }
 
