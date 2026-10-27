@@ -1022,7 +1022,7 @@ ifcLink();
 /* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
 /* «Forslag»: one list of the suggestions the person may see (api/versjoner: their own, then the public ones of real people), a card each with its picture,
    name, owner, how it is shared and when it was saved. The open one is marked; its «Detaljer» are folded under it (Morten 2026-10-27) */
-function cardOf(v) {
+function versionCard(v) {
   const open = v.version === versionId, sel = selecting && v.mine;
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
   const acts = v.mine && !selecting ? `<div class="fc-acts">${v.sharing === "offentlig" ? "" : act("vshare", v.sharing === "lenke" ? "Kopier lenken" : "Del: kopierer en lenke", IC.link)}${v.sharing === "privat" ? "" : act("vpriv", "Gjør privat: lenken virker ikke lenger", IC.lock)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett forslaget", IC.bin)}</div>` : "";
@@ -1036,7 +1036,7 @@ function drawList() {
   if (draft?.version && !draft.missing && versionId && !rows.some(v => v.version === versionId)) rows.unshift({ version: versionId, title: draft.title, owner: draft.owner, updated: draft.updated, sharing: draft.sharing, mine: mine(), ...(nokkel ? { nokkel } : {}) });
   $("verBar").hidden = !rows.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
   const keep = $("verList").querySelector(".fc-det")?.open; if (keep != null) detailsOpen = keep;
-  $("verList").innerHTML = rows.length ? rows.map(cardOf).join("") : `<li class="sel-empty">Ingen forslag ennå.</li>`;
+  $("verList").innerHTML = rows.length ? rows.map(versionCard).join("") : `<li class="sel-empty">Ingen forslag ennå.</li>`;
   const R = $("verList").querySelector(".fc.open"); if (R && draft?.version) bindDetails(R);
 }
 function listVersions() {
