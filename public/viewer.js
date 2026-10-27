@@ -1260,7 +1260,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       if (!shot) { drawNow(camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); }
       const [aw, ah] = ratio(shot.aspect), asp = aw / ah, LONG = 1280, W = aw >= ah ? LONG : Math.round(LONG * asp), H = aw >= ah ? Math.round(LONG / asp) : LONG;
       const sc = shot.live ? liveCamera(shot, asp) : shotCamera(shot, asp);
-      renderer.setSize(W, H, false); sc.updateMatrixWorld(); shafts.shoot(scene, sc, { atm, sunDir: sunDir(), draw: drawNow });   // the shafts only here: the live view and a plain snapshot never get them (U3887)
+      renderer.setSize(W, H, false); sc.updateMatrixWorld(); try { shafts.shoot(scene, sc, { atm, sunDir: sunDir(), draw: drawNow }); } catch (e) { console.warn("shafts", e); drawNow(sc); }   // the shafts only here: the live view and a plain snapshot never get them (U3887)
       const url = renderer.domElement.toDataURL("image/jpeg", 0.85);
       size(); dirty = true; return url;
     },
