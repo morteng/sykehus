@@ -24,6 +24,8 @@ import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
 import { createMeasure } from "./renderkit/measure.js";
 import { inferPoint } from "./renderkit/infer.js";
+import { createReadout } from "./renderkit/readout.js";
+import { groundAt as terrainAt } from "./renderkit/fit.js";
 import { createDragType } from "./dragtype.js?v=20261027zh";
 import { baseOf, groundText, lotText } from "./design.js";
 import { PLANTS } from "./plants.js";
@@ -1156,6 +1158,16 @@ const measure = createMeasure({ el: K.el, host: $("stage"), locale: "nb-NO",
 const setMal = on => { if (on) { if (placing) { aim(null); $("toast")?.remove(); } measure.on(); } else measure.off(); $("mal").setAttribute("aria-pressed", String(measure.active)); };
 $("mal").onclick = () => setMal(!measure.active);
 addEventListener("keydown", e => { if ((e.key === "m" || e.key === "M") && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) { e.preventDefault(); setMal(!measure.active); } });
+/* The pointer's place in the Plan (renderkit readout.js, U3883): «Ø», «N» in UTM 33 (the site's origin + its metres) and «h», the
+   kote of the storey shown (the lowest wing's, koteOf) or else the terrain's under the pointer (fit.js groundAt). Gone with the pointer. */
+const readout = createReadout({ host: $("stage"), locale: "nb-NO", words: { e: "Ø" } });
+K.el.addEventListener("pointermove", e => {
+  const v = viewer.view(), at = v.mode === "plan" ? viewer.groundAt(e.clientX, e.clientY, viewer.base || 0) : null;
+  if (!at) return readout.hide();
+  const [ox, oy] = site.origin || [0, 0], k = v.storey ? koteOf(v.storey) : null;
+  readout.set({ e: ox + at[0], n: oy + at[1], h: k ?? terrainAt(site, at) });
+});
+K.el.addEventListener("pointerleave", () => readout.hide());
 const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
   under: e => { if (placing || measure.active || build?.busy || shapeEd?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
   windowKeys: (r, inside) => { lastHit = null; return valg.windowKeys(r, inside, viewer.project, windowTest); },

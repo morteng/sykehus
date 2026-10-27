@@ -17,9 +17,13 @@ export const STROKE_RES = 0.25;
 const bboxOfPts = pts => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } return [x0, y0, x1, y1]; };
 
 /* A grid over a box, `res` metres a cell (same layout as detect.js makeGrid). */
+/** Cells of every grid built so far: the work a stroke costs, read by the paint test (U3885) instead of a clock. */
+export const gridWork = { cells: 0 };
 export function gridOver([x0, y0, x1, y1], res = STROKE_RES, pad = 0) {
   const X0 = Math.floor(x0 - pad), Y0 = Math.floor(y0 - pad), X1 = Math.ceil(x1 + pad), Y1 = Math.ceil(y1 + pad);
-  return { x0: X0, y0: Y0, x1: X1, y1: Y1, res, w: Math.max(1, Math.round((X1 - X0) / res)), h: Math.max(1, Math.round((Y1 - Y0) / res)) };
+  const g = { x0: X0, y0: Y0, x1: X1, y1: Y1, res, w: Math.max(1, Math.round((X1 - X0) / res)), h: Math.max(1, Math.round((Y1 - Y0) / res)) };
+  gridWork.cells += g.w * g.h;
+  return g;
 }
 /* Finer than half a metre where the lot is small; never more than about 1.2 million cells. */
 export const resFor = (box, pad = 0) => Math.max(STROKE_RES, Math.ceil(((Math.max(box[2] - box[0], box[3] - box[1]) + 2 * pad) / 1100) / STROKE_RES) * STROKE_RES);

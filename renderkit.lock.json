@@ -1,5 +1,5 @@
 {
-  "kits": "d606baa3dfb88d7454a11610ca6db80377ec48f8",
+  "kits": "388a953950355bba30d77c83c81ab212ec965f2f",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -68,7 +68,7 @@
     "sunpick.js": "e4efe0f58fab9f20f478a5d8cb45f1b786b27899",
     "photo.js": "c16dbfc07d2795b7d0dc3174a173e836b00f8959",
     "grid2d.js": "7ba402edbec5bb2aaeb5d057588e626c4b06163a",
-    "paint.js": "c4b2f9b6c06aa4237e8182b6bce77200d22c10d9",
+    "paint.js": "22bb6edb551a8b4fdb74a77871e1724596b1e0ee",
     "terrain.js": "b98d60291e2d28aa9dd9758e74c23220d168d302",
     "photoframe.js": "e201b08b58fc1d6234a60bd8705955cb970fd963",
     "thumb-grass.webp": "f493565373b00d2aa01cef4e7a30dccd2c595998",
@@ -86,6 +86,7 @@
     "infer.js": "e1a1fae0759c072530969cf8b1965cace5413d2d",
     "dragsnap.js": "348a591aaf26f5f90ae410eaec69bc02b9c0da25",
     "guidelines.js": "4353b2403cf4bc12846274d092957b2fb4df31a4",
-    "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78"
+    "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78",
+    "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71"
   }
 }
