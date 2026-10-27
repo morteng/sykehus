@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
+import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
@@ -695,6 +696,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "measure", tgt: "read", title: "Mål og les tilbake", ro: true, schema: S({ a: REF, b: { ...REF, description: "Leave out to read a back alone" }, target: TARGET, draft: OLD }, ["a"]),
       description: "The page's «Mål» in numbers, and the read-back of what was placed. a alone: its corners [east, north], axis bearing, length × width, foot and top kote, m², what it stands on. With b: distance, height difference and run from the middle of each footprint at its foot (a wing: its biggest roof level), and for two things with an axis the angle between them (parallel = under 0.5°), the offset to b's axis, and, for a part and a wing, how far the part sticks out past the roof edge. Quote the say.",
       run: async (a, req) => { const m = model(a.draft, req); try { return measureParts(m.site, a.a, a.b, wingOf); } catch (e) { throw toolErr(e.message); } } },
+    ...drawTools({ S, WING, TARGET, OLD, model, wingOf, toolErr }),   // T5
     { name: "check_fit", tgt: "read", title: "Passer delene sammen", ro: true, schema: S({ wing: { ...WING, description: "Only the roof of this wing" }, target: TARGET, draft: OLD }),
       description: "Do the new parts sit right: pairs that meet on one roof (names, m²), what sticks out past a roof's edge, what is off the lot, what overlaps a wing that stands. Nothing changed; quote the say, and when ok, say none.",
       run: async (a, req) => { const m = model(a.draft, req); return checkFit(m.site, a.wing ? wingOrErr(a.wing) : null); } },
