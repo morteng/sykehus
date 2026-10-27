@@ -87,11 +87,14 @@ export function createAtmosphere({ THREE, renderer, scene, hemi = null, sun = nu
        is far off and the haze would whiten the whole model */
     forCamera(cam) {
       const persp = !!cam.isPerspectiveCamera;
-      if (scene.fog) { scene.fog.near = persp ? FOG.near : 1e7; scene.fog.far = persp ? FOG.far : 2e7; }
+      if (scene.fog) { scene.fog.near = persp ? FOG.near / api.haze : 1e7; scene.fog.far = persp ? FOG.far / api.haze : 2e7; }
       if (dome) { dome.visible = persp; dome.position.copy(cam.position); }
       if (scene.background?.isColor) scene.background.copy(persp ? hz : api.flatSky);
     },
     flatSky: new THREE.Color(FOG.color),
+    haze: 1,                                   // > 1 pulls the fog in (shafts.js sets it for one picture and puts it back, U3887)
+    get dome() { return dome; },
+    get elevation() { return el; },            // the sun's height as setSun was last given it, degrees
     setSun(elevation) {
       el = elevation; const { zenith, horizon } = skyAt(elevation), z = new THREE.Color(zenith); hz = new THREE.Color(horizon);
       if (dome) {

@@ -22,6 +22,7 @@ import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the windo
 import { bimPlace } from "./design.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
+import { createShafts } from "./renderkit/shafts.js";   // light shafts and a little more haze for a photo-mode picture only (U3887)
 import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
@@ -53,6 +54,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const atm = createAtmosphere({ THREE, renderer, scene, hemi: sky, sun: sunL, reduced: !!matchMedia?.("(prefers-reduced-motion: reduce)").matches }).install();
   renderer.shadowMap.autoUpdate = false;
   const snowParam = new URLSearchParams(location.search).get("snow"); if (snowParam != null) atm.setSnow(+snowParam);
+  const shafts = createShafts({ THREE, renderer }), sunDir = () => sunL.position.clone().sub(sunL.target.position).normalize().toArray();
   const drawNow = cam => { renderer.shadowMap.needsUpdate = true; renderer.render(scene, cam); };
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide, ...o });
 
@@ -1258,7 +1260,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       if (!shot) { drawNow(camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); }
       const [aw, ah] = ratio(shot.aspect), asp = aw / ah, LONG = 1280, W = aw >= ah ? LONG : Math.round(LONG * asp), H = aw >= ah ? Math.round(LONG / asp) : LONG;
       const sc = shot.live ? liveCamera(shot, asp) : shotCamera(shot, asp);
-      renderer.setSize(W, H, false); drawNow(sc);
+      renderer.setSize(W, H, false); sc.updateMatrixWorld(); shafts.shoot(scene, sc, { atm, sunDir: sunDir(), draw: drawNow });   // the shafts only here: the live view and a plain snapshot never get them (U3887)
       const url = renderer.domElement.toDataURL("image/jpeg", 0.85);
       size(); dirty = true; return url;
     },

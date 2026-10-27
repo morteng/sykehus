@@ -1,5 +1,5 @@
 {
-  "kits": "34e674230a6b73c1ba3ffe86310db6d9094d1809",
+  "kits": "52e0fdf892da6e6ccdd0b522dfa5b6cd701f37ff",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -8,7 +8,7 @@
     "./three.js": "../vendor/three.module.js"
   },
   "files": {
-    "atmosphere.js": "2a6e286b18027e91a11f675191f238b5bfe5e282",
+    "atmosphere.js": "f1761e1d77e611160b15d8ffca8796d542abaf9f",
     "sun.js": "2caa173fdc3adcc0a12d2e2fbf28a4dfd9fdd492",
     "quality.js": "fa251f11621def68ddada3c47032a99dc21584f6",
     "ez-tree.js": "1ea19545e4ba1bbbc92f62ef66c781f741aac524",
@@ -89,6 +89,7 @@
     "dragsnap.js": "348a591aaf26f5f90ae410eaec69bc02b9c0da25",
     "guidelines.js": "4353b2403cf4bc12846274d092957b2fb4df31a4",
     "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78",
-    "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71"
+    "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71",
+    "shafts.js": "961918125e3b23d9e45443d7210e25b892d9e9e2"
   }
 }
