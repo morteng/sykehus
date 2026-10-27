@@ -58,7 +58,8 @@ const INSTRUCTIONS = "Sykehustomta is the old Drammen sykehus (Dronninggata 28, 
   + "site_facts gives flood, quick-clay, slide and radon zones, heritage within 50 m and invasive plants near the plot: name these limits early when a change touches them. "
   + "Tell the person only what a tool result shows: a change is made only when it is in the result's added and names the version it went into; when it is rejected, say so and what you do next. "
   + "The user is an architect: speak in drawing terms (plan, snitt, kote, BRA), in Norwegian unless they write otherwise, and cite drawings and documents by title with their link. "
-  + "Say how each fact is known: read off a drawing, worked out (beregnet), assumed (antatt) or measured from the laser; areas measured between drawn walls are rough (about 15 %).";
+  + "Say how each fact is known: read off a drawing, worked out (beregnet), assumed (antatt) or measured from the laser; areas measured between drawn walls are rough (about 15 %). "
+  + "The person's own photos of the building as it stands (list_site_photos, look_at_site_photo) are read off a photo, never measured: anchor a size on a drawing number and say so.";
 
 const err = (code, message) => Object.assign(new Error(message), { code });
 const toolErr = message => Object.assign(new Error(message), { tool: true });
@@ -70,7 +71,7 @@ const dirDeg = d => dirOf(d) ?? (() => { throw toolErr(`Unknown direction "${d}"
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, sitePhotos = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const libs = libraries();
@@ -687,6 +688,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "The person's saved photo spots (Gjengi pictures keep where they were taken from: camera place, lens, picture shape, look, the light). Each: id, when, look, lens_mm, aspect, the version it was taken of, stale (true when the model has changed since: a new picture would differ) and price_usd for one new picture. Use before retake_photos.",
       run: async (a, req) => { const who = userOf(req); if (!who) throw toolErr("Bildestedene hører til en innlogget person."); if (!photos) return { spots: [], note: "Gjengi er ikke slått på her." };
         const price = await photos.estimate(); return { spots: photos.spotsOf(who).slice(0, 50).map(r => ({ id: r.id, at: r.at, look: r.spot.look, lens_mm: r.spot.mm, aspect: r.spot.aspect, version: r.spot.version, stale: photos.staleOf(r), price_usd: price })), price_usd: price }; } },
+    /* Site photos: the person's own photos of the real building (sitephotos.mjs). Anton looks, and what it reads goes into try_change like any change, each labelled «leser fra bilde» in its why */
+    { name: "list_site_photos", title: "Mine bilder av bygget", ro: true, schema: S({ wing: { ...WING, description: "Only this wing" } }),
+      description: "The person's own photos of the real building as it stands (they add them on the page under «Bilder»), newest first: id, wing, facade side (nord, øst, sør, vest or ukjent), note, year. Not part of the shared model and never anyone else's. Look at one with look_at_site_photo.",
+      run: async (a, req) => { const who = userOf(req); if (!who) throw toolErr("Bildene hører til en innlogget person."); if (!sitePhotos) return { photos: [], count: 0, note: "Bilder tas ikke imot på denne serveren." };
+        const w = a.wing ? wingOrErr(a.wing).id : null, rows = sitePhotos.mine(who).filter(p => !w || p.wing === w).map(({ bytes, ...p }) => p); return { photos: rows, count: rows.length }; } },
+    { name: "look_at_site_photo", title: "Se på et bilde av bygget", ro: true, schema: S({ photo: { type: "string", description: "The id from list_site_photos" } }, ["photo"]),
+      description: "Shows you one of the person's photos of the real building, with its wing, facade side, year and note, and beside it what the model says now of that wing (storeys and their kote, roof, windows per facade) so one call is enough. Everything you read off the photo is «leser fra bilde», never measured: a single photo has no scale. Anchor any size on a known drawing number (the storey height from storeys, a window from openings) and say which one you used. Then put the change through try_change (or propose_sketch for a large one), with why = «leser fra bilde <id>: <what you saw>, målt mot <the number>».",
+      run: async (a, req) => { const who = userOf(req); if (!who) throw toolErr("Bildene hører til en innlogget person."); if (!sitePhotos) throw toolErr("Bilder tas ikke imot på denne serveren.");
+        const p = sitePhotos.read(who, a.photo); if (!p) throw toolErr("Fant ikke bildet. Bruk list_site_photos for id-ene.");
+        const w = wingOrErr(p.wing), full = wingOut(w, true), openings = full.facades.map(f => `${f.name}: ${f.openings} åpninger`), roof = full.roof?.levels?.map(l => ({ kote: l.kote, area_m2: l.area_m2 })) ?? null;
+        const now = { wing: w.name, storeys: full.storeys, levels: full.levels, ground_kote: full.ground_kote, top_kote: full.top_kote, roof_levels: roof, facade_bearings: full.facade_bearings, window_bays: full.window_bays, drawn_openings: openings };
+        const meta = { id: p.id, wing: p.wing, wing_name: w.name, side: p.side, year: p.year, note: p.note, read_from: "bilde", model_now: now };
+        const said = `Bilde ${p.id}: ${w.name}, fasade ${p.side}${p.year ? `, ${p.year}` : ""}${p.note ? `, «${p.note}»` : ""}. Alt du leser av dette bildet er leser fra bilde, aldri målt: ett bilde har ingen målestokk. Anker hvert mål i et tegningstall (etasjehøyde fra levels, vindu fra openings) og si hvilket du brukte. Modellen nå for denne fløya: ${JSON.stringify(now)}. Endringer: try_change (propose_sketch for store), med why «leser fra bilde ${p.id}: …, målt mot …».`;
+        return { _result: { content: [{ type: "image", data: p.data.toString("base64"), mimeType: p.type }, { type: "text", text: said }], structuredContent: meta } }; } },
     /* U3671: the ground round a place: Anton cannot see it, so it asks here (ways, what is laid on the ground, heights, what stands near) before it asks the person */
     { name: "about_ground", tgt: "read", title: "Bakken rundt et sted", ro: true, schema: S({
         target: TARGET, draft: OLD,
@@ -962,6 +977,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     list_parts: "The ready-made BIM parts (pool_basin, stair, railing, balcony, greenhouse) with settings, defaults and limits. Look here FIRST for a pool basin, stair, railing, balcony or greenhouse: place one with try_change kind part, before any geometry or script. An outdoor stair, also one down from a terrace to the garden, is the stair part: from = its foot in the garden, to = towards the terrace, params.height = the drop.",
     about_ground: "What is on the ground round a place: footpaths, roads, what is laid (also what was painted), buildings close by, and the terrain's kote there and in eight directions. Use this FIRST when the person names a place; ask_point only if it is still unclear. Take heights from here, not from the person. Name the place with wing and side, place, or x and y.",
     send_wish: "Sends Morten a wish or fault report for what the tools cannot do yet, with a picture of the model. Only after asking «Skal jeg sende dette som et ønske?» and a yes, and only for what the tools truly cannot do; never for a fault you can fix yourself. Needs the login.",
+    list_site_photos: "Lists the person's own photos of the real building (wing, facade side, note, year). Read-only; they are read off a photo, never measured.",
+    look_at_site_photo: "Shows you one of the person's photos of the building with the wing's numbers in the model beside it. What you read off it is «leser fra bilde», never measured: anchor any size on a drawing number (storeys, openings) and say so; then try_change with a why that says it.",
     retake_photos: "Proposes new pictures from the person's saved photo spots. It makes NOTHING and costs nothing: a card with the count and total price opens on their Gjengi tab, and only their press makes them. Say the count and price; never claim a picture is made.",
     delete_version: "Deletes the person's own versions (by id or name; never anyone else's) to the trash for 30 days; undelete_version brings them back. Only after the person has said which ones: name them when it is not plain. All or nothing.",
     new_version: "Only when the person asks for a new, separate alternative (their changes otherwise go into the version they have open). Makes a saved version owned by the person (needs the login), privat until set_sharing makes it lenke or offentlig; from: copies a draft's or visible version's changes. Then add to it with try_change (version:).",

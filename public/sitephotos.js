@@ -1,0 +1,57 @@
+/* «Bilder» (under Bygg): the person's own photos of the building as it stands. A photo is made at most 2000 px on its long edge in the
+   browser (a phone's camera picture is 12 MB), sent to /api/bilder (sitephotos.mjs) with its wing, facade side, note and year, listed,
+   viewed and deleted here; Anton reads them with the connector's look_at_site_photo. Only the person's own are ever shown. */
+export const MAX_EDGE = 2000, SIDES = ["nord", "øst", "sør", "vest", "ukjent"];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+/* the size a picture is sent at: as it is when small enough, else the long edge brought to max */
+export function fitSize(w, h, max = MAX_EDGE) { const k = Math.min(1, max / Math.max(w, h)); return { w: Math.round(w * k), h: Math.round(h * k) }; }
+/* the address a photo is sent to; the filename is never sent */
+export function uploadUrl({ wing, side, note, year }) {
+  const q = new URLSearchParams({ "fløy": wing, side: SIDES.includes(side) ? side : "ukjent" });
+  if (note && note.trim()) q.set("note", note.trim().slice(0, 300)); if (year) q.set("år", String(year));
+  return "api/bilder?" + q;
+}
+export const WORDS = { empty: "Ingen bilder ennå.", sending: "Sender …", sent: "Bildet er lagt til.", failed: "Fikk ikke lagt til bildet. Prøv igjen.", signedOut: "Logg inn for å legge til bilder.", del: "Slett bildet", sure: "Slette bildet?", unreadable: "Fikk ikke lest bildet. Bruk et JPEG-, PNG- eller WebP-bilde." };
+/* a file as a JPEG (PNG and WebP stay as they are when already small) at most MAX_EDGE on its long edge */
+export async function downscale(file, { max = MAX_EDGE, bitmap = createImageBitmap, canvas = (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h }) } = {}) {
+  const bm = await bitmap(file, { imageOrientation: "from-image" }), { w, h } = fitSize(bm.width, bm.height, max);
+  if (w === bm.width && h === bm.height && file.size <= 4 * 1024 * 1024 && /^image\/(jpeg|png|webp)$/.test(file.type)) { bm.close?.(); return file; }
+  const c = canvas(w, h); c.getContext("2d").drawImage(bm, 0, 0, w, h); bm.close?.();
+  return await new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error("toBlob")), "image/jpeg", 0.85));
+}
+
+export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => fetch(...a), shrink = downscale }) {
+  const $ = s => root.querySelector(s);
+  const form = $("#phForm"), file = $("#phFile"), wing = $("#phWing"), side = $("#phSide"), note = $("#phNote"), year = $("#phYear"), go = $("#phGo"), list = $("#phList"), say = $("#phSay");
+  let busy = false;
+  const speak = t => { say.textContent = t; say.hidden = !t; };
+  async function load() {
+    const r = await fetchImpl("api/bilder").catch(() => null);
+    if (!r || !r.ok) { list.innerHTML = ""; if (r?.status === 401) speak(WORDS.signedOut); return; }
+    const j = await r.json(); if (!wing.options.length) wing.innerHTML = j.wings.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
+    list.innerHTML = j.photos.length ? j.photos.map(p => `<li data-id="${esc(p.id)}"><a href="api/bilder/${esc(p.id)}" target="_blank" rel="noopener"><img loading="lazy" src="api/bilder/${esc(p.id)}" alt="${esc(p.wing_name)}, fasade ${esc(p.side)}"></a>
+      <div><b>${esc(p.wing_name)}</b> · ${esc(p.side)}${p.year ? ` · ${p.year}` : ""}${p.note ? `<br><small>${esc(p.note)}</small>` : ""}</div><button type="button" class="sm quiet" data-del="${esc(p.id)}" title="${WORDS.del}" aria-label="${WORDS.del}">Slett</button></li>`).join("") : `<li class="sel-empty">${WORDS.empty}</li>`;
+  }
+  list.onclick = async e => {
+    const id = e.target.closest("[data-del]")?.dataset.del; if (!id) return;
+    if (!confirm(WORDS.sure)) return;
+    const r = await fetchImpl(`api/bilder/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
+    if (r?.ok) load(); else toast(WORDS.failed);
+  };
+  form.onsubmit = async e => {
+    e.preventDefault(); if (busy || !file.files.length) return; busy = true; go.disabled = true;
+    let n = 0, bad = 0;
+    for (const f of [...file.files]) {
+      speak(`${WORDS.sending} ${++n} av ${file.files.length}`);
+      try {
+        const blob = await shrink(f), r = await fetchImpl(uploadUrl({ wing: wing.value, side: side.value, note: note.value, year: year.value }), { method: "POST", headers: { "content-type": blob.type || "application/octet-stream" }, body: blob });
+        if (!r.ok) { bad++; if (r.status === 401) { speak(WORDS.signedOut); break; } speak((await r.json().catch(() => ({}))).error || WORDS.failed); }
+      } catch { bad++; speak(WORDS.unreadable); }
+    }
+    busy = false; go.disabled = false; file.value = ""; note.value = "";
+    if (!bad) { speak(""); toast(WORDS.sent); }
+    await load();
+  };
+  load();
+  return { load };
+}
