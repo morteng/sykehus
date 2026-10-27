@@ -126,6 +126,15 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     t.polling = setTimeout(tick, 0);
   }
 
+  /* a version the person owns, else their work if one is made (never made here), as ids; selection, point and drawing as they were sent */
+  function pin(person, turn) {
+    if (!pages) return null;
+    const open = turn.job ? versions?.get(pages.open.get(person)) : turn.version && versions?.get(turn.version.id), own = open?.owner === person ? open : null;
+    const version = own?.id ?? versions?.list({ owner: person, viewer: person }).find(x => x.work)?.id ?? null;
+    const ctx = { id: turn.id, person, version, draft: null, picked: turn.job ? pages.picked?.get(person) ?? null : turn.picked ?? null, selection: turn.selection ?? null, point: turn.point ?? null, drawing: !!turn.drawing,
+      seen: version ? { id: version, edits: versions.get(version).edits.map(e => JSON.stringify(e)) } : null };
+    (pages.turn ??= new Map()).set(person, ctx); return ctx;
+  }
   async function run(person) {
     const t = thread(person);
     if (t.running) return;
@@ -135,6 +144,9 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
         : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+      /* the turn's own copy of what the person's page said when the message was sent (Morten: «while Anton works, the user
+         should be free to move around without that affecting what Anton sees or does»): mcp.mjs reads it, never pages.open, until the turn ends */
+      const ctx = pin(person, turn);
       const stop = t.stop = { stopped: false, abort: () => {} };
       const onLine = line => {
         if (line.type === "ping" || !["text", "tool", "approval", "qr", "done", "error"].includes(line.type)) return;
@@ -150,6 +162,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       try {
         for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, turn.device, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
       } catch (e) { console.error("anton turn", e); st = 500; j = { error: { code: "internal" } }; }
+      finally { if (pages?.turn?.get(person) === ctx) pages.turn.delete(person); }
       console.log("anton: turn", turn.id.slice(0, 8), "→", st);
       if (st !== 200) {
         if (refusedDevice(st, j)) { publish(person, "signed_out", { type: "signed_out" }); t.queue.length = 0; }
@@ -176,7 +189,8 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       let drawing = null;
       if (b?.drawing != null) { try { drawing = drawingOf(b.drawing); } catch (e) { return send(res, 400, { error: e.message }); } }
       const selection = selectionOf(b?.selection);
-      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection, point: pointOf(b?.point) };
+      const picked = selection?.items.find(i => i.kind === "wing" || i.kind === "building")?.id ?? null;
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection, point: pointOf(b?.point), picked };
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
       /* the wing or building picked when it was sent: a facade asked for with no wing named is that one's (mcp.mjs viewOf) */
       if (pages) { pages.picked ??= new Map(); const p = selection?.items.find(i => i.kind === "wing" || i.kind === "building"); if (p) pages.picked.set(me.person, p.id); else pages.picked.delete(me.person); }

@@ -662,7 +662,9 @@ let busy = false;   // one change at a time
 async function change(body) {
   const r = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
   const j = r ? await r.json().catch(() => ({})) : { error: "Fikk ikke kontakt." };
-  return r?.ok ? j : { error: j.error || "Det gikk ikke.", ...(j.stale ? { stale: true } : {}) };
+  /* every refusal says why: the server's own words, else what the status means (a proxy's page while the server restarts has none) */
+  const why = r && !r.ok && !j.error ? (r.status === 502 || r.status === 503 || r.status === 504 ? "Tjeneren starter på nytt. Vent noen sekunder og prøv igjen." : r.status === 401 ? "Du er logget ut. Logg inn og prøv igjen." : r.status === 429 ? "For mange forespørsler akkurat nå. Prøv igjen om litt." : "Endringen ble ikke tatt imot. Prøv igjen.") : "";
+  return r?.ok ? j : { error: j.error || why || "Endringen ble ikke tatt imot. Prøv igjen.", ...(j.stale ? { stale: true } : {}) };
 }
 /* the draft or version after a change, in place: its edits fetched, the model laid anew over the same objects, the
    viewer told what is gone, the strip, «Forslag» and the IFC link redrawn, the address changed without a reload */

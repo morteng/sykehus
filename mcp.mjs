@@ -142,7 +142,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* where a signed-in person's change goes when none is named: the version their page has open (assistant.mjs tells
      pages.open with each turn), if it is theirs, else their work (Morten 20:34Z: Anton's change went into a new
      version and the open page never changed) */
-  const openOf = me => { const v = versions?.get(pages?.open.get(me)); return v && v.owner === me ? v : workOf(me); };
+  /* the turn Anton is in (assistant.mjs pins one when a turn starts and drops it when it ends): what his calls read of the
+     person's page is what it was then, so moving around on the page changes nothing under him. Outside a turn: the page as it is now */
+  const pin = who => (who && pages?.turn?.get(who)) || null;
+  const openId = who => { const p = pin(who); return p ? p.version : pages?.open.get(who); };
+  const pickedOf = who => { const p = pin(who); return p ? p.picked : pages?.picked?.get(who); };
+  const openOf = me => { const v = versions?.get(openId(me)); return v && v.owner === me ? v : workOf(me); };
   const draftOf = id => { const d = drafts.get(String(id)); if (!d || Date.now() - d.t > DRAFT_MS) { dropDraft(id); throw toolErr(`No draft "${id}" (drafts last a day). Start a new one with try_change.`); } return d; };
   const draftUrl = (o, id) => `${o}/?utkast=${id}`;
   /* a version (versions.mjs) by its id, for anyone to look at; and one to change, for its owner only */
@@ -233,7 +238,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
        the after, and the result says which (a refusal the model repeats is a dead end) */
     if (!v.wing && !a.drawn_section && ["fasade", "tverrsnitt", "lengdesnitt"].includes(a.mode)) {
       const s = model(a.draft, req).site, stand = new Set(s.buildings.map(b => b.wing).filter(Boolean)), who = userOf(req);
-      const picked = who && pages?.picked?.get(who), byB = picked && site.buildings.find(b => b.id === picked)?.wing;
+      const picked = who && pickedOf(who), byB = picked && site.buildings.find(b => b.id === picked)?.wing;
       const area = id => s.buildings.filter(b => b.wing === id).reduce((t, b) => t + (b.area_m2 || 0), 0);
       const id = [picked, byB].find(x => x && stand.has(x)) || [...stand].sort((x, y) => area(y) - area(x))[0];
       if (id) { const w = wingOrErr(id); v.wing = w.id; v.building = piecesOf(w.id)[0]?.id; v.guessed = w.name; }
@@ -348,7 +353,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     ...(m.site.landscape ? { ground: m.site.landscape.map(({ ring, line, ...g }) => g.basin ? { ...g, say: basinText(g) } : g), planted: m.site.planted, plantings: (m.site.plantings || []).map(({ why, ...g }) => g), trees_felled: m.site.felled, ...(m.site.roof_say ? { roof_say: m.site.roof_say } : {}) } : {}) } : null;
   const isVid = id => /^v.{8}$/.test(String(id ?? ""));
   /* the version the person has open on the website (assistant.mjs pages.open), else their work; none signed out */
-  const openFor = req => { const who = userOf(req); if (!who || !versions) return null; const v = versions.get(pages?.open.get(who)); return v && v.owner === who ? v : versions.list({ owner: who, viewer: who }).find(x => x.work) || null; };
+  const openFor = req => { const who = userOf(req); if (!who || !versions) return null; const v = versions.get(openId(who)); return v && v.owner === who ? v : versions.list({ owner: who, viewer: who }).find(x => x.work) || null; };
   const openHint = req => { const v = openFor(req); return v ? `Utelat target for versjonen personen har åpen, «${v.title}» (${v.id}).` : userOf(req) ? "Utelat target for versjonen personen har åpen." : "Utelat target for dagens modell, eller start et utkast med try_change."; };
   /* target (or its older names) to what each tool's run reads: read tools and undo_change draft (a draft or a version
      id), try_change version or draft, the version tools version. Checked here, at the boundary, with an error that
@@ -488,8 +493,11 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => {
         let d, v = null;
         if (!a.version && !a.draft && versions && userOf(req)) a = { ...a, version: openOf(userOf(req)).id };
+        const ctx = pin(userOf(req)), before = ctx && a.version && a.fromPage !== true ? a.version : null;   // the page's own change is the person's, not Anton's call
         if (a.version) { v = ownVersion(a.version, req); d = { edits: v.edits }; }
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
+        /* the person's own changes to this version since Anton's last call in the turn (the page's change goes through this same tool, one at a time, so none comes in mid-call) */
+        const mine = [], gone = [], str = x => JSON.stringify(x), seen0 = before && v && ctx.seen?.id === v.id ? ctx.seen.edits : null;
         const ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         /* a later change in the same call to a new building that got another id goes to the id it got */
         for (const [i, e0] of expandEdits(a.edits).entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
@@ -502,14 +510,14 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             if (c.kind === "balconies") { const fc = new Set(balconyFaces(m.site, c));
               for (let k = d.edits.length - 1; k >= 0; k--) { const x = d.edits[k]; if (x.kind !== "balconies" || x.wing !== c.wing) continue;
                 const both = balconyFaces(m.site, x).filter(b => fc.has(b)); if (!both.length) continue;
-                d.edits.splice(k, 1); replaced = `Erstattet de eldre balkongene på fasaden mot ${both.map(b => `${b}°`).join(" og ")} (endring nr. ${k + 1}); bare de nye står.`; }
+                gone.push(str(d.edits.splice(k, 1)[0])); replaced = `Erstattet de eldre balkongene på fasaden mot ${both.map(b => `${b}°`).join(" og ")} (endring nr. ${k + 1}); bare de nye står.`; }
             }
-            d.edits.push(c); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (replaced) ok[ok.length - 1] = { ...ok[ok.length - 1], replaced }; if (placed) ok[ok.length - 1] = { ...ok[ok.length - 1], placed }; if (c.kind === "volume" || c.kind === "reshape") { const prev = c.kind === "reshape" ? (m.site.added || []).find(x => x.id === c.id) : null, on = c.on ?? prev?.on, say = on && (c.align ?? prev?.align) !== "free" && alignSay(alignDelta(m.site, prev ? { ...prev, ...e } : e, prev ? { ...prev, ...c } : c)); if (say) ok[ok.length - 1] = { ...ok[ok.length - 1], on_roof: say }; }   /* U3831: what setting it along the roof's own axis did */ if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message }); } }
+            d.edits.push(c); mine.push(str(c)); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (replaced) ok[ok.length - 1] = { ...ok[ok.length - 1], replaced }; if (placed) ok[ok.length - 1] = { ...ok[ok.length - 1], placed }; if (c.kind === "volume" || c.kind === "reshape") { const prev = c.kind === "reshape" ? (m.site.added || []).find(x => x.id === c.id) : null, on = c.on ?? prev?.on, say = on && (c.align ?? prev?.align) !== "free" && alignSay(alignDelta(m.site, prev ? { ...prev, ...e } : e, prev ? { ...prev, ...c } : c)); if (say) ok[ok.length - 1] = { ...ok[ok.length - 1], on_roof: say }; }   /* U3831: what setting it along the roof's own axis did */ if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id; } catch (x) { bad.push({ index: i, error: x.message || "Endringen kunne ikke settes inn." }); } }
         const m = applyEdits(site, floors, d.edits), after = afterOf(m);
         /* U3678: the building rules held against what this call put in (a part's own measures come with it) */
         /* the page's own change (handleChange, fromPage) shows none of the fit or the rules (only Anton reads them): surfaceFit alone took ~0.7 s of the answer with 12 surfaces */
         const quiet = a.fromPage === true;
-        const was = new Set(ok.length && !quiet ? applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site.added?.map(x => x.id) : []);
+        const was = new Set(ok.length && !quiet ? applyEdits(site, floors, d.edits.filter(e => !mine.includes(str(e)))).site.added?.map(x => x.id) : []);
         const tried = new Set([...(m.site.added || []).map(x => x.id).filter(id => id && !was.has(id)), ...ok.filter(e => e.kind === "reshape" && e.id).map(e => e.id)]);
         const checks = tried.size && !quiet ? checkRules(m.site, { ids: tried, printed: Object.fromEntries((m.site.added || []).filter(x => tried.has(x.id)).map(x => [x.id, ok.find(e => e.worker?.printed && e.name === x.name)?.worker.printed]).filter(([, p]) => p)) }) : [];
         /* a surface's fit over what stands and the ways there are (finding 6: the pool laid over a footpath) */
@@ -521,7 +529,14 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
         let out;
-        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...named, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: true }; }
+        /* what changed under Anton: the person's edits (not his own) since he last looked; he is told, and the next call counts from here */
+        const meanwhile = (() => { if (!before || !v) return null; const sub = (x, y) => { const c = new Map(); for (const k of y) c.set(k, (c.get(k) || 0) + 1); return x.filter(k => { const n = c.get(k) || 0; if (n) { c.set(k, n - 1); return false; } return true; }); };
+          const cur = v.edits.map(str), add = seen0 ? sub(sub(cur, seen0), mine) : [], del = seen0 ? sub(sub(seen0, cur), gone) : [];
+          ctx.seen = { id: v.id, edits: cur };
+          if (!add.length && !del.length) return null;
+          const kinds = [...new Set(add.map(k => JSON.parse(k).kind))];
+          return { added: add.length, removed: del.length, kinds, say: `Personen endret forslaget mens du jobbet: ${add.length} ny${add.length === 1 ? "" : "e"} endring${add.length === 1 ? "" : "er"}${kinds.length ? ` (${kinds.join(", ")})` : ""}${del.length ? ` og ${del.length} tatt bort` : ""}. Endringene dine ligger oppå dem; se over før du bygger videre.` }; })();
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: true }; }
         else { d.t = Date.now(); keepDraft(d);
           out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
@@ -538,7 +553,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "Shows the person a quick plan (north up, with its scale bar) of a proposed change BEFORE you build it, with its key numbers, one «Bygg det» button, and tools for them to draw pen strokes, drop pins with notes and write feedback on it (U3635). Use it for a LARGE or UNCLEAR ask: a whole facade of balconies, a new building or a greenhouse in a place not named, earthworks, several changes at once, or when the person left a choice open. Do NOT use it for a small clear edit (rename, one balcony of a given size and place, move a building, one tree): send those straight to try_change. Nothing is saved: the edits are only drawn. After it, say in one short line what you propose and wait: when the person presses «Bygg det» a message «Bygg det: <title>» comes: then send the same edits to try_change. Feedback comes as a message with a picture and the marks: strokes and pins as [east, north] in site metres from the site origin; change the proposal by it and show a new sketch if it changed much. Needs the login.",
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Skissen vises til en som er logget inn.");
-        const open = versions ? versions.get(pages?.open.get(who)) : null, id = open?.owner === who ? open.id : null, base = id ? editsOf(id, req) : [], ok = [], bad = [];
+        const open = versions ? versions.get(openId(who)) : null, id = open?.owner === who ? open.id : null, base = id ? editsOf(id, req) : [], ok = [], bad = [];
         let cur = applyEdits(site, floors, base);
         for (const [i, e00] of expandEdits(a.edits).entries()) { try { const { e: e0 } = placeAt(e00), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await withAround(await prepare(e0, cur.site)), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
         if (!ok.length) throw toolErr(`Ingen av endringene kunne tegnes: ${bad.map(b => `nr. ${b.n} (${b.kind}): ${b.error}`).join("; ")}`);
@@ -716,7 +731,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         /* U3832: the picture of the model the wish is about (the page's own snapshot path, look), kept with the wish */
         let png = null;
         if (a.picture !== false) {
-          const open = versions ? versions.get(pages?.open.get(who)) : null, pick = v && versions.visible(v, who) ? v : open?.owner === who ? open : null;
+          const open = versions ? versions.get(openId(who)) : null, pick = v && versions.visible(v, who) ? v : open?.owner === who ? open : null;
           if (pick) try { const m = model(pick.id, req), last = m.site.added?.findLast(x => x.kind === "volume"), r = await look(m.site, { view_name: a.view_name, focus: a.focus ?? last?.id ?? null }); png = r.png; }
           catch (e) { console.warn("send_wish picture:", e.message); }
         }
@@ -815,7 +830,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         draft: DRAFT, width: { type: "integer", minimum: 320, maximum: 1280 }, height: { type: "integer", minimum: 240, maximum: 960 } }),
       description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With target: that version or draft; without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
       run: async (a, req) => {
-        const who = userOf(req), open = who && versions ? versions.get(pages?.open.get(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
+        const who = userOf(req), open = who && versions ? versions.get(openId(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
         if (a.saved_view) { if (!id) throw toolErr("Ingen lagrede visninger: ingen versjon eller utkast er åpen."); try { a = { ...a, saved: findView(viewsOf(id, req), a.saved_view) }; } catch (e) { throw toolErr(e.message); } }
         let png, text; try { ({ png, text } = await look(m.site, a)); }
         catch (e) { if (e.tool) throw e; console.error("look:", e.message, "|", argsLine(a), "| added:", (m.site.added || []).map(x => x.kind).join(",")); throw toolErr(`Fikk ikke tegnet bildet (${e.message}). Prøv en annen visning, eller si fra til Morten.`); }
@@ -840,7 +855,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         picture_size: { type: "string", enum: ["utkast", "standard", "stor"], description: "The picture's size (Gjengi): utkast 1K, the cheapest; standard 2K, the default; stor 4K. Each button on the page shows its price before the press" },
         saved_view: { type: "string", description: "Go to a saved view, by its name or id (show_draft lists saved_views); the other view fields are not needed" }, target: TARGET, draft: OLD }),
       description: "Shows the hospital in 3D inside the chat: terrain, lot, the wings with their drawn facades and the operating module, and with a storey chosen every wing cut 1.2 m above that floor with the drawn walls and rooms (names and m² when zoomed in). Plan mode looks straight down like a drawing, with a scale bar; tverrsnitt and lengdesnitt cut one wing through its middle like a drawn section (outer walls are an assumed 0.35 m; inner walls only where a floor plan is drawn). With target: that version or draft; without, the version the person has open. The person can turn, zoom and change storey. You do not see this view: never describe what it shows from it, unless you asked for its picture (picture: true). To see the model yourself, use picture: true or look. Needs a chat app that shows MCP Apps, or the website open (the pill on sykehus.gulden.no moves the person's page); otherwise give the link. The light: sun {month, day, hour} (Oslo time) shows the site at that date and hour, e.g. «Vis tomta 21. desember kl. 15» = sun {month: 12, day: 21, hour: 15}, «Hvordan er sola en sommerkveld?» = {month: 6, day: 21, hour: 20}, «vinterkveld» = {month: 12, day: 15, hour: 16}; the shadows and the light follow. With save_as the view is kept with its light. The picture (Gjengi, the fourth tab in the right panel, a photo mode; it costs money and only the person presses it): camera, look, lens_mm, eye_height_m and picture_size set the card before the press, and say «Trykk Gjengi for bildet» when you have set it. Cameras: øyehøyde (street view, verticals vertical), fugleperspektiv (from the air), aksonometri (parallel, volumes), fasade (square on), froskeperspektiv (low, looking up). Looks: arkitektfoto, blåtime (dusk), konkurransebilde (soft light, people), drone, hvitmodell (white massing model), skisse (hand drawing). The person may also say «ta det med blåtime»: set look. Sizes: utkast (1K, cheapest), standard (2K), stor (4K); each shows its price on the page before the press.",
-      run: async (a, req) => { const who = userOf(req), on = a.draft || (who && pages?.open.get(who)) || (who && versions && openFor(req)?.id) || null;
+      run: async (a, req) => { const who = userOf(req), on = a.draft || (who && openId(who)) || (who && versions && openFor(req)?.id) || null;
         /* a saved view (U3562) is a view as this tool makes one: its camera, mode, storey and wing */
         let view, kept = null, eyeSaid = "";
         /* the camera (U3652): øyehøyde at a wing or a place stands the page at eye level there; fasade at a wing is its facade */
@@ -868,7 +883,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         /* through the pill: the person's open pages go to this view (assistant.mjs pages.show), else say they did not */
         /* a version's id names a version, not a draft (21:05Z: the page went to ?utkast=v…, a draft that is not there) */
         const { draft: dv, guessed, ...rest } = view, isV = /^v.{8}$/.test(String(dv ?? ""));
-        const moved = who && pages ? pages.show(who, { ...rest, ...(dv && !isV ? { draft: dv } : { version: isV ? dv : pages.open.get(who) || null }) }) : null;
+        const moved = who && pages ? pages.show(who, { ...rest, ...(dv && !isV ? { draft: dv } : { version: isV ? dv : openId(who) || null }) }) : null;
         /* the picture for Anton too (pm 05:36Z: «Jeg ser ikke selve bildet» after a view from Welhavens gate): where the view has its own camera */
         let png = null;
         if (a.picture && view.x != null && view.y != null && view.mode !== "section") try { png = await shotPicture(model(on, req), view); } catch (e) { console.warn("show_building picture:", e.message); }
@@ -913,6 +928,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     t.run = (a, req) => {
       const p = writes.then(async () => {
         const out = await run(a, req), s = out?._result?.structuredContent ?? out;
+        /* Anton's own undo or redo is no change of the person's: the turn's count of the version moves with it */
+        { const c = pin(userOf(req)), id = s.version || (/^v.{8}$/.test(String(a.draft)) ? a.draft : null); if (t.name !== "try_change" && !a.fromPage && c?.seen && id === c.seen.id) c.seen = { id, edits: versions.get(id).edits.map(JSON.stringify) }; }
         const n = s.changes_in_draft ?? (typeof s.changes === "number" ? s.changes : null);
         if (t.name === "try_change") REDO.delete(String(s.version || s.draft || a.version || a.draft));   // T11: a new change ends the redo
         const what = t.name === "redo_change" ? "redo" : t.name === "undo_change" ? `undo ${a.n}` : (s.added || []).map(e => e.kind).join(",") || "ingen";
@@ -1152,12 +1169,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (JSON.stringify(at) !== JSON.stringify(a.expect)) return send(res, 409, { stale: true, error: `forslaget er endret et annet sted siden siden ble tegnet${at ? `; nr. ${+a.undo} er nå en annen endring` : ""}. Siden er oppdatert; se over og prøv igjen.` });
       }
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
-      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, fromPage: true, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
+      const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo, fromPage: true } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, fromPage: true, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
       if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing", "import", "paint", "terrain", "trees"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg, byggenes navn og opplysninger, maling, terreng og planting.");   // the rest goes through Anton
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
       if (mine && mine.owner === me) out.nokkel = mine.own;
-      if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).join(" "), ...out });
+      if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).filter(Boolean).join(" ") || "Endringen kunne ikke settes inn.", ...out });
       const shown = mine ? versionBody(mine) : out.draft ? (() => { try { return draftBody(draftOf(String(out.draft))); } catch { return null; } })() : null;
       return send(res, 200, shown ? { ...out, shown } : out);
     } catch (e) { return send(res, e.tool ? 400 : 500, { error: e.tool ? e.message : "Noe gikk galt." }); }
