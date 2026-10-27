@@ -51,6 +51,7 @@ const fetchDraft = async () => { try { const r = await fetch(versionId ? `api/ve
    and signing in moves it into the person's version */
 const KEPT = "sykehus-utkast", me = await fetch("api/meg").then(r => r.json()).catch(() => ({}));
 let kept = null; try { kept = localStorage.getItem(KEPT); } catch { }
+try { localStorage.setItem("sykehus-me", me.person ? "1" : "0"); } catch { }   // the hint the inline script in index.html reads before first paint: visitor-safe unless it says «1»; never a permission
 const post = (u, b) => fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) }).then(r => r.ok ? r.json() : null).catch(() => null);
 if (me.person && kept) {
   const j = await post("api/endring", { adopt: kept });
@@ -1173,7 +1174,7 @@ import("./tour.js?v=20261027zmp").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261027pr").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261027ps").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
 import("./gjengi.js?v=20261027gjlight").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,

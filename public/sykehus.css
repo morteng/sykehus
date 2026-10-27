@@ -519,6 +519,9 @@ body.sk-open { overflow: hidden; }
 .fb-sent h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-md); }
 
 /* U3662: signed out, nothing of Anton: no tab, no panel, no pill, no «Spør Anton» on a card (early.js and anton.js set .anon) */
+/* html.anon is set by the inline script in <head> before the first paint (visitor-chrome.test.mjs): a visitor never gets the signed-in tabs, «Nytt prosjekt» or the pill shown and then taken away; anton.js lifts it for a signed-in person */
+html.anon #tab-selected, html.anon #tab-chat, html.anon #tab-photo, html.anon #p-selected, html.anon #p-chat, html.anon #p-photo, html.anon #pf, html.anon #p-changes .bygg-acts, html.anon #talk-form, html.anon [data-ask], html.anon .g-chat, html.anon #mfb { display: none !important; }
+html.anon #dock { --tabs: 1 !important; }
 body.anon #p-chat, body.anon #tab-photo, body.anon #p-photo, body.anon #pf, body.anon [data-ask], body.anon #talk-form, body.anon .g-chat, body.anon #mfb { display: none !important; }   /* #mfb: /api/feedback needs a sign-in */
 .dock[data-tabs]:has(#tab-photo[hidden]) { --tabs: 3; }
 .login-form { display: grid; gap: var(--sp-3); }
