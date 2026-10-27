@@ -9,6 +9,7 @@
    section around, by its way's id, vei-osm-24365596, U3543), with the ids the
    connector's tools take (a wing's id, a storey's name, a room's code or name with its storey, a facade's id), so
    Anton can pass them straight on. Sent with a message as { items, ids, summary } (Fab's {ids, summary} and more). */
+import { buildingWords } from "./design.js";
 import { groundAt } from "./renderkit/fit.js";
 import { MATERIALS } from "./renderkit/materials.js";
 import { pointInRing as inRing, segDist } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
@@ -45,7 +46,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
     if (n) { out.push({ kind: "new", id: n.id, label: n.name }); return out; }
     if (!b) return out;
     const w = wings.find(x => x.id === b.wing);
-    out.push(w ? { kind: "wing", id: w.id, label: w.name } : { kind: "building", id: b.id, label: b.name || (b.own ? `Bygning ${b.id} på tomta` : `Nabobygning ${b.id}`) });
+    out.push(w ? { kind: "wing", id: w.id, label: w.name } : { kind: "building", id: b.id, label: buildingWords(b, site.buildings) });
     if (w && at && !v.storey && v.mode === "3d" && at[2] > b.base + 1) {   // on a wall, not the roof: the facade it is on
       const f = (site.facades || []).filter(x => x.building === w.id).map(x => ({ x, d: segDist(at, x.from, x.to) })).filter(x => x.d < 2).sort((a, c) => a.d - c.d)[0];
       if (f && (b.top == null || at[2] < b.top - 0.5)) out.push({ kind: "facade", id: f.x.id, label: f.x.name });
@@ -74,7 +75,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
       const gone = new Set((site.demolished || []).map(d => d.id)), out = [];
       const standing = site.buildings.filter(b => !gone.has(b.id) && b.ring?.length);
       for (const w of wings) { const bs = standing.filter(b => b.wing === w.id); if (bs.length && test(segs(bs.map(b => ({ ring: b.ring, lo: b.base, hi: b.top ?? b.base + 10 }))), r, inside, pr)) out.push({ kind: "wing", id: w.id, label: w.name }); }
-      for (const b of standing.filter(b => !wings.some(w => w.id === b.wing))) if (test(segs([{ ring: b.ring, lo: b.base, hi: b.top ?? b.base + 10 }]), r, inside, pr)) out.push({ kind: "building", id: b.id, label: b.name || (b.own ? `Bygning ${b.id} på tomta` : `Nabobygning ${b.id}`) });
+      for (const b of standing.filter(b => !wings.some(w => w.id === b.wing))) if (test(segs([{ ring: b.ring, lo: b.base, hi: b.top ?? b.base + 10 }]), r, inside, pr)) out.push({ kind: "building", id: b.id, label: buildingWords(b, site.buildings) });
       for (const a of (site.added || []).filter(a => a.kind === "volume" && !gone.has(a.id))) {
         const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]) || 1, n = [-(a.to[1] - a.from[1]) / L * a.width / 2, (a.to[0] - a.from[0]) / L * a.width / 2];
         const ring = [[a.from[0] + n[0], a.from[1] + n[1]], [a.to[0] + n[0], a.to[1] + n[1]], [a.to[0] - n[0], a.to[1] - n[1]], [a.from[0] - n[0], a.from[1] - n[1]]];

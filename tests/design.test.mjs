@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
 import { ringFrame } from "../public/renderkit/frame.js";
 import { inRing } from "../public/renderkit/fit.js";
-import { BALCONY_DEPTH, groundAt, groundText, padFit, lotText, windowBays, balconyFaces } from "../public/design.js";
+import { buildingWords, BALCONY_DEPTH, groundAt, groundText, padFit, lotText, windowBays, balconyFaces } from "../public/design.js";
 
 const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url)));
 const floors = JSON.parse(readFileSync(new URL("../public/data/floors.json", import.meta.url))).floors;
@@ -297,4 +297,16 @@ test("U3831b: a volume set align free keeps that on the model, so a later move l
   assert.equal(v.align, "free");
   const w = applyEdits(site, floors, add(ed, { kind: "reshape", id: "ndrivhus", height: 5 })).site.added.find(x => x.id === "ndrivhus");
   assert.deepEqual([w.from, w.to], [v.from, v.to], "a free volume is not turned by a later reshape");
+});
+
+test("U3910: a building with no name is named in words, never by its number", () => {
+  const unnamed = site.buildings.filter(b => !b.name && !b.wing);
+  assert.ok(unnamed.length > 0, "control: the data has unnamed buildings");
+  const words = unnamed.map(b => buildingWords(b, site.buildings));
+  for (const w of words) assert.doesNotMatch(w, /\d{6,}/, w);
+  assert.equal(new Set(words).size, words.length, "alike buildings are told apart");
+  const a = { id: "1163588204", own: true }, c = { id: "1163588205", own: true };
+  assert.equal(buildingWords(a, [a]), "Bygning på tomta");
+  assert.equal(buildingWords(c, [a, c]), "Bygning på tomta, nr. 2");
+  assert.equal(buildingWords({ id: "9", name: "Hytta" }, []), "Hytta");
 });

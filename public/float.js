@@ -10,7 +10,7 @@
    - the panel open: the acts sit in «Bygget»'s card (#selActs, app.js card()), and nothing floats;
    - the panel folded: a small card beside the pick, never over it, that folds to a chip (its «–», or Esc) with the
      pick kept; the chip opens it again. Below 900 px it sits in the bottom stack, over the sheet (Fab's .bstack). */
-import { SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
+import { SURFACE_NO, groundName, roadName } from "./valg.js?v=20261027zl";
 import { groundAt } from "./renderkit/fit.js";
 import { basinText } from "./grading.js";
 const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"], PATHS = ["gravel", "paving", "asphalt", "wood"];   // landscape.js's

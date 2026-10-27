@@ -16,14 +16,14 @@ import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sun
 import { sunLabel } from "./gjengi-no.js";
 import { ghostIds } from "./livetries.js";
 import { nextTree, treeTitle } from "./treemode.js";
-import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261026s";
+import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=20261027zl";
 import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
 import { createDragType } from "./dragtype.js?v=20261027zh";
-import { baseOf, groundText, lotText } from "./design.js";
+import { baseOf, groundText, lotText, buildingWords } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
@@ -341,7 +341,7 @@ function showInfo(b) {
     (w ? sectionRow(w) : "") +
     (w ? `${sheetStrip(w)}<p class="src">${w.note ? esc(w.note) + ". " : ""}${w.sure ? "" : "Hvilken del dette er, er ikke sikkert ut fra dokumentene. "}Kilder: ${w.sources.map(docLink).join(" · ")}</p>` : "");
   card(w ? esc(w.name) : b.own ? "Bygning på tomta" : "Nabobygning", w?.alias ? esc(w.alias) : "", body,
-    w ? { kind: "wing", id: w.id, label: w.name } : { kind: "building", id: b.id, label: b.name || (b.own ? `Bygning ${b.id} på tomta` : `Nabobygning ${b.id}`) });
+    w ? { kind: "wing", id: w.id, label: w.name } : { kind: "building", id: b.id, label: buildingWords(b, site.buildings) });
   const el = $("info");
   for (const btn of el.querySelectorAll("[data-storey]")) btn.onclick = () => peel(b, w, btn.dataset.storey || null);
   for (const btn of el.querySelectorAll("[data-snitt]")) btn.onclick = () => section(b, btn.dataset.snitt);
@@ -476,7 +476,6 @@ function fresh() {
 }
 $("mnp").onclick = fresh;
 /* the name of a building in a change, plainly: a wing's name, a new building's, else what it is; never its id */
-const KIND = { hospital: "sykehusbygg", apartments: "boligblokk", house: "bolig", semidetached_house: "tomannsbolig", garage: "garasje", garages: "garasjer", civic: "offentlig bygg", kindergarten: "barnehage", university: "skolebygg", office: "kontorbygg", warehouse: "lager", shed: "bod", service: "teknisk bygg", roof: "tak" };
 function nameOf(id) {
   if (id === "alle") return "Alle sykehusbyggene";
   const low = String(id).toLowerCase(), w = (site0.wings || []).find(x => x.id === id || x.name.toLowerCase() === low); if (w) return w.name;   // Anton names wings too
@@ -486,7 +485,7 @@ function nameOf(id) {
   if (/^(flate|sti|tre)-\d+$/.test(id)) { const g = [...(site.landscape || []), ...(site.plantings || [])].find(x => x.id === id); return g ? groundName(g) : id.startsWith("sti") ? "En sti" : id.startsWith("tre") ? "Trær" : "En flate"; }   // a surface or a path (U3569)
   const b = site0.buildings.find(x => x.id === id); if (!b) return String(id);
   if (b.wing) return (site0.wings || []).find(x => x.id === b.wing)?.name || "Bygning på tomta";
-  return b.own ? "Bygning på tomta" : `Nabobygg${KIND[b.type] ? ` (${KIND[b.type]})` : ""}`;
+  return buildingWords(b, site0.buildings);
 }
 /* one line in the list: what the group heading does not already say */
 function short(e) {
