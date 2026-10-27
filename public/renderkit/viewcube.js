@@ -38,7 +38,11 @@ export function cubeMatrix(yaw, pitch) {
 export const mul3 = (a, b) => a.map(r => [0, 1, 2].map(j => r[0] * b[0][j] + r[1] * b[1][j] + r[2] * b[2][j]));
 export const tiltMatrix = (ay = -0.5, ax = -0.3) => mul3([[1, 0, 0], [0, Math.cos(ax), -Math.sin(ax)], [0, Math.sin(ax), Math.cos(ax)]], [[Math.cos(ay), 0, Math.sin(ay)], [0, 1, 0], [-Math.sin(ay), 0, Math.cos(ay)]]);
 const TILT = tiltMatrix();
-export const viewMatrix = (yaw, pitch) => mul3(TILT, cubeMatrix(yaw, pitch));   // what is drawn
+/* The extra tilt fades out as the camera comes to straight down or up (|pitch| from 70° to 90°, smoothstep), so a straight-down Topp
+   face is square on with its label upright and north at the top, as in the AutoCAD ViewCube. At 90° viewMatrix is cubeMatrix. */
+const TILT_FADE = 20 * Math.PI / 180;
+export const tiltScale = pitch => { const t = Math.max(0, Math.min(1, (Math.PI / 2 - Math.abs(pitch)) / TILT_FADE)); return t * t * (3 - 2 * t); };
+export const viewMatrix = (yaw, pitch) => { const k = tiltScale(pitch); return mul3(k === 1 ? TILT : tiltMatrix(-0.5 * k, -0.3 * k), cubeMatrix(yaw, pitch)); };   // what is drawn
 
 /* the css matrix3d (column-major) of that turn */
 export function cssMatrix(m) {
@@ -58,7 +62,7 @@ export function pickDir(m, px, py, half = 1) {
     t0 = Math.max(t0, Math.min(s, e)); t1 = Math.min(t1, Math.max(s, e));
   }
   if (t0 > t1) return null;
-  const p = [a[0] + t1 * b[0], a[1] + t1 * b[1], a[2] + t1 * b[2]], band = half * 0.5, s = p.map(v => (Math.abs(v) > band ? Math.sign(v) : 0));
+  const p = [a[0] + t1 * b[0], a[1] + t1 * b[1], a[2] + t1 * b[2]], band = half * 0.5, s = p.map((v, i) => (Math.abs(v) > band && Math.sign(v) * b[i] > 1e-3 ? Math.sign(v) : 0));   // an edge or corner only toward faces that face the viewer
   // the face the ray enters on always counts (its coordinate is ±half, rounding aside)
   const k = p.map(Math.abs).indexOf(Math.max(...p.map(Math.abs))); s[k] = Math.sign(p[k]);
   return [s[0] + 0, 0 - s[2], 0 - s[1]];   // css0 back to the world: x = cx, y = -cz, z = -cy
