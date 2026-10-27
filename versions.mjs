@@ -21,6 +21,9 @@ import { randomBytes } from "node:crypto";
 export const MAX_PER_OWNER = 50, MAX_EDITS = 300, TRASH_DAYS = 30, EMPTY_DAYS = 7;
 const ID = /^v[A-Za-z0-9_-]{8}$/;
 export const SHARING = ["privat", "lenke", "offentlig"];
+/* a real person, for the Forslag tab's list for others (the auth layer has no flag for it, so by name): test, qa, coretest, anton, admin
+   and system logins are fixtures and tools, never listed to anyone but themselves */
+export const isPerson = owner => typeof owner === "string" && owner !== "" && !/^(test|qa|coretest|anton|admin|system)/i.test(owner);
 const newKey = () => randomBytes(9).toString("base64url");
 
 export function createVersions(dir = process.env.SYKEHUS_VERSIONS_DIR, clock = () => Date.now()) {

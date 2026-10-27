@@ -7,7 +7,8 @@
   POST /mcp               the connector (mcp.mjs)
   GET  /api/utkast/<id>   a draft's changes, for the page's ?utkast=<id>
   GET  /api/versjon/<id>  a saved version (versions.mjs), for the page's ?versjon=<id>
-  GET  /api/versjoner     the saved versions, newest first
+  GET  /api/versjon/<id>/bilde.jpg   its card picture (thumbs.mjs)
+  GET  /api/versjoner     the Forslag list: the asker's own, then the public ones of real people
 
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
@@ -124,6 +125,8 @@ createServer(async (req, res) => {
     if (path.startsWith("/api/skisse/")) return mcp.handleSketch(req, res, path.slice("/api/skisse/".length), login.personOf(req)?.person);   // a plan Anton showed (U3635)
     if (path.startsWith("/api/bim/")) return mcp.handleBim(req, res, path.slice("/api/bim/".length));   // a construction's files (U3570), by sha
     if (path.startsWith("/api/utkast/")) return mcp.handleDraft(req, res, path.slice("/api/utkast/".length));
+    const th = /^\/api\/versjon\/([^/]+)\/bilde\.jpg$/.exec(path);
+    if (th) return await mcp.handleThumb(req, res, th[1]);   // the Forslag card's picture
     if (path.startsWith("/api/versjon/")) return mcp.handleVersion(req, res, path.slice("/api/versjon/".length));
     if (path === "/api/versjoner") return mcp.handleVersions(req, res);
     if (path === "/inn") return res.writeHead(308, { ...SECURITY, location: "/inn/" }).end();   // the fragment (the sign-in link's token) goes along

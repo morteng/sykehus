@@ -621,3 +621,26 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 #tegnErr { margin: 0; color: var(--danger, #b3261e); font-size: var(--fs-sm, .85rem); }
 #tegnErr[hidden] { display: none; }
 .talk-item a:has(> .snap) { display: block; width: fit-content; cursor: zoom-in; }
+
+/* «Forslag»: one list of cards, a picture each (Morten 2026-10-27); one column, the picture over the text on a phone, beside it from 560 px */
+.ver-list li.fc { display: block; margin: 0 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); overflow: hidden; }
+.ver-list li.fc.open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.fc-row { display: flex; flex-direction: column; }
+.ver-list .fc-a { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; min-height: 0; }
+.fc-img { position: relative; display: block; aspect-ratio: 16 / 10; background: var(--accent-panel); overflow: hidden; }
+.fc-img svg { position: absolute; inset: 0; margin: auto; width: 32px; height: 32px; stroke: var(--muted); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; opacity: .5; }
+.fc-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .2s; }
+.fc-img.on img { opacity: 1; } .fc-img.on svg { display: none; }
+.ver-list .fc-a > span.fc-img { flex: none; }
+.fc-b { display: block; padding: var(--sp-2) var(--sp-3) var(--sp-2); }
+.fc-b .t { font-weight: 600; } .fc-open { margin-left: var(--sp-1); padding: 1px 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: var(--fs-sm); font-style: normal; font-weight: 600; }
+.fc-acts { display: flex; justify-content: flex-end; gap: 2px; padding: 0 var(--sp-2) var(--sp-1); }
+.ver-list .fc-row > input.vsel { margin: var(--sp-2) var(--sp-3) 0; }
+.fc-det { border-top: 1px solid var(--border); padding: var(--sp-2) var(--sp-3); }
+.fc-det > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.fc-det input.dr-t { display: block; margin: var(--sp-1) 0 var(--sp-2); width: 100%; box-sizing: border-box; }
+.fc-det .dr-top { margin-top: var(--sp-1); } .fc-det svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.fc-for { display: inline-block; margin-top: var(--sp-2); font-size: var(--fs-sm); }
+.ver-list .fc-acts button.icon svg { width: 18px; height: 18px; }
+@media (min-width: 560px) { .fc-row { flex-direction: row; align-items: stretch; } .ver-list .fc-a { flex-direction: row; } .fc-img { width: 168px; flex: none; aspect-ratio: auto; } .fc-b { flex: 1; min-width: 0; } .fc-row .fc-acts { flex-direction: column; justify-content: flex-start; padding: var(--sp-1); } }
+.fc-det li { border-bottom: 0; }

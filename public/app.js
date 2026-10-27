@@ -417,6 +417,10 @@ const IC = {
   ute: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-6"/><path d="M12 3l5 8H7z"/><path d="M12 8l6 8H6z"/></svg>',
   vei: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3L5 21M16 3l3 18"/><path d="M12 5v3M12 11v3M12 17v2"/></svg>',
   note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v12l-4 4H5z"/><path d="M8 9h8M8 13h5"/></svg>',
+  link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
+  img: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10l8-6 8 6v10z"/><path d="M9 20v-6h6v6"/></svg>',
   bin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg>',
 };
 const GROUPS = [
@@ -431,37 +435,21 @@ const GROUPS = [
 /* the reasons that say nothing a reader needs: the page's own, and Anton's when it only says the person asked (pm 26.10) */
 const PAGE_WHY = /^((revet|endret|satt opp|fjernet) på siden|(personens|brukerens|eierens) (ønske|forespørsel)|på (personens )?(ønske|forespørsel)|etter ønske)\.?$/i;
 const clock = t => t ? new Date(t).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }) : "";
-function drawDraft() {
-  drawWhere();
-  if (!draft) { $("draftRow").innerHTML = ""; return; }
-  const n = draft.edits?.length || 0, ch = `${n} ${n === 1 ? "endring" : "endringer"}`, may = draft.version ? mine() : ownDraft();
-  if (draft.missing) { $("draftRow").innerHTML = `<div class="draftrow dr"><b>${versionId ? "Versjonen finnes ikke, eller er privat." : "Utkastet finnes ikke lenger"}</b><span class="dr-s">${versionId ? "" : "Utkast varer et døgn. "}Du ser modellen slik den er.</span></div>`; return; }
-  const title = mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på forslaget" title="Trykk for å gi det et annet navn">`
-    : `<b class="dr-t">${esc(draft.version ? draft.title : "Utkast")}</b>`;
-  const status = mine() ? `lagret ${clock(draft.updated)} · ${SHARED[draft.sharing] || ""}`
-    : draft.version ? `${esc(draft.owner)} sitt · ${SHARED[draft.sharing] || ""} · sist endret ${new Date(draft.updated).toLocaleDateString("nb-NO")}`
-    : ownDraft() ? `lagret på denne maskinen et døgn${me.person ? "" : " · logg inn for å beholde det"}` : "delt med lenke · det du endrer her, blir ditt eget";
-  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button>${mine() && draft.sharing === "lenke" ? `<button type="button" data-priv title="Lenken virker ikke lenger; bare du ser forslaget">Gjør privat</button>` : ""}${me.person ? `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>${mine() ? `<button type="button" data-kopi title="Et nytt alternativ, fra dette">Ny kopi</button>` : ""}` : `<button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>`}` : "";
-  /* the groups, each row its edit's number (1-based, as undo takes it), the newest last */
-  const rowsOf = GROUPS.map(g => ({ g, rows: [] }));
+/* the changes of the open one, one line each, grouped by kind (the old big card's body): in a draft's card, and folded under «Detaljer» on a version's card in the list. Its own: the name field and «Ta ut …» */
+function detailHtml(may) {
+  const n = draft.edits?.length || 0, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
+  const rowsOf = GROUPS.map(g => ({ g, rows: [] }));   // each row its edit's number (1-based, as undo takes it), the newest last
   (draft.edits || []).forEach((e, i) => rowsOf.find(x => x.g.of(e)).rows.push([e, i + 1]));
   const list = rowsOf.filter(x => x.rows.length).map(({ g, rows: rs }) => `<details class="dr-g"${rs.length > 5 ? "" : " open"}><summary><span class="dr-ic">${IC[g.k]}</span>${g.name} · ${rs.length}</summary><ul>${rs.map(([e, k]) =>
     `<li title="${esc(describe(e))}"><span>${esc(short(e))}</span>${may ? `<button type="button" class="dr-x" data-undo="${k}" title="${g.tip}" aria-label="${g.tip}: ${esc(short(e))}">${IC.back}</button>` : ""}</li>`).join("")}</ul></details>`).join("");
-  $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h">${title}<span class="dr-s">${status}</span></div>
-    <div class="dr-acts">${acts}${mine() ? `<button type="button" class="icon" data-vdel-open title="Slett forslaget" aria-label="Slett forslaget">${IC.bin}</button>` : ""}<a href="./?for">Se før</a></div>
-    ${n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Angre siste: ta ut «${esc(short(draft.edits[n - 1]))}»">${IC.undo}<span>Ta ut «${esc(short(draft.edits[n - 1]))}»</span></button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`}</div>`;
-  const R = $("draftRow");
+  return n ? `<div class="dr-top"><span>${ch}</span>${may ? `<button type="button" data-last title="Angre siste: ta ut «${esc(short(draft.edits[n - 1]))}»">${IC.undo}<span>Ta ut «${esc(short(draft.edits[n - 1]))}»</span></button>` : ""}</div>${list}` : `<p class="dr-s">Ingen endringer ennå. Trykk på et bygg, eller spør Anton.</p>`;
+}
+/* the handlers of detailHtml's buttons and of the name field, inside R */
+function bindDetails(R) {
+  const n = draft.edits?.length || 0;
   for (const b of R.querySelectorAll("[data-undo]")) b.onclick = async () => { const li = b.closest("li"), r = li.getBoundingClientRect(); if (await undo(+b.dataset.undo)) fxBox("dust", li, r); };   // U3884: the row's own place, read before it is redrawn
   R.querySelector("[data-last]")?.addEventListener("click", async e => { const b = e.currentTarget, r = b.getBoundingClientRect(); if (await undo(n)) fxBox("dust", b, r); });
-  R.querySelector("[data-del]")?.addEventListener("click", share);
-  R.querySelector("[data-priv]")?.addEventListener("click", async () => {   // «Del» undone: the link stops working
-    const j = await change({ unshare: versionId }); if (j.error) return toast(`Fikk ikke gjort det privat: ${j.error}`);
-    draft.sharing = j.sharing; drawDraft(); toast("Forslaget er privat igjen. Lenken virker ikke lenger.", { label: "Angre", run: share });
-  });
-  R.querySelector("[data-kopi]")?.addEventListener("click", async () => { const j = await change({ copy: versionId }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`); await show(j); nameIt(); toast(`Ny kopi: «${j.title}». Gi den et navn, eller jobb videre: endringene går inn i den.`); });
-  R.querySelector("[data-ny]")?.addEventListener("click", fresh);
-  R.querySelector("[data-vdel-open]")?.addEventListener("click", () => askDelete([{ version: versionId, title: draft.title }]));
-  const t = $("drTitle");
+  const t = R.querySelector("#drTitle");
   if (t) {
     t.onkeydown = e => { if (e.key === "Enter") t.blur(); if (e.key === "Escape") { t.value = draft.title; t.blur(); } };
     t.onchange = async () => {
@@ -471,8 +459,30 @@ function drawDraft() {
     };
   }
 }
-/* a new copy or proposal: its title ready to be typed over, in the card */
-const nameIt = () => { const t = $("drTitle"); if (t && t.offsetParent) { t.focus(); t.select(); } };
+/* the open one's «Detaljer», folded, under its card in the list: its name to change, the changes with «Ta ut …», and «Se før» (the only home of these since the tab became a plain list) */
+const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på forslaget" title="Trykk for å gi det et annet navn">` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
+let detailsOpen = false;
+const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "offentlig" };
+let verRows = [], selecting = false; const picked = new Set();
+const savedAt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? `i dag ${clock(t)}` : d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" }); };
+const thumbSrc = v => `api/versjon/${encodeURIComponent(v.version)}/bilde.jpg?t=${encodeURIComponent(v.updated)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}`;
+function drawDraft() {
+  drawWhere();
+  if (!draft) { $("draftRow").innerHTML = ""; drawList(); return; }
+  const n = draft.edits?.length || 0, may = draft.version ? mine() : ownDraft();
+  if (draft.version && !draft.missing) { $("draftRow").innerHTML = ""; drawList(); return; }   // a saved version is its card in the list below (Morten 2026-10-27)
+  if (draft.missing) { $("draftRow").innerHTML = `<div class="draftrow dr"><b>${versionId ? "Versjonen finnes ikke, eller er privat." : "Utkastet finnes ikke lenger"}</b><span class="dr-s">${versionId ? "" : "Utkast varer et døgn. "}Du ser modellen slik den er.</span></div>`; drawList(); return; }
+  const status = ownDraft() ? `lagret på denne maskinen et døgn${me.person ? "" : " · logg inn for å beholde det"}` : "delt med lenke · det du endrer her, blir ditt eget";
+  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button><button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>` : "";
+  $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h"><b class="dr-t">Utkast</b><span class="dr-s">${status}</span></div>
+    <div class="dr-acts">${acts}<a href="./?for">Se før</a></div>${detailHtml(may)}</div>`;
+  const R = $("draftRow"); bindDetails(R);
+  R.querySelector("[data-del]")?.addEventListener("click", () => share());
+  R.querySelector("[data-ny]")?.addEventListener("click", fresh);
+  drawList();
+}
+/* a new copy or proposal: its title ready to be typed over, in the card's «Detaljer» */
+const nameIt = () => { detailsOpen = true; drawList(); const t = $("drTitle"); if (t && t.offsetParent) { t.focus(); t.select(); } };
 /* «Nytt forslag» (U3667): the dialog (nytt-forslag.js). Signed in, it makes the version (a new empty one from the before, or a copy of
    one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
 let nyttForslag = null;
@@ -616,13 +626,21 @@ addEventListener("keydown", e => { if (e.key === "Escape" && !$("viewsPop").hidd
 document.addEventListener("pointerdown", e => { if (!$("viewsPop").hidden && !e.target.closest("#views")) viewsOpen(false); });
 drawViews();
 drawDraft();
-/* «Del», the one thing done by hand: a version is opened to those with its link, a draft's own link is given */
-async function share() {
+/* «Del», the one thing done by hand: a version (the card's, or the open one) is opened to those with its link, a draft's own link is given; «Gjør privat» takes it back; «Ny kopi» copies one of one's own */
+async function share(id) {
   let link;
-  if (mine()) { const j = await change({ share: versionId }); if (j.error) return toast(`Fikk ikke delt: ${j.error}`); link = j.link; draft.sharing = j.sharing; drawDraft(); }
+  if (id || mine()) { const j = await change({ share: id || versionId }); if (j.error) return toast(`Fikk ikke delt: ${j.error}`); link = j.link; if ((id || versionId) === versionId) draft.sharing = j.sharing; drawDraft(); listVersions(); }
   else link = new URL(`./?utkast=${encodeURIComponent(draftId)}`, location.href).href;
   try { await navigator.clipboard.writeText(link); toast("Lenken er kopiert. Alle med den ser dette, også uten innlogging."); }
   catch { toast(`Lenken: ${link}`); }
+}
+async function makePrivate(id) {   // «Del» undone: the link stops working
+  const j = await change({ unshare: id }); if (j.error) return toast(`Fikk ikke gjort det privat: ${j.error}`);
+  if (id === versionId) draft.sharing = j.sharing; drawDraft(); listVersions(); toast("Forslaget er privat igjen. Lenken virker ikke lenger.", { label: "Angre", run: () => share(id) });
+}
+async function copyVersion(id) {
+  const j = await change({ copy: id }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`);
+  await show(j); nameIt(); toast(`Ny kopi: «${j.title}». Gi den et navn, eller jobb videre: endringene går inn i den.`);
 }
 function describe(e) {   // by the wings as they were, since a wing torn down is gone from site.wings
   const wings = site0.wings || [], w = wings.find(x => x.id === e.wing)?.name || e.wing;
@@ -1002,22 +1020,43 @@ function ifcLink() {
 ifcLink();
 
 /* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
-const VIS = { privat: "privat", lenke: "bare de med lenken", offentlig: "offentlig" };
-let verRows = [], selecting = false; const picked = new Set();
+/* «Forslag»: one list of the suggestions the person may see (api/versjoner: their own, then the public ones of real people), a card each with its picture,
+   name, owner, how it is shared and when it was saved. The open one is marked; its «Detaljer» are folded under it (Morten 2026-10-27) */
+function cardOf(v) {
+  const open = v.version === versionId, sel = selecting && v.mine;
+  const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
+  const acts = v.mine && !selecting ? `<div class="fc-acts">${v.sharing === "offentlig" ? "" : act("vshare", v.sharing === "lenke" ? "Kopier lenken" : "Del: kopierer en lenke", IC.link)}${v.sharing === "privat" ? "" : act("vpriv", "Gjør privat: lenken virker ikke lenger", IC.lock)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett forslaget", IC.bin)}</div>` : "";
+  return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
+    + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
+    + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts}</div>`
+    + `${open && draft && !draft.missing ? openDetails() : ""}</li>`;
+}
+function drawList() {
+  const rows = verRows.map(v => v.version === versionId && draft?.version ? { ...v, title: draft.title ?? v.title, sharing: draft.sharing ?? v.sharing, updated: draft.updated ?? v.updated } : v);
+  if (draft?.version && !draft.missing && versionId && !rows.some(v => v.version === versionId)) rows.unshift({ version: versionId, title: draft.title, owner: draft.owner, updated: draft.updated, sharing: draft.sharing, mine: mine(), ...(nokkel ? { nokkel } : {}) });
+  $("verBar").hidden = !rows.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
+  const keep = $("verList").querySelector(".fc-det")?.open; if (keep != null) detailsOpen = keep;
+  $("verList").innerHTML = rows.length ? rows.map(cardOf).join("") : `<li class="sel-empty">Ingen forslag ennå.</li>`;
+  const R = $("verList").querySelector(".fc.open"); if (R && draft?.version) bindDetails(R);
+}
 function listVersions() {
   fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
-    versions = versions.filter(v => v.version !== versionId);   // the open one is the card above
     verRows = versions; for (const id of [...picked]) if (!versions.some(v => v.version === id && v.mine)) picked.delete(id);
-    $("verBar").hidden = !versions.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
-    if (!versions.length) { $("verList").innerHTML = `${versionId ? "" : `<li class="sel-empty">Ingen forslag ennå.</li>`}`; return; }   // with a version open its card is above: nothing more to say
-    $("verList").innerHTML = versions.map(v => `<li>${selecting && v.mine ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}<a href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${v.version === versionId ? ' aria-current="page"' : ""}><span><span class="t">${esc(v.title)}</span><small>${v.mine ? "din" : esc(v.owner)} · ${v.changes} ${v.changes === 1 ? "endring" : "endringer"} · ${new Date(v.updated).toLocaleDateString("nb-NO")}</small></span>${v.mine ? `<span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span>` : ""}</a>${v.mine && !selecting ? `<button type="button" class="icon" data-vdel="${esc(v.version)}" title="Slett forslaget" aria-label="Slett forslaget: ${esc(v.title)}">${IC.bin}</button>` : ""}</li>`).join("");
+    drawList();
   }).catch(() => {});
 }
+/* a picture that does not load: the quiet house icon stays */
+$("verList").addEventListener("error", e => { if (e.target.matches?.(".fc-img img")) e.target.remove(); }, true);
+$("verList").addEventListener("load", e => { if (e.target.matches?.(".fc-img img")) e.target.closest(".fc-img").classList.add("on"); }, true);
 /* U3654: «Slett forslaget» and «Velg» + «Slett valgte (n)»: asked in the page first (no window.confirm), then one «Angre» for all */
-const drawBar = () => { $("verSel").setAttribute("aria-pressed", String(selecting)); $("verSel").textContent = selecting ? "Ferdig" : "Velg"; $("verDelSel").hidden = !selecting; $("verDelSel").textContent = `Slett valgte (${picked.size})`; $("verDelSel").disabled = !picked.size; };
+function drawBar() { $("verSel").setAttribute("aria-pressed", String(selecting)); $("verSel").textContent = selecting ? "Ferdig" : "Velg"; $("verDelSel").hidden = !selecting; $("verDelSel").textContent = `Slett valgte (${picked.size})`; $("verDelSel").disabled = !picked.size; }
 $("verSel").onclick = () => { selecting = !selecting; picked.clear(); closeAsk(); drawBar(); listVersions(); };
 $("verList").addEventListener("change", e => { const c = e.target.closest("input.vsel"); if (!c) return; c.checked ? picked.add(c.dataset.id) : picked.delete(c.dataset.id); drawBar(); });
-$("verList").addEventListener("click", e => { const b = e.target.closest("[data-vdel]"); if (b) askDelete([verRows.find(v => v.version === b.dataset.vdel)].filter(Boolean)); });
+$("verList").addEventListener("click", e => {
+  const b = e.target.closest("[data-vdel], [data-vshare], [data-vpriv], [data-vcopy]"); if (!b) return; const d = b.dataset;
+  if (d.vdel) askDelete([verRows.find(v => v.version === d.vdel) || (d.vdel === versionId && draft?.version ? { version: versionId, title: draft.title } : null)].filter(Boolean));
+  else if (d.vshare) share(d.vshare); else if (d.vpriv) makePrivate(d.vpriv); else if (d.vcopy) copyVersion(d.vcopy);
+});
 $("verDelSel").onclick = () => askDelete(verRows.filter(v => picked.has(v.version)));
 let asking = [];
 const closeAsk = () => { asking = []; $("verConfirm").hidden = true; };

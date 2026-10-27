@@ -9,14 +9,16 @@ import { randomBytes, createHash } from "node:crypto";
 import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { nearWays } from "./public/paint-edit.js";
-import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS } from "./versions.mjs";
+import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS, isPerson } from "./versions.mjs";
+import { createThumbs } from "./thumbs.mjs";   // the Forslag tab's card pictures
+import { encodeJpeg } from "./jpeg.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
-import { withGarden, frame as lookFrame, say as lookSay, annotate } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
+import { withGarden, frame as lookFrame, say as lookSay, annotate, decode as decodePng } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
 const withMeshes = s => withGarden(meshesIn(s));
 import { tryShot } from "./tryshot.mjs";   // try_change's picture: aimed at what the call changed
 import { cameraProps, aimCamera, cameras, usedCamera } from "./camera.mjs";   // one camera for look and try_change's picture
@@ -1112,11 +1114,25 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const v = v0 && versions.visible(v0, userOf(req), key) ? v0 : null;
     return v ? send(res, 200, versionBody(v), open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
   }
+  /* the Forslag tab (Morten 2026-10-27): the asker's own versions of every sharing, then the public ones of real people (isPerson), newest first in each
+     group; a link-only version of someone else is never listed. Signed out: the public ones of real people only */
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const me = req.webUser ?? null;   // signed in on the page: their own versions too, each with the key that opens it
-    return send(res, 200, { versions: (versions?.list({ viewer: me }) || []).slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated,
-      ...(me && v.owner === me ? { mine: true, sharing: v.sharing, ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
+    const mine = v => !!me && v.owner === me, shown = (versions?.list({ viewer: me }) || []).filter(v => mine(v) || (v.sharing === "offentlig" && isPerson(v.owner)));
+    shown.sort((a, b) => mine(b) - mine(a) || b.updated.localeCompare(a.updated));
+    return send(res, 200, { versions: shown.slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated, sharing: v.sharing,
+      ...(mine(v) ? { mine: true, ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
+  }
+  /* GET /api/versjon/<id>/bilde.jpg: the card's picture (thumbs.mjs), seen by whoever may see the version itself */
+  const thumbs = versions ? createThumbs({ render: async v => { const { png } = await look(applyEdits(site, floors, v.edits).site, { view_name: "isometrisk", width: 480, height: 300 }), { px, W, H } = decodePng(png); return encodeJpeg(px, W, H, 78); } }) : null;
+  async function handleThumb(req, res, id) {
+    if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
+    const v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
+    if (!v0 || !versions.visible(v0, userOf(req), key)) return send(res, 404, { error: "Versjonen finnes ikke." }, { "access-control-allow-origin": "*" });
+    try { const bytes = await thumbs.get(v0);
+      res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "content-length": bytes.length, "cache-control": "private, max-age=3600", vary: "cookie" }); return res.end(bytes);
+    } catch (e) { console.error("thumb:", id, e.message); return send(res, 500, { error: "Bildet kunne ikke lages." }); }
   }
   /* POST /api/endring: the page's «Riv» and «Angre» (U3542), the same as try_change and undo_change: {edits, draft?,
      version?} adds (no draft: a new one), {undo: n, draft | version} takes the n-th out. A version is the signed-in
@@ -1223,7 +1239,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
+  return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
     setNotifier: f => { notify = f; },
     /* GET /api/skisse/<id>.png: a plan Anton showed this person */
     handleSketch: (req, res, rest, person) => {

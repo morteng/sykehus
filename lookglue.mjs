@@ -151,7 +151,7 @@ const GLYPH = { 0: "01110 10001 10011 10101 11001 10001 01110", 1: "00100 01100 
   e: "00000 00000 01110 10001 11111 10000 01110", "-": "00000 00000 00000 11111 00000 00000 00000", " ": "00000 00000 00000 00000 00000 00000 00000" };
 const FONT = Object.fromEntries(Object.entries(GLYPH).map(([k, v]) => [k, v.split(" ")]));
 
-function decode(buf) {
+export function decode(buf) {
   const W = buf.readUInt32BE(16), H = buf.readUInt32BE(20); let off = 8; const idat = [];
   while (off < buf.length) { const len = buf.readUInt32BE(off), type = buf.toString("ascii", off + 4, off + 8); if (type === "IDAT") idat.push(buf.subarray(off + 8, off + 8 + len)); off += 12 + len; }
   const raw = inflateSync(Buffer.concat(idat)), px = new Uint8Array(W * H * 3);
