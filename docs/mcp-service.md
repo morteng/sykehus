@@ -149,6 +149,10 @@ Operator: the tool list the model reads is short (the whole list at most 12 000 
 
 For people: you can ask Anton «Hvordan legger du en plen på taket?» and it looks up the right kind of change first. After «Angre» you can say «gjør om» to put the change back at its place; a new change after the undo ends it. «Hva har jeg sendt som ønsker, og hva er status?» lists your own wishes with their status (ny, sett, laget, nei). When Anton shows you a draft or version it also gives the link to its IFC file. If Anton says it cannot find a tool, send a wish.
 
+## For people: the picture after a change shows the change (2026-10-27)
+
+For people: after a change Anton's picture is aimed at what was changed (a lawn on a roof from above at the roof, a railing run as one picture, a torn-down wing with its neighbours in orange), with a caption in Norwegian that says what is in frame and the camera it used. You can ask «vis det fra sør, 20 grader brattere», «vis før og etter ved siden av hverandre» or «stå på bakken ved Dronninggata og se mot taket»: Anton then gives the camera exactly (at, frame, distance_m, from_direction, tilt_deg, eye, era, views, up to 3 pictures in one call; the lens is fixed). A camera the model cannot give, such as a point off the site, is refused with the limits. Operator: `tryshot.mjs` (the aim and caption), `camera.mjs` (the shared fields, used by look and try_change's `picture`).
+
 ## For people: a railing round the roof edge, and how far a thing is off it (A–E, 2026-10-27)
 
 - Say «sett et høyt glassgjerde rundt takkanten på Sentralblokka». Sentralblokka's roof has three levels (kote 73,16, 69,91 and 66,41), each with its own edge, so Anton lays one railing per level (`edge_rail`, one call per level): the straight railing part in pieces along that level's edge, corners closed, every piece standing at that level's kote. Edges that stand against a higher level get no rail (there is no fall there) unless Anton is told to take all. The answer says how many pieces, how many metres, and what was left out. If a step in the edge is under 1 m, it is smoothed and the answer says so.

@@ -18,6 +18,8 @@ import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the aft
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { withGarden, frame as lookFrame, say as lookSay, annotate } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
 const withMeshes = s => withGarden(meshesIn(s));
+import { tryShot } from "./tryshot.mjs";   // try_change's picture: aimed at what the call changed
+import { cameraProps, aimCamera, cameras, usedCamera } from "./camera.mjs";   // one camera for look and try_change's picture
 import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
 import { edgeRail } from "./public/roofedge.js";   // edge_rail: a railing round a roof level's edge, as many railing parts   // T5: draw_plan, draw_section
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
@@ -423,13 +425,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (a.focus && !f) throw toolErr(`Fant ikke «${a.focus}» å se på: en fløy, en bygnings id eller et nytt bygg (id eller navn).`);
     if (a.from_direction != null) { v.from = dirDeg(a.from_direction); if (v.plan) delete v.plan; v.tilt ??= 30; }
     if (a.tilt_deg != null && !v.plan) v.tilt = a.tilt_deg;
-    const fr = lookFrame(s, a, f, v), dist = fr.dist ?? (v.plan ? 220 : 330), tilt = fr.tilt ?? v.tilt, W = a.width || 1024, H = a.height || 640;
+    const fr = lookFrame(s, a, f, v), W = a.width || 1024, H = a.height || 640;
+    /* the camera fields (camera.mjs) over the framing: at, frame, eye, distance_m, tilt_deg 90 = plan */
+    const cm = aimCamera({ at: a.at, frame: a.frame, eye: a.eye, distance_m: a.distance_m, tilt_deg: a.tilt_deg >= 90 ? 90 : null }, { target: f ? fr.target : hospital, dist: fr.dist ?? (v.plan ? 220 : 330), tilt: fr.tilt ?? v.tilt ?? 35, from: v.from ?? 0, plan: !!v.plan }, { site: s, ground: groundAt, dirDeg, err: toolErr }), dist = cm.dist, tilt = cm.plan ? null : cm.tilt;
+    if (cm.plan) v.plan = true; else delete v.plan; v.from = cm.from; fr.target = cm.target;
     /* a new building's pad (U3566), as the picture shows it: what is dug out and filled, and at which side */
     const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground || fa?.lot ? `${fa.name}: ${fa.ground ? groundText(fa.ground) : ""}${lotText(fa.lot) ? ` ${lotText(fa.lot)}` : ""}`.trim() : "";
-    let png = await picture(fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: f ? fr.target : hospital, dist, focus: fr.focus, accent: fr.accent, width: W, height: H });
-    png = annotate(png, { plan: !!v.plan, dist, target: fr.target, levels: fr.levels, width: W, height: H });
+    const before = a.era === "før", cam = usedCamera(cm, a.era);
+    let png = await picture(before ? withMeshes(site) : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
+    png = annotate(png, { plan: !!v.plan, dist, target: fr.target, levels: before ? null : fr.levels, width: W, height: H });
     const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8], seen = f ? lookSay(s, { ...fr, dist }, f, v, fr) : "";
-    return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, midt i bildet ${f.name}` : ""}. Nordpilen øverst til høyre${v.plan ? "; målestokken nederst til venstre er 50 m" : ""}.${seen ? " I bildet: " + seen : ""}${pad ? " " + pad : ""}` };
+    return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, midt i bildet ${f.name}` : ""}. Nordpilen øverst til høyre${v.plan ? "; målestokken nederst til venstre er 50 m" : ""}.${seen ? " I bildet: " + seen : ""}${pad ? " " + pad : ""} ${cam.say}`, camera: cam.num };
   }
   /* a saved view (the page's camera, saved.js) as the server's picture takes it (U3527): the orbit's yaw, pitch and
      dist; the person's eye as a camera 1,7 m over the ground there looking at the centre (the picture's narrower lens);
@@ -487,7 +493,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     /* documents: see below */
     { name: "try_change", tgt: "write", title: "Prøv en endring", writeIf: a => !!a.version, schema: S({ edits: { type: "array", items: EDIT, minItems: 1, maxItems: 50 }, target: { ...TARGET, description: TARGET.description + ". Signed out with none open: a new draft (a day, no login)" }, draft: OLD, version: OLD,
       include_screenshot: { type: "boolean", description: "false for the middle steps of a sequence; look at the last one. A picture of the model after the change comes back (default true)" },
-      view_name: VIEW_NAME }, ["edits"]),
+      view_name: VIEW_NAME, picture: { type: "object", description: "The picture's camera: look's fields (at, frame, eye, era, views, distance_m, from_direction, tilt_deg, view_name, focus, width, height). Default: aimed at what changed" } }, ["edits"]),
       description: "Tries changes on the model: a storey's kote in a wing, a fact on a wing's card, a room's name, use or area, a note, and the after: demolish or restore buildings, balconies on a wing, a ready-made part (a greenhouse, stair, railing, balcony or pool basin: part, before any free geometry), a construction (a structure an IfcOpenShell script builds as BIM, in metres, its foot at params.ground: the contract is in the construction kind's description), and the ground (a pool or pond is kind surface with surface water; pool: true makes it a dug swimming pool with a level edge, its water flat): surfaces, paths, trees (hagekart's species) and felling, and earthworks (kind ground: level a terrace or a yard, dig into a slope or fill it up, with a slope or a retaining wall round it; the result says how many m³ are dug out and filled). Each is checked; those that pass go into the target. Leave target out: signed in, the changes go into the version the person has open on the website (their «Mitt etter») and their page redraws with them; signed out, into a draft that lasts a day. The result names where they went (version or draft), how many changes it now has and its link: report from that. The before, the shared model, is never changed. Say where each change comes from in why. " +
         "For a building on a roof (on) the result's added entry has on_roof: how many degrees it was turned to the building's axis and how many metres it was moved in, and whether it had to be made smaller. Quote it to the person word for word when you tell what you did; never ask what it was turned or moved by, read it there. The result has a picture of the model after it (a plain massing drawing: new buildings in their material's colour, the newest picked out in orange, a north arrow top right) and fit: for each new building what its foot stands on (the ground, a roof, nothing = it floats, or buried), the ground under it, the wings it overlaps (m²) and the nearest gap; and for each new surface (a pool, a lawn, paving) what it covers, by m²: buildings, and the footpaths, pavements and roads there are today (from OSM and NVDB). A pool or a lawn over a path cuts the path: say so, and move it or lay a new path round it, unless that is what was asked. Look at both before you tell the person what you made: say what you see, and if it is wrong (it floats, cuts into a wing, stands on the wrong side, is not the shape asked for), fix it with another try_change (reshape, or demolish its id and build it again) before you answer. look gives other views.",
       run: async (a, req) => {
@@ -541,11 +547,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
         if (a.include_screenshot === false || !ok.length) return out;
-        /* the picture of what it made (the FreeCAD MCP's pattern): aimed at the last new or changed building, else the whole site */
-        const last = ok.findLast(e => e.kind === "volume" || e.kind === "reshape"), id = last && (last.id ?? m.site.added?.findLast(x => x.kind === "volume" && x.name === last.name)?.id);
-        try { const { png, text } = await look(m.site, { view_name: a.view_name, focus: id && m.site.added?.some(x => x.id === id) ? id : null });
-          return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text }], structuredContent: out } };
-        } catch (e) { console.error("look (try_change's picture):", e.message, "| edits:", argsLine({ edits: a.edits }), "| added:", (m.site.added || []).map(x => x.kind).join(",")); return out; } } },
+        /* the picture of what it made: aimed at what the call changed (tryshot.mjs), the camera fields (camera.mjs) over that; with a focus, look's own aim */
+        const pic = a.picture || {}, last = ok.findLast(e => e.kind === "volume" || e.kind === "reshape"), id = last && (last.id ?? m.site.added?.findLast(x => x.kind === "volume" && x.name === last.name)?.id);
+        try { const sh = pic.focus ? null : await tryShot({ prior: applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site, s: withMeshes(m.site), edits: d.edits.slice(-ok.length), a, picture, ground: groundAt, annotate, before: withMeshes(site), dirDeg, err: toolErr });
+          const shots = sh ? sh.images : await Promise.all(cameras({ view_name: a.view_name, ...pic, focus: pic.focus ?? (id && m.site.added?.some(x => x.id === id) ? id : null) }).map(c => look(m.site, c)));
+          const cams = shots.map(x => x.camera).filter(Boolean), so = cams.length ? { ...out, picture: { cameras: cams } } : out;
+          return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, ...shots.flatMap((x, i) => [{ type: "image", data: x.png.toString("base64"), mimeType: "image/png" }, { type: "text", text: (shots.length > 1 ? `Bilde ${i + 1}: ` : "") + x.text }])], structuredContent: so } };
+        } catch (e) { if (e.tool) return { ...out, picture_refused: e.message }; console.error("look (try_change's picture):", e.message, "| edits:", argsLine({ edits: a.edits }), "| added:", (m.site.added || []).map(x => x.kind).join(",")); return out; } } },
     { name: "propose_sketch", tgt: "read", title: "Vis en skisse først", ro: true, schema: S({ title: { type: "string", maxLength: 100, description: "What the change is, in the person's words (a short title)" },
         edits: { type: "array", minItems: 1, maxItems: 12, items: { type: "object" }, description: "The same edits you would send to try_change for it, as you would send them: nothing is saved by this call" },
         numbers: { type: "array", maxItems: 8, items: { type: "object", properties: { label: { type: "string", maxLength: 30 }, value: { type: "string", maxLength: 40 } }, required: ["label", "value"], additionalProperties: false }, description: "The key numbers the person must see: count, size, facing, e.g. {label: «Antall», value: «454»}, {label: «Mot», value: «120°»}" },
@@ -823,18 +831,17 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const t = a.title_contains ? `%${String(a.title_contains).slice(0, 60)}%` : null;
         const rows = docs.prepare(`SELECT id, title, kind, year, file, pages, has_text, urls FROM docs WHERE 1=1 ${a.kind ? "AND kind=?" : ""} ${t ? "AND title LIKE ?" : ""} ORDER BY kind, year, title LIMIT 250`).all(...[a.kind, t].filter(Boolean));
         return { documents: rows.map(docOut) }; } },
-    { name: "look", tgt: "read", title: "Se på modellen", ro: true, schema: S({ view_name: VIEW_NAME, focus: { type: "string", description: "A wing (id or name), a building id, or a new building's id or name: aimed at and picked out in orange" },
-        from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees; overrides view_name's" },
-        tilt_deg: { type: "number", minimum: 5, maximum: 85 }, distance_m: { type: "number", minimum: 30, maximum: 1200 },
+    { name: "look", tgt: "read", title: "Se på modellen", ro: true, schema: S({ ...cameraProps(VIEW_NAME),
         saved_view: { type: "string", description: "A saved view by its name or id (show_draft's saved_views, or a shot make_shots made): the picture from its camera, its «før» on the before; the other view fields are not needed" },
-        draft: DRAFT, width: { type: "integer", minimum: 320, maximum: 1280 }, height: { type: "integer", minimum: 240, maximum: 960 } }),
+        draft: DRAFT }),
       description: "A picture of the model for you to look at: the terrain, the lot line (red dashes), the buildings as massing (the hospital light, neighbours grey), new buildings in their material's colour (glass pale green), trees as cones, a north arrow top right; plan has a 50 m scale bar bottom left. With target: that version or draft; without, the version the person has open. Use it to check your own work from the side that shows it best, e.g. S for something built on the south side, plan for where it stands. The person does not see this picture; to show them, use show_building.",
       run: async (a, req) => {
         const who = userOf(req), open = who && versions ? versions.get(openId(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
         if (a.saved_view) { if (!id) throw toolErr("Ingen lagrede visninger: ingen versjon eller utkast er åpen."); try { a = { ...a, saved: findView(viewsOf(id, req), a.saved_view) }; } catch (e) { throw toolErr(e.message); } }
-        let png, text; try { ({ png, text } = await look(m.site, a)); }
+        const shots = []; try { for (const c of a.saved ? [a] : cameras(a)) shots.push(await look(m.site, a.saved ? a : { ...a, ...c })); }   // views: up to 3 cameras, one picture each
         catch (e) { if (e.tool) throw e; console.error("look:", e.message, "|", argsLine(a), "| added:", (m.site.added || []).map(x => x.kind).join(",")); throw toolErr(`Fikk ikke tegnet bildet (${e.message}). Prøv en annen visning, eller si fra til Morten.`); }
-        return { _result: { content: [{ type: "image", data: png.toString("base64"), mimeType: "image/png" }, { type: "text", text: text + (id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.") }] } }; } },
+        const tail = id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.", cams = shots.map(x => x.camera).filter(Boolean);
+        return { _result: { content: shots.flatMap((x, i) => [{ type: "image", data: x.png.toString("base64"), mimeType: "image/png" }, { type: "text", text: (shots.length > 1 ? `Bilde ${i + 1}: ` : "") + x.text + tail }]), ...(cams.length ? { structuredContent: { cameras: cams } } : {}) } }; } },
     { name: "show_building", tgt: "read", title: "Vis bygget", ro: true, ui: true, schema: S({
         storey: { ...STOREY, description: STOREY.description + ". Cuts every wing 1.2 m above that floor, as a plan is cut; leave out for the whole site" },
         wing: { ...WING, description: "Look at this wing and ring it in yellow. Needed for fasade, tverrsnitt and lengdesnitt: the wing named, e.g. «fasaden mot sør på Sentralblokka» is {mode: \"fasade\", wing: \"Sentralblokka\", from_direction: \"S\"}" },
