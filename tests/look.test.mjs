@@ -35,7 +35,7 @@ test("try_change: the picture after it, and fit for each new building", async ()
 
 test("look: a picture from a side, aimed at a building; an unknown one is an error", async () => {
   const r = await call("look", { view_name: "S", focus: "Sentralblokka", width: 480, height: 320 });
-  assert.ok(isPng(r.content[0])); assert.match(r.content[1].text, /sett fra sør.*Sentralblokka i oransje/);
+  assert.ok(isPng(r.content[0])); assert.match(r.content[1].text, /sett fra sør.*Sentralblokka \(i oransje\): taket har 3 nivåer/);
   assert.equal((await call("look", { focus: "Ingenting" })).isError, true);
 });
 
