@@ -1,7 +1,8 @@
 /* Prospekt (Morten 2026-10-27): a read-only page per shared project. Sharing decides on every request: privat, an unknown id and a wrong key are
    the same 404 (JSON and pictures); lenke opens with its key and is never listed; offentlig opens and is listed. The JSON has exactly PROSPEKT_KEYS.
    A render shows unless the owner turned it off (owner only); one is the hero. The real server runs; the plot's facts come from a stub.
-   node --test tests/prospekt.test.mjs */
+   node --test tests/prospekt.test.mjs
+   2026-10-28: the Prospekt is a view in the viewing area (prospekt-pane.js); the old page only sends on. */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
@@ -12,6 +13,7 @@ import { spawn } from "node:child_process";
 import vm from "node:vm";
 import { PROSPEKT_KEYS, numbersOf, limitsOf } from "../prospekt.mjs";
 import { prospektHtml, GONE } from "../public/prospekt-view.js";
+import { firstView, sharedOpen, prospektOpen, PREVIEW_NOTE, renderProspekt } from "../public/prospekt-pane.js";
 
 const secret = "proxy-secret-for-tests-0123456789", as = who => ({ "remote-user": who, "x-sykehus-proxy-auth": secret });
 const dir = mkdtempSync(join(tmpdir(), "sykehus-prospekt-")), vdir = join(dir, "v");
@@ -44,14 +46,27 @@ s = await boot(); after(() => s.stop());
 const get = (p, h) => fetch(s.O + p, { headers: h }).then(async r => ({ status: r.status, type: r.headers.get("content-type"), text: await r.text(), r }));
 const gone = await get("/api/prospekt/vzzzzzzzz");
 
-test("privat, an unknown id and a lenke without its key all answer the same 404, for the JSON and for the pictures; even to the owner of the privat one", async () => {
+test("privat, an unknown id and a lenke without its key all answer the same 404, for the JSON and for the pictures; and a stranger who is signed in or holds another project\'s key; only the owner previews a privat one (next test)", async () => {
   for (const p of [`/api/prospekt/${priv}`, `/api/prospekt/${lnk.version}`, `/api/prospekt/${lnk.version}?nokkel=feil`, `/api/prospekt/${priv}/bilde/${R.v1}.jpg`, `/api/prospekt/${lnk.version}/bilde/${R.l1}.jpg`, `/api/prospekt/vzzzzzzzz/bilde/${R.p1}.jpg`, `/api/prospekt/${priv}?nokkel=${KEY}`]) {
     const r = await get(p); assert.equal(r.status, 404, p); assert.equal(r.text, gone.text, `${p}: same body as an unknown id`);
   }
-  assert.equal((await get(`/api/prospekt/${priv}`, lars)).status, 404, "the owner too: privat has no prospekt");
   assert.equal((await get(`/api/prospekt/${priv}`, kari)).status, 404);
 });
 
+test("the owner previews an unshared project: the full data and its pictures; a stranger, a visitor and a link-key holder still get the same 404", async () => {
+  const own = await get(`/api/prospekt/${priv}`, lars); assert.equal(own.status, 200); const j = JSON.parse(own.text);
+  assert.deepEqual(Object.keys(j).sort(), [...PROSPEKT_KEYS].sort(), "the same keys a visitor gets once it is shared"); assert.equal(j.sharing, "privat"); assert.equal(j.owner, "lars");
+  assert.deepEqual(j.renders.map(r => r.id), [R.v1]); assert.ok(!j.renders[0].url.includes("nokkel"), "no key in a privat one's picture URLs");
+  const pic = await fetch(`${s.O}/${j.renders[0].url}`, { headers: lars }); assert.equal(pic.status, 200); assert.deepEqual(Buffer.from(await pic.arrayBuffer()), bytes(R.v1));
+  assert.equal((await fetch(`${s.O}/${j.renders[0].url}`)).status, 404, "its picture is not served to a visitor"); assert.equal((await fetch(`${s.O}/${j.renders[0].url}`, { headers: kari })).status, 404);
+  const still = await fetch(`${s.O}/${j.stills[0].url}`, { headers: lars }); assert.equal(still.status, 200, "the owner's still too");
+  for (const [p, h] of [[`/api/prospekt/${priv}`, undefined], [`/api/prospekt/${priv}`, kari], [`/api/prospekt/${priv}?nokkel=${KEY}`, undefined], [`/api/prospekt/${priv}?nokkel=${KEY}`, kari], [`/api/prospekt/${priv}/modell/sorvest.jpg`, kari]]) {
+    const r = await get(p, h); assert.equal(r.status, 404, p); assert.equal(r.text, gone.text, "the same body as an unknown id");
+  }
+  const el = { innerHTML: "" }, d = await renderProspekt(el, { id: priv, fetch: u => fetch(`${s.O}/${u}`, { headers: lars }) });
+  assert.equal(d.sharing, "privat"); assert.ok(el.innerHTML.startsWith(PREVIEW_NOTE), "the preview says so on top"); assert.ok(el.innerHTML.includes(prospektHtml(d, { links: {} })));
+  const pub2 = await renderProspekt(el, { id: pub, fetch: u => fetch(`${s.O}/${u}`) }); assert.ok(!el.innerHTML.includes("pk-preview"), `a shared one carries no note (${pub2.sharing})`);
+});
 test("offentlig opens for a visitor and is listed; lenke opens with its key (and for its owner), and is never listed to a visitor or another person", async () => {
   const r = await get(`/api/prospekt/${pub}`); assert.equal(r.status, 200);
   const list = async h => (await (await fetch(s.O + "/api/versjoner", { headers: h })).json()).versions;
@@ -114,11 +129,16 @@ test("the model's stills are drawn on the server for a shared project only: a JP
   for (const p of [`/api/prospekt/${priv}/modell/sorvest.jpg`, `/api/prospekt/${lnk.version}/modell/sorvest.jpg`, `/api/prospekt/vzzzzzzzz/modell/sorvest.jpg`]) assert.equal((await get(p)).text, gone.text, p);
   assert.equal((await get(`/api/prospekt/${pub}/modell/finnesikke.jpg`)).status, 404);
 });
-test("the page is served to a visitor at /prospekt/<id> and /prospekt.html, with no login controls; the main page still hides what a visitor may not use", async () => {
+test("the old address /prospekt/<id> and /prospekt.html still resolve: a small page whose script opens the main page with the Prospekt view picked; the main page still hides what a visitor may not use", async () => {
   for (const p of [`/prospekt/${pub}`, "/prospekt.html"]) {
     const r = await get(p); assert.equal(r.status, 200, p); assert.match(r.type, /text\/html/); assert.match(r.text, /src="prospekt\.js/); assert.match(r.text, /<base href="\/">/);
-    assert.ok(!/logg inn|anton|<form|<input/i.test(r.text), "no login, chat or edit controls in the page");
+    assert.ok(!/<form|<input|prospekt\.css/i.test(r.text), "no controls and no brochure of its own in the page");
   }
+  const go = (href, id) => { let to = null; const u = new URL(href); vm.runInNewContext(readFileSync(new URL("../public/prospekt.js", import.meta.url), "utf8"), { URLSearchParams, encodeURIComponent, location: { search: u.search, pathname: u.pathname, replace: x => { to = x; } } }); return to; };
+  assert.equal(go(`http://x/prospekt/${pub}`), `./?versjon=${pub}&vis=prospekt`, "the id from the path");
+  assert.equal(go(`http://x/prospekt.html?v=${pub}`), `./?versjon=${pub}&vis=prospekt`, "the id from ?v=");
+  assert.equal(go(`http://x/prospekt.html?v=${lnk.version}&nokkel=k%201`), `./?versjon=${lnk.version}&nokkel=k%201&vis=prospekt`, "a link-only project keeps its key");
+  assert.equal(go("http://x/prospekt.html"), "./", "no id: the main page");
   const idx = (await get("/")).text; assert.match(idx, /me-hint\.js/, "the visitor chrome is still the main page's");
 });
 
@@ -139,11 +159,11 @@ test("the page markup: full-bleed hero with the title, facts column, renders the
   const base = { version: "v1", title: "A <b>&\" hus", owner: "lars", updated: "2026-10-27T10:00:00Z", hero: "r2", renders: [{ id: "r1", url: "u1", at: "2026-10-26T10:00:00Z" }, { id: "r2", url: "u2", at: "2026-10-27T10:00:00Z" }],
     stills: [{ title: "Modellen sett fra sørvest", url: "s1" }], numbers: { volumes: [{ name: "Hus", storeys: 3, footprint_m2: 288, bta_m2: 864, bra_m2: null, foot_kote: 22, top_kote: 31.6, storey_kotes: [22, 25.2, 28.4] }], bta_m2: 864, bra_m2: null, demolished: { count: 0 }, how: "Beregnet." },
     limits: [{ line: "Kvikkleire.", how: "Fra NVE" }], limits_say: null };
-  const h = prospektHtml(base, { links: { explore: "./?versjon=v1&fra=prospekt" } });
+  const h = prospektHtml(base, { links: { explore: "./?versjon=v1&vis=3d" } });
   assert.match(h, /class="pk-hero-img" data-lb="1"[^>]*><img src="u2"/, "the hero is the chosen render, first and large");
   assert.ok(h.indexOf('class="pk-hero') < h.indexOf('class="pk-facts"') && h.indexOf('class="pk-facts"') < h.indexOf("<h2>Bilder") && h.indexOf("<h2>Bilder") < h.indexOf("<h2>Modellen") && h.indexOf("<h2>Modellen") < h.indexOf("Tomta og begrensninger"), "order: hero, facts, pictures, model, limits");
   assert.match(h, /data-lb="0"[^>]*><img src="u1"/); assert.match(h, /data-lb="2"[^>]*><img src="s1"/); assert.match(h, /<figcaption>Modellen sett fra sørvest<\/figcaption>/); assert.match(h, /Gjengitt bilde, 26\. oktober 2026/);
-  assert.match(h, /<a class="pk-btn" href="\.\/\?versjon=v1&amp;fra=prospekt">Utforsk i 3D<\/a>/); assert.match(h, /Laget med Sykehustomta/);
+  assert.match(h, /<a class="pk-btn" data-explore href="\.\/\?versjon=v1&amp;vis=3d">Utforsk i 3D<\/a>/); assert.match(h, /Laget med Sykehustomta/);
   assert.ok(!/canvas|<script|webgl|viewer/i.test(h), "no live 3D in the page");
   assert.match(h, /<dt>BRA<\/dt><dd>ikke oppgitt/); assert.match(h, /<dt>Høyeste kote<\/dt><dd>\+31,6 m/); assert.match(h, /etasjer \+22 · \+25,2 · \+28,4/);
   assert.ok(h.includes("A &lt;b&gt;&amp;&quot; hus") && !h.includes("<b>&"), "title escaped"); assert.match(h, /Av lars/);
@@ -151,16 +171,46 @@ test("the page markup: full-bleed hero with the title, facts column, renders the
   const bare = prospektHtml({ ...base, hero: null, renders: [] }); assert.match(bare, /class="pk-hero-img" data-lb="0"[^>]*><img src="s1"/, "no render: the first still is the hero");
   assert.ok(!/<h2>Modellen/.test(bare), "and is not shown twice"); assert.match(GONE, /Fant ikke prospektet/);
 });
-test("a visitor who opens a project lands on its Prospekt; a signed-in one, or one sent from the Prospekt (&fra=), does not (me-hint.js)", () => {
-  const hint = readFileSync(new URL("../public/me-hint.js", import.meta.url), "utf8");
-  const go = (href, stored) => { let to = null; const cls = new Set(); const u = new URL(href);
-    vm.runInNewContext(hint, { URL, document: { documentElement: { classList: { add: c => cls.add(c), contains: c => cls.has(c) } } }, localStorage: { getItem: () => stored }, location: { href, hash: u.hash, replace: x => { to = x; } } }); return to; };
-  assert.equal(go("http://x/?versjon=vAbcdefgh", null), "prospekt.html?v=vAbcdefgh");
-  assert.equal(go("http://x/?versjon=vAbcdefgh&nokkel=k%201", null), "prospekt.html?v=vAbcdefgh&nokkel=k%201");
-  assert.equal(go("http://x/#prospekt=vAbcdefgh", null), "prospekt.html?v=vAbcdefgh");
-  assert.equal(go("http://x/?versjon=vAbcdefgh&fra=prospekt", null), null, "«Utforsk i 3D» stays in the project view");
-  assert.equal(go("http://x/?versjon=vAbcdefgh", "1"), null, "a signed-in browser gets the project view");
-  assert.equal(go("http://x/", null), null, "no project, no redirect");
+test("which view opens first: a shared project's Prospekt for a visitor and for anyone not the owner; 3D for the owner; ?vis= asks; a project with no Prospekt opens on 3D", () => {
+  for (const [shared, owner, asked, want, why] of [[true, false, null, "prospekt", "visitor or another person"], [true, true, null, "3d", "the owner"], [true, true, "prospekt", "prospekt", "the owner asks"], [true, false, "3d", "3d", "a visitor asks"],
+    [true, false, "x", "prospekt", "an unknown ask is no ask"], [false, false, null, "3d", "nothing shared: no Prospekt"], [false, false, "prospekt", "3d", "asked, but privat or missing"]]) assert.equal(firstView({ shared, owner, asked }), want, why);
+  assert.deepEqual([{ version: "v1", sharing: "offentlig" }, { version: "v1", sharing: "lenke" }, { version: "v1", sharing: "privat" }, { version: "v1", sharing: "offentlig", missing: true }, null].map(sharedOpen), [true, true, false, false, false]);
+});
+test("the viewing area mounts the one content builder: the real server's answer becomes the page, with «Utforsk i 3D» as a switch; a 404 says so; no contact says so", async () => {
+  const el = { innerHTML: "" }, via = u => fetch(`${s.O}/${u}`);
+  const j = await renderProspekt(el, { id: pub, explore: "?versjon=x&vis=3d", fetch: via });
+  assert.equal(j.title, "Til alle"); assert.equal(el.innerHTML, prospektHtml(j, { links: { explore: "?versjon=x&vis=3d" } }), "the same markup the builder makes, nothing else");
+  assert.match(el.innerHTML, /<a class="pk-btn" data-explore href="\?versjon=x&amp;vis=3d">Utforsk i 3D<\/a>/);
+  assert.equal(await renderProspekt(el, { id: priv, fetch: via }), null); assert.equal(el.innerHTML, GONE);
+  assert.equal(await renderProspekt(el, { id: pub, fetch: () => Promise.reject(new Error("down")) }), null); assert.match(el.innerHTML, /Fikk ikke kontakt/);
+  let url = null; await renderProspekt(el, { id: lnk.version, nokkel: "k 1", fetch: u => { url = u; return Promise.resolve(null); } }); assert.equal(url, `api/prospekt/${lnk.version}?nokkel=k%201`, "the link key goes along");
+});
+test("the owner has the Prospekt while working: open for their own project shared or not, for another's only when shared; and it follows the project (the same answer, drawn again after a pick changes)", async () => {
+  const v = sharing => ({ version: "v1", sharing }), tbl = [[v("offentlig"), false, true], [v("lenke"), false, true], [v("privat"), false, false], [v("privat"), true, true], [v("offentlig"), true, true], [{ ...v("privat"), missing: true }, true, false], [null, true, false]];
+  for (const [d, owner, want] of tbl) assert.equal(prospektOpen(d, owner), want, JSON.stringify([d, owner]));
+  assert.equal(PREVIEW_NOTE, `<p class="pk-preview">Slik ser besøkende det når du deler det</p>`);
+  /* the owner's flow in the page: show() and the picks both call pkRefresh, which draws the Prospekt again when it is the open view */
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /ifcLink\(\); pkRefresh\(\);/, "after every change to the project (show)"); assert.match(app, /pkLoad\(\); pkRefresh\(\);/, "after the owner's picks");
+  assert.match(app, /const pkRefresh = \(\) => \{ if \(pkOn\) pkShow\(true\); \}/); assert.match(app, /draft\?\.sharing !== pkSharing\) pkRefresh\(\)/, "and when the sharing changes");
+  const el = { innerHTML: "" }, via = u => fetch(`${s.O}/${u}`, { headers: lars });   // the owner's own request: the same builder and data path as a visitor's
+  const before = await renderProspekt(el, { id: pub, fetch: via }), html0 = el.innerHTML; assert.ok(before.renders.some(r => r.id === R.p2));
+  await s.page({ prospekt: { render: R.p2, show: false } }, lars);
+  const after = await renderProspekt(el, { id: pub, fetch: via }); assert.ok(!after.renders.some(r => r.id === R.p2)); assert.notEqual(el.innerHTML, html0, "the page changed with the pick");
+  assert.ok(!el.innerHTML.includes(`bilde/${R.p2}`), "the hidden render is gone from the markup");
+  await s.page({ prospekt: { render: R.p2, show: true } }, lars); assert.ok((await renderProspekt(el, { id: pub, fetch: via })).renders.some(r => r.id === R.p2), "and back");
+});
+test("one copy: only the pane module builds the brochure; the main page and the old address use it or send on; the visitor is no longer sent away from the main page", () => {
+  const rd = f => readFileSync(new URL(`../public/${f}`, import.meta.url), "utf8"), app = rd("app.js"), html = rd("index.html");
+  for (const f of ["app.js", "prospekt.js", "me-hint.js"]) assert.ok(!/prospektHtml|factsHtml|limitsHtml|volumesHtml/.test(rd(f)), `${f} builds no brochure`);
+  assert.match(rd("prospekt-pane.js"), /prospektHtml\(data/); assert.match(app, /import \{[^}]*renderProspekt[^}]*\} from "\.\/prospekt-pane\.js/);
+  assert.ok(!/location\.replace/.test(rd("me-hint.js")), "me-hint.js no longer redirects"); assert.match(rd("me-hint.js"), /add\("pk-wait"\)/); assert.match(app, /classList\.remove\("pk-wait"\)/, "the hint is lifted when the view is chosen"); assert.match(rd("sykehus.css"), /html\.pk-wait \.loading \{ visibility: hidden/);
+  assert.ok(!/pkBack|drawBack|fra=|prospekt\.html|&se=1/.test(app + html), "the full-page «Tilbake til prospekt» and its links are gone");
+  const group = /<span class="seg2" role="group" aria-label="Visning">(.*?)<\/span>/s.exec(html)[1], ids = [...group.matchAll(/id="(\w+)"/g)].map(m => m[1]);
+  assert.deepEqual(ids.slice(0, 2), ["mpk", "m3d"], "«Prospekt» is the first view button, next to 3D"); assert.match(group, /id="mpk" hidden[^>]*>Prospekt<\/button>/);
+  assert.ok(html.indexOf('id="stage"') < html.indexOf('id="pkPane"') && html.indexOf('id="pkPane"') < html.indexOf('class="vt"'), "the pane is in the stage, with the same area as the model");
+  assert.match(app, /firstView\(\{ shared: pkShared\(\), owner: mine\(\), asked: qs\.get\("vis"\) \}\)/, "the first view is decided from the owner and ?vis=");
+  assert.match(rd("sykehus.css"), /body\.pk-on \.nz[^{]*\.vt > :not\(\.seg2\)/, "only the view buttons stay over the Prospekt");
 });
 import { readFileSync } from "node:fs";
 function readJson(f) { return readFileSync(new URL(`../${f}`, import.meta.url), "utf8"); }
