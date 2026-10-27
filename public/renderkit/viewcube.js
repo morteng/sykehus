@@ -13,11 +13,11 @@
      onPick  (view, info): view { yaw, pitch } in radians, info { dir: [x, y, z] unit vector from the target to the camera,
              name: "front" | "top-right" | "front-top-right" …, low } (low: prefers-reduced-motion, so jump, no ease). The app
              moves its camera, with camera.js ease/moveCamera, and keeps its own distance and target.
-     onHome  (info { low }): the app's home view
+     onHome  (info { low }): the app's home view; with none, no home button (the app has its own)
      low     () → true to jump; default prefers-reduced-motion
-     size    the box in px (default 72); the cube is 0.62 of it
+     size    the box in px (default 72); the cube is 0.58 of it, drawn tilted (viewMatrix)
      inline  true: static, in the app's own column; else absolute, top right of host
-   Colours are the page's tokens (--panel, --panel-2, --border, --text, --muted, --accent, --on-accent), none are set here. */
+   Colours are the page's tokens (--panel, --panel-2, --panel-3, --border, --border-strong, --text, --accent), none are set here. */
 
 /* the six faces: the world direction each looks along (from the target to the camera) */
 export const FACES = Object.freeze({ top: [0, 0, 1], bottom: [0, 0, -1], front: [0, -1, 0], back: [0, 1, 0], right: [1, 0, 0], left: [-1, 0, 0] });
@@ -31,6 +31,14 @@ export function cubeMatrix(yaw, pitch) {
   // css0 = (x, -z, -y) of the world, so a world vector w = (cx, -cz, -cy) of css0
   return [[r[0], -r[2], -r[1]], [-u[0], u[2], u[1]], [c[0], -c[2], -c[1]]];
 }
+
+/* The cube is drawn a little off the camera, as every view cube is, so that three faces show and it reads as a solid even when the
+   camera looks straight at the Front: the tilt turns it about the screen's vertical (the right side comes round) and its horizontal
+   (the top comes up). It is part of the picture, so the pick uses the same matrix: what is under the pointer is what is drawn. */
+export const mul3 = (a, b) => a.map(r => [0, 1, 2].map(j => r[0] * b[0][j] + r[1] * b[1][j] + r[2] * b[2][j]));
+export const tiltMatrix = (ay = -0.5, ax = -0.3) => mul3([[1, 0, 0], [0, Math.cos(ax), -Math.sin(ax)], [0, Math.sin(ax), Math.cos(ax)]], [[Math.cos(ay), 0, Math.sin(ay)], [0, 1, 0], [-Math.sin(ay), 0, Math.cos(ay)]]);
+const TILT = tiltMatrix();
+export const viewMatrix = (yaw, pitch) => mul3(TILT, cubeMatrix(yaw, pitch));   // what is drawn
 
 /* the css matrix3d (column-major) of that turn */
 export function cssMatrix(m) {
@@ -71,53 +79,60 @@ export function dirName(d) {
   return n.length === 1 ? n[0] : [n.find(x => x === "front" || x === "back"), n.find(x => x === "top" || x === "bottom"), n.find(x => x === "left" || x === "right")].filter(Boolean).join("-");
 }
 
-const HOME_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>';
+const HOME_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>';
 // each face: where it sits on the cube (css0: z toward the viewer, y down, so the top is -y)
+/* a face's tone, from the page's surfaces: the top as the panel, the fronts and backs a step off it, the sides two steps, so three faces read as one solid */
+const TONE = { top: "var(--panel)", front: "color-mix(in srgb,var(--text) 8%,var(--panel))", back: "color-mix(in srgb,var(--text) 8%,var(--panel))", left: "color-mix(in srgb,var(--text) 17%,var(--panel))", right: "color-mix(in srgb,var(--text) 17%,var(--panel))", bottom: "color-mix(in srgb,var(--text) 17%,var(--panel))" };
 const PLACE = { front: "", back: "rotateY(180deg)", right: "rotateY(90deg)", left: "rotateY(-90deg)", top: "rotateX(90deg)", bottom: "rotateX(-90deg)" };
 
-export function createViewCube({ host, labels = {}, onPick = () => {}, onHome = () => {}, low = null, size = 72, inline = false, doc = globalThis.document }) {
-  const side = Math.round(size * 0.62), half = side / 2;
+export function createViewCube({ host, labels = {}, onPick = () => {}, onHome = null, low = null, size = 72, inline = false, doc = globalThis.document }) {
+  const side = Math.round(size * 0.58), half = side / 2;
   const isLow = low || (() => !!globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
   const el = doc.createElement("div"); el.className = "rk-viewcube"; el.setAttribute("role", "group"); el.setAttribute("aria-label", labels.cube || "");
-  el.style.cssText = `${inline ? "position:relative" : "position:absolute;top:var(--sp-3);right:var(--sp-3)"};z-index:var(--z-canvas);width:${size}px;height:${size}px;user-select:none;touch-action:none`;
+  el.style.cssText = `${inline ? "position:relative;margin:var(--sp-2) 0" : "position:absolute;top:var(--sp-3);right:var(--sp-3)"};z-index:var(--z-canvas);width:${size}px;height:${size}px;cursor:pointer;user-select:none;touch-action:none`;
   const stage = doc.createElement("div");
-  stage.style.cssText = `position:absolute;left:50%;top:50%;width:${side}px;height:${side}px;margin:${-half}px 0 0 ${-half}px;transform-style:preserve-3d;cursor:pointer`;
+  stage.style.cssText = `position:absolute;left:50%;top:50%;width:${side}px;height:${side}px;margin:${-half}px 0 0 ${-half}px;transform-style:preserve-3d;pointer-events:none`;
   const faces = {};
   for (const name of Object.keys(FACES)) {
     const f = doc.createElement("div"); f.dataset.face = name; f.textContent = labels[name] || "";
     f.style.cssText = `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;box-sizing:border-box;backface-visibility:hidden;transform:${PLACE[name]} translateZ(${half}px);`
-      + `font-size:var(--fs-xs);color:${labels[name] ? "var(--text)" : "var(--muted)"};background:var(--panel);border:1px solid var(--border-strong,var(--border));border-radius:var(--radius-xs,2px);pointer-events:none`;
+      + `font-size:var(--fs-xs);color:${labels[name] ? "var(--text)" : "var(--muted)"};background:${TONE[name]};border:1px solid var(--border-strong,var(--border));border-radius:var(--radius-xs,2px);pointer-events:none`;
     faces[name] = f; stage.append(f);
   }
   el.append(stage);
-  const home = doc.createElement("button"); home.type = "button"; home.className = "rk-viewcube-home"; home.innerHTML = HOME_SVG;
-  if (labels.home) { home.title = labels.home; home.setAttribute("aria-label", labels.home); }
-  home.style.cssText = "position:absolute;left:0;top:0;display:flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer";
-  home.onclick = () => onHome({ low: isLow() });
-  el.append(home);
+  if (onHome) {   // the app's own ⌂ may do the same: then it passes no onHome and the cube has none
+    const home = doc.createElement("button"); home.type = "button"; home.className = "rk-viewcube-home"; home.innerHTML = HOME_SVG;
+    if (labels.home) { home.title = labels.home; home.setAttribute("aria-label", labels.home); }
+    home.style.cssText = "position:absolute;left:0;bottom:0;display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer";
+    home.onclick = () => onHome({ low: isLow() });
+    el.append(home);
+  }
 
-  let m = cubeMatrix(0, 0.5), yaw = 0, hot = [];
+  let m = viewMatrix(0, 0.5), yaw = 0, hot = [];
+  /* a hover tints what a click would take: a face strongly, an edge or a corner (more than one face) lightly, each face of it */
   const lit = names => {
     hot = names;
+    const pct = names.length > 1 ? 22 : 40;
     for (const [n, f] of Object.entries(faces)) {
       const on = names.includes(n) && labels[n];
-      f.style.background = on ? "var(--accent)" : "var(--panel)"; f.style.color = on ? "var(--on-accent)" : labels[n] ? "var(--text)" : "var(--muted)";
+      f.style.background = on ? `color-mix(in srgb,var(--accent) ${pct}%,${TONE[n]})` : TONE[n];
+      f.style.borderColor = on ? "var(--accent)" : "var(--border-strong,var(--border))";
     }
   };
-  const at = e => { const b = stage.getBoundingClientRect(); return pickDir(m, e.clientX - (b.left + b.width / 2), e.clientY - (b.top + b.height / 2), half); };
+  const at = e => { const b = el.getBoundingClientRect(); return pickDir(m, e.clientX - (b.left + b.width / 2), e.clientY - (b.top + b.height / 2), half); };
   /* the faces a direction touches, one name an axis; a direction that touches a face with no label is not offered */
   const AX = [d => d[0] > 0 ? "right" : "left", d => d[1] < 0 ? "front" : "back", d => d[2] > 0 ? "top" : "bottom"];
   const parts = d => (d ? AX.flatMap((f, i) => (d[i] ? [f(d)] : [])) : []);
   const offered = d => !!d && parts(d).every(n => labels[n]);
-  stage.addEventListener("pointermove", e => { const d = at(e); lit(offered(d) ? parts(d) : []); });
-  stage.addEventListener("pointerleave", () => lit([]));
-  stage.addEventListener("click", e => {
+  el.addEventListener("pointermove", e => { const d = at(e); lit(offered(d) ? parts(d) : []); });
+  el.addEventListener("pointerleave", () => lit([]));
+  el.addEventListener("click", e => {
     const d = at(e); if (!offered(d)) return;
     const v = dirToView(d, yaw), n = Math.hypot(...d);
     onPick(v, { dir: d.map(x => x / n), name: dirName(d), low: isLow() });
   });
 
-  function set(y, p) { yaw = y; m = cubeMatrix(y, p); stage.style.transform = cssMatrix(m); }
+  function set(y, p) { yaw = y; m = viewMatrix(y, p); stage.style.transform = cssMatrix(m); }
   set(0, 0.5);
   host.append(el);
   return { el, set, get hot() { return hot.slice(); }, destroy() { el.remove(); } };

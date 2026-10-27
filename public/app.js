@@ -1179,8 +1179,8 @@ let hidden = [];   // the ids the person hid or left out with «Skjul» and «Vi
 /* the view cube (renderkit viewcube.js, U3882): a click on a face, an edge or a corner moves the camera there, the house button
    goes home; it turns with the camera, and is shown in 3D only. The bottom face is not offered: the orbit does not go under the ground. */
 const cube = createViewCube({ host: document.querySelector(".nz"), inline: true,
-  labels: { top: "Topp", front: "Front", back: "Bak", left: "Venstre", right: "Høyre", home: "Tilbake til startvisningen", cube: "Visningskube" },
-  onPick: v => viewer.look({ yaw: v.yaw, pitch: v.pitch, eye: false }), onHome: () => viewer.reset() });
+  labels: { top: "Topp", front: "Front", back: "Bak", left: "Venstre", right: "Høyre", cube: "Visningskube" },
+  onPick: v => viewer.look({ yaw: v.yaw, pitch: v.pitch, eye: false }) });   // no home button of its own: the column's ⌂ (zhome) is the same move, viewer.reset()
 document.querySelector(".nz").prepend(cube.el);
 viewer.follow(() => { const p = viewer.pose(), three = viewer.view().mode === "3d"; cube.el.hidden = !three; if (three) cube.set(p.yaw, p.pitch); });
 addEventListener("sykehus:valg", () => picker.set(valg.items.map(valg.key), undefined, "sync"));

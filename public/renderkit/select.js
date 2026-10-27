@@ -141,7 +141,7 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
   /* «Select other»: what lies under the pointer, nearest first; each outlined on hover, a tap takes it */
   function closeMenu() { if (!menu) return; menu.remove(); menu = null; hover([]); }
   function openMenu(e) {
-    const items = (other(e, lvl) || []).slice(0, 8); if (!items.length || !doc) return;
+    const items = (other(e, lvl) || []).slice(0, 8); if ((!items.length && !(acts && anyHidden())) || !doc) return;   // nothing under it still offers «Vis alt» while something is hidden
     const hb = (host || el).getBoundingClientRect(), p = rel(e);
     menu = doc.createElement("div"); menu.className = "pmenu rk-pick-other"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Velg en annen");
     menu.style.cssText = `position:absolute;z-index:var(--z-sticky);left:${Math.min(e.clientX - hb.left, hb.width - 220)}px;top:${e.clientY - hb.top}px`;
@@ -155,10 +155,10 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
        on the nearest item, or on the whole selection when the nearest is in it; onAct(act, keys) is the app's (it holds what
        is hidden); «Vis alt» shows only while anyHidden() */
     if (acts) {
-      const near = items[0].keys, keys = near.every(k => sel.includes(k)) ? sel.slice() : near.slice(), rows = [["isolate", keys], ["hide", keys], ["showAll", []]];
-      const sep = doc.createElement("hr"); sep.className = "rk-pick-sep"; sep.setAttribute("role", "separator"); menu.append(sep);
+      const near = items[0]?.keys || [], keys = near.length && near.every(k => sel.includes(k)) ? sel.slice() : near.slice(), rows = [["isolate", keys], ["hide", keys], ["showAll", []]];
+      const sep = doc.createElement("hr"); sep.className = "rk-pick-sep"; sep.style.cssText = "border:0;border-top:1px solid var(--border);margin:var(--sp-1) 0;height:0;width:100%"; sep.setAttribute("role", "separator"); menu.append(sep);
       for (const [act, ks] of rows) {
-        if (!acts[act] || (act === "showAll" && !anyHidden())) continue;
+        if (!acts[act] || (act === "showAll" ? !anyHidden() : !near.length)) continue;
         const b = doc.createElement("button"); b.type = "button"; b.className = "pmi"; b.dataset.act = act; b.textContent = acts[act]; b.setAttribute("role", "menuitem");
         b.onclick = () => { closeMenu(); onAct(act, ks); };
         menu.append(b);
