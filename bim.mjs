@@ -178,6 +178,26 @@ export async function importFile(bytes, meta = {}) {
   if (!existsSync(join(DIR, sha))) renameSync(tmp, join(DIR, sha));
   return { file: sha, ...importSummary(mesh, src), ...sourceOf(sha) };
 }
+/* the worker's model check (gulden-worker steps/ifccheck.py): one IFC (or two, for a diff) sent as blobs, one job of the step
+   alone, its small answer back; cfg is the step's settings without the file names. The worker's failures in plain words. */
+export async function checkIfc(files, cfg) {
+  const W = workerUrl();
+  if (!W) throw toolErr("Modellkontrollen kjører i arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
+  const base = W.replace(/\/+$/, ""), inputs = {};
+  let j;
+  try {
+    for (const [name, bytes] of Object.entries(files)) {
+      const b = await (await fetch(`${base}/blobs`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: bytes, signal: AbortSignal.timeout(120000) })).json();
+      if (!/^[0-9a-f]{64}$/.test(b.sha256 || "")) throw new Error(b.errors?.[0]?.message || "fila kom ikke fram");
+      inputs[name] = b.sha256;
+    }
+    const r = await fetch(`${base}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs, then: ["ifccheck"], ifccheck: { ...cfg, file: "model.ifc", ...(files["other.ifc"] ? { other: "other.ifc" } : {}) } }), signal: AbortSignal.timeout(360000) });
+    j = await r.json();
+  } catch (e) { throw toolErr(`Modellkontrollen kan ikke kjøre nå: arbeideren svarer ikke (${String(e.message).slice(0, 150)}). Prøv igjen om litt; si fra til den som drifter siden hvis det varer.`); }
+  if (j.errors?.[0]?.code === "bad_request") throw toolErr("Modellkontrollen kan ikke kjøre nå: arbeideren er ikke oppdatert med kontrollen ennå (si fra til den som drifter siden).");
+  if (j.state !== "done" || !j.ifccheck) throw toolErr(`Modellkontrollen feilet i arbeideren: ${j.errors?.[0]?.message || j.state || "ukjent"}`.slice(0, 400));
+  return j.ifccheck;
+}
 const r2 = v => Math.round(v * 100) / 100;
 /* the unit the file was in: an IFC's own (mesh.json), a STEP's read by FreeCAD (the file's, not said back), glTF's
    metres, an OBJ's or STL's as the person said */
