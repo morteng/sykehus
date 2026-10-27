@@ -96,6 +96,15 @@ curl -s https://sykehus.gulden.no/mcp -H 'content-type: application/json' -H 'mc
 answers `supportedVersions` starting with `2026-07-28` and `capabilities.extensions["io.modelcontextprotocol/ui"]`.
 The test suite runs the same against a local server: `DOCS=<docs.sqlite> node --test tests/*.mjs`.
 
+## Checking the model (check_model)
+
+`check_model` (read-only; target is a version or draft, as the other read tools) exports the target's IFC the way `GET /api/ifc`
+does and sends it to the worker's `ifccheck` step (gulden-worker: ifctester, ifcclash, ifcdiff). `what` is `standard` (a default IDS:
+names, materials, predefined types, storey elevations, project/site/building, metres), `clashes` (classes `a`, `b`, `tolerance_mm`) or
+`changes` (a diff against the shared before, or against `against`). It answers in Norwegian counts, then the first findings by name,
+and `todo`. It needs `SYKEHUS_WORKER` and a worker image with the step (gulden-worker, branch ifc-check); without either it says the
+check cannot run and gives no result. The whole IFC is checked, the old wings too, so a run can take up to a minute.
+
 ## Connecting a chat app
 
 Claude: Settings → Connectors → Add custom connector → `https://sykehus.gulden.no/mcp`, no login. Adding it to

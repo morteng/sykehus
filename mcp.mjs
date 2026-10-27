@@ -22,7 +22,7 @@ import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   //
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, roofOf, roofSay } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
-import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc } from "./bim.mjs";
+import { prepare, slim, withMeshes, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
 import { createSiteFacts } from "./sitefacts.mjs";
 import { readPart } from "./partmerge.mjs";
@@ -689,6 +689,38 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "check_design", tgt: "read", title: "Sjekk mot byggereglene", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "Holds the after (a version or draft) against the building rules (TEK17, rules/tek17.json) that its parts and its step-free entrance can answer (U3678): a stair's rise and tread (2 × opptrinn + inntrinn), its width and handrail, a railing's or balcony's railing height where there is a fall, a balcony door's size, a ramp's slope. Each row: the rule, its §, the thing it is about, status (ok, brudd, or ikke målt), the value, the limit and a plain sentence. «ikke målt» is never ok: the model does not hold that number. A row with verify: true is a rule or number not yet read against the law text: say «etter min lesning av TEK17» and that it is to be confirmed, never that the design is approved. Nothing is changed. Only what the rules can measure is listed: a clean list is not a building permit.",
       run: async (a, req) => { const m = model(a.draft, req), rows = checkRules(m.site); return { checks: rows, ...checkSummary(rows), counted: rows.length, note: rows.length ? "Dette er en lesing av forslaget mot de reglene appen kan måle (TEK17), ikke en godkjenning. «verify» betyr at regelen ikke er lest mot lovteksten ennå." : "Forslaget har ingen deler eller rampe som reglene kan måle ennå (trapp, rekkverk, balkong med dør, trinnfri inngang)." }; } },
+    { name: "check_model", tgt: "read", title: "Kontroller BIM-modellen", ro: true,
+      schema: S({ target: TARGET, draft: OLD, what: { type: "string", enum: ["standard", "clashes", "changes"], description: "standard: the IFC held against an IDS (names, materials, types, storey elevations, project/site/building, metres). clashes: parts that stand inside each other. changes: what was added, removed or changed against the shared before, or against `against`" },
+        against: { type: "string", description: "Only for changes: a version or draft id to compare with. Leave it out for the shared before" },
+        a: { type: "string", description: "Only for clashes: the IFC classes to test, «IfcWall, IfcSlab», or «all» (default)" }, b: { type: "string", description: "Only for clashes: the classes to test them against (default: a itself)" },
+        tolerance_mm: { type: "number", description: "Only for clashes: overlaps under this are ignored (default 2)" } }, ["what"]),
+      description: "Checks the after's IFC with the open IFC tools (IDS, clash detection, diff) in the worker, and answers in counts and the first findings by name. Use it when the person asks if the model is right, standard-compliant, has parts through each other, or what a version changed. It reads the whole IFC (the old wings too, as the before has them), so it takes up to a minute. Read-only; it fixes nothing: say what to do from `todo`. If the worker is down the answer says so; do not guess a result.",
+      run: async (a, req) => {
+        const what = a.what; if (!["standard", "clashes", "changes"].includes(what)) throw toolErr("what er standard, clashes eller changes.");
+        const idOf = id => id ? { tag: /^v.{8}$/.test(id) ? (v => `${v.id}@${v.updated}`)(versionOf(id, req)) : (d => `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`)(draftOf(id)), edits: editsOf(id, req) } : { tag: "før", edits: [] };
+        const mine = idOf(a.draft), file = await ifcBody(mine.tag, mine.edits).catch(e => { throw toolErr(e.tool ? e.message : `IFC-fila kunne ikke lages: balkongene bygges av arbeideren, og den svarte ikke (${String(e.message).slice(0, 150)})`); });
+        const of = a.draft ? "etter-modellen" : "før-modellen (dagens, delt)";
+        if (what === "standard") {
+          const r = await checkIfc({ "model.ifc": file }, { what: "ids" }), bad = r.specifications.filter(s => s.failed);
+          if (r.ids_error) throw toolErr(`Kontrollen kunne ikke lese kravene: ${r.ids_error}`);
+          return { what, of, ok: r.ok, specifications: r.specifications.map(s => ({ name: s.name, applicable: s.applicable, failed: s.failed, ...(s.failed ? { failures: s.failures } : {}) })),
+            say: r.ok ? `${of}: alle ${r.specifications.length} krav er oppfylt.` : `${of}: ${bad.length} av ${r.specifications.length} krav har brudd. ${bad.slice(0, 5).map(s => `${s.name}: ${s.failed} av ${s.applicable || "modellen"}`).join("; ")}.`,
+            todo: r.ok ? null : "Rett opp i det som lager elementet (en del, et skript eller en import; navn og type står i hver rad). Elementer fra den gamle tegningen ligger i før-modellen: si hvilke de er, men ikke rett dem." };
+        }
+        if (what === "clashes") {
+          const r = await checkIfc({ "model.ifc": file }, { what: "clash", a: a.a || "all", ...(a.b ? { b: a.b } : {}), tolerance_mm: a.tolerance_mm ?? 2 });
+          return { what, of, count: r.count, a: r.a, b: r.b, tolerance_mm: r.tolerance_mm, clashes: r.clashes,
+            say: r.count ? `${of}: ${r.count} par står inne i hverandre (over ${r.tolerance_mm} mm). Dypest: ${r.clashes.slice(0, 5).map(c => `${c.a.name || c.a.class} (${c.a.class}) mot ${c.b.name || c.b.class} (${c.b.class}), ${Math.round(c.depth_m * 1000)} mm`).join("; ")}.` : `${of}: ingen deler står inne i hverandre (over ${r.tolerance_mm} mm) mellom ${r.a} og ${r.b}.`,
+            todo: r.count ? "Flytt eller kutt den ene delen. Vegg mot dekke der de hører sammen er ofte meningen: se på dybden, og spør hvis du er i tvil." : null };
+        }
+        const other = a.against && !/^(før|before)$/i.test(String(a.against).trim()) ? resolveTarget({ tgt: "read" }, { target: a.against }, req).draft : null, theirs = idOf(other);
+        const old = await ifcBody(theirs.tag, theirs.edits).catch(e => { throw toolErr(e.tool ? e.message : "Den andre IFC-fila kunne ikke lages: arbeideren svarte ikke."); });
+        const r = await checkIfc({ "model.ifc": file, "other.ifc": old }, { what: "diff" }), names = rows => rows.map(x => `${x.name || x.global_id} (${x.class})`).join(", ");
+        const that = other ? `versjonen ${other}` : "før-modellen";
+        return { what, of, against: that, added: r.added, removed: r.removed, changed: r.changed, added_first: r.added_first, removed_first: r.removed_first, changed_first: r.changed_first,
+          say: !(r.added + r.removed + r.changed) ? `${of} er lik ${that}: ingen elementer er lagt til, tatt bort eller endret.` : `${of} mot ${that}: ${r.added} lagt til, ${r.removed} tatt bort, ${r.changed} endret.${r.added ? ` Nye: ${names(r.added_first.slice(0, 5))}.` : ""}${r.removed ? ` Bort: ${names(r.removed_first.slice(0, 5))}.` : ""}${r.changed ? ` Endret: ${names(r.changed_first.slice(0, 5))}.` : ""}`,
+          todo: "Si til personen hva som er nytt og hva som er tatt bort. Det er en lesing av filene, ikke en vurdering av om endringene er riktige." };
+      } },
     { name: "list_parts", title: "Ferdige deler", ro: true, schema: S({}),
       description: "The ready-made BIM parts the worker builds (U3620): each one's name, what it is, its settings with default and limits, and the IFC it makes (property sets, quantities, materials). Look here FIRST when the person asks for a swimming pool basin, a stair, a railing, a balcony or a greenhouse (a polygon of 3–8 sides, or a geodesic dome): place one with try_change kind part, before you write any geometry or script. An outdoor stair, also one down from a terrace to the garden, is the stair part: from = its foot in the garden, to = towards the terrace, params.height = the drop (see each part's example).",
       run: async () => { const ps = await listParts(); return { parts: Object.entries(ps).map(([id, v]) => ({ part: id, name: v.no, what: v.say, engine: v.engine, makes: v.classes, settings: v.params })), use: "try_change kind part: part, from, to, params (the settings you want; the others take their defaults)", examples: { stair: "A stair down from a terrace 1.2 m over the garden: {kind: \"part\", part: \"stair\", from: <its foot in the garden>, to: <towards the terrace edge>, params: {height: 1.2, width: 1.2}}. The flight climbs from `from` to `to`: its foot stands on the ground at from, its top is `height` higher. Do not write a script for a stair." } }; } },
@@ -846,6 +878,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     try_change: O({ added: { type: "array", description: "The changes that went in, as checked" }, rejected: { type: "array", description: "{index, error} for each refused" }, ids: { type: "object", description: "An asked id that was taken: the id each got" },
       changes_in_draft: "number", after: "object", fit: "array", checks: { type: "array", description: "The building rules (TEK17) held against what this call put in: {rule, section, thing, status: ok | brudd | ikke målt, value, limit, said}. Say a «brudd» to the person" }, saved: "boolean", note: "string", ...TARGET_OUT }, "What went in and what was refused, and where"),
     check_design: O({ checks: { type: "array", description: "{rule, section, thing, status: ok | brudd | ikke målt, ok, value, limit, said, verify?}" }, ok: "number", brudd: "number", "ikke_målt": "number", counted: "number", note: "string" }, "The building rules held against the after"),
+    check_model: O({ what: "string", of: "string", ok: "boolean", specifications: { type: "array", description: "standard: {name, applicable, failed, failures: [{global_id, name, class, reason}]} (first 10 a requirement)" }, count: "number", clashes: { type: "array", description: "clashes: {a, b: {name, class, global_id}, depth_m} (first 20)" },
+      added: "number", removed: "number", changed: "number", added_first: "array", removed_first: "array", changed_first: "array", say: "string", todo: { type: ["string", "null"] } }, "A model check by the worker's IFC tools: counts, then the first findings by name"),
     show_building: O({ app: "string", view: "object", saved_view: "object" }),
     make_shots: O({ shots: { type: "array", description: "{name, caption, camera} in the order shown" }, note: "string", ...TARGET_OUT }),
   };
@@ -1051,6 +1085,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* GET /api/ifc?utkast=<id> | ?versjon=<id>&nokkel=: the model as IFC without the wings the after tears down
      (ifcfilter.mjs), with what it builds and the wings it renames (ifcadd.mjs); the before's file is read once, each answer kept until the draft or version changes */
   let base = null; const ifcs = new Map();
+  /* the IFC of an after (the edits), kept by tag; shared by GET /api/ifc and check_model */
+  async function ifcBody(tag, edits) {
+    let body = ifcs.get(tag);
+    if (!body) {
+      const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
+      const gone = (site.wings || []).filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
+      base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
+      /* the balconies are the worker's part (U3690): one run a size, each written in where it stands */
+      const parts = new Map(); for (const [size, { width, depth }] of balconySizes(m.site)) parts.set(size, readPart(await partIfc("balcony", { width, depth, door: false })));
+      body = Buffer.from(withAdded(withoutBuildings(base, gone).text, base, m.site, site, parts).text, "utf8");
+      if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
+    }
+    return body;
+  }
   async function handleIfc(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const q = new URL(req.url, "http://x").searchParams, vid = q.get("versjon"), did = q.get("utkast");
@@ -1060,17 +1108,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       else if (did) { const d = draftOf(did); edits = d.edits; tag = `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`; name = "utkast"; }
       else throw toolErr("Hvilket utkast eller hvilken versjon?");
     } catch (e) { return send(res, 404, { error: e.tool ? e.message : "Finnes ikke." }); }
-    let body = ifcs.get(tag);
-    if (!body) {
-      const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
-      const gone = (site.wings || []).filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
-      base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
-      /* the balconies are the worker's part (U3690): one run a size, each written in where it stands */
-      const parts = new Map(); try { for (const [size, { width, depth }] of balconySizes(m.site)) parts.set(size, readPart(await partIfc("balcony", { width, depth, door: false }))); }
-      catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
-      body = Buffer.from(withAdded(withoutBuildings(base, gone).text, base, m.site, site, parts).text, "utf8");
-      if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
-    }
+    let body; try { body = await ifcBody(tag, edits); } catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
     const file = `gamle-drammen-sykehus-${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
