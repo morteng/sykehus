@@ -9,7 +9,7 @@ const nve = (Data, NoDataValue = -9999) => { const calls = []; return { calls, f
 test("asks NVE's sd theme for the last days at the point, and answers the newest day with data", async () => {
   const f = nve([0, 12, 31.5, -9999]), s = createSnow({ fetchImpl: f.fetchImpl, now: () => NOON });
   const out = await s.depth(560000, 6620000);
-  assert.deepEqual(out, { mm: 31.5, date: "2026-10-26", src: "NVE seNorge" });          // the last cell was no data: the day before it
+  assert.deepEqual(out, { mm: 315, date: "2026-10-26", src: "NVE seNorge" });           // NVE answers in cm; the last cell was no data: the day before it
   assert.equal(f.calls[0], "https://gts.nve.no/api/GridTimeSeries/560000/6620000/2026-10-24/2026-10-27/sd.json");
 });
 test("kept an hour per 100 m cell, then asked again", async () => {
@@ -30,7 +30,7 @@ test("a point outside Norway is refused before NVE is asked, and the route answe
   await assert.rejects(s.depth(0, 0), /Utenfor Norge/); assert.equal(f.calls.length, 0);
   const sent = {}, res = { writeHead(c, h) { sent.code = c; sent.h = h; return this; }, end(b) { sent.body = b; } };
   assert.equal(await s.route({}, res, "/api/snoe", new URL("http://x/api/snoe?x=560000&y=6620000")), true);
-  assert.equal(sent.code, 200); assert.equal(JSON.parse(sent.body).mm, 3);
+  assert.equal(sent.code, 200); assert.equal(JSON.parse(sent.body).mm, 30);
   assert.equal(await s.route({}, res, "/api/annet", new URL("http://x/api/annet")), false);
   await s.route({}, res, "/api/snoe", new URL("http://x/api/snoe?x=1&y=2")); assert.equal(sent.code, 400);
 });
