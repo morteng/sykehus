@@ -640,7 +640,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
     if (e.from) what.push("flyttet eller nye mål"); if (e.width) what.push(`${String(e.width).replace(".", ",")} m bredt`); if (e.height) what.push(`${String(e.height).replace(".", ",")} m høyt`);
     return `${was}: ${what.join(", ")}${why}`;
   }
-  if (e.kind === "volume") return `${e.name}: ${{ box: "kasse", gable: "saltak", triangle: "trekant (A-form)", lean_to: "pulttak" }[e.shape]}, ${String(e.width).replace(".", ",")} × ${String(Math.round(Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) * 10) / 10).replace(".", ",")} m, ${String(e.height).replace(".", ",")} m høy, ${{ glass: "glass", concrete: "betong", steel: "stål", wood: "tre", brick: "tegl" }[e.material]}${why}`;
+  if (e.kind === "volume") return `${e.name}: ${{ box: "kasse", gable: "saltak", triangle: "trekant (A-form)", lean_to: "pulttak" }[e.shape]}, ${String(e.width).replace(".", ",")} × ${String(Math.round(Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) * 10) / 10).replace(".", ",")} m, ${String(e.height).replace(".", ",")} m høy, ${{ glass: "glass", concrete: "betong", steel: "stål", wood: "tre", brick: "tegl", water: "vann" }[e.material]}${why}`;
   const surf = k => (SURFACE_NO[k] || k).toLowerCase();   // valg.js's names, small
   if (e.kind === "surface") return `${e.name ? e.name + ": " : ""}${surf(e.surface)}${e.plants?.length ? ` (${e.plants.join(", ")})` : ""}${why}`;
   if (e.kind === "path") return `${e.name || "Sti"}: ${surf(e.surface)}, ${String(e.width).replace(".", ",")} m bred${why}`;

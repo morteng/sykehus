@@ -82,7 +82,7 @@ export const KINDS = {
   demolish: { family: "Riv", words: "riv rive demolish tear down fjern remove alle all", example: { kind: "demolish", building: "ostfloy", why: "ønske" }, readback: "show_draft" },
   restore: { family: "Riv", words: "gjenopprett restore tilbake back behold keep", example: { kind: "restore", building: "sentralblokka" }, readback: "show_draft" },
   balconies: { family: "Bygg", words: "balkong balkonger balcony balconies fasade facade rekkverk railing", example: { kind: "balconies", wing: "ostfloy", side: "S", from_storey: "2", to_storey: "4", why: "ønske" }, readback: "show_draft" },
-  volume: { family: "Bygg", words: "volum volume bygg building nytt new tilbygg hus box saltak gable pyramide drivhus glass tak roof taket", example: { kind: "volume", name: "Paviljong", shape: "box", at: { wing: "ostfloy", side: "S", gap_m: 4 }, length: 20, width: 10, height: 6 }, readback: "measure" },
+  volume: { family: "Bygg", words: "volum volume bygg building nytt new tilbygg hus box saltak gable pyramide drivhus glass tak roof taket vann water basseng pool glassbunn", note: "vann: material water på et volum fyller et basseng; glassbunn: material glass", example: { kind: "volume", name: "Paviljong", shape: "box", at: { wing: "ostfloy", side: "S", gap_m: 4 }, length: 20, width: 10, height: 6 }, readback: "measure" },
   part: { family: "Bygg", words: "del part ferdig ready basseng pool trapp stair rekkverk railing balkong balcony drivhus greenhouse kuppel dome", example: { kind: "part", part: "stair", from: [100, 100], to: [100, 105], params: { height: 1.2, width: 1.2 } }, readback: "check_design" },
   construction: { family: "Bygg", words: "konstruksjon construction script python ifcopenshell paviljong pavilion ramme frame bim", example: { kind: "construction", name: "Ramme", from: [100, 100], to: [110, 100], script: "# see find_tool kind=construction" }, readback: "check_model" },
   import: { family: "Bygg", words: "import fil file ifc step gltf obj stl dxf dwg modell model", example: { kind: "import", file: "<sha from /api/import>", name: "Benk", from: [100, 100], to: [102, 100], licence: "CC0" }, readback: "check_model" },
@@ -143,7 +143,7 @@ export function createFinder({ tools, kinds, guide, fieldsOf, text }) {
     if (a.kind != null) {
       const k = kinds[a.kind]; if (!k) throw Object.assign(new Error(`No edit kind «${a.kind}». Kinds: ${Object.keys(kinds).join(", ")}.`), { tool: true });
       const g = guide.kinds[a.kind];
-      return { kind: a.kind, family: k.family, about: g.about, fields: g.fields, example_edit: k.example, example_check: fieldsOf(k.example) || "fields ok", read_back_with: k.readback };
+      return { kind: a.kind, family: k.family, about: g.about, fields: g.fields, ...(k.note ? { note: k.note } : {}), example_edit: k.example, example_check: fieldsOf(k.example) || "fields ok", read_back_with: k.readback };
     }
     if (a.tool != null) {
       const t = tools.find(x => x.name === a.tool); if (!t) throw Object.assign(new Error(`No tool «${a.tool}». Tools: ${tools.map(x => x.name).join(", ")}.`), { tool: true });

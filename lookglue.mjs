@@ -52,7 +52,8 @@ function terrainAt(site) {
 
 export function withGarden(site) {
   const land = (site.landscape || []).filter(g => g.ring?.length >= 3), roofTrees = (site.trees || []).filter(t => t[7] != null);
-  if (!land.length && !roofTrees.length) return site;
+  const watered = (site.added || []).some(a => a.material === "water");
+  if (!land.length && !roofTrees.length && !watered) return site;
   const zAt = terrainAt(site), extra = [];
   land.forEach((g, n) => {
     const roof = g.on != null && g.kote != null, ring = open(g.ring);
@@ -68,7 +69,9 @@ export function withGarden(site) {
     return ring.map((p, k) => [p, ring[(k + 1) % 6], top]);
   };
   if (roofTrees.length) extra.push({ id: "_lag-trær", kind: "look", name: "trær på tak", parts: [{ axis: [[0, 0], [1, 0]], tris: roofTrees.flatMap(cone), mat: "tree" }] });
-  return { ...site, roof_trees: roofTrees.length, added: [...(site.added || []), ...extra], trees: (site.trees || []).filter(t => t[7] == null) };
+  /* the kit has no water in its palette (it would draw concrete): a water volume is drawn in the glass colour, blue-green */
+  const added = (site.added || []).map(a => a.material === "water" && a.parts ? { ...a, parts: a.parts.map(p => p.mat === "water" ? { ...p, mat: "glass" } : p) } : a);
+  return { ...site, roof_trees: roofTrees.length, added: [...added, ...extra], trees: (site.trees || []).filter(t => t[7] == null) };
 }
 
 /* ---- kit gap 2: a wing's roof levels, one colour each ---- */

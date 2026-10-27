@@ -339,6 +339,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* ---------- the after: what a draft builds (design.js), each part a profile [across, kote] drawn along its axis,
      across to the left of the axis; glass seen through, as a greenhouse is ---------- */
   const ADDED = Object.fromEntries(BUILDING.map(k => [k, mat(MATERIALS[k].colour, MATERIALS[k].look)]));
+  ADDED.water = mat(MATERIALS.water.colour, { ...MATERIALS.water.look, transparent: true, opacity: 0.62, metalness: 0.15, depthWrite: false });   // a volume of water (a basin's fill): see-through, glossy
   /* drawn again in place when the after changes (setAdded, U3556): the old ones taken away and freed */
   const addedGroups = new Map(); let addedKeys = new Map();
   function setAdded(list) {
@@ -391,7 +392,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       if (p.tris) {   // a pyramid: its faces as they are (design.js)
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(p.tris.flat().flatMap(q => { const v = P(q, q[2]); return [v.x, v.y, v.z]; }), 3)); g.computeVertexNormals();
         const m = (ADDED[p.mat] || ADDED.concrete).clone(); m.side = THREE.DoubleSide;
-        const mesh = new THREE.Mesh(g, m); mesh.castShadow = p.mat !== "glass"; mesh.receiveShadow = true; grp.add(mesh);
+        const mesh = new THREE.Mesh(g, m); mesh.castShadow = p.mat !== "glass" && p.mat !== "water"; mesh.receiveShadow = true; grp.add(mesh);
         if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
         continue;
       }
@@ -401,7 +402,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const d = new THREE.Vector3((x1 - x0) / L, 0, -(y1 - y0) / L), n = new THREE.Vector3(-(y1 - y0) / L, 0, -(x1 - x0) / L);
       const m4 = new THREE.Matrix4().makeBasis(n, new THREE.Vector3(0, 1, 0), d).setPosition(x0, 0, -y0);
       const mesh = new THREE.Mesh(g.applyMatrix4(m4), (ADDED[p.mat] || ADDED.concrete).clone());   // its own, to light up alone
-      mesh.castShadow = p.mat !== "glass"; mesh.receiveShadow = true; grp.add(mesh);
+      mesh.castShadow = p.mat !== "glass" && p.mat !== "water"; mesh.receiveShadow = true; grp.add(mesh);
       if (p.mat === "glass") grp.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: "#6f8f8a" })));
     }
     grp.userData.added = a.id; grp.userData.id = a.id; grp.traverse(o => { o.userData.id = a.id; }); scene.add(grp); addedGroups.set(a.id, grp); addedKeys.set(a.id, addedKey(a));

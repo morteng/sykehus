@@ -215,11 +215,11 @@ export function footRing(v) {
 }
 
 /* T2: the new parts on one roof that meet one another in plan AND in height: [{ id, name, m2 }] for `v` (a new part { id?, name, on, from, to, width,
-   base_kote, top_kote }) against the others that stand on the same wing's roof. Under 0.5 m² is not a meeting (fitOf's limit). */
+   base_kote, top_kote }) against the others that stand on the same wing's roof. Under 0.5 m² is not a meeting (fitOf's limit). Water fills a basin: a water volume and a non-water one never collide. */
 export function roofCollisions(site, v) {
   if (!v.on || v.base_kote == null) return [];
   const r = footRing(v), z = [v.base_kote, v.top_kote ?? v.base_kote + (v.height || 0)], Fv = footSet(v);
-  return (site.added || []).filter(x => x.kind === "volume" && x.on === v.on && x.id !== v.id && x.from && x.to)
+  return (site.added || []).filter(x => x.kind === "volume" && x.on === v.on && x.id !== v.id && x.from && x.to && (x.material === "water") === (v.material === "water"))
     .map(x => ({ id: x.id, name: x.name, m2: r1(Fv || footSet(x) ? shapeOverlap(Fv, r, z, x) : overlapArea(footRing(x), r, [x.base_kote, x.top_kote], z)) })).filter(c => c.m2 > 0.5);
 }
 /* a shape against another footprint (a rectangle or a shape), in plan and in height: the m² of the cells of the one that lie on the other */
