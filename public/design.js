@@ -268,12 +268,22 @@ export function alignSay(f) {
   return bits.length ? `På taket: ${bits.join(", ")}.` : null;
 }
 
+/* a building in words, never by its cadastre number (U3910): its name, else «Bygning på tomta» or «Nabobygg (kind)»; when
+   several unnamed ones would read alike, each gets «, nr. 1», «, nr. 2» by their order in site.buildings (stable) */
+export const KIND = { hospital: "sykehusbygg", apartments: "boligblokk", house: "bolig", semidetached_house: "tomannsbolig", garage: "garasje", garages: "garasjer", civic: "offentlig bygg", kindergarten: "barnehage", university: "skolebygg", office: "kontorbygg", warehouse: "lager", shed: "bod", service: "teknisk bygg", roof: "tak" };
+export function buildingWords(b, buildings = []) {
+  if (b.name) return b.name;
+  const base = x => x.own ? "Bygning på tomta" : `Nabobygg${KIND[x.type] ? ` (${KIND[x.type]})` : ""}`;
+  const w = base(b), same = buildings.filter(x => !x.name && !x.wing && base(x) === w);
+  return same.length > 1 && same.some(x => x.id === b.id) ? `${w}, nr. ${same.findIndex(x => x.id === b.id) + 1}` : w;
+}
+
 /* balconies: every outline wall of the wing that faces the side, at each storey it stands over. U3628: a balcony
    that would stand inside another building (a lower wing in front, under its roof) is not made; skipped says which
    building took how many, for Anton to say */
 function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = new Map()) {
   const others = site.buildings.filter(b => b.wing !== e.wing && !gone.has(b.id)).flatMap(b => (b.blocks?.length ? b.blocks : [{ p: b.ring, top: b.top }]).filter(k => k.top != null)
-    .map(k => ({ p: k.p, z: [b.lift ?? b.base, k.top], name: (site.wings || []).find(w => w.id === b.wing)?.name || b.name || `bygning ${b.id}` })));
+    .map(k => ({ p: k.p, z: [b.lift ?? b.base, k.top], name: (site.wings || []).find(w => w.id === b.wing)?.name || buildingWords(b, site.buildings) })));
   const w = site.wings.find(x => x.id === e.wing), bs = site.buildings.filter(b => b.wing === e.wing);
   const lv = (w.levels || []).slice().sort((a, b) => a.kote - b.kote), ground = Math.min(...bs.map(b => b.base));
   const i0 = e.from_storey ? lv.findIndex(l => l.name === e.from_storey) : lv.findIndex(l => l.kote > ground + 2);
@@ -649,7 +659,7 @@ export function applyDesign(site, floors, edits) {
   }
   if (!gone.size && !added.length) return;
   const rings = site.buildings.filter(b => gone.has(b.id)).map(b => b.ring), wings = new Set(site.buildings.filter(b => gone.has(b.id) && b.wing).map(b => b.wing));
-  site.demolished = site.buildings.filter(b => gone.has(b.id)).map(b => ({ id: b.id, name: b.name || `Bygning ${b.id} på tomta`, wing: b.wing ?? null, own: !!b.own, footprint_m2: b.area_m2, gross_volume_m3: grossVolume(b) }));
+  site.demolished = site.buildings.filter(b => gone.has(b.id)).map(b => ({ id: b.id, name: buildingWords(b, site.buildings), wing: b.wing ?? null, own: !!b.own, footprint_m2: b.area_m2, gross_volume_m3: grossVolume(b) }));
   site.buildings = site.buildings.filter(b => !gone.has(b.id));
   /* a wing with nothing left of it is gone from the after altogether (Morten 2026-10-25 20:12Z: «we want deleted
      buildings removed»): its entry (so its storeys, kotes and name), its facades and its own plans go too; what it
