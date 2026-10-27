@@ -671,6 +671,7 @@ export function applyDesign(site, floors, edits) {
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
       footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m ? { overhang_m: e.overhang_m } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
+  roofGardenUnder(site, added);
   /* a meeting is said on both: the one laid first learns of the one that met it */
   for (const a of added) for (const m of a.ground?.meets || []) {
     const b = added.find(x => x.id === m.id); if (!b?.ground) continue;
@@ -693,6 +694,19 @@ export function applyDesign(site, floors, edits) {
   }
   for (let i = floors.length - 1; i >= 0; i--) if (whole.has(floors[i].wing) || gone.size && !floors[i].walls.length && !floors[i].rooms.length) floors.splice(i, 1);
   site.added = added;
+}
+
+/* T4: a garden on a roof (landscape.js: on, kote) that a new volume on the same roof covers (a greenhouse over a lawn): under = [{ id, name, all }]
+   on it, all: every corner of the surface or every tree is inside the volume's footprint, the volume's foot at the garden's kote */
+function roofGardenUnder(site, added) {
+  const vols = added.filter(a => a.kind === "volume" && a.on && a.from && a.to);
+  if (!vols.length) return;
+  const box = a => { const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L * a.width / 2, d[0] / L * a.width / 2]; return [[a.from[0] + n[0], a.from[1] + n[1]], [a.to[0] + n[0], a.to[1] + n[1]], [a.to[0] - n[0], a.to[1] - n[1]], [a.from[0] - n[0], a.from[1] - n[1]]]; };
+  for (const g of [...(site.landscape || []), ...(site.plantings || [])].filter(x => x.on)) {
+    const pts = g.kind === "trees" ? (site.trees || []).filter(t => t[6] === g.id).map(t => [t[0], t[1]]) : g.ring || [];
+    const under = vols.filter(a => a.on === g.on && Math.abs(a.base_kote - g.kote) < 0.06).map(a => { const r = box(a), k = pts.filter(p => inRing(p, r)).length; return k ? { id: a.id, name: a.name, all: k === pts.length } : null; }).filter(Boolean);
+    if (under.length) g.under = under;
+  }
 }
 
 /* a building's gross volume from its blocks (outline × height from the ground to each block's roof), m³ */

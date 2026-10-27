@@ -146,3 +146,16 @@ test("U3831: a greenhouse put on Høyblokka's roof by guess is set along the bui
   assert.equal(r.rejected.length, 0, JSON.stringify(r.rejected)); assert.match(r.added[0].on_roof, /På taket: snudd .*byggets egen akse/);
   const d = tools.find(t => t.name === "try_change").description; assert.match(d, /Quote it to the person word for word/);
 });
+test("T4: a lawn, a path and a tree on Sentralblokka's roof come back at the roof's kote; a lawn past the edge is refused with its metres", async () => {
+  const R = (await call("about_wing", { wing: "Sentralblokka" })).data.roof, lv = R.blocks.find(b => b.kote === 69.91).corners;   // its biggest piece at that level (a level need not fill its bounding rectangle), site metres
+  const mid = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], at = (u, v) => mid(mid(lv[0], lv[1], u), mid(lv[3], lv[2], u), v);   // u along the long side, v across, 0..1
+  const ring = [at(0.4, 0.3), at(0.6, 0.3), at(0.6, 0.7), at(0.4, 0.7)];
+  const t = (await call("try_change", { include_screenshot: false, edits: [
+    { kind: "surface", surface: "grass", on: "Sentralblokka", kote: 69.91, ring, name: "Takplen" },
+    { kind: "path", on: "Sentralblokka", kote: 69.91, line: [at(0.35, 0.5), at(0.65, 0.5)], width: 1.5, surface: "paving" },
+    { kind: "trees", species: "Betula pendula", on: "Sentralblokka", kote: 69.91, points: [at(0.5, 0.5)], height: 5, crown: 3 }] })).data;
+  assert.deepEqual(t.rejected, []);
+  assert.deepEqual(t.after.ground.map(g => g.kote), [69.91, 69.91]); assert.equal(t.after.plantings[0].kote, 69.91); assert.equal(t.after.plantings[0].soil_depth_m, 0.9);
+  const off = (await call("try_change", { include_screenshot: false, edits: [{ kind: "surface", surface: "grass", on: "Sentralblokka", kote: 69.91, ring: [at(0.4, -0.2), at(0.6, -0.2), at(0.6, 0.3), at(0.4, 0.3)] }] })).data;
+  assert.match(off.rejected[0].error, /stikker \d+(,\d+)? m \(\d+(,\d+)? m²\) ut over takkanten til Sentralblokka på kote 69,91/);
+});
