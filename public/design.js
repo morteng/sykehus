@@ -43,8 +43,8 @@ export { fitOf, surfaceFit, groundAt };
 import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360, dirDeg, dirWord } from "./renderkit/dirs.js";   // one copy of directions (DRY 5)
 import { BUILDING as MATERIALS } from "./renderkit/materials.js";   // glass, concrete, steel, wood, brick (U3618)
 import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
-import { roofHold, roofSay, roofOf, placeOnRoof } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
-export { roofHold, roofSay, roofOf, placeOnRoof };
+import { roofHold, roofSay, roofOf, placeOnRoof, roofCollisions, collisionSay, measureParts, footRing } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
+export { roofHold, roofSay, roofOf, placeOnRoof, roofCollisions, measureParts, footRing };
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
@@ -107,7 +107,8 @@ function footOf(site, e, out, num) {
     out.on = w.id; if (e.overhang_m != null) out.overhang_m = num(e.overhang_m, 0, 50, "Fremspringet (overhang_m)");
     if (e.align != null) out.align = String(e.align);
     if (out.align !== "free") { const f = alignOnRoof(site, out); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width }); }   // U3831
-    roofCheck(site, out, w);   // after the align: what still sticks out is refused with its metres, not placed with «taket er for lite»
+    if (e.allow_overlap != null) out.allow_overlap = e.allow_overlap === true;
+    roofCheck(site, out, w); collideCheck(site, out, w);   // after the align: what still sticks out is refused with its metres, not placed with «taket er for lite»
   } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
   return out;
 }
@@ -120,6 +121,23 @@ function roofCheck(site, v, w) {
   const ok = Number(v.overhang_m) || 0;
   if (v.align === "free") return;   // «free» is a placement on purpose (U3831): from and to as given; fit.roof still says how far it sticks out
   if (h.overhang_m > ok + EDGE_SLACK) throw new Error(`${name} stikker ${String(h.overhang_m).replace(".", ",")} m (${String(h.outside_m2).replace(".", ",")} m²) ut over takkanten til ${w.name}${ok ? `, mer enn de ${String(ok).replace(".", ",")} m som overhang_m tillater` : ""}. Flytt det inn, gjør det mindre, eller si hvor mye det får stikke ut med overhang_m (minst ${Math.ceil(h.overhang_m * 10) / 10}). about_wing roof har takets kant i meter`);
+}
+/* T2: two new parts that meet on one roof (in plan and in height) are refused with both names and the m², unless allow_overlap is true (then kept, listed in the result's overlap) */
+function collideCheck(site, v, w) {
+  if (v.allow_overlap || !v.on) return;
+  const base = v.base_kote ?? baseOf(site, v), c = roofCollisions(site, { ...v, base_kote: base, top_kote: base + v.height });
+  if (c.length) throw new Error(`${v.name || "Volumet"} overlapper ${collisionSay(c, w.name)}. Flytt det eller gjør det mindre, eller send allow_overlap: true hvis det skal stå slik`);
+}
+/* T2 check_fit: what is wrong with how the new parts sit, in words: meetings between parts on one roof (m², by name), what sticks out past a roof's edge,
+   what is off the lot, and (not on a roof) what overlaps a wing that stands. wing: only the roof of that wing. -> { collisions, overhangs, off_lot, overlaps, ok, say } */
+export function checkFit(site, wing = null) {
+  const vols = (site.added || []).filter(a => a.kind === "volume" && (!wing || a.on === wing.id)), name = id => (site.wings || []).find(w => w.id === id)?.name || id, com = v => String(v).replace(".", ",");
+  const collisions = [], overhangs = [];
+  vols.forEach((a, i) => { for (const c of roofCollisions(site, a)) { const j = vols.findIndex(v => v.id === c.id); if (j > i) collisions.push({ a: a.name, b: c.name, roof: name(a.on), m2: c.m2, kept: !!(a.allow_overlap || vols[j].allow_overlap) }); }
+    if (a.on) { const r = roofSay(site, a); if (r && r.overhang_m > 0.05) overhangs.push({ part: a.name, roof: r.on, overhang_m: r.overhang_m, outside_m2: r.outside_m2, allowed_m: a.overhang_m ?? 0 }); } });
+  const fit = fitOf(site).filter(f => vols.some(v => v.id === f.id)), off_lot = fit.filter(f => f.on_lot && f.on_lot !== "helt på tomta").map(f => ({ part: f.name, says: f.on_lot })), overlaps = fit.filter(f => !vols.find(v => v.id === f.id).on).flatMap(f => f.overlaps.map(o => ({ part: f.name, with: o.with, m2: o.m2 })));
+  const said = [...collisions.map(c => `«${c.a}» og «${c.b}» overlapper ${com(c.m2)} m² på taket til ${c.roof}${c.kept ? " (lagt slik med vilje)" : ""}`), ...overhangs.map(o => `«${o.part}» stikker ${com(o.overhang_m)} m (${com(o.outside_m2)} m²) ut over takkanten til ${o.roof}`), ...off_lot.map(o => `«${o.part}» står ikke helt på tomta (${o.says})`), ...overlaps.map(o => `«${o.part}» overlapper ${o.with} med ${o.m2} m²`)];
+  return { collisions, overhangs, off_lot, overlaps, ok: !said.length, say: said.length ? said.join("; ") + "." : vols.length ? `Ingen kollisjoner${wing ? ` på taket til ${wing.name}` : ""}: ${vols.length} ${vols.length === 1 ? "del" : "deler"} sjekket.` : "Forslaget har ingen nye deler å sjekke." };
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
@@ -195,9 +213,10 @@ export function checkDesign(site, e, str) {
       if (onA && (out.align ?? a.align) !== "free" && (out.align === "building" || out.from || out.to || e.width != null)) {
         const f = alignOnRoof(site, { ...a, ...out, from: out.from || a.from, to: out.to || a.to, on: onA }); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width });
       }
+      if (e.allow_overlap != null) out.allow_overlap = e.allow_overlap === true;
       if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
       const onW = out.on ?? a.on, geo = { ...a, ...out, from: out.from || a.from, to: out.to || a.to };
-      if (onW && (out.on || out.from || out.to || out.width != null || out.bim || out.overhang_m != null)) roofCheck(site, geo, (site.wings || []).find(x => x.id === onW));
+      if (onW && (out.on || out.from || out.to || out.width != null || out.bim || out.overhang_m != null)) { const w = (site.wings || []).find(x => x.id === onW); roofCheck(site, geo, w); collideCheck(site, { ...geo, ...out, base_kote: undefined }, w); }
       return Object.assign(out, w_);
     }
     case "balconies": {
@@ -669,7 +688,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep, guard, lot) : null, near = lotOf(site, e);
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m ? { overhang_m: e.overhang_m } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m ? { overhang_m: e.overhang_m } : {}), ...(e.on && e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   /* a meeting is said on both: the one laid first learns of the one that met it */
   for (const a of added) for (const m of a.ground?.meets || []) {

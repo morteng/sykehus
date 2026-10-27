@@ -5,8 +5,9 @@
    not any of them. A building without blocks is one flat piece: its ring at its top.
    THE RULE for a foot: the roof level that holds the most of the footprint (m² on the roof, sampled), a tie the higher.
    Never the highest level under the middle (which changed with the middle). The levels under it are all named. */
-import { inRing } from "./renderkit/fit.js";
+import { inRing, groundAt, overlapArea } from "./renderkit/fit.js";
 import { ringDist, ringArea } from "./renderkit/paths2d.js";
+import { measureOf } from "./renderkit/measure.js";   // «Mål»'s own maths: distance, height difference, run (one copy)
 
 const r2 = v => Math.round(v * 100) / 100 + 0, r1 = v => Math.round(v * 10) / 10 + 0;   // + 0: no -0
 const kk = v => Math.round(v * 100) / 100;
@@ -131,4 +132,64 @@ export function placeOnRoof(site, w, at, length, width) {
   const mid = (t, q) => [r2(s0[0] + u[0] * t + v[0] * q), r2(s0[1] + u[1] * t + v[1] * q)], q = gap + width / 2;
   return { from: mid(alongM, q), to: mid(alongM + length, q), kote: lv.kote, axis_bearing_deg: lv.bounding_rect.axis_bearing_deg,
     text: `på taket til ${w.name} (kote ${String(lv.kote).replace(".", ",")}), langs takets akse ${String(lv.bounding_rect.axis_bearing_deg).replace(".", ",")}°: ${String(r1(alongM)).replace(".", ",")} m fra enden og ${String(r1(gap)).replace(".", ",")} m fra venstre kant; taket er ${String(lv.bounding_rect.length_m).replace(".", ",")} × ${String(lv.bounding_rect.width_m).replace(".", ",")} m` };
+}
+
+/* a new part's footprint, 4 corners (the edge on from's side first): the rectangle from -> to, width across */
+export function footRing(v) {
+  const d = [v.to[0] - v.from[0], v.to[1] - v.from[1]], L = Math.hypot(d[0], d[1]) || 1, n = [-d[1] / L * v.width / 2, d[0] / L * v.width / 2];
+  return [[v.from[0] - n[0], v.from[1] - n[1]], [v.to[0] - n[0], v.to[1] - n[1]], [v.to[0] + n[0], v.to[1] + n[1]], [v.from[0] + n[0], v.from[1] + n[1]]];
+}
+
+/* T2: the new parts on one roof that meet one another in plan AND in height: [{ id, name, m2 }] for `v` (a new part { id?, name, on, from, to, width,
+   base_kote, top_kote }) against the others that stand on the same wing's roof. Under 0.5 m² is not a meeting (fitOf's limit). */
+export function roofCollisions(site, v) {
+  if (!v.on || v.base_kote == null) return [];
+  const r = footRing(v), z = [v.base_kote, v.top_kote ?? v.base_kote + (v.height || 0)];
+  return (site.added || []).filter(x => x.kind === "volume" && x.on === v.on && x.id !== v.id && x.from && x.to)
+    .map(x => ({ id: x.id, name: x.name, m2: r1(overlapArea(footRing(x), r, [x.base_kote, x.top_kote], z)) })).filter(c => c.m2 > 0.5);
+}
+export const collisionSay = (c, wingName) => `${c.map(x => `«${x.name}» (${String(x.m2).replace(".", ",")} m²)`).join(", ")} på taket til ${wingName}`;
+
+/* T1 measure: what a new part, a wing or a point is, as numbers, and how two relate. ref: [east, north, kote?] | a new part's id or name | a wing
+   (lookup is the caller's wingOf). A part's reference point is the middle of its footprint at its foot; a wing's the middle of its biggest roof level at that kote
+   (so a part on a roof is 0 m above it). Throws a sentence for what it cannot find. */
+function partOf(site, ref, wingOf) {
+  if (Array.isArray(ref)) {
+    const p = ref.map(Number); if (p.length < 2 || p.length > 3 || !p.every(Number.isFinite)) throw new Error("Et punkt er [øst, nord] eller [øst, nord, kote] i meter");
+    const k = p[2] ?? r2(groundAt(site, p)); return { kind: "point", name: `punktet ${p[0]}, ${p[1]}`, pt: [p[0], p[1], k], kote_from: p[2] == null ? "terrenget" : "oppgitt" };
+  }
+  const key = String(ref ?? "").trim().toLowerCase(), v = key && (site.added || []).find(x => x.kind === "volume" && (x.id.toLowerCase() === key || x.name.toLowerCase() === key));
+  if (v) {
+    const d = [v.to[0] - v.from[0], v.to[1] - v.from[1]], L = Math.hypot(d[0], d[1]), c = [r2((v.from[0] + v.to[0]) / 2), r2((v.from[1] + v.to[1]) / 2)];
+    return { kind: "part", id: v.id, name: v.name, corners: footRing(v).map(p => p.map(r2)), axis_bearing_deg: r1(bearing(d[0], d[1])), length_m: r2(L), width_m: r2(v.width), foot_kote: v.base_kote, top_kote: v.top_kote,
+      area_m2: r1(L * v.width), stands_on: v.on ? `taket til ${(site.wings || []).find(w => w.id === v.on)?.name || v.on}` : "bakken", on: v.on || null, pt: [c[0], c[1], v.base_kote], vol: v };
+  }
+  const w = key && wingOf(site, ref), R = w && roofOf(site, w.id);
+  if (R) {
+    const lv = R.levels.slice().sort((a, b) => b.area_m2 - a.area_m2)[0], b = lv.bounding_rect, c = b.corners, m = [r2(c.reduce((s, p) => s + p[0], 0) / 4), r2(c.reduce((s, p) => s + p[1], 0) / 4)];
+    return { kind: "wing", id: w.id, name: w.name, corners: c, axis_bearing_deg: b.axis_bearing_deg, length_m: b.length_m, width_m: b.width_m, foot_kote: site.buildings.find(x => x.wing === w.id)?.base ?? null, top_kote: lv.kote,
+      area_m2: lv.area_m2, stands_on: "bakken", roof_levels: R.levels.map(l => l.kote), pt: [m[0], m[1], lv.kote] };
+  }
+  throw new Error(`Fant ikke «${ref}»: en fløy, et nytt bygg (id eller navn: ${(site.added || []).filter(x => x.kind === "volume").map(x => x.id).slice(0, 12).join(", ") || "forslaget har ingen ennå"}) eller et punkt [øst, nord]`);
+}
+const show = ({ pt, vol, kote_from, ...p }) => p, com = v => String(v).replace(".", ",");
+export function measureParts(site, a, b, wingOf) {
+  const A = partOf(site, a, wingOf), B = b == null ? null : partOf(site, b, wingOf);
+  if (!B) { if (A.kind === "point") throw new Error("Ett punkt har ingenting å lese tilbake: gi b også, eller en del eller fløy"); return { a: show(A), say: `${A.name}: ${com(A.length_m)} × ${com(A.width_m)} m, akse ${com(A.axis_bearing_deg)}°, fot kote ${com(A.foot_kote)}, topp kote ${com(A.top_kote)}, ${com(A.area_m2)} m², står på ${A.stands_on}.` }; }
+  const m = measureOf([A.pt, B.pt]), out = { a: show(A), b: show(B), distance_m: m.distance_m, dh_m: m.dh_m, horizontal_m: m.horizontal_m }, said = [];
+  said.push(`Fra ${A.name} til ${B.name}: ${com(m.distance_m)} m (${com(m.horizontal_m)} m vannrett, ${com(Math.abs(m.dh_m))} m ${m.dh_m < 0 ? "ned" : "opp"}), målt fra midten av grunnflaten i foten`);
+  if (A.axis_bearing_deg != null && B.axis_bearing_deg != null) {
+    const d = Math.abs(A.axis_bearing_deg - B.axis_bearing_deg) % 180, ang = r1(Math.min(d, 180 - d)), u = [Math.sin(B.axis_bearing_deg * Math.PI / 180), Math.cos(B.axis_bearing_deg * Math.PI / 180)];
+    const rel = [A.pt[0] - B.pt[0], A.pt[1] - B.pt[1]], cross = u[0] * rel[1] - u[1] * rel[0], off = r2(Math.abs(cross));
+    Object.assign(out, { angle_deg: ang, parallel: ang <= 0.5, offset_m: off, offset_side: Math.abs(cross) < 0.005 ? null : cross > 0 ? "venstre" : "høyre" });
+    said.push(ang <= 0.5 ? "står parallelt" : `er skjev ${com(ang)}° (ikke parallelt; grensen er 0,5°)`, `${com(off)} m til siden for aksen til ${B.name}${out.offset_side ? ` (${out.offset_side}, sett langs aksen)` : ""}`);
+  }
+  const [part, roof] = A.kind === "part" && B.kind === "wing" ? [A, B] : B.kind === "part" && A.kind === "wing" ? [B, A] : [];
+  if (part) {
+    const h = roofHold(site, { ...part.vol, on: roof.id });
+    if (h && h.on_roof) { Object.assign(out, { overhang_m: h.overhang_m, outside_m2: h.outside_m2 }); said.push(h.overhang_m > 0.05 ? `${part.name} stikker ${com(h.overhang_m)} m (${com(h.outside_m2)} m²) ut over takkanten til ${roof.name}` : `${part.name} ligger innenfor takkanten til ${roof.name}`); }
+    else if (h) { Object.assign(out, { overhang_m: null }); said.push(`${part.name} ligger ikke over taket til ${roof.name}`); }
+  }
+  out.say = said.join("; ") + ".";
+  return out;
 }
