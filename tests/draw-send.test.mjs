@@ -64,15 +64,16 @@ test("A: a picture that is not a JPEG data URL is refused with the words the win
   }
 });
 
-test("B: the replay of a version that names a gone volume is a refusal with the text and the ids it has", async () => {
-  assert.throws(() => applyDesign({ buildings: [], wings: [{ id: "w", name: "Vestfløy" }], added: [] }, [], [{ kind: "demolish", building: "volum-32" }]), /Fant ikke «volum-32».*ingen nye bygg nå/, "the plain Error is what mcp.mjs sees");
+test("B: the replay of a stored version that names a gone volume is skipped, so the page loads; a typo in a wing still refuses", async () => {
+  const base = { buildings: [], wings: [{ id: "w", name: "Vestfløy" }], added: [] };
+  assert.doesNotThrow(() => applyDesign({ ...base }, [], [{ kind: "demolish", building: "volum-32" }]), "a gone new building in a stored edit must not stop the replay");
+  assert.throws(() => applyDesign({ ...base }, [], [{ kind: "demolish", building: "Vestflyen" }]), /Fant ikke «Vestflyen».*ingen nye bygg nå/, "a name that is no building and no new id is still refused");
   const v = versions.create("lars", "Prøve"); const rec = versions.get(v.id);
   rec.edits = [{ kind: "volume", id: "volum-7", name: "Hus", shape: "box", height: 4, from: [10, 10], to: [20, 10], width: 6 }, { kind: "demolish", building: "volum-32" }]; versions.save(rec);
   for (const [name, args] of [["try_change", { edits: [{ kind: "note", text: "x" }], target: v.id, include_screenshot: false }], ["look", { target: v.id }]]) {
     const j = await rpc(name, args);
     assert.equal(j.error, undefined, `${name}: ${JSON.stringify(j.error)}`);
-    assert.equal(j.result.isError, true, name); const txt = j.result.content[0].text;
-    assert.doesNotMatch(txt, /Internal error/); assert.match(txt, /Fant ikke «volum-32»/); assert.match(txt, /«volum-7»/, "it lists what the version does have");
+    assert.doesNotMatch(JSON.stringify(j.result), /Internal error/, name);
   }
 });
 

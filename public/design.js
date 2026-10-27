@@ -670,7 +670,10 @@ export function applyDesign(site, floors, edits) {
     if ((e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id)) continue;   // landscape.js's
     if ((e.kind === "demolish" || e.kind === "restore") && ROAD_ID.test(e.building)) continue;   // roads.js's
     if (e.kind === "demolish" && vols.has(e.building)) vols.delete(e.building);
-    else if (e.kind === "demolish") for (const id of targets(site, e.building, [...vols.keys()])) gone.add(id);
+    else if (e.kind === "demolish") {   // a stored edit that names a new building already gone (undone, deleted, torn down twice) is skipped: the replay must never stop the page
+      let t; try { t = targets(site, e.building, [...vols.keys()]); } catch (err) { if (/^(volum-\d+|n[a-z]+\d*)$/i.test(String(e.building))) continue; throw err; }
+      for (const id of t) gone.add(id);
+    }
     else if (e.kind === "restore") for (const id of targets(site, e.building, [...vols.keys()])) gone.delete(id);
     else if (e.kind === "reshape") { const v = vols.get(e.id); if (v) { const { kind, id, why, ...set } = e; Object.assign(v, set); if (set.storeys != null && set.height == null) v.height = Math.round(set.storeys * STOREY_M * 100) / 100; } }
     else if (e.kind === "balconies") {
