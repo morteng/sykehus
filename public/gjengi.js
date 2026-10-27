@@ -6,6 +6,7 @@
    taken from (photospots.js) can be flown to for free and taken again for a press. */
 import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, lookFor, viewpointFor } from "./photo-set.js";
 import { LENSES, ASPECTS, frameRect, frameFov, viewFov, hFov, poseFromCam, frameSvg, frustumSvg } from "./renderkit/photoframe.js";
+import { bearingOf } from "./sunlight.js";
 import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO } from "./gjengi-no.js";
 import { spotOfView, flyTo, isStale, retakeBody, retake, total, whyNot, hasWork, NEEDS_WORK } from "./photospots.js";
 const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
@@ -13,7 +14,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];
 const $ = id => document.getElementById(id);
 
-export function startGjengi({ panel, viewer, work, toast, sun = () => null, setSun = () => {}, setMode = () => {}, rings = () => [], changes = () => null, sunLabel = () => "" }) {
+export function startGjengi({ panel, viewer, work, toast, sun = () => null, setSun = () => {}, setMode = () => {}, rings = () => [], changes = () => null, sunLabel = () => "", materials = () => [] }) {
   const say = $("gjSay"), go = $("gjGo"), wish = $("gjWish"), list = $("gjList"), cam = $("gjCam"), pf = $("pf"), view = $("view"), result = $("pfResult"), inset = $("pfInset"), shotBtn = $("pfShot");
   let st = null, busy = false, on = false, prevTab = "changes", prevMode = "3d", tick = null, sig = "", selSpot = null;
   /* the person's choice over what the view has by itself; null is «valgt av seg selv» */
@@ -125,7 +126,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   const spotNow = () => spotOfView({ pose: pose(), mm: mmNow(), fov: frameFov(mmNow(), aspectNow()), aspect: aspectNow(), look: lookNow(), viewpoint: vpNow(), lens: lensNow(), sun: sun(), version: work().versjon || work().utkast || null, n: changes() });
   async function post(extra) {
     const w = work(), spot = extra?.spot || spotNow(), image = viewer.snapshot({ live: true, mm: spot.mm, aspect: spot.aspect, viewpoint: spot.viewpoint });
-    const body = { image, wish: wish.value.trim() || undefined, shown_usd: priceOf(sizeNow()), size: sizeNow(), viewpoint: spot.viewpoint, look: spot.look, lens: spot.mm, eyeh: spot.eyeh ?? undefined, aspect: spot.aspect, spot, ...(sun() || {}), ...(extra || {}), ...(w.versjon ? { versjon: w.versjon, nokkel: w.nokkel || undefined } : { utkast: w.utkast }) };
+    const body = { image, wish: wish.value.trim() || undefined, shown_usd: priceOf(sizeNow()), size: sizeNow(), viewpoint: spot.viewpoint, look: spot.look, lens: spot.mm, eyeh: spot.eyeh ?? undefined, aspect: spot.aspect, spot, bearing: bearingOf(spot.viewpoint, spot.pose?.yaw) ?? undefined, materials: materials().slice(0, 12), ...(sun() || {}), ...(extra || {}), ...(w.versjon ? { versjon: w.versjon, nokkel: w.nokkel || undefined } : { utkast: w.utkast }) };
     let j; try { j = await fetch("api/gjengi", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()); } catch { j = { error: "Fikk ikke kontakt." }; }
     return { j, image };
   }

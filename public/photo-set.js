@@ -15,14 +15,14 @@ const viewpoints = {
   "froskeperspektiv": { mm: 20, aspect: "2:3", eye: 0.6, line: "Low viewpoint looking up, two-point perspective, verticals corrected." },
 };
 const looks = {
-  arkitektfoto: { mm: null, aspect: null, when: ["øyehøyde", "fasade", "froskeperspektiv"], style: "Architectural photograph, tilt-shift lens ({mm} mm), verticals corrected, crisp daylight, neutral colour.",
-    flat: "Architectural photograph, orthographic, verticals corrected, crisp daylight, neutral colour." },
-  blåtime: { mm: null, aspect: null, when: [], style: "Architectural photograph at blue hour, tilt-shift lens ({mm} mm), verticals corrected, deep blue sky, warm lit windows.",
-    flat: "Architectural photograph at blue hour, orthographic, verticals corrected, deep blue sky, warm lit windows." },
-  konkurransebilde: { mm: null, aspect: null, when: [], style: "Architectural competition illustration, soft light, people and planting, a little atmosphere, eye level, {mm} mm.",
-    flat: "Architectural competition illustration, soft light, people and planting, a little atmosphere, eye level." },
+  arkitektfoto: { mm: null, aspect: null, when: ["øyehøyde", "fasade", "froskeperspektiv"], style: "Architectural photograph, tilt-shift lens ({mm} mm), verticals corrected, crisp detail, neutral white balance for the light described.",
+    flat: "Architectural photograph, orthographic, verticals corrected, crisp detail, neutral white balance for the light described." },
+  blåtime: { mm: null, aspect: null, when: [], style: "Architectural photograph, tilt-shift lens ({mm} mm), verticals corrected, long calm exposure, white balance for the light described.",
+    flat: "Architectural photograph, orthographic, verticals corrected, long calm exposure, white balance for the light described." },
+  konkurransebilde: { mm: null, aspect: null, when: [], style: "Architectural competition illustration, people and planting, a little atmosphere, eye level, {mm} mm.",
+    flat: "Architectural competition illustration, people and planting, a little atmosphere, eye level." },
   drone: { mm: null, aspect: "16:9", when: ["fugleperspektiv"], style: "Aerial photograph, {mm} mm lens, sharp, the surroundings in view.", flat: "Aerial photograph, sharp, the surroundings in view." },
-  hvitmodell: { mm: null, aspect: null, when: ["aksonometri"], style: "White clay massing model, soft shadows, no textures, no colour." },
+  hvitmodell: { mm: null, aspect: null, when: ["aksonometri"], style: "White clay massing model, no textures, no colour; shadows as the light gives them." },
   skisse: { mm: null, aspect: null, when: [], style: "Hand-drawn line and watercolour illustration." },
 };
 

@@ -1164,8 +1164,9 @@ import("./tour.js?v=20261027zmp").then(({ createTour }) => {
 }).catch(e => console.error("tour:", e));
 import("./anton.js?v=20261027pr").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
-import("./gjengi.js?v=20261027u3814p").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
+import("./gjengi.js?v=20261027gjlight").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
+  materials: () => [...(site.added || []), ...(site.landscape || [])].filter(a => typeof a.material === "string").map(a => ({ name: String(a.name || a.id || "").slice(0, 40), material: a.material })),
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));
 /* the streets around, as hagekart draws them, after the model shows (streets.js) */
 requestAnimationFrame(() => import("./streets.js?v=20261026r").then(m => m.addStreets({ viewer, site })).then(h => { streetsOn = h; h?.setRemoved(((showingBefore ? site0 : site).roads_removed || []).map(r => r.id)); }).catch(e => console.warn("gater:", e)));

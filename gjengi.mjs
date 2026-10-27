@@ -19,21 +19,53 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
-import { lightLine } from "./public/renderkit/sunpick.js";
+import { lightLine, bearingOf, phaseOf } from "./public/sunlight.js";
 import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/photo-set.js";
 
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
 const ASPECTS = [["1:1", 1], ["4:5", 4 / 5], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
 const ID = /^[a-z0-9]{16}$/, MAX_IN = 6 * 1024 * 1024;
-/* The view is the only geometry the model gets (U3526: the first prompt let it invent hills and houses behind the site) */
-const PROMPT = "This image is a view of a 3D model of a site in Bragernes, Drammen, Norway. It is the only geometry: make it a photorealistic architectural rendering of exactly this view. "
+/* The view is the only geometry the model gets (U3526: the first prompt let it invent hills and houses behind the site). The prompt runs in this order, kept
+   short: the geometry lock (first), the light (direction, height, colour: sunlight.js), the materials in view, the camera (lens and framing only), people and planting. */
+const GEOMETRY = "This image is a view of a 3D model of a site in Bragernes, Drammen, Norway. It is the only geometry: make it a photorealistic architectural rendering of exactly this view. "
   + "Keep every building, road and terrain line exactly; change only materials, light, people and planting. "
   + "Same camera, same framing, every outline and edge in the same place. Add no building, house, hill, mountain, wall, road or other structure, and remove none. "
-  + "Where the model ends, keep the background as plain sky or the same flat ground that is there; do not invent a landscape, a skyline or a town behind it. "
-  + "Materials: the existing hospital wings in concrete, brick and render; new buildings in the material their colour suggests; asphalt, kerbs, grass. "
-  + "Planting: trees and shrubs only where the model has trees or green areas. People: a few small pedestrians on the paths and pavements. "
-  + "No text or labels.";   // the light is said apart, from the view's sun (lightLine)
+  + "Where the model ends, keep the background as plain sky or the same flat ground that is there; do not invent a landscape, a skyline or a town behind it.";
+const PEOPLE = "Planting: trees and shrubs only where the model has trees or green areas. People: a few small pedestrians on the paths and pavements, lit as the light says. No text or labels.";
+/* how a material must look, by the light (phase: the sun's: high, mid, lowish, golden, blue, night) */
+const dim = ph => ph === "blue" || ph === "night";
+const HOW = {
+  glass: ph => dim(ph) ? "dark, reflecting the sky glow, the warm lit interior showing through" : ph === "golden" ? "reflecting the warm sky, a little of the interior showing" : "reflecting the sky and surroundings, a little see-through",
+  window_glass: ph => HOW.glass(ph),
+  water: ph => dim(ph) ? "a dark mirror of the sky glow and the lamps" : "mirroring the sky and the buildings, still",
+  brick: ph => `visible brick courses and mortar${dim(ph) ? "" : ", the texture raking in the light"}`,
+  concrete: () => "fine concrete texture, panel joints",
+  steel: ph => dim(ph) ? "dark metal with small highlights from lamps" : "metal with sharp highlights where the sun hits it",
+  wood: () => "visible grain, a warm tone",
+  planting: () => "plant texture", grass: () => "grass texture", meadow: () => "meadow texture", gravel: () => "gravel texture", paving: () => "paving stones with joints", asphalt: () => "asphalt, a little damp sheen", soil: () => "soil",
+};
+const MATNAME = /^[a-z_]{2,20}$/;
+/* the materials the page sends: a short list of { name, material } (the page's new volumes and surfaces); strings sliced, at most 12 */
+export function materialsOf(v) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 12).map(m => m && typeof m === "object" ? { name: String(m.name ?? "").replace(/[\n\r]/g, " ").slice(0, 40).trim(), material: String(m.material ?? "").toLowerCase().slice(0, 20) } : null).filter(m => m && MATNAME.test(m.material));
+}
+export function materialsLine(list, ph) {
+  const by = new Map(); for (const m of materialsOf(list)) { by.set(m.material, [...(by.get(m.material) || []), m.name].filter(Boolean)); }
+  const old = "the existing hospital wings in concrete, brick and render";
+  if (!by.size) return `Materials: ${old}; new buildings in the material their colour suggests; asphalt, kerbs, grass.`;
+  return `Materials in view: ${old}; new parts: ` + [...by].map(([k, names]) => `${k.replace("_", " ")}${names.length ? ` (${[...new Set(names)].slice(0, 4).join(", ")})` : ""}, ${(HOW[k] || (() => "as named"))(ph)}`).join("; ") + ".";
+}
+const sunClean = b => { const ok = (v, lo, hi) => Number.isFinite(+v) && v !== null && v !== "" && +v >= lo && +v <= hi; return ok(b.sunM, 1, 12) && ok(b.sunD, 1, 31) && ok(b.sunH, 0, 24) ? { sunM: Math.round(+b.sunM), sunD: Math.round(+b.sunD), sunH: +b.sunH } : null; };
+/* the whole prompt for a body (pure: no model, no network): geometry lock, light, materials, camera, people and planting, then the person's wish.
+   The camera line is the viewpoint and look the page sent (null: none); the bearing is the camera's compass way, 0-360, from the page or from the spot's yaw */
+export function promptPreview(body) {
+  const b = body || {}, cam = VIEWPOINTS[b.viewpoint] ? shotOf({ viewpoint: b.viewpoint, look: b.look, lens: b.lens, eyeh: b.eyeh }) : null;
+  const bearing = num(b.bearing, 0, 360) ?? bearingOf(b.viewpoint, num(b.spot?.pose?.yaw, -1e3, 1e3)), sun = sunClean(b), look = cam?.look ?? (LOOKS[b.look] ? b.look : null);
+  const wish = b.wish == null ? "" : String(b.wish).trim().slice(0, 300);
+  return [GEOMETRY, lightLine(sun, bearing, look), materialsLine(b.materials, phaseOf(sun, look)), cam ? "Camera (lens, framing and finish only; the light and materials above stay as said): " + promptLine(cam) : "", PEOPLE].filter(Boolean).join(" ") + (wish ? WISH + wish : "");
+}
 /* a photo spot (U3665): where a picture was taken from and with what, kept beside the picture so it can be taken again; only numbers and short
    ids come in, whatever the page sent */
 const num = (v, lo, hi) => Number.isFinite(+v) && v !== null && v !== "" ? Math.min(hi, Math.max(lo, +v)) : null;
@@ -115,7 +147,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     try {
       const r = await fetchImpl(URL_, { method: "POST", signal: AbortSignal.timeout(120000), headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "http-referer": "https://sykehus.gulden.no", "x-title": "Sykehustomta" },
         body: JSON.stringify({ model, modalities: google ? ["image", "text"] : ["image"], provider: ROUTING, usage: { include: true }, image_config: { aspect_ratio: ar, image_size: sz },
-          messages: [{ role: "user", content: [{ type: "text", text: PROMPT + " " + lightLine(body) + (cam ? " Camera and look (these override the light and materials wording above where they differ; the geometry stays): " + promptLine(cam) : "") + (wish ? WISH + wish : "") }, { type: "image_url", image_url: { url: body.image } }] }] }) });
+          messages: [{ role: "user", content: [{ type: "text", text: promptPreview(body) }, { type: "image_url", image_url: { url: body.image } }] }] }) });
       const j = await r.json().catch(() => ({}));
       const cost = Number.isFinite(+j.usage?.cost) ? +j.usage.cost : null;
       const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url || "";
