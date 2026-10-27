@@ -27,6 +27,8 @@ function piecesOf(site, wing) {
   }
   return out;
 }
+/* T5: a wing's roof pieces as they are ({ p: 4 corners or the ring, top, building }): one copy for the drawings (drawing.js) */
+export const roofPieces = (site, wing) => piecesOf(site, wing).flatMap(c => c.pieces.map(k => ({ p: k.p, top: k.top, building: c.id })));
 const bearing = (dx, dy) => (((Math.atan2(dx, dy) * 180 / Math.PI) % 180) + 180) % 180;   // of a line, 0..180 from north clockwise
 
 /* axis-aligned rectangles in the grid frame (u along th, v across), same kote, edge-sharing: merged until none can be */

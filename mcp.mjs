@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
+import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
@@ -699,6 +700,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "summary", tgt: "read", title: "Areal og kostnad", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "Areas and a cost range for the after (a version or draft), in one read: BTA per new volume (storeys × footprint, «beregnet»; BRA only when a sourced factor is in rules/costs.json), what is demolished (m², m³), the ground surfaces laid (m² per kind), earthwork (cut, fill, net m³), and a cost range where every price carries its source and is «antatt». With no prices in rules/costs.json the cost is «ikke målt»: say so, never guess a price. Quote the note.",
       run: async (a, req) => { const m = model(a.draft, req); let costs; try { costs = loadCosts(); } catch (e) { throw toolErr(e.message); } return areaSummary(m.site, costs); } },
+    ...drawTools({ S, WING, TARGET, OLD, model, wingOf, toolErr }),   // T5
     { name: "check_fit", tgt: "read", title: "Passer delene sammen", ro: true, schema: S({ wing: { ...WING, description: "Only the roof of this wing" }, target: TARGET, draft: OLD }),
       description: "Do the new parts sit right: pairs that meet on one roof (names, m²), what sticks out past a roof's edge, what is off the lot, what overlaps a wing that stands. Nothing changed; quote the say, and when ok, say none.",
       run: async (a, req) => { const m = model(a.draft, req); return checkFit(m.site, a.wing ? wingOrErr(a.wing) : null); } },
