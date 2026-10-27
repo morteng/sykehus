@@ -1,4 +1,4 @@
-/* «Nytt forslag» (U3667, Morten 15:56Z): a dialog (the kit's modal, as «Tilbakemelding» uses) to start a proposal: from the
+/* «Nytt prosjekt» (U3667, Morten 15:56Z): a dialog (the kit's modal, as «Tilbakemelding» uses) to start a proposal: from the
    before or a copy of one of one's own, a name (optional), a start card, a wish. «Start» makes the version, opens it, and
    hands the first turn to Anton, which says what to do when the wish is clear or not. The text of that turn is firstTurn(). */
 import { modal } from "./kit/modal.js";
@@ -14,14 +14,14 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 
 /* what Anton is told: the choices in plain words, then how to begin; no name means Anton names it when the idea is clear */
 export function firstTurn({ name = "", card = "blank", wish = "", from = null }) {
-  const c = CARDS.find(x => x.id === card) || CARDS[CARDS.length - 1], lines = ["Jeg har laget et nytt forslag."];
+  const c = CARDS.find(x => x.id === card) || CARDS[CARDS.length - 1], lines = ["Jeg har laget et nytt prosjekt."];
   lines.push(from ? `Det begynner som en kopi av «${from}».` : "Det begynner slik tomta står i dag.");
   if (name.trim()) lines.push(`Navnet er «${name.trim()}».`);
   if (c.say) lines.push(`Utgangspunkt: ${c.say}`);
   if (wish.trim()) lines.push(`Ønsket mitt: ${wish.trim()}`);
-  lines.push("Er ønsket tydelig, så begynn å arbeide i forslaget. Er det ikke det, still høyst to spørsmål først.");
+  lines.push("Er ønsket tydelig, så begynn å arbeide i prosjektet. Er det ikke det, still høyst to spørsmål først.");
   lines.push("Si tidlig fra om grenser for regulering og vern (fredning) som gjelder tomta.");
-  if (!name.trim()) lines.push("Forslaget har ikke fått navn. Gi det et kort navn selv når du vet hva det blir.");
+  if (!name.trim()) lines.push("Prosjektet har ikke fått navn. Gi det et kort navn selv når du vet hva det blir.");
   return lines.join("\n");
 }
 
@@ -29,7 +29,7 @@ export function firstTurn({ name = "", card = "blank", wish = "", from = null })
    and opens it (returns an error text or null), say(text) hands Anton its first turn, mine() lists one's own versions,
  */
 export function startNew(o) {
-  const m = modal({ title: "Nytt forslag", closeLabel: "Lukk", className: "np-panel", onClose: () => { st.busy = false; } });
+  const m = modal({ title: "Nytt prosjekt", closeLabel: "Lukk", className: "np-panel", onClose: () => { st.busy = false; } });
   const st = { card: "blank", busy: false };
   async function fill() {
     const mine = await Promise.resolve(o.mine()).catch(() => []);
@@ -43,7 +43,7 @@ export function startNew(o) {
       <label class="np-l" for="npWish">Hva ønsker du? (kan stå tomt)</label>
       <textarea id="npWish" rows="2" maxlength="2000" placeholder="For eksempel: Behold høyblokka, og lag et grønt tun mot sør."></textarea>
       <p class="np-s">Anton arbeider innenfor månedens ramme.</p>
-      <p class="np-s">Forslaget er privat til du deler det.</p>
+      <p class="np-s">Prosjektet er privat til du deler det.</p>
       <p class="np-err" id="npErr" role="alert" hidden></p>
       <div class="np-acts"><button type="submit" class="dr-p" id="npGo">Start</button><button type="button" id="npNo">Avbryt</button></div></form>`;
     const f = m.body.querySelector("form");

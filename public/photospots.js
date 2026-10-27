@@ -28,7 +28,7 @@ export async function retake(list, { confirmed, make }) {
 /* what the card says for the price of several */
 export const total = (n, each) => Math.round(n * each * 100) / 100;
 /* why the shutter is grey, in the words on screen (null: it is not). On «Før» there is no version or draft to keep the picture in: the tab itself is greyed with NEEDS_WORK (U3666) */
-export const NEEDS_WORK = "Åpne et forslag for å ta bilder";
+export const NEEDS_WORK = "Åpne et prosjekt for å ta bilder";
 export const hasWork = w => !!(w && (w.versjon || w.utkast));
 export function whyNot({ st, work, busy, price }) {
   if (busy) return "Lager bildet …"; if (!st) return "Henter prisen …"; if (!st.on) return "Gjengi er ikke slått på her"; if (!st.signed_in) return "Logg inn for å ta bilder";

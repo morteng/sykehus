@@ -71,7 +71,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
     const w = work(), m = MONTH[new Date().getUTCMonth()], est = priceOf(sizeNow()), room = st.left_usd >= est; drawCam();
     say.textContent = !st.on ? "Gjengi er ikke slått på her ennå."
       : !st.signed_in ? `Logg inn for å gjengi: hvert bilde koster penger (omtrent ${usd(est)}).`
-      : !w.versjon && !w.utkast ? "Gjør en endring eller åpne et forslag først: bildene lagres i forslaget."
+      : !w.versjon && !w.utkast ? "Gjør en endring eller åpne et prosjekt først: bildene lagres i prosjektet."
       : `Rammen er bildet: det du ser i den blir sendt. Brukt i ${m}: ${usd(st.month_usd)} av ${usd(st.cap_usd)}.${room ? "" : " Grensen er nådd denne måneden."}`;
     const reason = why(), label = reason || `Ta bildet · ca. ${usd(est)}`;   // a grey shutter says why on itself, in the view and in the drawer
     for (const b of [go, shotBtn]) { b.disabled = !!reason; b.setAttribute("aria-label", reason ? `Ta bildet: ${reason}` : label); }

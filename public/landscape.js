@@ -201,7 +201,7 @@ function waterOf(e, surface) {
 export const GROUND_ID = /^(flate|sti|tre|terreng)-\d+$/;   // tre: a planting, the trees one change planted; terreng: a planed area (U3616)
 export function checkGroundEdit(site, e, str) {
   const id = String(e.kind === "demolish" ? e.building ?? "" : e.id ?? "").trim(), all = [...(site.landscape || []), ...(site.plantings || []), ...(site.grading || [])], g = all.find(x => x.id === id);
-  if (!g) { const ls = all.map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; forslaget har ingen flater, stier eller trær ennå"}`); }
+  if (!g) { const ls = all.map(x => `«${x.id}»`).slice(0, 8); throw new Error(`Fant ikke «${id}» på bakken${ls.length ? ` (${ls.join(", ")})` : "; prosjektet har ingen flater, stier eller trær ennå"}`); }
   const why = e.why == null ? undefined : str(e.why, 300, "Begrunnelsen"), w_ = why ? { why } : {};
   if (e.kind === "demolish") return { kind: "demolish", building: id, ...w_ };
   const out = { kind: "reshape", id };

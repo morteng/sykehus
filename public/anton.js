@@ -45,7 +45,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
   if (!me.person) {
     /* not signed in (U3662): no pill, no chips, only «Logg inn» in the bar, with the code in a dialog. The Bygg, Anton and Gjengi tabs are not there at all (Morten
        2026-10-26 21:16Z «should not see greyed out anton, bygg or gjengi tabs … keep it as simple and anonymous»; this replaces the greyed tabs of U3677); a page
-       that opens on one of them falls back to Forslag, the one tab left */
+       that opens on one of them falls back to Prosjekter, the one tab left */
     unmark(); document.body.classList.add("anon");
     for (const id of ["tab-photo", "tab-selected", "tab-chat"]) $(id).hidden = true;
     $("dock").style.setProperty("--tabs", "1");
@@ -133,10 +133,10 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     /* while a turn runs (U3564, Morten 22:01Z «the red stop button … should animate to indicate anton is working.
        waits can get a bit worryingly long for an unexperienced user»): the stop button breathes (sykehus.css), and the
        line under the text says the step in plain words, from the tool events, and after 10 s how long it has been */
-    const STEP = { look: "Ser på bygget", try_change: "Prøver endringen", undo_change: "Angrer en endring", show_building: "Viser deg bygget", show_draft: "Ser på forslaget",
+    const STEP = { look: "Ser på bygget", try_change: "Prøver endringen", undo_change: "Angrer en endring", show_building: "Viser deg bygget", show_draft: "Ser på prosjektet",
       about_site: "Leser om tomta", about_wing: "Leser om fløyen", storeys: "Leser etasjene", floor_plan: "Leser plantegningen", openings: "Ser på fasadetegningen",
-      search_documents: "Leter i dokumentene", read_document: "Leser et dokument", list_documents: "Leter i dokumentene", list_versions: "Ser på forslagene",
-      new_version: "Lagrer forslaget", rename_version: "Lagrer navnet", set_sharing: "Endrer delingen", search_plants: "Leter etter planter" };
+      search_documents: "Leter i dokumentene", read_document: "Leser et dokument", list_documents: "Leter i dokumentene", list_versions: "Ser på prosjektene",
+      new_version: "Lagrer prosjektet", rename_version: "Lagrer navnet", set_sharing: "Endrer delingen", search_plants: "Leter etter planter" };
     let step = "", since = 0, ticking = null, turnOf = null;
     const stepOf = key => STEP[String(key || "").split(/[.:/]/).pop()] || "Arbeider";
     function state() {
@@ -169,7 +169,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
     input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
-    /* «Nytt forslag» (nytt-forslag.js) hands over its first turn here: the text goes in as if typed, then is sent */
+    /* «Nytt prosjekt» (nytt-forslag.js) hands over its first turn here: the text goes in as if typed, then is sent */
     document.addEventListener("sykehus:anton-say", e => { if (e.detail?.text) sendIt({ text: e.detail.text, ...(e.detail.point ? { point: e.detail.point } : {}) }); });
     form.onsubmit = e => { e.preventDefault(); if (running && !input.value.trim()) json("api/anton/stopp"); else sendIt(); };
     async function sendIt(drawn) {
@@ -193,7 +193,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     /* a question that needs a yes: in the log, and over the pill while the chat is shut; either answers both */
     function card(a) {
       const make = () => { const li = document.createElement("li"); li.className = "talk-item card";
-        li.innerHTML = `<div class="talk-body"><b>${esc(a.summary || "Anton vil gjøre noe som trenger ditt ja.")}</b></div><div class="cnote">Du kan angre i «Forslag».</div><div class="asst-row"><button type="button" class="ckeep">Ikke nå</button><button type="button" class="go">Ja, gjør det</button></div>`; return li; };
+        li.innerHTML = `<div class="talk-body"><b>${esc(a.summary || "Anton vil gjøre noe som trenger ditt ja.")}</b></div><div class="cnote">Du kan angre i «Prosjekter».</div><div class="asst-row"><button type="button" class="ckeep">Ikke nå</button><button type="button" class="go">Ja, gjør det</button></div>`; return li; };
       const copies = [make(), make()]; log.append(copies[0]); $("reply-cards").replaceChildren(copies[1]); empty(); toEnd();
       asking++; placePill(); showReply(); if (!chatOpen()) copies[1].querySelector(".ckeep").focus({ preventScroll: true });
       const answer = async d => {

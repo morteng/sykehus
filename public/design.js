@@ -143,7 +143,7 @@ export function checkFit(site, wing = null) {
     if (a.on) { const r = roofSay(site, a); if (r && r.overhang_m > 0.05) overhangs.push({ part: a.name, roof: r.on, overhang_m: r.overhang_m, outside_m2: r.outside_m2, allowed_m: a.overhang_m ?? 0, over: r.over, judged_on: r.judged_on ?? null, say: overSay(r, r.on) }); } });
   const fit = fitOf(site).filter(f => vols.some(v => v.id === f.id)), off_lot = fit.filter(f => f.on_lot && f.on_lot !== "helt på tomta").map(f => ({ part: f.name, says: f.on_lot })), overlaps = fit.filter(f => !vols.find(v => v.id === f.id).on).flatMap(f => f.overlaps.map(o => ({ part: f.name, with: o.with, m2: o.m2 })));
   const said = [...collisions.map(c => `«${c.a}» og «${c.b}» overlapper ${com(c.m2)} m² på taket til ${c.roof}${c.kept ? " (lagt slik med vilje)" : ""}`), ...overhangs.map(o => `«${o.part}» ${o.say}`), ...off_lot.map(o => `«${o.part}» står ikke helt på tomta (${o.says})`), ...overlaps.map(o => `«${o.part}» overlapper ${o.with} med ${o.m2} m²`)];
-  return { collisions, overhangs, off_lot, overlaps, ok: !said.length, say: said.length ? said.join("; ") + "." : vols.length ? `Ingen kollisjoner${wing ? ` på taket til ${wing.name}` : ""}: ${vols.length} ${vols.length === 1 ? "del" : "deler"} sjekket.` : "Forslaget har ingen nye deler å sjekke." };
+  return { collisions, overhangs, off_lot, overlaps, ok: !said.length, say: said.length ? said.join("; ") + "." : vols.length ? `Ingen kollisjoner${wing ? ` på taket til ${wing.name}` : ""}: ${vols.length} ${vols.length === 1 ? "del" : "deler"} sjekket.` : "Prosjektet har ingen nye deler å sjekke." };
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
@@ -195,7 +195,7 @@ export function checkDesign(site, e, str) {
       const id = String(e.id ?? ""), a = (site.added || []).find(x => x.id === id && x.kind === "volume");
       if (GROUND_ID.test(id)) return checkGroundEdit(site, e, str);
       /* teaches what reshape is for (21:22Z: «reshape» id «basseng» was meant as a new pool) */
-      if (!a) { const n = (site.added || []).filter(x => x.kind === "volume"); throw new Error(`Fant ikke det nye bygget «${e.id}». reshape endrer et nytt bygg som alt står i forslaget${n.length ? ` (${n.slice(0, 8).map(x => `«${x.id}»`).join(", ")})` : "; forslaget har ingen nye bygg ennå"}. Et nytt bygg er kind volume; et basseng, en plass eller en plen er kind surface (surface: "water" for vann) med ring.`); }
+      if (!a) { const n = (site.added || []).filter(x => x.kind === "volume"); throw new Error(`Fant ikke det nye bygget «${e.id}». reshape endrer et nytt bygg som alt står i prosjektet${n.length ? ` (${n.slice(0, 8).map(x => `«${x.id}»`).join(", ")})` : "; prosjektet har ingen nye bygg ennå"}. Et nytt bygg er kind volume; et basseng, en plass eller en plen er kind surface (surface: "water" for vann) med ring.`); }
       const out = facts(e, str, { kind: "reshape", id });
       if (e.name != null) out.name = str(String(e.name), 80, "Navnet");
       if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");

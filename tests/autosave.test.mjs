@@ -67,7 +67,7 @@ test("«Ny kopi» is the next one worked on; «Del» opens it to the link, signe
   assert.equal((await fetch(`${O}/api/versjon/${c.j.version}?nokkel=${k}`)).status, 404);
 });
 
-test("«Nytt forslag» starts empty from the before and is the one worked on; its title is set in place", async () => {
+test("«Nytt prosjekt» starts empty from the before and is the one worked on; its title is set in place", async () => {
   const f = await post({ fresh: true }, lars); assert.equal(f.status, 200); assert.equal(f.j.changes, 0);
   const d = await post(riv("Østfløy"), lars); assert.equal(d.j.version, f.j.version);
   assert.equal((await post({ rename: f.j.version, title: "Drivhus mot sør" })).status, 400);   // only its owner

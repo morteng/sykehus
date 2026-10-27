@@ -30,9 +30,9 @@ test("the person's marks on the server count on another device", () => {
 test("the visitor list is short and ends on the way in; the full list holds every step", () => {
   const v = listFor("gjest", h), f = listFor("full", h);
   assert.ok(v.length >= 4 && v.length <= 6, `${v.length}`); assert.equal(v.at(-1).title, "Logg inn");
-  assert.ok(!v.some(s => /Anton|Tegn|Forslaget/.test(s.title)), "nothing that needs a login");
+  assert.ok(!v.some(s => /Anton|Tegn|Prosjektet/.test(s.title)), "nothing that needs a login");
   assert.equal(f.length, steps(h).length); assert.ok(f.length > v.length + 8);
-  for (const t of ["Slett og angre med tastene", "Sola", "Gjengi", "Bredden på panelet", "Slett lagrede forslag", "Mal", "Samtalen"]) assert.ok(f.some(s => s.title === t), t);
+  for (const t of ["Slett og angre med tastene", "Sola", "Gjengi", "Bredden på panelet", "Slett lagrede prosjekter", "Mal", "Samtalen"]) assert.ok(f.some(s => s.title === t), t);
 });
 
 test("the «new since» list is the intro, the steps newer than the version seen, and the end", () => {

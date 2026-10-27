@@ -35,7 +35,7 @@ const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle
    the page does first (the view home, a building picked, the panel's tab) */
 export function steps(h) {
   const all = [
-    { title: "Velkommen til Sykehustomta", text: "Her er Gamle Drammen sykehus slik det står i dag, bygget opp fra arkivets tegninger, laserdata og kart. Du kan se på alt, prøve endringer og lage ditt eget forslag til hvordan tomta kan bli. Omvisningen tar et par minutter.", before: () => h.home() },
+    { title: "Velkommen til Sykehustomta", text: "Her er Gamle Drammen sykehus slik det står i dag, bygget opp fra arkivets tegninger, laserdata og kart. Du kan se på alt, prøve endringer og lage ditt eget prosjekt til hvordan tomta kan bli. Omvisningen tar et par minutter.", before: () => h.home() },
     { el: "#view", title: "Modellen", text: "Dra med fingeren eller musa for å snu modellen. Rull, eller knip med to fingre, for å gå nærmere. Trykk på et bygg for å velge det." },
     { el: () => document.getElementById("m3d")?.parentElement, title: "Tre måter å se på", text: "3D er perspektiv fra luften. Gateplan er slik en som står på bakken ser det, med øyet 1,7 m over terrenget: dra for å se deg rundt, gå med W A S D eller piltastene, eller dra den lille mannen ved zoomknappene dit du vil stå. Plan er rett ovenfra, nord opp, med målestokk, og kan skrives ut." },
     { el: "#flr", title: "Etasjene", text: "Velg en etasje her, eller gå opp og ned med pilene. Da kuttes alle fløyene 1,2 m over gulvet, som på en plantegning, med vegger, rom og arealer der tegningene finnes. «Hele anlegget» tar deg tilbake." },
@@ -47,10 +47,10 @@ export function steps(h) {
     { el: () => visible(document.getElementById("talk-form")) ? document.getElementById("talk-form") : document.getElementById("tab-chat"), title: "Anton", text: "Anton er en assistent som kjenner tomta, tegningene og planene. Skriv eller snakk som til en kollega: «Riv Østfløy og sett et drivhus mot sør», «Hva sier reguleringsplanen om høyder?», «Vis meg fasaden mot Dronninggata». For å snakke med Anton må du være logget inn.", before: () => h.unpick() },
     { since: 2, el: () => document.getElementById("tab-chat"), title: "Samtalen", text: "Når du har skrevet med Anton, står samtalen i «Anton»-fanen. Over feltet står bare en linje med det Anton gjør nå, og så første setning av svaret; «Les mer» åpner fanen. «Ny samtale» starter en ny samtale. Anton kan slå opp i de gamle når du viser til dem." },
     { el: "#talkTegn", title: "Tegn", text: "Tegn med fingeren eller pennen rett på det du ser, en skisse eller en strek der noe skal stå, og send den til Anton, som gjør den om til en endring." },
-    { el: () => h.phone() ? document.getElementById("tab-changes") : document.getElementById("p-changes"), title: "Forslaget ditt", text: "Alt du endrer lagres med en gang i ditt eget forslag. Her ser du endringene, og kan ta dem ut igjen én for én. Ingen andre ser forslaget før du trykker «Del», og «Gjør privat» tar det tilbake.", before: () => h.tab("changes") },
+    { el: () => h.phone() ? document.getElementById("tab-changes") : document.getElementById("p-changes"), title: "Prosjektet ditt", text: "Alt du endrer lagres med en gang i ditt eget prosjekt. Her ser du endringene, og kan ta dem ut igjen én for én. Ingen andre ser prosjektet før du trykker «Del», og «Gjør privat» tar det tilbake.", before: () => h.tab("changes") },
     { since: 2, el: () => h.phone() ? null : document.querySelector("#right .g-split"), before: () => h.tab("changes"), title: "Bredden på panelet", text: "Dra i kanten til venstre for panelet for å gjøre det bredere eller smalere. Dobbeltklikk setter det tilbake." },
-    { since: 2, el: "#verSel", before: () => h.tab("changes"), title: "Slett lagrede forslag", text: "Trykk «Velg», merk forslagene du ikke trenger, og trykk «Slett valgte». De ligger en stund i papirkurven." },
-    { el: "#viewsBtn", title: "Visninger og bildeserie", text: "Lagre det du ser som en visning du kan gå tilbake til. Anton kan også sette sammen en bildeserie som forklarer forslaget, med før og etter, som du kan vise eller skrive ut." },
+    { since: 2, el: "#verSel", before: () => h.tab("changes"), title: "Slett lagrede prosjekter", text: "Trykk «Velg», merk prosjektene du ikke trenger, og trykk «Slett valgte». De ligger en stund i papirkurven." },
+    { el: "#viewsBtn", title: "Visninger og bildeserie", text: "Lagre det du ser som en visning du kan gå tilbake til. Anton kan også sette sammen en bildeserie som forklarer prosjektet, med før og etter, som du kan vise eller skrive ut." },
     { since: 2, el: "#mmal", title: "Mal", text: "Mal gress, belegg, bed eller grus på bakken: trykk langs der penselen skal gå. Angre tar det bort igjen." },
     { since: 2, el: "#view", title: "Slett og angre med tastene", text: "Trykk Delete eller Backspace for å fjerne det du har valgt. Cmd-Z (Ctrl-Z) tar tilbake, og Shift-Cmd-Z (Ctrl-Y) gjør det igjen." },
     { since: 2, el: "#mfb", title: "Tilbakemelding", text: "Noe som ikke virker, en ide eller et spørsmål? Send det her, så ser Morten det. Du kan ta med et bilde av siden, og se hva du har sendt før." },
@@ -64,7 +64,7 @@ export function visitorSteps(h) {
   return [
     { ...by("Velkommen til Sykehustomta"), text: "Her er Gamle Drammen sykehus slik det står i dag, bygget opp fra arkivets tegninger, laserdata og kart. Du kan se på alt. Omvisningen tar et minutt." },
     by("Modellen"), by("Tre måter å se på"), by("Etasjene"),
-    { el: () => document.getElementById("meBtn") || document.getElementById("me"), title: "Logg inn", text: "Logg inn med koden du har fått av Morten, så kan du lage ditt eget forslag til hvordan tomta kan bli, og få hjelp til det." },
+    { el: () => document.getElementById("meBtn") || document.getElementById("me"), title: "Logg inn", text: "Logg inn med koden du har fått av Morten, så kan du lage ditt eget prosjekt til hvordan tomta kan bli, og få hjelp til det." },
   ];
 }
 /* the list for a kind: «nytt» is the intro and the steps newer than the version seen, then the end */

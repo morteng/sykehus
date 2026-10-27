@@ -1,7 +1,7 @@
 /* The web page: the site in 3D or in plan, one floor at a time. Everything here is open to look at and try.
    The layout is Fab's (the Anton-first redlines, 2026-10-25): the view, the storey strip at its left edge, the view's
-   tools over it, Anton's pill at the bottom, and the panel on the right with «Bygget», «Anton», «Forslag» and
-   «Forslag», «Bygg» and «Anton» (panel.js). */
+   tools over it, Anton's pill at the bottom, and the panel on the right with «Bygget», «Anton», «Prosjekter» and
+   «Prosjekter», «Bygg» and «Anton» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { applyEdits } from "./edits.js";
@@ -92,7 +92,7 @@ const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-/* the panel; a version or a draft opens on «Forslag», where it is told what it is; else the tab last open, Anton first */
+/* the panel; a version or a draft opens on «Prosjekter», where it is told what it is; else the tab last open, Anton first */
 const panel = createPanel({ start: draft ? "changes" : null, onChange: t => dispatchEvent(new CustomEvent("sykehus:panel", { detail: t })) });
 const toCard = () => panel.show("selected", { quiet: true });   // a tap on the model or the strip shows its card, the sheet stays where it is
 
@@ -402,8 +402,8 @@ function sheetStrip(w) {
     `<a href="${esc(d.url)}#page=${d.page || 1}" target="_blank" rel="noopener" title="${esc(d.title)}${d.year ? " (" + esc(d.year) + ")" : ""}"><img src="${esc(thumbs[key])}" alt="" loading="lazy">${esc(d.title)}${d.year ? ", " + esc(d.year) : ""}</a>`).join("")}</div>`;
 }
 
-/* «Forslag»: the version or draft shown, as the tab's top card (Morten 20:46Z «polish needed»): its title, edited in
-   place when it is one's own, one status line, «Del» first, «Nytt forslag» from the before, «Ny kopi» of this one;
+/* «Prosjekter»: the version or draft shown, as the tab's top card (Morten 20:46Z «polish needed»): its title, edited in
+   place when it is one's own, one status line, «Del» first, «Nytt prosjekt» from the before, «Ny kopi» of this one;
    then the changes, one line each by the building's plain name, grouped by kind with a count and folded past five,
    each with a small ↺ to take it out; one «Angre siste» over them */
 const SHARED = { privat: "bare du ser den", lenke: "delt med lenke", offentlig: "offentlig" };
@@ -460,7 +460,7 @@ function bindDetails(R) {
   }
 }
 /* the open one's «Detaljer», folded, under its card in the list: its name to change, the changes with «Ta ut …», and «Se før» (the only home of these since the tab became a plain list) */
-const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på forslaget" title="Trykk for å gi det et annet navn">` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
+const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
 let detailsOpen = false;
 const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "offentlig" };
 let verRows = [], selecting = false; const picked = new Set();
@@ -473,7 +473,7 @@ function drawDraft() {
   if (draft.version && !draft.missing) { $("draftRow").innerHTML = ""; drawList(); return; }   // a saved version is its card in the list below (Morten 2026-10-27)
   if (draft.missing) { $("draftRow").innerHTML = `<div class="draftrow dr"><b>${versionId ? "Versjonen finnes ikke, eller er privat." : "Utkastet finnes ikke lenger"}</b><span class="dr-s">${versionId ? "" : "Utkast varer et døgn. "}Du ser modellen slik den er.</span></div>`; drawList(); return; }
   const status = ownDraft() ? `lagret på denne maskinen et døgn${me.person ? "" : " · logg inn for å beholde det"}` : "delt med lenke · det du endrer her, blir ditt eget";
-  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button><button type="button" data-ny title="Et nytt, tomt forslag fra før">Nytt forslag</button>` : "";
+  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button><button type="button" data-ny title="Et nytt, tomt prosjekt fra før">Nytt prosjekt</button>` : "";
   $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h"><b class="dr-t">Utkast</b><span class="dr-s">${status}</span></div>
     <div class="dr-acts">${acts}<a href="./?for">Se før</a></div>${detailHtml(may)}</div>`;
   const R = $("draftRow"); bindDetails(R);
@@ -483,15 +483,15 @@ function drawDraft() {
 }
 /* a new copy or proposal: its title ready to be typed over, in the card's «Detaljer» */
 const nameIt = () => { detailsOpen = true; drawList(); const t = $("drTitle"); if (t && t.offsetParent) { t.focus(); t.select(); } };
-/* «Nytt forslag» (U3667): the dialog (nytt-forslag.js). Signed in, it makes the version (a new empty one from the before, or a copy of
+/* «Nytt prosjekt» (U3667): the dialog (nytt-forslag.js). Signed in, it makes the version (a new empty one from the before, or a copy of
    one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
 let nyttForslag = null;
 function fresh() {
   nyttForslag ||= import("./nytt-forslag.js?v=20261027d").then(({ startNew }) => startNew({
-    signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et forslag."); $("meBtn")?.click(); },
+    signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et prosjekt."); $("meBtn")?.click(); },
     mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
     fx: b => fxBox("leaves", b),
-    create: async o => { const j = await change({ fresh: !o.copy, ...o }); if (j.error) return `Fikk ikke laget et nytt forslag: ${j.error}`; await show(j); return null; },
+    create: async o => { const j = await change({ fresh: !o.copy, ...o }); if (j.error) return `Fikk ikke laget et nytt prosjekt: ${j.error}`; await show(j); return null; },
     say: text => { $("tab-chat")?.click(); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text } })); },
   }));
   nyttForslag.then(n => n.open());
@@ -517,7 +517,7 @@ function short(e) {
   return describe({ ...e, why: null }) + why;
 }
 /* the label over the view, top left (Morten 20:47Z «current version, metadata top left when viewing one?»): the open
-   version's title and one line; a tap opens «Forslag» */
+   version's title and one line; a tap opens «Prosjekter» */
 function drawWhere() {
   const el = $("where"); if (!el) return;
   const before = !draft || draft.missing, n = draft?.edits?.length || 0, ch = `${n} ${n === 1 ? "endring" : "endringer"}`;
@@ -525,7 +525,7 @@ function drawWhere() {
     : `<b>${esc(draft.version ? draft.title : "Utkast")}</b><span>${mine() ? `din · ${ch} · lagret ${clock(draft.updated)}`
       : draft.version ? `${esc(draft.owner)} · ${draft.sharing === "lenke" ? "delt med lenke" : SHARED[draft.sharing] || ""} · ${ch}`
       : ownDraft() ? `utkast · ${ch} · på denne maskinen` : `delt med lenke · ${ch}`}</span>`;
-  el.title = before ? "Modellen slik den er. Trykk for forslagene." : "Trykk for å se endringene";
+  el.title = before ? "Modellen slik den er. Trykk for prosjektene." : "Trykk for å se endringene";
   el.hidden = false;
 }
 $("where").onclick = () => panel.reveal("changes");
@@ -605,7 +605,7 @@ async function printSeries() {
     pages.push({ w, i, pic, names: viewer.labels.cloneNode(true) });
   }
   $("sheet").innerHTML = pages.map(({ w, i }) => `<section class="spage"><div class="pic" style="width:${(W * k).toFixed(1)}px;height:${(H * k).toFixed(1)}px"><div style="width:${W}px;height:${H}px;transform:scale(${k.toFixed(4)});transform-origin:0 0"></div></div>
-    <div class="block"><div style="flex:1"><h1>${esc(`${i + 1}/${l.length} · ${w.name.replace(/^\d+ /, "")}`)}</h1><p>${esc(w.state?.caption || "")}</p><p>Gamle Drammen sykehus, Dronninggata 28 · ${esc(title)} · ${w.state?.era === "før" ? "slik det står i dag" : "forslaget"} · utskrevet ${new Date().toLocaleDateString("nb-NO")} fra sykehus.gulden.no</p></div></div>
+    <div class="block"><div style="flex:1"><h1>${esc(`${i + 1}/${l.length} · ${w.name.replace(/^\d+ /, "")}`)}</h1><p>${esc(w.state?.caption || "")}</p><p>Gamle Drammen sykehus, Dronninggata 28 · ${esc(title)} · ${w.state?.era === "før" ? "slik det står i dag" : "prosjektet"} · utskrevet ${new Date().toLocaleDateString("nb-NO")} fra sykehus.gulden.no</p></div></div>
     <div class="src">Tegnet fra arkivets tegninger, OpenStreetMap og Kartverkets laser; ikke målt på stedet. ${w.state?.cam === "eye" ? "Øyehøyde 1,7 m over terrenget." : w.state?.mode === "plan" ? "Plan, nord opp, uten målestokk." : "Perspektiv, uten målestokk."}</div></section>`).join("");
   $("sheet").querySelectorAll(".pic > div").forEach((d, j) => { const { pic, names } = pages[j]; pic.style.cssText = "position:absolute;inset:0;width:100%;height:100%"; d.append(pic, names); });
   print();
@@ -636,7 +636,7 @@ async function share(id) {
 }
 async function makePrivate(id) {   // «Del» undone: the link stops working
   const j = await change({ unshare: id }); if (j.error) return toast(`Fikk ikke gjort det privat: ${j.error}`);
-  if (id === versionId) draft.sharing = j.sharing; drawDraft(); listVersions(); toast("Forslaget er privat igjen. Lenken virker ikke lenger.", { label: "Angre", run: () => share(id) });
+  if (id === versionId) draft.sharing = j.sharing; drawDraft(); listVersions(); toast("Prosjektet er privat igjen. Lenken virker ikke lenger.", { label: "Angre", run: () => share(id) });
 }
 async function copyVersion(id) {
   const j = await change({ copy: id }); if (j.error) return toast(`Fikk ikke kopiert: ${j.error}`);
@@ -671,7 +671,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
 }
 /* «Riv» (U3542, on the card over the pick since U3554, float.js): tear wings or buildings down as a change in the
    after, never in the data: into the draft shown, or the signed-in person's own version shown, else a new draft (a
-   day, no login). The page then shows the draft from the same place, with «Angre» over the view; «Forslag» lists
+   day, no login). The page then shows the draft from the same place, with «Angre» over the view; «Prosjekter» lists
    every change with its own «Angre». What is torn down leaves nothing on the model. */
 /* where a change goes: one's own version shown, the draft shown, else one's own work (signed in, the server's; signed
    out, the draft this browser keeps, if it is still there), else a new draft */
@@ -685,7 +685,7 @@ async function change(body) {
   return r?.ok ? j : { error: j.error || why || "Endringen ble ikke tatt imot. Prøv igjen.", ...(j.stale ? { stale: true } : {}) };
 }
 /* the draft or version after a change, in place: its edits fetched, the model laid anew over the same objects, the
-   viewer told what is gone, the strip, «Forslag» and the IFC link redrawn, the address changed without a reload */
+   viewer told what is gone, the strip, «Prosjekter» and the IFC link redrawn, the address changed without a reload */
 async function show(j) {
   if (j.version) { versionId = j.version; nokkel = null; draftId = null; }
   else if (j.draft) { versionId = null; draftId = kept = j.draft; try { localStorage.setItem(KEPT, j.draft); } catch { } }
@@ -868,7 +868,7 @@ malPop.onsubmit = ev => ev.preventDefault();
 const impPop = $("impPop"), impSay = t => { $("impSay").hidden = !t; $("impSay").textContent = t || ""; };
 const impOpen = on => { impPop.hidden = !on; $("mimp").setAttribute("aria-expanded", String(on)); $("mimp").setAttribute("aria-pressed", String(on)); if (on) { impSay(""); $("impFile").focus(); } };
 $("mimp").onclick = () => {
-  if (!me.person) return toast("Logg inn for å hente inn filer: de lagres i ditt forslag.");
+  if (!me.person) return toast("Logg inn for å hente inn filer: de lagres i ditt prosjekt.");
   impOpen(impPop.hidden);
 };
 /* OBJ and STL say no unit: the person picks it before it goes */
@@ -957,30 +957,30 @@ const PLANT_NO = new Map(PLANTS.map(p => [p.id, p.no]));
 function showGround(g) {
   const plant = id => PLANT_NO.get(id) || id;
   if (g.kind === "trees") {   // a planting
-    card(esc(groundName(g)), "Trær i forslaget", rows([["Art", `${esc(g.name || g.species)}${g.latin && g.latin !== g.name ? ` (<i>${esc(g.latin)}</i>)` : ""}`], ["Antall", String(g.count)],
+    card(esc(groundName(g)), "Trær i prosjektet", rows([["Art", `${esc(g.name || g.species)}${g.latin && g.latin !== g.name ? ` (<i>${esc(g.latin)}</i>)` : ""}`], ["Antall", String(g.count)],
       ["Høyde", `${String(g.height).replace(".", ",")} m`], ["Krone", `${String(g.crown).replace(".", ",")} m bred`]]) +
-      (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Plantet i forslaget; størrelsen fra hagekart der arten er kjent.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
+      (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Plantet i prosjektet; størrelsen fra hagekart der arten er kjent.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
     return;
   }
-  card(esc(groundName(g)), g.kind === "path" ? "Sti i forslaget" : g.surface === "water" ? "Vann i forslaget" : "Flate i forslaget", rows([
+  card(esc(groundName(g)), g.kind === "path" ? "Sti i prosjektet" : g.surface === "water" ? "Vann i prosjektet" : "Flate i prosjektet", rows([
     [g.kind === "path" ? "Dekke" : "Materiale", esc(SURFACE_NO[g.surface] || g.surface)],
     ...(g.kind === "path" ? [["Lengde", `${String(g.length_m).replace(".", ",")} m`], ["Bredde", `${String(g.width).replace(".", ",")} m`]] : []),
     ["Areal", `${num(g.area_m2)} m²`], ...(g.plants?.length ? [["Planter", g.plants.map(p => esc(plant(p))).join(", ")]] : [])]) +
-    (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Lagt i forslaget; ikke i IFC-fila.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
+    (g.why ? `<p class="note">${esc(g.why)}</p>` : "") + `<p class="src">Lagt i prosjektet; ikke i IFC-fila.</p>`, { kind: "ground", id: g.id, label: groundName(g) });
 }
 /* a road section's card in «Bygget» (U3543): what it is, its size here, where it comes from; «Fjern» is on the acts */
 function showRoad(r) {
   const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   card(esc(roadName(r)), "Vei rundt tomta", rows([["Slags", esc(r.what)], ...(r.width ? [["Bredde", `${m1(r.width)} m`]] : []), ...(r.length_m ? [["Lengde her", `${m1(r.length_m)} m`]] : [])]) +
-    `<p class="src">${r.src === "nvdb" ? "Kjørebanen målt av Statens vegvesen (NVDB)" : "Fra OpenStreetMap"}, hentet hver dag. Fjernes den, blir den borte i forslaget også når gatene hentes på nytt.</p>`, { kind: "road", id: r.id, label: roadName(r) });
+    `<p class="src">${r.src === "nvdb" ? "Kjørebanen målt av Statens vegvesen (NVDB)" : "Fra OpenStreetMap"}, hentet hver dag. Fjernes den, blir den borte i prosjektet også når gatene hentes på nytt.</p>`, { kind: "road", id: r.id, label: roadName(r) });
 }
 /* a new building's card in «Bygget» */
 function showNew(a) {
   const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   /* a plan brought in (U3571 S3: DXF, DWG): flat on the ground, its size and its layers, no height or digging */
-  if (a.bim?.plan) return card(esc(a.name), "Tegning i forslaget", rows([["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Lag", String(Object.values(a.bim.classes || {}).reduce((x, y) => x + y, 0))], ["Ligger på", `kote ${kote(a.base_kote)}`]]) +
+  if (a.bim?.plan) return card(esc(a.name), "Tegning i prosjektet", rows([["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Lag", String(Object.values(a.bim.classes || {}).reduce((x, y) => x + y, 0))], ["Ligger på", `kote ${kote(a.base_kote)}`]]) +
     (a.note ? `<p class="note">${esc(a.note)}</p>` : "") + `<p class="src">Innhentet tegning «${esc(a.bim.filename || "plan.dxf")}», lagt flatt over bakken. Kilde: ${/^https?:\/\//.test(a.bim.source || "") ? `<a href="${esc(a.bim.source)}" target="_blank" rel="noopener noreferrer">${esc(a.bim.source.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60))}</a>` : esc(a.bim.source || "ikke oppgitt")}. Lisens: ${esc(a.bim.licence || "ukjent")}.</p>`, { kind: "new", id: a.id, label: a.name });
-  card(esc(a.name), a.bim?.file ? "Innhentet i forslaget" : "Nytt bygg i forslaget", rows([...(a.use ? [["Bruk", esc(a.use)]] : []), ...(a.storeys ? [["Etasjer", String(a.storeys)]] : []), ...(a.built ? [["Bygget", esc(a.built)]] : []),
+  card(esc(a.name), a.bim?.file ? "Innhentet i prosjektet" : "Nytt bygg i prosjektet", rows([...(a.use ? [["Bruk", esc(a.use)]] : []), ...(a.storeys ? [["Etasjer", String(a.storeys)]] : []), ...(a.built ? [["Bygget", esc(a.built)]] : []),
     ["Mål", `${m1(L)} × ${m1(a.width)} m`], ["Grunnflate", `${num(a.footprint_m2)} m²`], ["Høyde", `${m1(a.top_kote - a.base_kote)} m`], ["Topp", `kote ${kote(a.top_kote)}`], ["Terreng", `kote ${kote(a.base_kote)}`],
     ...(a.ground ? [["Graving", `${num(a.ground.cut_m3)} m³ ut, ${num(a.ground.fill_m3)} m³ fylling`]] : [])]) +
     (a.ground ? `<p class="note">${esc(groundText(a.ground))}</p>` : "") +
@@ -991,7 +991,7 @@ function showNew(a) {
       : a.shape === "bim" && a.bim?.sha
       /* a construction (U3570): Anton's script made it; its own IFC (an IfcBuilding with its storey and parts) */
       ? `<p class="src">Bygget av Antons skript (${Object.entries(a.bim.classes || {}).map(([k, n]) => `${n} ${k.replace(/^Ifc/, "")}`).join(", ")}).</p>`
-      : `<p class="src">Satt opp i forslaget; med i IFC-fila som et eget bygg.</p>`), { kind: "new", id: a.id, label: a.name });
+      : `<p class="src">Satt opp i prosjektet; med i IFC-fila som et eget bygg.</p>`), { kind: "new", id: a.id, label: a.name });
 }
 /* an undo names the change it takes out (expect), so a page that is behind (another tab, Anton) takes out nothing it
    did not show (pm 22:08Z: an undo in a second tab took out Morten's three newest changes); then the page is shown
@@ -1020,12 +1020,12 @@ function ifcLink() {
 ifcLink();
 
 /* the versions: the public ones, and your own with how they are shared; Anton's saves call it again */
-/* «Forslag»: one list of the suggestions the person may see (api/versjoner: their own, then the public ones of real people), a card each with its picture,
+/* «Prosjekter»: one list of the suggestions the person may see (api/versjoner: their own, then the public ones of real people), a card each with its picture,
    name, owner, how it is shared and when it was saved. The open one is marked; its «Detaljer» are folded under it (Morten 2026-10-27) */
 function versionCard(v) {
   const open = v.version === versionId, sel = selecting && v.mine;
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
-  const acts = v.mine && !selecting ? `<div class="fc-acts">${v.sharing === "offentlig" ? "" : act("vshare", v.sharing === "lenke" ? "Kopier lenken" : "Del: kopierer en lenke", IC.link)}${v.sharing === "privat" ? "" : act("vpriv", "Gjør privat: lenken virker ikke lenger", IC.lock)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett forslaget", IC.bin)}</div>` : "";
+  const acts = v.mine && !selecting ? `<div class="fc-acts">${v.sharing === "offentlig" ? "" : act("vshare", v.sharing === "lenke" ? "Kopier lenken" : "Del: kopierer en lenke", IC.link)}${v.sharing === "privat" ? "" : act("vpriv", "Gjør privat: lenken virker ikke lenger", IC.lock)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
     + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
     + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts}</div>`
@@ -1036,7 +1036,7 @@ function drawList() {
   if (draft?.version && !draft.missing && versionId && !rows.some(v => v.version === versionId)) rows.unshift({ version: versionId, title: draft.title, owner: draft.owner, updated: draft.updated, sharing: draft.sharing, mine: mine(), ...(nokkel ? { nokkel } : {}) });
   $("verBar").hidden = !rows.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
   const keep = $("verList").querySelector(".fc-det")?.open; if (keep != null) detailsOpen = keep;
-  $("verList").innerHTML = rows.length ? rows.map(versionCard).join("") : `<li class="sel-empty">Ingen forslag ennå.</li>`;
+  $("verList").innerHTML = rows.length ? rows.map(versionCard).join("") : `<li class="sel-empty">Ingen prosjekter ennå.</li>`;
   const R = $("verList").querySelector(".fc.open"); if (R && draft?.version) bindDetails(R);
 }
 function listVersions() {
@@ -1048,7 +1048,7 @@ function listVersions() {
 /* a picture that does not load: the quiet house icon stays */
 $("verList").addEventListener("error", e => { if (e.target.matches?.(".fc-img img")) e.target.remove(); }, true);
 $("verList").addEventListener("load", e => { if (e.target.matches?.(".fc-img img")) e.target.closest(".fc-img").classList.add("on"); }, true);
-/* U3654: «Slett forslaget» and «Velg» + «Slett valgte (n)»: asked in the page first (no window.confirm), then one «Angre» for all */
+/* U3654: «Slett prosjektet» and «Velg» + «Slett valgte (n)»: asked in the page first (no window.confirm), then one «Angre» for all */
 function drawBar() { $("verSel").setAttribute("aria-pressed", String(selecting)); $("verSel").textContent = selecting ? "Ferdig" : "Velg"; $("verDelSel").hidden = !selecting; $("verDelSel").textContent = `Slett valgte (${picked.size})`; $("verDelSel").disabled = !picked.size; }
 $("verSel").onclick = () => { selecting = !selecting; picked.clear(); closeAsk(); drawBar(); listVersions(); };
 $("verList").addEventListener("change", e => { const c = e.target.closest("input.vsel"); if (!c) return; c.checked ? picked.add(c.dataset.id) : picked.delete(c.dataset.id); drawBar(); });
@@ -1062,7 +1062,7 @@ let asking = [];
 const closeAsk = () => { asking = []; $("verConfirm").hidden = true; };
 function askDelete(rows) {
   if (!rows.length) return; asking = rows;
-  $("verAsk").textContent = rows.length === 1 ? `Slette «${rows[0].title}»? Du kan angre i 30 dager.` : `Slette ${rows.length} forslag? Du kan angre i 30 dager.`;
+  $("verAsk").textContent = rows.length === 1 ? `Slette «${rows[0].title}»? Du kan angre i 30 dager.` : `Slette ${rows.length} prosjekter? Du kan angre i 30 dager.`;
   $("verConfirm").hidden = false; $("verNo").focus(); $("verConfirm").scrollIntoView?.({ block: "nearest" });
 }
 $("verNo").onclick = closeAsk;
@@ -1070,7 +1070,7 @@ $("verYes").onclick = async () => {
   const rows = asking; closeAsk(); if (!rows.length || busy) return; busy = true;
   try {
     const ids = rows.map(r => r.version), j = await change({ delete: ids }); if (j.error) return toast(`Fikk ikke slettet: ${j.error}`);
-    const text = ids.length === 1 ? `«${rows[0].title}» er slettet.` : `${ids.length} forslag er slettet.`, was = versionId, wasOpen = ids.includes(was);
+    const text = ids.length === 1 ? `«${rows[0].title}» er slettet.` : `${ids.length} prosjekter er slettet.`, was = versionId, wasOpen = ids.includes(was);
     selecting = false; picked.clear();
     if (wasOpen && !j.now_open) { try { sessionStorage.setItem(UNDO, JSON.stringify({ ids, text, reopen: was })); } catch { } location.href = "./?for"; return; }   // the open one is gone and no other is left: back to «Før»
     if (wasOpen) await show({ version: j.now_open.version }); else listVersions();
@@ -1080,7 +1080,7 @@ $("verYes").onclick = async () => {
 async function restoreVersions(ids, reopen) {
   const j = await change({ undelete: ids }); if (j.error) return toast(`Fikk ikke hentet tilbake: ${j.error}`);
   if (reopen && j.restored.some(r => r.version === reopen)) { await show({ version: reopen }); } else listVersions();
-  toast(ids.length === 1 ? "Forslaget er hentet tilbake." : `${ids.length} forslag er hentet tilbake.`);
+  toast(ids.length === 1 ? "Prosjektet er hentet tilbake." : `${ids.length} prosjekter er hentet tilbake.`);
 }
 const UNDO = "sykehus-slettet";   // the toast to show after the page went back to «Før»
 try { const u = JSON.parse(sessionStorage.getItem(UNDO) || "null"); if (u) { sessionStorage.removeItem(UNDO); toast(u.text, { label: "Angre", run: () => restoreVersions(u.ids, u.reopen) }); } } catch { }
@@ -1149,7 +1149,7 @@ function showView(v) {
 /* back from «Logg inn» (login.js): said once */
 try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeItem("sykehus-innlogget"); toast("Du er logget inn."); } } catch { }
 /* «Tilbakemelding» (U3660): the bar's button and the kit's dialog (feedback.js) */
-import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Forslag" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
+import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Prosjekter" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
 import("./tour.js?v=20261027zm").then(({ createTour }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");

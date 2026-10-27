@@ -1,4 +1,4 @@
-/* «Nytt forslag» (U3667): the first turn Anton is given (against the real firstTurn), the name typed in the dialog reaching a real
+/* «Nytt prosjekt» (U3667): the first turn Anton is given (against the real firstTurn), the name typed in the dialog reaching a real
    version through /api/endring, and an empty version left a week going to the trash at the sweep. No model is called.
    node --test tests/new-proposal.test.mjs */
 import { test, after } from "node:test";
@@ -34,9 +34,9 @@ after(() => srv.kill());
 const lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
 const post = body => fetch(`http://localhost:${PORT}/api/endring`, { method: "POST", headers: { "content-type": "application/json", ...lars }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, j: await r.json() }));
 
-test("«Start»: the typed name becomes the version's title; empty keeps «Nytt forslag»; a copy takes the typed name too", async () => {
+test("«Start»: the typed name becomes the version's title; empty keeps «Nytt prosjekt»; a copy takes the typed name too", async () => {
   const a = await post({ fresh: true, title: "  Tun   sør " }); assert.equal(a.status, 200); assert.equal(a.j.title, "Tun sør");
-  const b = await post({ fresh: true }); assert.equal(b.j.title, "Nytt forslag");
+  const b = await post({ fresh: true }); assert.equal(b.j.title, "Nytt prosjekt");
   const c = await post({ fresh: false, copy: a.j.version, title: "Tun sør 2" }); assert.equal(c.status, 200); assert.equal(c.j.title, "Tun sør 2");
   const d = await post({ copy: a.j.version }); assert.equal(d.j.title, "Tun sør (kopi)");
 });

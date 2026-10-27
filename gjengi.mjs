@@ -155,7 +155,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
           if (pending.has(who)) return json(res, 429, { error: "Ett bilde om gangen: vent til det forrige er ferdig." });
           const body = await readJson(req, MAX_IN * 1.4 + 4096);
           const w = workOf({ versjon: body.versjon, nokkel: body.nokkel, utkast: body.utkast }, who);
-          if (!w) return json(res, 400, { error: "Åpne forslaget du vil gjengi, eller gjør en endring først." });
+          if (!w) return json(res, 400, { error: "Åpne prosjektet du vil gjengi, eller gjør en endring først." });
           const rec = await make({ ...body, work: w.key }, who);
           proposals.delete(who); return json(res, 200, { picture: pub(rec, who), ...(await state(who)) });
         }
@@ -171,7 +171,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
         }
         if (m[2] && req.method === "POST") {
           const [kind, wid] = String(r.work).split(":"), v = kind === "versjon" ? versions?.get(wid) : null;
-          if (!who || (r.by !== who && v?.owner !== who)) return json(res, 403, { error: "Bare den som laget bildet, eller eieren av forslaget, kan endre favorittene." });
+          if (!who || (r.by !== who && v?.owner !== who)) return json(res, 403, { error: "Bare den som laget bildet, eller eieren av prosjektet, kan endre favorittene." });
           const b = await readJson(req, 1024); r.fav = !!b.on; save();
           return json(res, 200, { picture: pub(r, who) });
         }

@@ -70,7 +70,7 @@ test("the person's edit in A mid-turn is kept, Anton's change goes on top and sa
   const s = r.structuredContent, es = versions.get(A.id).edits;
   assert.equal(es.length, mineBefore + 2); assert.ok(es.some(e => e.building === "Vestfløy"), "the person's edit stays"); assert.ok(es.some(e => e.building === "MR-bygget"));
   assert.deepEqual({ ...s.changed_meanwhile, say: undefined }, { added: 1, removed: 0, kinds: ["demolish"], say: undefined });
-  assert.match(s.changed_meanwhile.say, /Personen endret forslaget mens du jobbet: 1 ny endring \(demolish\)/);
+  assert.match(s.changed_meanwhile.say, /Personen endret prosjektet mens du jobbet: 1 ny endring \(demolish\)/);
   const again = await mcpCall("try_change", { edits: [riv("Sentralblokka")], include_screenshot: false });
   assert.equal(again.structuredContent.changed_meanwhile, undefined, "told once");
   await endTurn();

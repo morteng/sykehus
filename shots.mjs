@@ -65,7 +65,7 @@ export function planShots(after, before, places = []) {
   const kc = groundAt(after, c) ?? 15;
   const what = [...added.map(a => `${a.name} (nytt)`), ...goneWings.map(x => `${x.w.name} (revet)`)];
   const shots = [];
-  shots.push({ name: "Oversikt", caption: what.length ? `Hele forslaget fra luften, fra sørvest: ${what.join(", ")}.` : "Tomta fra luften, fra sørvest. Forslaget endrer ingen bygg ennå.",
+  shots.push({ name: "Oversikt", caption: what.length ? `Hele prosjektet fra luften, fra sørvest: ${what.join(", ")}.` : "Tomta fra luften, fra sørvest. Prosjektet endrer ingen bygg ennå.",
     state: { mode: "3d", x: r1(c[0]), y: r1(c[1]), kote: r1(kc + 6), yaw: yawFrom(225), pitch: r3(0.85), dist: r1(Math.min(900, Math.max(180, span * 2.1))), names: true } });
   for (const a of added.slice().sort((p, q) => (q.footprint_m2 || 0) - (p.footprint_m2 || 0)).slice(0, goneWings.length ? 1 : 2)) {
     const ac = [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2], H = (a.top_kote ?? a.base_kote + 6) - a.base_kote;

@@ -37,7 +37,7 @@ export function summarize(site, costs = { prices: [], bra_factor: null }) {
   const qty = { bta_m2, bra_m2: costs.bra_factor ? r1(bta_m2 * costs.bra_factor.value) : null, demolished_m3: demolished.gross_volume_m3, demolished_m2: demolished.footprint_m2, ground_m2, cut_m3: earthwork.cut_m3, fill_m3: earthwork.fill_m3 };
   const lines = costs.prices.filter(p => num(qty[p.quantity]) && qty[p.quantity] > 0).map(p => ({ item: p.item, quantity: qty[p.quantity], unit: p.unit, nok_low: Math.round(qty[p.quantity] * p.nok_low), nok_high: Math.round(qty[p.quantity] * p.nok_high), source: p.source, antatt: true }));
   const cost = lines.length ? { lines, nok_low: lines.reduce((s, l) => s + l.nok_low, 0), nok_high: lines.reduce((s, l) => s + l.nok_high, 0), antatt: true, note: "Antatt: hver pris har sin kilde, men er ikke et tilbud." }
-    : { lines: [], nok_low: null, nok_high: null, antatt: true, note: costs.prices.length ? "Ingen av prisene i prislisten passer mengdene i forslaget." : "Ingen priser er lagt inn ennå (rules/costs.json er tom): kostnad er ikke målt. Be Morten legge inn priser med kilde." };
+    : { lines: [], nok_low: null, nok_high: null, antatt: true, note: costs.prices.length ? "Ingen av prisene i prislisten passer mengdene i prosjektet." : "Ingen priser er lagt inn ennå (rules/costs.json er tom): kostnad er ikke målt. Be Morten legge inn priser med kilde." };
   return { new_volumes: volumes, totals: { bta_m2, bra_m2: qty.bra_m2 }, demolished, ground: { surfaces, total_m2: ground_m2 }, earthwork, cost,
     note: "Arealene er beregnet (etasjer x fotavtrykk), ikke målt på tegning." + (costs.bra_factor ? "" : " BRA er ikke målt: ingen kildebelagt BRA-faktor er lagt inn.") };
 }

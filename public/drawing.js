@@ -27,7 +27,7 @@ function resolveFocus(site, ref, wingOf) {
   if (v) return { kind: "part", v };
   const w = key && wingOf(site, ref);
   if (w) return { kind: "wing", w };
-  throw new Error(`Fant ikke «${ref ?? ""}»: en fløy eller et nytt bygg (id eller navn: ${(site.added || []).filter(x => x.kind === "volume").map(x => x.id).slice(0, 12).join(", ") || "forslaget har ingen ennå"})`);
+  throw new Error(`Fant ikke «${ref ?? ""}»: en fløy eller et nytt bygg (id eller navn: ${(site.added || []).filter(x => x.kind === "volume").map(x => x.id).slice(0, 12).join(", ") || "prosjektet har ingen ennå"})`);
 }
 
 /* scale: px per metre for what must fit in avail pixels; `scale` is the 1:N asked for. Refuses with the smallest 1:N that fits. */

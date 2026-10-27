@@ -308,7 +308,7 @@ function partOf(site, ref, wingOf) {
     return { kind: lvk != null ? "level" : "wing", id: w.id, name: lvk != null ? `kanten av taknivået kote ${com(lv.kote)} på ${w.name}` : w.name, corners: c, axis_bearing_deg: b.axis_bearing_deg, length_m: b.length_m, width_m: b.width_m, foot_kote: site.buildings.find(x => x.wing === w.id)?.base ?? null, top_kote: lv.kote,
       area_m2: lv.area_m2, stands_on: "bakken", roof_levels: R.levels.map(l => l.kote), pt: [m[0], m[1], lv.kote], outl: lvk != null ? levelOutline(site, w.id, lv.kote) : { pts: dens(R.outline), segs: [R.outline], inside: p => inRing(p, R.outline) } };
   }
-  throw new Error(`Fant ikke «${ref}»: en fløy, et nytt bygg (id eller navn: ${(site.added || []).filter(x => x.kind === "volume").map(x => x.id).slice(0, 12).join(", ") || "forslaget har ingen ennå"}) eller et punkt [øst, nord]`);
+  throw new Error(`Fant ikke «${ref}»: en fløy, et nytt bygg (id eller navn: ${(site.added || []).filter(x => x.kind === "volume").map(x => x.id).slice(0, 12).join(", ") || "prosjektet har ingen ennå"}) eller et punkt [øst, nord]`);
 }
 const show = ({ pt, vol, kote_from, outl, ...p }) => p;
 export function measureParts(site, a, b, wingOf) {

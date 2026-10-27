@@ -14,7 +14,7 @@ export const KINDS = [
 ];
 export const WORDS = {
   title: "Tilbakemelding", kindGroup: "Type", textLabel: "Tilbakemeldingen din", placeholder: "Skriv her.",
-  picture: "Ta med et bilde av siden", pictureAlt: "Bildet av siden", pictureRemove: "Fjern bildet", pictureNote: "Bildet viser det som står på skjermen din, også navn og forslag.",
+  picture: "Ta med et bilde av siden", pictureAlt: "Bildet av siden", pictureRemove: "Fjern bildet", pictureNote: "Bildet viser det som står på skjermen din, også navn og prosjekter.",
   send: "Send til Morten", sending: "Sender …", cancel: "Avbryt", close: "Lukk", left: n => `${n} tegn igjen`,
   pictureTooBig: "Bildet er for stort til å sendes. Send uten bildet.", pictureFailed: "Fikk ikke laget bildet. Send uten bildet.", tooLong: "For langt: høyst 4000 tegn.",
   notSent: "Fikk ikke sendt. Prøv igjen.", signedOut: "Logg inn for å sende tilbakemelding.",
@@ -39,7 +39,7 @@ export function startFeedback({ button, version, toast, page = () => ({}) }) {
     picture: undefined,
     context: () => {
       const p = page(), ctx = { page: location.pathname, ...(p.tab ? { tab: p.tab } : {}), ...(version() ? { version: String(version()) } : {}) };
-      return { ctx, line: "Sendes med: " + [p.tabName, version() ? "forslag " + version() : "uten forslag"].filter(Boolean).join(" · ") };
+      return { ctx, line: "Sendes med: " + [p.tabName, version() ? "prosjekt " + version() : "uten prosjekt"].filter(Boolean).join(" · ") };
     },
   });
 }

@@ -1,4 +1,4 @@
-/* U3786: «Nytt forslag» keeps the person's own wish with the version, and show_draft hands it back. node --test tests/version-wish.test.mjs */
+/* U3786: «Nytt prosjekt» keeps the person's own wish with the version, and show_draft hands it back. node --test tests/version-wish.test.mjs */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";

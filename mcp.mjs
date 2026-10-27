@@ -10,7 +10,7 @@ import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { nearWays } from "./public/paint-edit.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS, isPerson } from "./versions.mjs";
-import { createThumbs } from "./thumbs.mjs";   // the Forslag tab's card pictures
+import { createThumbs } from "./thumbs.mjs";   // the Prosjekter tab's card pictures
 import { encodeJpeg } from "./jpeg.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -190,7 +190,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Offentlig: står i lista på forsiden og åpner for alle." };
   const versionOut = (v, o, req) => { const mine = !!req && userOf(req) === v.owner, k = v.sharing === "offentlig" ? null : v.sharing === "lenke" ? v.key : mine ? v.own : null;
     return { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, changes: v.edits.length, updated: v.updated,
-      link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(v.wish?.text ? { wish: v.wish } : {}), ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };   // wish: what the person asked for when «Nytt forslag» made it (U3786)
+      link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(v.wish?.text ? { wish: v.wish } : {}), ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };   // wish: what the person asked for when «Nytt prosjekt» made it (U3786)
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all); a version only for who may see it */
   const editsOf = (id, req) => /^v.{8}$/.test(String(id)) ? versionOf(id, req).edits : draftOf(id).edits;
@@ -547,7 +547,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           ctx.seen = { id: v.id, edits: cur };
           if (!add.length && !del.length) return null;
           const kinds = [...new Set(add.map(k => JSON.parse(k).kind))];
-          return { added: add.length, removed: del.length, kinds, say: `Personen endret forslaget mens du jobbet: ${add.length} ny${add.length === 1 ? "" : "e"} endring${add.length === 1 ? "" : "er"}${kinds.length ? ` (${kinds.join(", ")})` : ""}${del.length ? ` og ${del.length} tatt bort` : ""}. Endringene dine ligger oppå dem; se over før du bygger videre.` }; })();
+          return { added: add.length, removed: del.length, kinds, say: `Personen endret prosjektet mens du jobbet: ${add.length} ny${add.length === 1 ? "" : "e"} endring${add.length === 1 ? "" : "er"}${kinds.length ? ` (${kinds.join(", ")})` : ""}${del.length ? ` og ${del.length} tatt bort` : ""}. Endringene dine ligger oppå dem; se over før du bygger videre.` }; })();
         if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: okOut, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: true }; }
         else { d.t = Date.now(); keepDraft(d);
           out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: okOut, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: false,
@@ -594,7 +594,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const vo = isV ? versionOut(versionOf(a.draft, req), o, req) : null;   // T11: the IFC link beside the page link (print is the page's «Skriv ut» on a saved view series: no link of its own)
         return { ...(vo ?? { draft: String(a.draft), link: draftUrl(o, a.draft) }), ifc: vo ? vo.link.replace("/?versjon=", "/api/ifc?versjon=") : `${o}/api/ifc?utkast=${a.draft}`, changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV, saved_views: viewsOut(viewsOf(a.draft, req)) }; } },
     { name: "make_shots", tgt: "draft", title: "Lag en bildeserie", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, pictures: { type: "boolean", description: "Leave out (true): each shot comes back as a small picture for you to look at" } }),
-      description: "Puts together 4–6 good shots of the version or draft that also explain it (U3527): the whole from the air, each new building at eye level from the nearest named street, a torn-down wing before and after from the same place, and the plan, each with a caption. They are saved as its views (in place of the last series), and the page plays them as «Bildeserie» under Visninger, with Før/Etter on the pairs. For «lag noen gode bilder», «sett sammen en presentasjon», «vis forslaget for noen». Say what each shot shows.",
+      description: "Puts together 4–6 good shots of the version or draft that also explain it (U3527): the whole from the air, each new building at eye level from the nearest named street, a torn-down wing before and after from the same place, and the plan, each with a caption. They are saved as its views (in place of the last series), and the page plays them as «Bildeserie» under Visninger, with Før/Etter on the pairs. For «lag noen gode bilder», «sett sammen en presentasjon», «vis prosjektet for noen». Say what each shot shows.",
       run: async (a, req) => {
         const { shots } = await makeShots(a.draft, req), o = originOf(req), isV = /^v.{8}$/.test(String(a.draft)), m = model(a.draft, req);
         const out = { draft: String(a.draft), shots: shots.map(s => ({ name: s.name, caption: s.state.caption, camera: s.state.cam === "eye" ? "øyehøyde" : s.state.mode })), link: `${o}/${isV ? `?versjon=${a.draft}` : `?utkast=${a.draft}`}`,
@@ -660,7 +660,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         let c = null, said = "";
         if (Number.isFinite(a.x) && Number.isFinite(a.y)) { c = [a.x, a.y]; said = "punktet du ga"; }
         else if (a.wing) {
-          const w = wingOrErr(a.wing), rs = S0.buildings.filter(b => b.wing === w.id).flatMap(b => b.ring); if (!rs.length) throw toolErr(`${w.name} står ikke i dette forslaget.`);
+          const w = wingOrErr(a.wing), rs = S0.buildings.filter(b => b.wing === w.id).flatMap(b => b.ring); if (!rs.length) throw toolErr(`${w.name} står ikke i dette prosjektet.`);
           const xs = rs.map(p => p[0]), ys = rs.map(p => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, off = 8;
           c = a.side === "S" ? [cx, y0 - off] : a.side === "N" ? [cx, y1 + off] : a.side === "Ø" ? [x1 + off, cy] : a.side === "V" ? [x0 - off, cy] : [cx, cy];
           said = a.side ? `${a.side === "S" ? "sør" : a.side === "N" ? "nord" : a.side === "Ø" ? "øst" : "vest"} for ${w.name} (8 m fra veggen)` : `rundt ${w.name}`;
@@ -753,7 +753,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         catch (e) { throw toolErr(e.message); } } },
     { name: "check_design", tgt: "read", title: "Sjekk mot byggereglene", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "Holds the after (a version or draft) against the building rules (TEK17, rules/tek17.json) that its parts and its step-free entrance can answer (U3678): a stair's rise and tread (2 × opptrinn + inntrinn), its width and handrail, a railing's or balcony's railing height where there is a fall, a balcony door's size, a ramp's slope. Each row: the rule, its §, the thing it is about, status (ok, brudd, or ikke målt), the value, the limit and a plain sentence. «ikke målt» is never ok: the model does not hold that number. A row with verify: true is a rule or number not yet read against the law text: say «etter min lesning av TEK17» and that it is to be confirmed, never that the design is approved. Nothing is changed. Only what the rules can measure is listed: a clean list is not a building permit.",
-      run: async (a, req) => { const m = model(a.draft, req), rows = checkRules(m.site); return { checks: rows, ...checkSummary(rows), counted: rows.length, note: rows.length ? "Dette er en lesing av forslaget mot de reglene appen kan måle (TEK17), ikke en godkjenning. «verify» betyr at regelen ikke er lest mot lovteksten ennå." : "Forslaget har ingen deler eller rampe som reglene kan måle ennå (trapp, rekkverk, balkong med dør, trinnfri inngang)." }; } },
+      run: async (a, req) => { const m = model(a.draft, req), rows = checkRules(m.site); return { checks: rows, ...checkSummary(rows), counted: rows.length, note: rows.length ? "Dette er en lesing av prosjektet mot de reglene appen kan måle (TEK17), ikke en godkjenning. «verify» betyr at regelen ikke er lest mot lovteksten ennå." : "Prosjektet har ingen deler eller rampe som reglene kan måle ennå (trapp, rekkverk, balkong med dør, trinnfri inngang)." }; } },
     { name: "measure", tgt: "read", title: "Mål og les tilbake", ro: true, schema: S({ a: REF, b: { ...REF, description: "Leave out to read a back alone" }, target: TARGET, draft: OLD }, ["a"]),
       description: "The page's «Mål» in numbers, and the read-back of what was placed. a alone: its corners [east, north], axis bearing, length × width, foot and top kote, m², what it stands on. With b: distance, height difference and run from the middle of each footprint at its foot (a wing: its biggest roof level), and for two things with an axis the angle between them (parallel = under 0.5°), the offset to b's axis, and, for a part and a wing, how far the part sticks out past the roof edge. Quote the say.",
       run: async (a, req) => { const m = model(a.draft, req); try { return measureParts(m.site, a.a, a.b, wingOf); } catch (e) { throw toolErr(e.message); } } },
@@ -888,7 +888,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (a.eye_height_m != null) view.eyeh = Math.min(50, Math.max(0.3, +a.eye_height_m) || 1.6);
         if (a.picture_size != null) { const z = { utkast: "1K", standard: "2K", stor: "4K" }[String(a.picture_size).toLowerCase()] || (SIZES[a.picture_size] ? a.picture_size : null); if (!z) throw toolErr("Bildestørrelsen er utkast, standard eller stor."); view.gsize = z; }
         if (a.save_as != null && !a.saved_view) {
-          if (!on) throw toolErr("Å lagre en visning trenger et forslag: gjør en endring først (try_change), eller åpne en versjon.");
+          if (!on) throw toolErr("Å lagre en visning trenger et prosjekt: gjør en endring først (try_change), eller åpne en versjon.");
           const { draft: _d, key: _k, guessed: _g, ...state } = view; if (!state.mode) state.mode = "3d";
           const l = changeViews(on, req, l => addView(l, { name: a.save_as, state, by: "anton" }, VIEW_SPEC)); kept = l.find(x => x.name.toLowerCase() === String(a.save_as).replace(/\s+/g, " ").trim().toLowerCase()) || l.at(-1);
         }
@@ -1114,7 +1114,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const v = v0 && versions.visible(v0, userOf(req), key) ? v0 : null;
     return v ? send(res, 200, versionBody(v), open) : send(res, 404, { error: "Versjonen finnes ikke." }, open);
   }
-  /* the Forslag tab (Morten 2026-10-27): the asker's own versions of every sharing, then the public ones of real people (isPerson), newest first in each
+  /* the Prosjekter tab (Morten 2026-10-27): the asker's own versions of every sharing, then the public ones of real people (isPerson), newest first in each
      group; a link-only version of someone else is never listed. Signed out: the public ones of real people only */
   function handleVersions(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
@@ -1148,37 +1148,37 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       /* the saved views (U3562): {view: "add", name, state} | {view: "rename", id, name} | {view: "remove", id}, on the
          version or draft named, or the person's work */
       if (a.view) {
-        const id = String(a.version || a.draft || (me && versions ? work().id : "")); if (!id) throw toolErr("Hvilket forslag?");
+        const id = String(a.version || a.draft || (me && versions ? work().id : "")); if (!id) throw toolErr("Hvilket prosjekt?");
         const l = changeViews(id, req, l => a.view === "add" ? addView(l, { name: a.name, state: a.state, by: "person" }, VIEW_SPEC) : a.view === "rename" ? renameView(l, a.id, a.name)
           : a.view === "remove" ? removeView(l, a.id) : (() => { throw new Error("view er add, rename eller remove"); })());
         return send(res, 200, { views: l, ...(a.view === "add" ? { saved: l.find(w => w.name.toLowerCase() === String(a.name || "").replace(/\s+/g, " ").trim().toLowerCase())?.id ?? l.at(-1).id } : {}) });
       }
       if (a.shots) {   // «Lag bildeserie» (U3527): the series made on the open version or this draft
-        const id = String(a.version || a.draft || (me && versions ? work().id : "")); if (!id) throw toolErr("Hvilket forslag?");
+        const id = String(a.version || a.draft || (me && versions ? work().id : "")); if (!id) throw toolErr("Hvilket prosjekt?");
         if (/^v.{8}$/.test(id)) ownVersion(id, req);
         const { views } = await makeShots(id, req); return send(res, 200, { views });
       }
       if (a.adopt || a.copy || a.fresh || a.rename || a.share || a.unshare || a.delete || a.undelete) {
         if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
-        if (a.delete) return send(res, 200, deleteVersions(me, a.delete));   // «Slett forslaget»: ids, into the 30-day trash
+        if (a.delete) return send(res, 200, deleteVersions(me, a.delete));   // «Slett prosjektet»: ids, into the 30-day trash
         if (a.undelete) { const r = undeleteVersions(me, a.undelete); return send(res, 200, { restored: r.restored.map(x => ({ ...x, nokkel: versions.get(x.version).own })) }); }   // the toast's «Angre»
-        if (a.rename) {   // the title on the «Forslag» card, edited in place
-          const v = ownVersion(String(a.rename), req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi forslaget et navn (høyst 120 tegn).");
+        if (a.rename) {   // the title on the «Prosjekter» card, edited in place
+          const v = ownVersion(String(a.rename), req), t = String(a.title || "").trim(); if (!t || t.length > 120) throw toolErr("Gi prosjektet et navn (høyst 120 tegn).");
           v.title = t; versions.save(v); return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
         }
         if (a.adopt) {   // a draft made signed out, moved into the person's version at sign-in; then the draft is gone
           const d = draftOf(a.adopt), v = work(); v.edits.push(...structuredClone(d.edits).slice(0, MAX_VERSION_EDITS - v.edits.length)); versions.save(v); dropDraft(d.id);
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own, adopted: d.edits.length });
         }
-        if (a.copy || a.fresh) {   // «Ny kopi»: a second alternative from this one; «Nytt forslag»: one from the before. It becomes the one worked on
-          /* named after its source, «Ny fasade (kopi)», or «Nytt forslag» (Morten 21:19Z: «Min etter 3 is not a good title»); renamed in the card */
+        if (a.copy || a.fresh) {   // «Ny kopi»: a second alternative from this one; «Nytt prosjekt»: one from the before. It becomes the one worked on
+          /* named after its source, «Ny fasade (kopi)», or «Nytt prosjekt» (Morten 21:19Z: «Min etter 3 is not a good title»); renamed in the card */
           const from = a.copy ? ownVersion(String(a.copy), req) : null, taken = new Set(versions.list({ owner: me, viewer: me }).map(x => x.title));
-          const own = typeof a.title === "string" ? a.title.replace(/\s+/g, " ").trim().slice(0, 100) : "",   // «Nytt forslag» (U3667): the name typed in the dialog; empty keeps the plain one
-            stem = own || (from ? `${from.title.replace(/ \(kopi( \d+)?\)$/, "")} (kopi` : "Nytt forslag"), name = k => from && !own ? `${stem}${k > 1 ? ` ${k}` : ""})` : `${stem}${k > 1 ? ` ${k}` : ""}`;
+          const own = typeof a.title === "string" ? a.title.replace(/\s+/g, " ").trim().slice(0, 100) : "",   // «Nytt prosjekt» (U3667): the name typed in the dialog; empty keeps the plain one
+            stem = own || (from ? `${from.title.replace(/ \(kopi( \d+)?\)$/, "")} (kopi` : "Nytt prosjekt"), name = k => from && !own ? `${stem}${k > 1 ? ` ${k}` : ""})` : `${stem}${k > 1 ? ` ${k}` : ""}`;
           let k = 1; while (taken.has(name(k))) k++;
           const v = versions.create(me, name(k).slice(0, 120), from ? structuredClone(from.edits) : []);
           for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
-          const wish = typeof a.wish === "string" ? a.wish.trim().slice(0, 2000) : ""; if (wish) v.wish = { text: wish, at: new Date().toISOString() };   // the person's own words from «Nytt forslag» (U3786)
+          const wish = typeof a.wish === "string" ? a.wish.trim().slice(0, 2000) : ""; if (wish) v.wish = { text: wish, at: new Date().toISOString() };   // the person's own words from «Nytt prosjekt» (U3786)
           v.work = true; versions.save(v);
           return send(res, 200, { ...versionOut(v, o, req), nokkel: v.own });
         }
@@ -1195,7 +1195,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
          taken out (a second tab, or Anton, changed it since the page was drawn) */
       if (a.undo && a.expect !== undefined) {
         const id = String(a.version || a.draft || ""), es = editsOf(id, req), at = es[+a.undo - 1];
-        if (JSON.stringify(at) !== JSON.stringify(a.expect)) return send(res, 409, { stale: true, error: `forslaget er endret et annet sted siden siden ble tegnet${at ? `; nr. ${+a.undo} er nå en annen endring` : ""}. Siden er oppdatert; se over og prøv igjen.` });
+        if (JSON.stringify(at) !== JSON.stringify(a.expect)) return send(res, 409, { stale: true, error: `prosjektet er endret et annet sted siden siden ble tegnet${at ? `; nr. ${+a.undo} er nå en annen endring` : ""}. Siden er oppdatert; se over og prøv igjen.` });
       }
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
       const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo, fromPage: true } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, fromPage: true, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };

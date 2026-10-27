@@ -29,7 +29,7 @@
       <button type="button" class="views-btn" id="viewsBtn" aria-expanded="false" aria-controls="viewsPop" title="Lagrede visninger: gå til en, eller lagre den du ser nå"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Visninger</span></button>
       <div class="views-pop" id="viewsPop" hidden>
         <ul id="viewsList"></ul>
-        <div class="views-series" id="viewsSeries" hidden><button type="button" id="seriesPlay">Vis bildeserie</button><button type="button" id="seriesPrint" title="Hvert bilde på sin A4-side, med tekst og navn">Skriv ut</button><button type="button" id="seriesMake" title="Anton setter sammen 4–6 bilder som forklarer forslaget: oversikt, nye bygg fra gata, før og etter, plan">Lag bildeserie</button></div>
+        <div class="views-series" id="viewsSeries" hidden><button type="button" id="seriesPlay">Vis bildeserie</button><button type="button" id="seriesPrint" title="Hvert bilde på sin A4-side, med tekst og navn">Skriv ut</button><button type="button" id="seriesMake" title="Anton setter sammen 4–6 bilder som forklarer prosjektet: oversikt, nye bygg fra gata, før og etter, plan">Lag bildeserie</button></div>
         <form id="viewSave" class="views-save"><input id="viewName" maxlength="60" aria-label="Navn på visningen du ser nå" autocomplete="off"><button type="submit">Lagre denne</button></form>
       </div>
     </div>
@@ -96,7 +96,7 @@
     <button type="button" class="grab" id="grab" aria-label="Panelets høyde" aria-controls="right"><i></i></button>
     <div class="peekhead" id="peekhead"></div>
     <nav class="dock" id="dock" data-tabs="4" style="--tabs:4" role="tablist" aria-label="Panel">
-      <button type="button" role="tab" data-tab="changes" id="tab-changes" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>Forslag<span class="dbadge" id="b-changes" hidden></span></button>
+      <button type="button" role="tab" data-tab="changes" id="tab-changes" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>Prosjekter<span class="dbadge" id="b-changes" hidden></span></button>
       <button type="button" role="tab" data-tab="selected" id="tab-selected" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg>Bygg</button>
       <button type="button" role="tab" data-tab="chat" id="tab-chat" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4z"/></svg>Anton<span class="dbadge" id="b-chat" hidden></span></button>
       <button type="button" role="tab" data-tab="photo" id="tab-photo" aria-selected="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>Gjengi</button>
@@ -159,17 +159,17 @@
             <ul class="csugg" id="talkSugg"><li><button type="button" data-say="Vis 5. etasje i plan">Vis 5. etasje i plan</button></li>
               <li><button type="button" data-say="Hvor høyt er Sentralblokka?">Hvor høyt er Sentralblokka?</button></li>
               <li><button type="button" data-say="Hvilke tegninger finnes av Østfløy?">Hvilke tegninger finnes av Østfløy?</button></li>
-              <li><button type="button" data-say="Tegn et forslag med meg">Tegn et forslag med meg</button></li></ul></div>
+              <li><button type="button" data-say="Tegn et prosjekt med meg">Tegn et prosjekt med meg</button></li></ul></div>
           <div id="talkLogin" hidden></div>
         </div>
         <div class="chatpill" id="chat-pill"></div>
       </section>
       <section class="tabp" id="p-changes" data-tab="changes" role="tabpanel" aria-labelledby="tab-changes" hidden>
         <div class="ver-confirm" id="verConfirm" role="alertdialog" aria-labelledby="verAsk" hidden><span id="verAsk"></span><button type="button" id="verYes" class="dr-p">Slett</button><button type="button" id="verNo">Avbryt</button></div>
-        <div class="bygg-acts"><button type="button" class="tgl" id="mnp" title="Begynn et nytt forslag: velg utgangspunkt, og Anton hjelper deg i gang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M12 10v6M9 13h6"/></svg>Nytt forslag</button></div>
+        <div class="bygg-acts"><button type="button" class="tgl" id="mnp" title="Begynn et nytt prosjekt: velg utgangspunkt, og Anton hjelper deg i gang"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M12 10v6M9 13h6"/></svg>Nytt prosjekt</button></div>
         <div id="draftRow"></div>
         <div class="ver-bar" id="verBar" hidden><button type="button" id="verSel" aria-pressed="false">Velg</button><button type="button" id="verDelSel" hidden>Slett valgte (0)</button></div>
-        <ul class="ver-list" id="verList"><li class="sel-empty">Ingen forslag å vise ennå.</li></ul>
+        <ul class="ver-list" id="verList"><li class="sel-empty">Ingen prosjekter å vise ennå.</li></ul>
       </section>
     </div>
   </aside>

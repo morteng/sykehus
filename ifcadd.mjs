@@ -171,7 +171,7 @@ export function addedLines(parsed, after, before, parts = null) {
     if (tris.length) {
       const list = put(`IFCCARTESIANPOINTLIST3D((${xyz.map(pt).join(",")}),$)`), face = put(`IFCTRIANGULATEDFACESET(#${list},$,.F.,(${tris.map(t => `(${t.join(",")})`).join(",")}),$)`);
       const rep = put(`IFCSHAPEREPRESENTATION(#${A.body},'Body','Tessellation',(#${face}))`), shp = put(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${rep}))`);
-      const el = put(`IFCGEOGRAPHICELEMENT('${gid("terrain")}',$,${stepStr("Terreng etter")},${stepStr("Bakken der etter-forslaget graver ut og fyller")},$,#${placeAt(0)},#${shp},$,.TERRAIN.)`); onSite.push(el); made("soil", el);
+      const el = put(`IFCGEOGRAPHICELEMENT('${gid("terrain")}',$,${stepStr("Terreng etter")},${stepStr("Bakken der etter-prosjektet graver ut og fyller")},$,#${placeAt(0)},#${shp},$,.TERRAIN.)`); onSite.push(el); made("soil", el);
       const sum = k => (after.grading || []).reduce((a, g) => a + (g[k] || 0), 0) + waters.reduce((a, w) => a + (w.basin[k] || 0), 0) + (after.added || []).reduce((a, x) => a + (x.ground?.[k] || 0), 0);
       pset("terrain", [el], "Sykehustomta_Terreng", { Utgraving: `${sum("cut_m3")} m³`, Fylling: `${sum("fill_m3")} m³`, Flater: (after.grading || []).map(g => `${g.name}: kote +${g.kote}`).join("; ") || null, Status: "NEW" });
       counts.elements++;
