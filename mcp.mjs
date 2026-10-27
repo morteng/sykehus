@@ -21,7 +21,7 @@ const withMeshes = s => withGarden(meshesIn(s));
 import { tryShot } from "./tryshot.mjs";   // try_change's picture: aimed at what the call changed
 import { cameraProps, aimCamera, cameras, usedCamera } from "./camera.mjs";   // one camera for look and try_change's picture
 import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
-import { edgeRail } from "./public/roofedge.js";   // edge_rail: a railing round a roof level's edge, as many railing parts   // T5: draw_plan, draw_section
+import { edgeRail, compactRail } from "./public/roofedge.js";   // edge_rail: a railing round a roof level's edge, as many railing parts   // T5: draw_plan, draw_section
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
@@ -379,10 +379,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* U3783: a part placed from a wing's facade (at + length + width) becomes the from and to it is stored as, with the receipt's words */
   /* edge_rail (public/roofedge.js): one edit that is many railing parts. Expanded before the changes are tried; a failure stays a failed change (__bad) and the first piece carries the summary */
   const edgeNote = new WeakMap();
-  function expandEdits(edits) {
+  function expandEdits(edits, railIds = new Set()) {
     return edits.flatMap(e => {
       if (e?.kind !== "edge_rail") return [e];
-      try { const w = wingOf(site, e.wing); if (!w) throw new Error(`Fant ikke fløyen «${e.wing}»`); const r = edgeRail(site, w, e), p = r.parts.map(x => ({ ...x })); edgeNote.set(p[0], r.say); return p; }
+      try { const w = wingOf(site, e.wing); if (!w) throw new Error(`Fant ikke fløyen «${e.wing}»`); const r = edgeRail(site, w, e), p = r.parts.map(x => ({ ...x })); edgeNote.set(p[0], r.say); p.forEach(x => railIds.add(x.id)); return p; }
       catch (x) { return [{ kind: "edge_rail", __bad: x.message }]; }
     });
   }
@@ -415,7 +415,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const VIEW_NAME = { type: "string", enum: Object.keys(VIEWS), description: "isometrisk (from the south-west, from above; default), plan (straight down, north up), N / Ø / S / V (from that side, low), NØ / SØ / SV / NV (from that corner, higher)" };
   /* a picture of a model (render.mjs) and what it shows, in words */
   const hospital = (() => { const ps = site.buildings.filter(b => b.own).flatMap(b => b.ring); return [ps.reduce((s, p) => s + p[0], 0) / ps.length, ps.reduce((s, p) => s + p[1], 0) / ps.length, 25]; })();
-  async function look(s, a = {}) {
+  /* era «før» on a draft or version: its state before its LAST edit (the stored edits minus the last); with no edits the shared before, said in the camera line */
+  const priorOf = edits => edits?.length ? { site: withMeshes(applyEdits(site, floors, edits.slice(0, -1)).site), note: `, modellen slik den var før siste endring (${edits.length - 1} av ${edits.length} endringer er med)` }
+    : { site: withMeshes(site), note: ", modellen slik den var før (målet har ingen endringer ennå, så dette er den delte førmodellen)" };
+  async function look(s, a = {}, edits = []) {
     if (a.saved) {   // a saved view, as the page shows it (U3527): its camera, its «før» on the before
       const st = a.saved.state, png = await picture(withMeshes(st.era === "før" ? site : s), { ...viewOpts(st, s), width: a.width || 1024, height: a.height || 640 });
       return { png, text: `Bildet: den lagrede visningen «${a.saved.name}»${st.caption ? ` (${st.caption.replace(/\.$/, "")})` : ""}${st.cam === "eye" ? "; i øyehøyde, men med smalere linse enn siden" : ""}. Nordpilen øverst til høyre.` };
@@ -431,8 +434,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (cm.plan) v.plan = true; else delete v.plan; v.from = cm.from; fr.target = cm.target;
     /* a new building's pad (U3566), as the picture shows it: what is dug out and filled, and at which side */
     const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground || fa?.lot ? `${fa.name}: ${fa.ground ? groundText(fa.ground) : ""}${lotText(fa.lot) ? ` ${lotText(fa.lot)}` : ""}`.trim() : "";
-    const before = a.era === "før", cam = usedCamera(cm, a.era);
-    let png = await picture(before ? withMeshes(site) : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
+    const before = a.era === "før", prior = before ? priorOf(edits) : null, cam = usedCamera(cm, a.era, prior?.note);
+    let png = await picture(before ? prior.site : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
     png = annotate(png, { plan: !!v.plan, dist, target: fr.target, levels: before ? null : fr.levels, width: W, height: H });
     const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8], seen = f ? lookSay(s, { ...fr, dist }, f, v, fr) : "";
     return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, midt i bildet ${f.name}` : ""}. Nordpilen øverst til høyre${v.plan ? "; målestokken nederst til venstre er 50 m" : ""}.${seen ? " I bildet: " + seen : ""}${pad ? " " + pad : ""} ${cam.say}`, camera: cam.num };
@@ -504,9 +507,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         /* the person's own changes to this version since Anton's last call in the turn (the page's change goes through this same tool, one at a time, so none comes in mid-call) */
         const mine = [], gone = [], str = x => JSON.stringify(x), seen0 = before && v && ctx.seen?.id === v.id ? ctx.seen.edits : null;
-        const ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
+        const railIds = new Set(), ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         /* a later change in the same call to a new building that got another id goes to the id it got */
-        for (const [i, e0] of expandEdits(a.edits).entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
+        for (const [i, e0] of expandEdits(a.edits, railIds).entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
             /* a new building that differs only in the id it was given is the same one sent again */
             const bare = x => JSON.stringify(x.kind === "volume" ? { ...x, id: undefined } : x);
@@ -532,6 +535,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const fit0 = quiet ? [] : fitOf(m.site);
         for (const f of fit0) { const a = (m.site.added || []).find(x => x.id === f.id && x.on); if (!a) continue; const r = roofSay(m.site, a); if (r) f.roof = { on: r.on, kote: r.kote, levels: r.levels, overhang_m: r.overhang_m, outside_m2: r.outside_m2, ...(r.say ? { say: r.say } : {}) }; const col = roofCollisions(m.site, a); if (col.length) (f.roof ||= {}).overlap = col.map(c => ({ with: c.name, m2: c.m2 })); }   /* T2: kept with allow_overlap, listed here */
         const fit = quiet ? [] : [...fit0, ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit({ ...m.site, landscape: m.site.landscape.filter(l => !l.on) }, wayRings) : []), ...padFit(m.site, wayRings)];
+        const { added: okOut, fit: fitOut, built: builtOut, checks: checksOut } = compactRail(ok, fit, railIds, after?.built, checks);   // an edge_rail's pieces as one entry
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
         let out;
@@ -542,15 +546,15 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           if (!add.length && !del.length) return null;
           const kinds = [...new Set(add.map(k => JSON.parse(k).kind))];
           return { added: add.length, removed: del.length, kinds, say: `Personen endret forslaget mens du jobbet: ${add.length} ny${add.length === 1 ? "" : "e"} endring${add.length === 1 ? "" : "er"}${kinds.length ? ` (${kinds.join(", ")})` : ""}${del.length ? ` og ${del.length} tatt bort` : ""}. Endringene dine ligger oppå dem; se over før du bygger videre.` }; })();
-        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: ok, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: true }; }
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: okOut, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: true }; }
         else { d.t = Date.now(); keepDraft(d);
-          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: ok, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after } : {}), ...(fit.length ? { fit } : {}), ...(checks.length ? { checks } : {}), saved: false,
+          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: okOut, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
         if (a.include_screenshot === false || !ok.length) return out;
         /* the picture of what it made: aimed at what the call changed (tryshot.mjs), the camera fields (camera.mjs) over that; with a focus, look's own aim */
         const pic = a.picture || {}, last = ok.findLast(e => e.kind === "volume" || e.kind === "reshape"), id = last && (last.id ?? m.site.added?.findLast(x => x.kind === "volume" && x.name === last.name)?.id);
-        try { const sh = pic.focus ? null : await tryShot({ prior: applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site, s: withMeshes(m.site), edits: d.edits.slice(-ok.length), a, picture, ground: groundAt, annotate, before: withMeshes(site), dirDeg, err: toolErr });
-          const shots = sh ? sh.images : await Promise.all(cameras({ view_name: a.view_name, ...pic, focus: pic.focus ?? (id && m.site.added?.some(x => x.id === id) ? id : null) }).map(c => look(m.site, c)));
+        try { const sh = pic.focus ? null : await tryShot({ prior: applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site, s: withMeshes(m.site), edits: d.edits.slice(-ok.length), a, picture, ground: groundAt, annotate, before: cameras(a.picture).some(c => c.era === "før") ? priorOf(d.edits) : null, dirDeg, err: toolErr });
+          const shots = sh ? sh.images : await Promise.all(cameras({ view_name: a.view_name, ...pic, focus: pic.focus ?? (id && m.site.added?.some(x => x.id === id) ? id : null) }).map(c => look(m.site, c, d.edits)));
           const cams = shots.map(x => x.camera).filter(Boolean), so = cams.length ? { ...out, picture: { cameras: cams } } : out;
           return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, ...shots.flatMap((x, i) => [{ type: "image", data: x.png.toString("base64"), mimeType: "image/png" }, { type: "text", text: (shots.length > 1 ? `Bilde ${i + 1}: ` : "") + x.text }])], structuredContent: so } };
         } catch (e) { if (e.tool) return { ...out, picture_refused: e.message }; console.error("look (try_change's picture):", e.message, "| edits:", argsLine({ edits: a.edits }), "| added:", (m.site.added || []).map(x => x.kind).join(",")); return out; } } },
@@ -838,7 +842,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => {
         const who = userOf(req), open = who && versions ? versions.get(openId(who)) : null, id = a.draft || (open?.owner === who ? open.id : null), m = model(id, req);
         if (a.saved_view) { if (!id) throw toolErr("Ingen lagrede visninger: ingen versjon eller utkast er åpen."); try { a = { ...a, saved: findView(viewsOf(id, req), a.saved_view) }; } catch (e) { throw toolErr(e.message); } }
-        const shots = []; try { for (const c of a.saved ? [a] : cameras(a)) shots.push(await look(m.site, a.saved ? a : { ...a, ...c })); }   // views: up to 3 cameras, one picture each
+        const shots = []; try { for (const c of a.saved ? [a] : cameras(a)) shots.push(await look(m.site, a.saved ? a : { ...a, ...c }, id ? editsOf(id, req) : [])); }   // views: up to 3 cameras, one picture each
         catch (e) { if (e.tool) throw e; console.error("look:", e.message, "|", argsLine(a), "| added:", (m.site.added || []).map(x => x.kind).join(",")); throw toolErr(`Fikk ikke tegnet bildet (${e.message}). Prøv en annen visning, eller si fra til Morten.`); }
         const tail = id ? ` Modellen: ${id}.` : " Modellen slik den står i dag.", cams = shots.map(x => x.camera).filter(Boolean);
         return { _result: { content: shots.flatMap((x, i) => [{ type: "image", data: x.png.toString("base64"), mimeType: "image/png" }, { type: "text", text: (shots.length > 1 ? `Bilde ${i + 1}: ` : "") + x.text + tail }]), ...(cams.length ? { structuredContent: { cameras: cams } } : {}) } }; } },

@@ -76,11 +76,14 @@ function frameOfRect(c) {
 }
 
 /* =============================== plan =============================== */
+export const isBalcony = x => x?.kind === "balconies" || x?.role === "slab" || x?.role === "railing" || x?.bim?.part === "balcony" || /^balkong/i.test(x?.name || "");
 export function planDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
   const f = resolveFocus(site, o.focus, wingOf), prims = [], dims = [];
   const wingId = f.kind === "wing" ? f.w.id : f.v.on || null, R = wingId ? roofOf(site, wingId) : null;
   const m = measureParts(site, f.kind === "wing" ? f.w.id : f.v.id, undefined, wingOf), A = m.a;   // length, width, axis: T1's numbers
-  const parts = (site.added || []).filter(x => x.kind === "volume" && x.from && x.to && (f.kind === "part" ? x.id === f.v.id : x.on === wingId));
+  /* balconies (the balcony part, or a slab or railing of a balconies edit: role) hide on a plan with a roof focus (at), where hundreds of them bury the roof edges; balconies: true shows them, false hides them */
+  const hideBal = o.balconies === true ? false : o.balconies === false ? true : o.at != null;
+  const parts = (site.added || []).filter(x => x.kind === "volume" && x.from && x.to && (f.kind === "part" ? x.id === f.v.id : x.on === wingId) && !(hideBal && f.kind === "wing" && isBalcony(x)));
   const pts = f.kind === "wing" ? [...(R?.outline || A.corners), ...parts.flatMap(footRing)] : footRing(f.v);
   let lo = [Math.min(...pts.map(q => q[0])), Math.min(...pts.map(q => q[1]))], hi = [Math.max(...pts.map(q => q[0])), Math.max(...pts.map(q => q[1]))];
   if (f.kind === "part") { const g = Math.max(12, 0.6 * Math.max(hi[0] - lo[0], hi[1] - lo[1])); lo = [lo[0] - g, lo[1] - g]; hi = [hi[0] + g, hi[1] + g]; }
@@ -118,10 +121,12 @@ export function planDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
   northArrow(prims, W - 50, 60, 0); scaleBar(prims, 40, H - 40, p, W); frameBox(prims, W, H);
   const title = `PLAN ${(f.kind === "wing" ? f.w.name : f.v.name).toUpperCase()}   ${sc.said.toUpperCase()}   NORD OPP`;
   T(prims, [40, 36], title, { size: 2 });
+  const hidden = (site.added || []).filter(x => x.kind === "volume" && x.on === wingId && f.kind === "wing" && hideBal && isBalcony(x)).length;
   const say = `Plan over ${f.kind === "wing" ? f.w.name : f.v.name} i ${sc.said}, nord opp${at ? `, sentrert på [${com(r1(at[0]))}, ${com(r1(at[1]))}]` : ""}, med mål, akse og kote. ${m.say}`
     + (edgeKotes.length ? ` Hvert taknivås kant er tegnet i egen farge med kote (${edgeKotes.map(com).join(", ")}); den svarte linja er hele takets ytterkant.` : "") + (f.kind === "wing" && levels.length ? ` Taket ligger på kote ${levels.map(com).join(", ")} (høyeste først).` : "")
-    + (f.kind === "wing" && parts.length ? ` Nytt på taket eller ved siden: ${parts.map(v => `${v.name} (topp kote ${com(v.top_kote)})`).join(", ")}.` : "");
-  return { prims, W, H, scale: sc.N, dims, kotes, say, numbers: A };
+    + (f.kind === "wing" && parts.length ? ` Nytt på taket eller ved siden: ${parts.map(v => `${v.name} (topp kote ${com(v.top_kote)})`).join(", ")}.` : "")
+    + (hidden ? ` ${hidden} balkongdeler er utelatt så takkantene kan leses (balconies: true tegner dem).` : "");
+  return { prims, W, H, scale: sc.N, dims, kotes, say, numbers: A, parts: parts.length, hidden };
 }
 
 /* =============================== section =============================== */

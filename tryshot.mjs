@@ -109,7 +109,7 @@ export function tryAim(prior, s, edits, a = {}, ground = () => 0) {
   return { target: [cx, cy, tz], dist, tilt, from, plan, ids, accent: ids.length > 0, area, near: [...new Set(near.map(b => (s.wings || []).find(w => w.id === b.wing)?.name || b.name).filter(Boolean))] };
 }
 
-/* the picture and its caption. deps: picture (the kit's), ground (terrain height), annotate (the scale bar), before (the before model with meshes, for era før),
+/* the picture and its caption. deps: picture (the kit's), ground (terrain height), annotate (the scale bar), before (before: { site, note } the target's state before its last edit, for era før),
    dirDeg, err. a.picture: the camera fields (camera.mjs) over the automatic framing; views: up to 3 pictures. null: nothing to aim at (the caller draws the old picture) */
 export async function tryShot({ prior, s, edits, a, picture, ground, annotate, before, dirDeg, err }) {
   const auto = tryAim(prior, s, edits, a, ground); if (!auto) return null;
@@ -119,11 +119,11 @@ export async function tryShot({ prior, s, edits, a, picture, ground, annotate, b
   for (const c of cameras(a.picture)) {
     const base = { target: auto.target, dist: auto.dist, tilt: auto.tilt ?? 55, from: auto.from ?? 225, plan: auto.plan };
     const cam = aimCamera(c, base, { site: s, ground, dirDeg, err }), W = c.width || 1024, H = c.height || 640, v = cam.plan ? { plan: true } : { from: cam.from, tilt: cam.tilt };
-    const draw = c.era === "før" ? before : s;
+    const draw = c.era === "før" ? before?.site ?? before : s;
     let png = await picture(draw, { ...v, target: cam.target, dist: cam.dist, focus: c.era === "før" ? [] : auto.ids, accent: c.era !== "før" && auto.accent, width: W, height: H });
     png = annotate(png, { plan: cam.plan, dist: cam.dist, target: cam.target, levels: null, width: W, height: H });
-    const used = usedCamera(cam, c.era), shown = c.era === "før" ? "" : say(dedup, { target: cam.target, dist: cam.dist, levels: null }, { name: centre, ids: auto.area.ids, target: cam.target }, v, { accent: auto.accent });
-    const text = c.era === "før" ? `Bildet: ${cam.plan ? "plan, rett ovenfra, nord opp" : "samme sted"}, modellen slik den var før endringen (uten det nye). ${used.say}`
+    const used = usedCamera(cam, c.era, c.era === "før" ? before?.note : undefined), shown = c.era === "før" ? "" : say(dedup, { target: cam.target, dist: cam.dist, levels: null }, { name: centre, ids: auto.area.ids, target: cam.target }, v, { accent: auto.accent });
+    const text = c.era === "før" ? `Bildet: ${cam.plan ? "plan, rett ovenfra, nord opp" : "samme sted"}, modellen slik den var før (uten siste endring). ${used.say}`
       : `Bildet: ${cam.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${SIDE(cam.from)}, ${Math.round(cam.tilt)}° over bakken`}, ${Math.round(cam.dist)} m unna, midt i bildet ${centre}. Nordpilen øverst til høyre${cam.plan ? "; målestokken nederst til venstre er 50 m" : ""}. ` +
         `Endret: ${lines.join("; ")}.${auto.accent ? " Det nye står i sterk oransje, resten er dempet." : ""}${auto.near.length ? ` Naboer i bildet: ${auto.near.join(", ")}.` : ""}${shown ? " I bildet: " + shown : ""} ${used.say}`;
     images.push({ png, text, camera: used.num, opts: { ...v, target: cam.target, dist: cam.dist, width: W, height: H } });

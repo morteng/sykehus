@@ -57,3 +57,27 @@ export function edgeRail(site, w, o, wingName = w.name) {
   return { parts, total_m: r2(total), say: `Rekkverk langs kanten av taknivået kote ${com(k)} på ${wingName}: ${parts.length} deler, ${com(Math.round(total * 10) / 10)} m, ${com(height)} m høyt (${infill === "glass" ? "glass" : "spiler"}), ${com(inset)} m inn fra kanten, hver del på kote ${com(k)} etter fotregelen`
     + (walls && !all ? `; ${walls} kanter mot et høyere tak er utelatt (der er det ikke fall)` : "") + (smoothed ? `; ${smoothed} trinn under 1 m i kanten er jevnet ut` : "") + (tiny ? `; ${tiny} deler under 1 m er utelatt` : "") + "." };
 }
+
+/* try_change's answer for an edge_rail: its pieces as one entry, not one full entry each in added, fit, after.built and checks. ok = the added rows, fit = the fit rows,
+   ids = the pieces' ids, built = after.built, checks = the rule rows. -> { added, fit, built, checks }: the rows that are not pieces as they were, then
+   added: { kind: "edge_rail", pieces, total_m, levels: [{ kote, pieces, max_overhang_m }], ids: all of them when five or fewer, else first and last few, placed };
+   checks: one row for a rule and status the pieces share, with how many pieces it holds. */
+export function compactRail(ok, fit, ids, built = [], checks = []) {
+  const mine = ok.filter(e => ids.has(e.id)); if (mine.length < 2) return { added: ok, fit, built, checks };
+  const rows = new Map((fit || []).filter(f => ids.has(f.id)).map(f => [f.id, f])), by = new Map(), short = names => names.length <= 5 ? names.join(", ") : `${names.slice(0, 3).join(", ")} … ${names.slice(-2).join(", ")} (${names.length} deler, ${names[0]} til ${names[names.length - 1]})`;
+  let total = 0;
+  for (const e of mine) {
+    total += e.params?.length ?? (e.from && e.to ? Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) : 0);
+    const roof = rows.get(e.id)?.roof, k = roof?.kote ?? e.base_kote ?? null, g = by.get(k) || { kote: k, pieces: 0, max_overhang_m: 0 };
+    g.pieces++; g.max_overhang_m = Math.max(g.max_overhang_m, roof?.overhang_m ?? 0); by.set(k, g);
+  }
+  const names = mine.map(e => e.id), placed = mine.find(e => e.placed)?.placed;
+  const sum = { kind: "edge_rail", pieces: mine.length, total_m: r2(total), levels: [...by.values()].map(g => ({ ...g, max_overhang_m: r2(g.max_overhang_m) })), ids: short(names), ...(placed ? { placed } : {}) };
+  const first = ok.indexOf(mine[0]), grp = new Map();
+  for (const c of checks) { const id = c.thing?.id; if (!ids.has(id)) continue; const k = `${c.rule}|${c.status}`, g = grp.get(k) || { row: c, ids: [] }; g.ids.push(id); grp.set(k, g); }
+  const done = new Set(), outChecks = [];
+  for (const c of checks) { const id = c.thing?.id; if (!ids.has(id)) { outChecks.push(c); continue; } const k = `${c.rule}|${c.status}`; if (done.has(k)) continue; done.add(k); const g = grp.get(k);
+    outChecks.push({ ...c, thing: { name: String(c.thing.name || "").replace(/\s*\d+\/\d+$/, ""), part: c.thing.part, pieces: g.ids.length, ids: short(g.ids) } }); }
+  const bf = built.findIndex(x => ids.has(x.id)), outBuilt = bf < 0 ? built : [...built.slice(0, bf).filter(x => !ids.has(x.id)), { kind: "edge_rail", name: String(mine[0].name || "").replace(/\s*\d+\/\d+$/, ""), pieces: mine.length, ids: short(names), total_m: r2(total) }, ...built.slice(bf).filter(x => !ids.has(x.id))];
+  return { added: [...ok.slice(0, first).filter(e => !ids.has(e.id)), sum, ...ok.slice(first).filter(e => !ids.has(e.id))], fit: (fit || []).filter(f => !ids.has(f.id)), built: outBuilt, checks: outChecks };
+}
