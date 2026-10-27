@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- /prospekt/<id> (server.mjs) and /prospekt.html?v=<id> are this page; both are relative to the root -->
+<base href="/">
+<title>Prospekt · Sykehustomta</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Et prosjekt på den gamle sykehustomta i Drammen: bilder, tall og tomtas begrensninger">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="stylesheet" href="kit/tokens.css?v=20261027zj">
+<link rel="stylesheet" href="prospekt.css?v=2">
+</head>
+<body>
+<main id="pk" aria-live="polite"><p class="pk-wait">Laster prospektet …</p></main>
+<div class="pk-lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Bilde">
+  <button type="button" class="pk-lb-x" id="lbX" aria-label="Lukk">×</button>
+  <button type="button" class="pk-lb-n pk-lb-p" id="lbP" aria-label="Forrige bilde">‹</button>
+  <img id="lbImg" alt="">
+  <button type="button" class="pk-lb-n pk-lb-f" id="lbN" aria-label="Neste bilde">›</button>
+  <div class="pk-lb-b"><span id="lbCap"></span><a id="lbD" download>Last ned</a></div>
+</div>
+<script type="module" src="prospekt.js?v=2"></script>
+</body>
+</html>

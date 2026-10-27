@@ -654,3 +654,14 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 .fc-pub { display: grid; gap: 2px; padding: var(--sp-1) 0; }
 .pub-box { display: flex; align-items: center; gap: var(--sp-1); font-weight: 600; cursor: pointer; }
 .pub-note { color: var(--muted); }
+/* Prospekt: the card's link, and the open project's choice of pictures under «Detaljer» */
+.fc-pk { align-self: center; padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; color: var(--text); margin-right: var(--sp-1); }
+.fc-pk:hover { background: var(--hover-wash); }
+.fc-pkp:not(:empty) { margin: var(--sp-2) 0; } .pk-h { display: block; font-size: var(--fs-sm); margin-bottom: var(--sp-1); }
+.pk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); } .pk-list li { display: flex; align-items: center; gap: var(--sp-2); }
+.pk-list label { display: flex; align-items: center; gap: var(--sp-1); } .pk-list img { width: 96px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); }
+.pk-hero { font-size: var(--fs-sm); } .pk-hero[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+/* «Tilbake til prospekt»: in the top bar of a shared project's 3D view */
+.pk-back { align-self: center; padding: 5px 14px; border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; color: var(--text); white-space: nowrap; background: var(--panel); }
+.pk-back[hidden] { display: none; } .pk-back:hover { background: var(--hover-wash); }

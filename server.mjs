@@ -8,6 +8,7 @@
   GET  /api/utkast/<id>   a draft's changes, for the page's ?utkast=<id>
   GET  /api/versjon/<id>  a saved version (versions.mjs), for the page's ?versjon=<id>
   GET  /api/versjon/<id>/bilde.jpg   its card picture (thumbs.mjs)
+  GET  /api/prospekt/<id>  a shared project's read-only Prospekt (prospekt.mjs); /prospekt/<id> is its page
   GET  /api/versjoner     the Forslag list: the asker's own, then the public ones of real people
 
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
@@ -40,6 +41,7 @@ import { createWishes } from "./wishes.mjs";
 import { createGuide } from "./guide.mjs";
 import { importFile, MAX_IMPORT } from "./bim.mjs";
 import { createRenderings } from "./gjengi.mjs";
+import { createProspekt } from "./prospekt.mjs";
 
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".webmanifest": "application/manifest+json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21", ".glb": "model/gltf-binary" };
@@ -103,6 +105,7 @@ const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   /
 const pages = { open: new Map(), show: () => false };
 const gjengi = createRenderings({ SECURITY, readJson, login, versions });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
 const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, pages, photos: gjengi, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
+const prospekt = createProspekt({ SECURITY, login, versions, photos: gjengi, site, floors, siteFacts: () => mcp.siteFacts(), stills: mcp.stills });   // the read-only page of a shared project
 const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 mcp.setNotifier((person, event, data) => anton.publish(person, event, data));   // a sketch Anton shows reaches the person's page (U3635)
 const streets = createStreets({ site, SECURITY });
@@ -110,7 +113,8 @@ const snow = createSnow({ SECURITY });   // the snow on the ground today, NVE se
 
 createServer(async (req, res) => {
   try {
-    const url = new URL(req.url, "http://x"), path = decodeURIComponent(url.pathname);
+    const url = new URL(req.url, "http://x"); let path = decodeURIComponent(url.pathname);
+    if (/^\/prospekt\/[^/]+\/?$/.test(path)) path = "/prospekt.html";   // the page reads the id from its address
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (path === "/mcp/server-card") return mcp.handleCard(req, res);
     if (await auth.route(req, res, url) || await streets.route(req, res, path, url) || await snow.route(req, res, path, url)) return;
@@ -120,6 +124,7 @@ createServer(async (req, res) => {
     if (path === "/api/endring") return mcp.handleChange(req, res);
     if (path === "/api/ifc") return await mcp.handleIfc(req, res);
     if (path === "/api/import") return await handleImport(req, res);
+    if (await prospekt.route(req, res, path, url)) return;
     if (await gjengi?.route(req, res, path, url)) return;
     if (path === "/api/skisser") return mcp.handleSketches(req, res, login.personOf(req)?.person);
     if (path.startsWith("/api/skisse/")) return mcp.handleSketch(req, res, path.slice("/api/skisse/".length), login.personOf(req)?.person);   // a plan Anton showed (U3635)

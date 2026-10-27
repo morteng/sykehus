@@ -10,7 +10,7 @@ import { SCOPE } from "./auth.mjs";
 import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { nearWays } from "./public/paint-edit.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS, isPerson } from "./versions.mjs";
-import { createThumbs, drawCard } from "./thumbs.mjs";   // the Prosjekter tab's card pictures
+import { createThumbs, drawCard, cardOpts } from "./thumbs.mjs";   // the Prosjekter tab's card pictures
 import { encodeJpeg } from "./jpeg.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1166,8 +1166,18 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     const mine = v => !!me && v.owner === me, shown = (versions?.list({ viewer: me }) || []).filter(v => mine(v) || (v.sharing === "offentlig" && isPerson(v.owner)));
     shown.sort((a, b) => mine(b) - mine(a) || b.updated.localeCompare(a.updated));
     return send(res, 200, { versions: shown.slice(0, 200).map(v => ({ version: v.id, title: v.title, owner: v.owner, changes: v.edits.length, updated: v.updated, sharing: v.sharing,
-      thumb: photos?.favoriteOf(v.id)?.id || v.updated, ...(mine(v) ? { mine: true, ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
+      thumb: photos?.favoriteOf(v.id)?.id || v.updated, ...(mine(v) ? { mine: true, ...(v.sharing === "lenke" ? { pkey: v.key } : {}), ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
   }
+  /* the Prospekt's stills of the model (Morten 2026-10-27: no live 3D in the Prospekt, only pictures): the after drawn from the south-west, the north-east and straight down,
+     1600x1000 JPEG by the same renderer as look and the card; kept in memory per save, at most 8 projects */
+  const STILLS = [{ id: "sorvest", title: "Modellen sett fra sørvest", zoom: 0.8, opts: { from: 225, tilt: 32 } }, { id: "nordost", title: "Modellen sett fra nordøst", zoom: 0.62, opts: { from: 45, tilt: 32 } }, { id: "plan", title: "Plan, nord opp (streken nederst er 50 m)", zoom: 0.62, opts: { plan: true } }];
+  const stillCache = new Map();
+  const stillsOf = v => {
+    const k = v.id + "@" + v.updated; if (stillCache.has(k)) return stillCache.get(k);
+    const after = applyEdits(site, floors, v.edits).site, s = withMeshes(after), area = changeArea(site, s, v.edits);
+    const p = Promise.all(STILLS.map(async st => { const base = cardOpts(site, area), png = await picture(s, { ...base, ...st.opts, dist: Math.round(base.dist * st.zoom), width: 1600, height: 1000 }), { px, W, H } = decodePng(png); return [st.id, encodeJpeg(px, W, H, 82)]; })).then(e => new Map(e));
+    p.catch(() => stillCache.delete(k)); stillCache.set(k, p); if (stillCache.size > 8) stillCache.delete(stillCache.keys().next().value); return p;
+  };
   /* GET /api/versjon/<id>/bilde.jpg: the card's picture (thumbs.mjs), seen by whoever may see the version itself */
   const thumbs = versions ? createThumbs({ render: async v => { const after = applyEdits(site, floors, v.edits).site, s = withMeshes(after), area = changeArea(site, s, v.edits), png = await drawCard({ site, s, area, picture }), { px, W, H } = decodePng(png); return encodeJpeg(px, W, H, 78); } }) : null;
   async function handleThumb(req, res, id) {
@@ -1201,6 +1211,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const id = String(a.version || a.draft || (me && versions ? work().id : "")); if (!id) throw toolErr("Hvilket prosjekt?");
         if (/^v.{8}$/.test(id)) ownVersion(id, req);
         const { views } = await makeShots(id, req); return send(res, 200, { views });
+      }
+      if (a.prospekt) {   // the Prospekt's renders (prospekt.mjs): { render, show?: bool, hero?: true } on one's own project's render; the owner's only
+        const p = a.prospekt, rid = String(p?.render ?? ""), vid = /^versjon:(.+)$/.exec(photos?.workOfRender(rid) ?? "")?.[1];
+        if (!me || !versions) throw toolErr("Logg inn for å velge bildene i prospektet.");
+        if (!vid) throw toolErr("Fant ikke bildet.");
+        ownVersion(vid, req);
+        return send(res, 200, photos.setProspekt(rid, { show: typeof p.show === "boolean" ? p.show : undefined, hero: p.hero === true }));
       }
       if (a.adopt || a.copy || a.fresh || a.rename || a.share || a.unshare || a.delete || a.undelete) {
         if (!me || !versions) throw toolErr("Logg inn for å beholde det.");
@@ -1284,7 +1301,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
+  return { siteFacts, stills: { list: STILLS.map(({ id, title }) => ({ id, title })), of: stillsOf }, handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
     setNotifier: f => { notify = f; },
     /* GET /api/skisse/<id>.png: a plan Anton showed this person */
     handleSketch: (req, res, rest, person) => {

@@ -25,6 +25,7 @@ import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./pu
 const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
 const ASPECTS = [["1:1", 1], ["4:5", 4 / 5], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
+const MAX_PROSPEKT = 24;   // the renders a Prospekt shows, newest first
 const ID = /^[a-z0-9]{16}$/, MAX_IN = 6 * 1024 * 1024;
 /* The view is the only geometry the model gets (U3526: the first prompt let it invent hills and houses behind the site). The prompt runs in this order, kept
    short: the geometry lock (first), the light (direction, height, colour: sunlight.js), the materials in view, the camera (lens and framing only), people and planting. */
@@ -120,7 +121,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
     if (q.utkast && /^[A-Za-z0-9_-]{6,16}$/.test(q.utkast)) return { key: `utkast:${q.utkast}`, owner: null };
     return null;
   }
-  const pub = (r, who = null) => ({ id: r.id, at: r.at, by: r.by, mine: !!who && r.by === who, fav: !!r.fav, spot: r.spot || null, retake_of: r.retake_of || null, stale: staleOf(r), wish: r.wish || null, cost_usd: r.cost_usd, url: `api/gjengi/${r.id}.${r.ext}`, download: `api/gjengi/${r.id}.${r.ext}?last-ned` });
+  const pub = (r, who = null) => ({ id: r.id, at: r.at, by: r.by, mine: !!who && r.by === who, fav: !!r.fav, prospekt: r.prospekt !== false, hero: !!r.hero, spot: r.spot || null, retake_of: r.retake_of || null, stale: staleOf(r), wish: r.wish || null, cost_usd: r.cost_usd, url: `api/gjengi/${r.id}.${r.ext}`, download: `api/gjengi/${r.id}.${r.ext}?last-ned` });
   /* the model changed since the picture: the version was saved after it (a draft has no clock here: the page compares the change count in the spot) */
   const staleOf = r => { const [kind, wid] = String(r.work).split(":"), v = kind === "versjon" ? versions?.get(wid) : null; return v ? String(v.updated) > r.at : null; };
   const proposals = new Map();   // who → {ids, at}: Anton's «lag nye bilder fra disse stedene», waiting for the person to confirm on the page
@@ -176,6 +177,17 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
       if (!r) return null;
       try { return { id: r.id, ext: r.ext, bytes: readFileSync(join(dir, `${r.id}.${r.ext}`)) }; } catch { return null; }
     },
+    /* the Prospekt's renders of a version (prospekt.mjs): not failed, newest first, at most MAX_PROSPEKT; `prospekt` is true unless the owner turned it off */
+    rendersOf(versionId) { return all.filter(x => x.work === `versjon:${versionId}` && !x.failed && x.ext && x.bytes).sort((p, q) => q.at.localeCompare(p.at)).slice(0, MAX_PROSPEKT).map(r => ({ id: r.id, at: r.at, ext: r.ext, prospekt: r.prospekt !== false, hero: !!r.hero })); },
+    bytesOf(id) { const r = all.find(x => x.id === id && !x.failed); if (!r) return null; try { return { ext: r.ext, bytes: readFileSync(join(dir, `${r.id}.${r.ext}`)) }; } catch { return null; } },
+    /* the owner's pick for the Prospekt: { show?: bool, hero?: true }; the work's other heroes are cleared, and the hero is always shown. null: no such render */
+    setProspekt(id, { show, hero } = {}) {
+      const r = all.find(x => x.id === id && !x.failed); if (!r) return null;
+      if (show !== undefined) { r.prospekt = !!show; if (!r.prospekt) delete r.hero; }
+      if (hero) { for (const x of all) if (x.work === r.work) delete x.hero; r.hero = true; r.prospekt = true; }
+      save(); return { id: r.id, prospekt: r.prospekt !== false, hero: !!r.hero };
+    },
+    workOfRender(id) { return all.find(x => x.id === id && !x.failed)?.work ?? null; },
     estimate, spent, make, spotsOf, staleOf, get all() { return all; },
     /* Anton's proposal: the ids of the person's spots to take again; nothing is made until the person confirms on the page (U3665) */
     propose(who, ids) { proposals.set(who, { ids, t: Date.now() }); },

@@ -462,8 +462,24 @@ function bindDetails(R) {
   }
 }
 /* the open one's «Detaljer», folded, under its card in the list: its name to change, the changes with «Ta ut …», and «Se før» (the only home of these since the tab became a plain list) */
-const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${mine() ? `<div class="fc-pub">${publicBox({ version: versionId, sharing: draft.sharing, mine: true }, esc)}</div>` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
+const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${mine() ? `<div class="fc-pub">${publicBox({ version: versionId, sharing: draft.sharing, mine: true }, esc)}</div>` : ""}${mine() ? `<div class="fc-pkp" id="pkPick">${pkHtml()}</div>` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
+/* the Prospekt page of a shared project: a link-only one carries its link key (prospekt.mjs); a public one needs none */
+const prospektHref = (v, stay) => `prospekt.html?v=${encodeURIComponent(v.version)}${v.sharing === "lenke" && v.pkey ? `&nokkel=${encodeURIComponent(v.pkey)}` : ""}${stay ? "&se=1" : ""}`;
 let detailsOpen = false;
+/* «Bilder i prospektet»: the open project's Gjengi pictures, each with a tick (shown in the Prospekt) and «Hovedbilde» (the first, large one); owner only, through POST /api/endring { prospekt } */
+let pkList = { id: null, pics: [] };
+const pkHtml = () => pkList.id !== versionId || !pkList.pics.length ? "" : `<b class="pk-h">Bilder i prospektet</b><ul class="pk-list">${pkList.pics.map(p => `<li><label><input type="checkbox" data-pkshow="${esc(p.id)}"${p.prospekt ? " checked" : ""}><img src="${esc(p.url)}" alt="" loading="lazy" width="96" height="64"></label><button type="button" class="pk-hero" data-pkhero="${esc(p.id)}" aria-pressed="${!!p.hero}" title="Det store bildet øverst i prospektet">${p.hero ? "Hovedbilde" : "Velg hovedbilde"}</button></li>`).join("")}</ul>`;
+async function pkLoad() {
+  if (!mine()) return; const id = versionId;
+  const j = await fetch(`api/gjengi?versjon=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!j || id !== versionId) return; pkList = { id, pics: (j.pictures || []).slice(0, 24) };
+  const box = document.getElementById("pkPick"); if (box) box.innerHTML = pkHtml();
+}
+async function pkSet(render, body) {
+  const j = await fetch("api/endring", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prospekt: { render, ...body } }) }).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (!j) return toast("Fikk ikke endret prospektet. Prøv igjen.");
+  pkLoad();
+}
 const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "delt åpent" };
 let verRows = [], selecting = false; const picked = new Set();
 const savedAt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? `i dag ${clock(t)}` : d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" }); };
@@ -1035,19 +1051,28 @@ ifcLink();
 function versionCard(v) {
   const open = v.version === versionId, sel = selecting && v.mine;
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
-  const acts = v.mine && !selecting ? `<div class="fc-acts">${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
+  const pk = v.sharing !== "privat" && !selecting && me.person ? `<a class="fc-pk" href="${esc(prospektHref(v, true))}" title="Åpne prospektet: bilder og tall, uten innlogging" aria-label="Prospekt: ${esc(v.title)}">Prospekt</a>` : "";
+  const acts = v.mine && !selecting ? `<div class="fc-acts">${pk}${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
-    + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
-    + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts}</div>`
+    + `<a class="fc-a" href="${!me.person && v.sharing !== "privat" ? esc(prospektHref(v)) : `?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}`}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
+    + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts || (pk ? `<div class="fc-acts">${pk}</div>` : "")}</div>`
     + `${open && draft && !draft.missing ? openDetails() : ""}</li>`;
 }
+/* «Tilbake til prospekt» (Morten 2026-10-27): from the project view of a shared project, for a visitor, and for anyone who came from its Prospekt */
+function drawBack() {
+  const a = $("pkBack"); if (!a) return;
+  const v = draft?.version && !draft.missing && versionId && draft.sharing !== "privat";
+  a.hidden = !(v && (!me.person || new URLSearchParams(location.search).has("fra"))); if (!a.hidden) a.href = prospektHref({ version: versionId, sharing: draft.sharing, pkey: nokkel }, !!me.person);
+}
 function drawList() {
+  drawBack();
   const rows = verRows.map(v => v.version === versionId && draft?.version ? { ...v, title: draft.title ?? v.title, sharing: draft.sharing ?? v.sharing, updated: draft.updated ?? v.updated } : v);
   if (draft?.version && !draft.missing && versionId && !rows.some(v => v.version === versionId)) rows.unshift({ version: versionId, title: draft.title, owner: draft.owner, updated: draft.updated, sharing: draft.sharing, mine: mine(), ...(nokkel ? { nokkel } : {}) });
   $("verBar").hidden = !rows.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
   const keep = $("verList").querySelector(".fc-det")?.open; if (keep != null) detailsOpen = keep;
   $("verList").innerHTML = listHtml(rows, { signedIn: !!me.person, card: versionCard });
   const R = $("verList").querySelector(".fc.open"); if (R && draft?.version) bindDetails(R);
+  if (R && draft?.version && mine()) pkLoad();
 }
 function listVersions() {
   fetch("api/versjoner").then(r => r.ok ? r.json() : { versions: [] }).then(({ versions = [] }) => {
@@ -1068,6 +1093,8 @@ $("verList").addEventListener("click", e => {
   else if (d.vshare) share(d.vshare); else if (d.vpriv) makePrivate(d.vpriv); else if (d.vcopy) copyVersion(d.vcopy);
   else if (d.vpub) setSharing(d.vpub, "offentlig"); else if (d.vlink) setSharing(d.vlink, "lenke");
 });
+$("verList").addEventListener("change", e => { const c = e.target.closest("input[data-pkshow]"); if (c) pkSet(c.dataset.pkshow, { show: c.checked }); });
+$("verList").addEventListener("click", e => { const b = e.target.closest("[data-pkhero]"); if (b) pkSet(b.dataset.pkhero, { hero: true }); });
 $("verList").addEventListener("change", e => { const c = e.target.closest("input[data-pub]"); if (c) setSharing(c.dataset.pub, sharingFor(c.checked)); });
 $("verDelSel").onclick = () => askDelete(verRows.filter(v => picked.has(v.version)));
 let asking = [];

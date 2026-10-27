@@ -7,7 +7,7 @@
 <meta name="description" content="Gamle Drammen sykehus i 3D og plan, etasje for etasje, fra arkivets tegninger">
 <meta name="theme-color" content="#fbf9f4">
 <!-- not inline and not deferred: the edge CSP forbids inline script, and this must run before the first paint (visitor-chrome.test.mjs) -->
-<script src="me-hint.js?v=1"></script>
+<script src="me-hint.js?v=2"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -20,11 +20,12 @@
 <link rel="stylesheet" href="kit/kit.css?v=20261027zj">
 <link rel="stylesheet" href="fab/laser.css">
 <link rel="stylesheet" href="fab/cardshell.css">
-<link rel="stylesheet" href="sykehus.css?v=20261027zw">
+<link rel="stylesheet" href="sykehus.css?v=20261027pk2">
 </head>
 <body class="ed">
 <header class="top appbar">
   <a class="brand" href="./" title="Gamle Drammen sykehus, Dronninggata 28 · gnr. 114 bnr. 272: modellen slik den står i dag">Gamle Drammen sykehus<small>Dronninggata 28 · gnr. 114 bnr. 272</small></a>
+  <a class="pk-back" id="pkBack" href="prospekt.html" hidden title="Tilbake til prospektet: bilder og tall">‹ Tilbake til prospekt</a>
   <div class="wherebar">
     <button type="button" class="where" id="where" hidden></button>
     <div class="views" id="views" hidden>
@@ -179,6 +180,6 @@
 <div id="sheet"></div>
 <!-- ?v: once, past what browsers held from before the edge sent no-cache (2026-10-25) -->
 <script src="early.js" defer></script>
-<script type="module" src="app.js?v=20261027prk"></script>
+<script type="module" src="app.js?v=20261027pk2"></script>
 </body>
 </html>
