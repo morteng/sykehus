@@ -24,6 +24,7 @@ import { planAdded, addedKey } from "./added-cache.js";
 import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
 import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
+import { createSkyBodies } from "./skybodies.js";   // the sun's disc and the moon in the sky, visual only
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
@@ -52,6 +53,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* the weather (renderkit atmosphere.js, U3886): Neutral tone mapping, haze #dfe8ee from 100 to 1000 m, a sky by the sun's height, snow and wind in the
      materials' own shaders. ?snow=<mm> forces a snow depth; the shadow map is drawn when the picture changed, not when only the wind did. */
   const atm = createAtmosphere({ THREE, renderer, scene, hemi: sky, sun: sunL, reduced: !!matchMedia?.("(prefers-reduced-motion: reduce)").matches }).install();
+  const skyb = createSkyBodies({ THREE, scene }), atmBefore = scene.onBeforeRender; scene.onBeforeRender = (r, sc, cam) => { atmBefore(r, sc, cam); skyb.forCamera(cam); };
   renderer.shadowMap.autoUpdate = false;
   const snowParam = new URLSearchParams(location.search).get("snow"); if (snowParam != null) atm.setSnow(+snowParam);
   const drawNow = cam => { renderer.shadowMap.needsUpdate = true; renderer.render(scene, cam); };
@@ -1109,7 +1111,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   function setSun(date) {
     const s = sunPosition(date, lat, lon), az = s.azimuth * Math.PI / 180, el = Math.max(s.elevation, 1) * Math.PI / 180, d = 700;
     sunL.position.set(O.x + d * Math.cos(el) * Math.sin(az), d * Math.sin(el), -O.y - d * Math.cos(el) * Math.cos(az)); sunL.target.position.set(O.x, 0, -O.y);
-    atm.setSun(s.elevation); dirty = true; return s;
+    atm.setSun(s.elevation); skyb.update(date, lat, lon); dirty = true; return s;
   }
 
   /* the camera for one picture (snapshot): two-point views (øyehøyde, froskeperspektiv) look level and the frame is

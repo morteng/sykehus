@@ -37,6 +37,17 @@ function errorOf(j) {
   return say + (e.code === "script_error" && tail ? `\nSlutten av utskriften:\n${tail}` : "");
 }
 
+/* one job to the worker. A cold `import ifcopenshell` in the sandbox sometimes dies with the script error «KeyboardInterrupt»
+   (the sandbox, not the script): that one answer, exactly, is asked again once after a second; twice gives the first answer. */
+export const RETRY = { ms: 1000 };
+const sandboxHiccup = j => j?.errors?.[0]?.code === "script_error" && j.errors[0].message === "KeyboardInterrupt";
+async function workerJob(base, body) {
+  const ask = async () => { const r = await fetch(`${base}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body, signal: AbortSignal.timeout(360000) }); return { r, j: await r.json() }; };
+  const first = await ask();
+  if (!sandboxHiccup(first.j)) return first;
+  await new Promise(ok => setTimeout(ok, RETRY.ms));
+  try { const again = await ask(); return sandboxHiccup(again.j) ? first : again; } catch { return first; }
+}
 /* run (or find) a construction: { sha, box, classes, buildings, storeys, triangles, result } */
 /* JSON for the script: a whole ground (12) as 12.0, since IfcOpenShell refuses an int in a point's coordinates */
 const asJson = o => JSON.stringify(o).replace(/"ground":(-?\d+)(?=[,}])/, '"ground":$1.0');
@@ -47,8 +58,7 @@ export async function runBim(script, params) {
   if (!W) throw toolErr("Konstruksjoner bygges av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
   let j;
   try {
-    const r = await fetch(`${W.replace(/\/+$/, "")}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: asJson({ script, params, then: ["mesh", "glb"] }), signal: AbortSignal.timeout(360000) });
-    j = await r.json();
+    ({ j } = await workerJob(W.replace(/\/+$/, ""), asJson({ script, params, then: ["mesh", "glb"] })));
   } catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
   if (j.state !== "done") throw toolErr(errorOf(j));
   const get = async f => Buffer.from(await (await fetch(`${W.replace(/\/+$/, "")}${j.files[f]}`, { signal: AbortSignal.timeout(60000) })).arrayBuffer());
@@ -92,8 +102,8 @@ export async function runPart(part, params, name) {
   const W = partsAtUrl[part] || base;
   let j, bad = null;
   try {
-    const r = await fetch(`${W.replace(/\/+$/, "")}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ part, params: own, ...(ground != null ? { ground: +ground } : {}), ...(name ? { name } : {}), materials: materialTable(), then: ["mesh", "glb"] }), signal: AbortSignal.timeout(360000) });
-    j = await r.json(); if (!r.ok) bad = j.errors?.[0];
+    const got = await workerJob(W.replace(/\/+$/, ""), JSON.stringify({ part, params: own, ...(ground != null ? { ground: +ground } : {}), ...(name ? { name } : {}), materials: materialTable(), then: ["mesh", "glb"] }));
+    j = got.j; if (!got.r.ok) bad = j.errors?.[0];
   } catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
   if (bad) {
     const names = Object.keys(await listParts().catch(() => ({})));
@@ -189,8 +199,7 @@ export async function importFile(bytes, meta = {}) {
     const b = await (await fetch(`${base}/blobs`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: bytes, signal: AbortSignal.timeout(120000) })).json();
     if (b.sha256 !== fileSha) throw new Error(b.errors?.[0]?.message || "fila kom ikke fram");
     const job = { inputs: { [input]: fileSha }, then: fmt === "ifc" ? ["mesh"] : ["import", "mesh"], ...(unit || up ? { params: { ...(unit ? { unit } : {}), ...(up ? { up } : {}) } } : {}) };
-    const r = await fetch(`${base}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(job), signal: AbortSignal.timeout(360000) });
-    j = await r.json();
+    ({ j } = await workerJob(base, JSON.stringify(job)));
   } catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
   const why = j.errors?.[0]?.message || "";
   if (j.state !== "done" || !j.files?.["mesh.json"]) throw toolErr(/^no unit/.test(why) ? "Tegningen sier ikke hvilken enhet den er tegnet i: velg enheten og send den igjen." : /spans/.test(why) ? `Tegningen er for stor: noe ligger langt fra resten (${why.replace(/^the drawing spans ([\d.]+) km.*/, "$1 km")}). Slett det, eller send planen alene.` : /DWG/.test(why) ? `DWG-fila kunne ikke leses: ${why}. Lagre den som DXF og prøv igjen.` : /no geometry/.test(why) ? "Fila har ingen former arbeideren kan tegne (på lag som er på)." : /too many/.test(why) ? `Fila er for tung: ${why}` : /compressed|other files/.test(why) ? `glTF-fila kan ikke leses slik: ${why}` : `Arbeideren kunne ikke lese fila: ${why || j.state || "ukjent"}`);
@@ -220,8 +229,7 @@ export async function checkIfc(files, cfg) {
       if (!/^[0-9a-f]{64}$/.test(b.sha256 || "")) throw new Error(b.errors?.[0]?.message || "fila kom ikke fram");
       inputs[name] = b.sha256;
     }
-    const r = await fetch(`${base}/jobs?wait=330`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ inputs, then: ["ifccheck"], ifccheck: { ...cfg, file: "model.ifc", ...(files["other.ifc"] ? { other: "other.ifc" } : {}) } }), signal: AbortSignal.timeout(360000) });
-    j = await r.json();
+    ({ j } = await workerJob(base, JSON.stringify({ inputs, then: ["ifccheck"], ifccheck: { ...cfg, file: "model.ifc", ...(files["other.ifc"] ? { other: "other.ifc" } : {}) } })));
   } catch (e) { throw toolErr(`Modellkontrollen kan ikke kjøre nå: arbeideren svarer ikke (${String(e.message).slice(0, 150)}). Prøv igjen om litt; si fra til den som drifter siden hvis det varer.`); }
   if (j.errors?.[0]?.code === "bad_request") throw toolErr("Modellkontrollen kan ikke kjøre nå: arbeideren er ikke oppdatert med kontrollen ennå (si fra til den som drifter siden).");
   if (j.state !== "done" || !j.ifccheck) throw toolErr(`Modellkontrollen feilet i arbeideren: ${j.errors?.[0]?.message || j.state || "ukjent"}`.slice(0, 400));
