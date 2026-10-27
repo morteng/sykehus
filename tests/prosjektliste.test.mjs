@@ -1,5 +1,5 @@
 /* «Prosjekter» list (Morten 2026-10-27): a visitor who is not signed in sees no «Nytt prosjekt» and one list of public projects;
-   a signed-in person sees «Dine prosjekter» first, then «Andres offentlige prosjekter»; an empty group has no heading; no rows keeps the one plain line.
+   a signed-in person sees «Dine prosjekter» first, then «Andres delte prosjekter»; an empty group has no heading; no rows keeps the one plain line.
    The server refuses a create without the login.   node --test tests/prosjektliste.test.mjs */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -21,22 +21,22 @@ const otherA = { version: "vc", title: "Andres C", owner: "pappa" }, otherB = { 
 const order = h => [...h.matchAll(/<h3>([^<]+)<\/h3>|data-id="(\w+)"/g)].map(m => m[1] || m[2]);
 const rd = f => readFileSync(new URL("../public/" + f, import.meta.url), "utf8");
 
-test("(a) signed out: one list headed «Offentlige prosjekter», only public rows; the page hides «Nytt prosjekt» without a person", () => {
-  assert.deepEqual(order(listHtml([otherA, otherB], { signedIn: false, card })), ["Offentlige prosjekter", "vc", "vd"]);
+test("(a) signed out: one list headed «Delte prosjekter», only public rows; the page hides «Nytt prosjekt» without a person", () => {
+  assert.deepEqual(order(listHtml([otherA, otherB], { signedIn: false, card })), ["Delte prosjekter", "vc", "vd"]);
   const app = rd("app.js");
   assert.match(app, /\$\("mnp"\)\.parentElement\.hidden = !me\.person/, "the button's row is hidden without a person");
   assert.match(app, /\$\{me\.person \? `<button type="button" data-ny /, "the draft card's «Nytt prosjekt» needs a person");
   assert.match(rd("index.html"), /class="bygg-acts"><button[^>]*id="mnp"/, "the control the line above hides is the real one");
 });
 
-test("(b) signed in with own and others: «Dine prosjekter» and its rows first, then «Andres offentlige prosjekter»", () => {
+test("(b) signed in with own and others: «Dine prosjekter» and its rows first, then «Andres delte prosjekter»", () => {
   assert.deepEqual(order(listHtml([otherA, mineA, otherB, mineB], { signedIn: true, card })),
-    ["Dine prosjekter", "va", "vb", "Andres offentlige prosjekter", "vc", "vd"]);
+    ["Dine prosjekter", "va", "vb", "Andres delte prosjekter", "vc", "vd"]);
 });
 
 test("(c) signed in with only own rows: only the first heading; only others: only the second", () => {
   assert.deepEqual(order(listHtml([mineA, mineB], { signedIn: true, card })), ["Dine prosjekter", "va", "vb"]);
-  assert.deepEqual(order(listHtml([otherA], { signedIn: true, card })), ["Andres offentlige prosjekter", "vc"]);
+  assert.deepEqual(order(listHtml([otherA], { signedIn: true, card })), ["Andres delte prosjekter", "vc"]);
 });
 
 test("(d) no rows at all: the one plain line, no heading, signed in or not", () => {

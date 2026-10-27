@@ -1,4 +1,4 @@
-/* «Vis offentlig i Prosjekter» (Morten 2026-10-27): the owner sets a project offentlig, lenke or privat through the page's route
+/* «Del i Prosjekter» (Morten 2026-10-27): the owner sets a project offentlig, lenke or privat through the page's route
    (POST /api/endring { share, sharing }); only the owner may; the public ones are listed to a signed-out visitor.
    node --test tests/share-public.test.mjs */
 import { test, after } from "node:test";
@@ -68,7 +68,7 @@ test("a project of a test account stays out of the list although it is public", 
 
 /* the page's pieces (public/sharing.js): who gets which control, and what a tick sends */
 const act = (k, title) => `<b data-${k}="v1" title="${title}"></b>`, IC = { link: "L", lock: "K" };
-test("the owner's card has «Vis offentlig»; a card of someone else has no share control; a public card shows «Bare lenke»", () => {
+test("the owner's card has «Del åpent»; a card of someone else has no share control; a public card shows «Bare lenke»", () => {
   const own = shareActs({ version: "v1", mine: true, sharing: "lenke" }, act, IC);
   assert.match(own, /data-vpub="v1"/); assert.ok(own.includes(PUBLIC_TIP)); assert.match(own, /data-vpriv/);
   assert.equal(shareActs({ version: "v1", sharing: "offentlig", owner: "lars" }, act, IC), "", "not the owner's: no control");
@@ -78,10 +78,10 @@ test("the owner's card has «Vis offentlig»; a card of someone else has no shar
 });
 test("the box says its label, is checked when public, and a tick means offentlig, an untick lenke", () => {
   const off = publicBox({ version: "v1", mine: true, sharing: "lenke" }), on = publicBox({ version: "v1", mine: true, sharing: "offentlig" });
-  assert.match(off, /Vis offentlig i Prosjekter/); assert.match(off, /Alle som åpner siden ser prosjektet, uten innlogging\./); assert.match(off, /Fjern haken for å gjøre det til bare lenke\./);
+  assert.match(off, /Del i Prosjekter/); assert.match(off, /Alle som åpner siden ser prosjektet, uten innlogging\./); assert.match(off, /Fjern haken for å gjøre det til bare lenke\./);
   assert.doesNotMatch(off, /checked/); assert.match(on, /checked/); assert.equal(publicBox({ version: "v1", sharing: "offentlig" }), "", "no box for a project that is not yours");
   assert.deepEqual([sharingFor(true), sharingFor(false)], ["offentlig", "lenke"]);
-  assert.deepEqual(SHARE_TOAST, { offentlig: "Prosjektet vises nå offentlig", lenke: "Prosjektet er nå bare delt med lenke" });
+  assert.deepEqual(SHARE_TOAST, { offentlig: "Prosjektet er nå delt åpent", lenke: "Prosjektet er nå bare delt med lenke" });
 });
 test("the page wires the control to the same route and the cache strings moved", () => {
   const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8"), html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");

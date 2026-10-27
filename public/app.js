@@ -408,7 +408,7 @@ function sheetStrip(w) {
    place when it is one's own, one status line, «Del» first, «Nytt prosjekt» from the before, «Ny kopi» of this one;
    then the changes, one line each by the building's plain name, grouped by kind with a count and folded past five,
    each with a small ↺ to take it out; one «Angre siste» over them */
-const SHARED = { privat: "bare du ser den", lenke: "delt med lenke", offentlig: "offentlig" };
+const SHARED = { privat: "bare du ser den", lenke: "delt med lenke", offentlig: "delt åpent" };
 const IC = {
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg>',
@@ -464,7 +464,7 @@ function bindDetails(R) {
 /* the open one's «Detaljer», folded, under its card in the list: its name to change, the changes with «Ta ut …», and «Se før» (the only home of these since the tab became a plain list) */
 const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${mine() ? `<div class="fc-pub">${publicBox({ version: versionId, sharing: draft.sharing, mine: true }, esc)}</div>` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
 let detailsOpen = false;
-const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "offentlig" };
+const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "delt åpent" };
 let verRows = [], selecting = false; const picked = new Set();
 const savedAt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? `i dag ${clock(t)}` : d.toLocaleDateString("nb-NO", { day: "numeric", month: "short" }); };
 const thumbSrc = v => `api/versjon/${encodeURIComponent(v.version)}/bilde.jpg?t=${encodeURIComponent(v.thumb || v.updated)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}`;
@@ -637,7 +637,7 @@ async function share(id) {
   try { await navigator.clipboard.writeText(link); toast("Lenken er kopiert. Alle med den ser dette, også uten innlogging."); }
   catch { toast(`Lenken: ${link}`); }
 }
-/* «Vis offentlig i Prosjekter»: the card's globe and the box under «Detaljer» set offentlig; back to lenke from either. The toast undoes it */
+/* «Del i Prosjekter»: the card's globe and the box under «Detaljer» set offentlig; back to lenke from either. The toast undoes it */
 async function setSharing(id, to) {
   const row = id === versionId && draft?.version ? draft : verRows.find(v => v.version === id), was = row?.sharing || "lenke";
   const j = await change({ share: id, sharing: to }); if (j.error) { drawDraft(); return toast(`Fikk ikke endret hvem som ser det: ${j.error}`); }

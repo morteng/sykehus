@@ -187,7 +187,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return { restored: back.map(brief) };
   };
   /* its link as the asker may give it: plain when public; the share link when link-only; the owner's own when private */
-  const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Offentlig: står i lista på forsiden og åpner for alle." };
+  const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Delt åpent: står i lista på forsiden og åpner for alle." };
   const versionOut = (v, o, req) => { const mine = !!req && userOf(req) === v.owner, k = v.sharing === "offentlig" ? null : v.sharing === "lenke" ? v.key : mine ? v.own : null;
     return { version: v.id, title: v.title, owner: v.owner, sharing: v.sharing, changes: v.edits.length, updated: v.updated,
       link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(v.wish?.text ? { wish: v.wish } : {}), ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };   // wish: what the person asked for when «Nytt prosjekt» made it (U3786)
