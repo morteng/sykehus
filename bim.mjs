@@ -215,6 +215,8 @@ async function placed(site, run, p, from, to, at, asked) {
 /* what the agent sends (construction; reshape with params) made into what design.js checks (volume shape bim; reshape
    with bim), after the worker ran it. site: the model as it stands (for the ground and the construction's script) */
 export async function prepare(e, site) {
+  /* on is a wing's id or name; the roof lookups (baseOf) take the id, so a name must not fall through to the ground */
+  if (e?.on != null) { const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k); if (w) e = { ...e, on: w.id }; }
   /* a file brought in (U3571): placed like a construction, the box its file's */
   if (e?.kind === "import") {
     const { kind, file, source, licence, material, ...rest } = e, bim = importBim(e);
@@ -250,14 +252,14 @@ export async function prepare(e, site) {
     return { ...rest, kind: "volume", shape: "bim", material: mat, bim: { script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
   }
   /* a construction's parameters changed, or it moved or turned: its script again, its foot where it now stands */
-  if (e?.kind === "reshape" && ((e.params && typeof e.params === "object") || e.from || e.to)) {
+  if (e?.kind === "reshape" && ((e.params && typeof e.params === "object") || e.from || e.to || e.on)) {
     const a = (site.added || []).find(x => x.id === String(e.id) && x.shape === "bim");
     if (!a) return e;
     /* a file brought in has no script: it moves and turns as it is */
     if (a.bim.file) { if (e.params) throw toolErr(`${a.name} er en innhentet fil: den har ingen parametre å endre`); return e; }
     const { params, ...rest } = e, from = e.from || a.from, to = e.to || a.to;
-    const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: a.on });
-    const { r, p } = await placed(site, a.bim.part ? q => runPart(a.bim.part, q, a.name) : q => runBim(a.bim.script, q), p0, from, to, { on: a.on }, false);
+    const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: e.on ?? a.on });
+    const { r, p } = await placed(site, a.bim.part ? q => runPart(a.bim.part, q, a.name) : q => runBim(a.bim.script, q), p0, from, to, { on: e.on ?? a.on }, false);
     return { ...rest, bim: a.bim.part ? { part: a.bim.part, script: null, params: r.params ?? p, sha: r.sha, box: r.box, classes: r.classes, ...(a.bim.nopad ? { nopad: true } : {}) } : { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes }, _ran: r };
   }
   /* a construction as it was kept (a draft's edits shown again, or replayed into one's own version): its script and

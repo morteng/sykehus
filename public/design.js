@@ -43,6 +43,8 @@ export { fitOf, surfaceFit, groundAt };
 import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360, dirDeg, dirWord } from "./renderkit/dirs.js";   // one copy of directions (DRY 5)
 import { BUILDING as MATERIALS } from "./renderkit/materials.js";   // glass, concrete, steel, wood, brick (U3618)
 import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
+import { roofHold, roofSay, roofOf, placeOnRoof } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
+export { roofHold, roofSay, roofOf, placeOnRoof };
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
@@ -102,11 +104,21 @@ function footOf(site, e, out, num) {
   if (e.on != null) {
     const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k);
     if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
-    out.on = w.id; if (roofUnder(site, out) == null) throw new Error(`Midten av ${out.name} står ikke på taket til ${w.name}: flytt from og to så midten er innenfor fløyen`);
+    out.on = w.id; if (e.overhang_m != null) out.overhang_m = num(e.overhang_m, 0, 50, "Fremspringet (overhang_m)");
     if (e.align != null) out.align = String(e.align);
     if (out.align !== "free") { const f = alignOnRoof(site, out); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width }); }   // U3831
+    roofCheck(site, out, w);   // after the align: what still sticks out is refused with its metres, not placed with «taket er for lite»
   } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
   return out;
+}
+/* a volume on a wing's roof: refused when none of it is on the roof, or when it sticks out past the edge by more than overhang_m
+   (default 0, 25 cm slack for the drawn edge). The answer names the metres (Anton 2026-10-27: «taket er for lite» and set up anyway) */
+const EDGE_SLACK = 0.25;
+function roofCheck(site, v, w) {
+  const h = roofHold(site, v), name = v.name || "Volumet";
+  if (!h || !h.on_roof) throw new Error(`${name} står ikke på taket til ${w.name}: ingen del av grunnflaten ligger på taket. about_wing roof har takets hjørner og kote i meter`);
+  const ok = Number(v.overhang_m) || 0;
+  if (h.overhang_m > ok + EDGE_SLACK) throw new Error(`${name} stikker ${String(h.overhang_m).replace(".", ",")} m (${String(h.outside_m2).replace(".", ",")} m²) ut over takkanten til ${w.name}${ok ? `, mer enn de ${String(ok).replace(".", ",")} m som overhang_m tillater` : ""}. Flytt det inn, gjør det mindre, eller si hvor mye det får stikke ut med overhang_m (minst ${Math.ceil(h.overhang_m * 10) / 10}). about_wing roof har takets kant i meter`);
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
@@ -173,12 +185,18 @@ export function checkDesign(site, e, str) {
         if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
         if (e.height != null) out.height = num(e.height, 1, 80, "Høyden");
       }
+      /* on / overhang_m: a reshape may put it on a roof or say how far it may stick out; the roof it already stands on is kept (never silently the ground) */
+      if (e.on != null) { const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k); if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`); out.on = w.id; }
+      if (e.overhang_m != null) out.overhang_m = num(e.overhang_m, 0, 50, "Fremspringet (overhang_m)");
       /* U3831: re-align one on a roof: align building turns it to the building's axis and keeps it inside the roof; a move or a resize does the same unless it is free */
-      if (e.align != null) { if (!["building", "free"].includes(String(e.align))) throw new Error("align er building (langs byggets egen akse, på taket) eller free"); if (String(e.align) === "building" && !a.on) throw new Error(`${a.name} står ikke på et tak: align building gjelder bare et bygg med on`); out.align = String(e.align); }
-      if (a.on && (out.align ?? a.align) !== "free" && (out.align === "building" || out.from || out.to || e.width != null)) {
-        const f = alignOnRoof(site, { ...a, ...out, on: a.on }); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width });
+      const onA = out.on ?? a.on;
+      if (e.align != null) { if (!["building", "free"].includes(String(e.align))) throw new Error("align er building (langs byggets egen akse, på taket) eller free"); if (String(e.align) === "building" && !onA) throw new Error(`${a.name} står ikke på et tak: align building gjelder bare et bygg med on`); out.align = String(e.align); }
+      if (onA && (out.align ?? a.align) !== "free" && (out.align === "building" || out.from || out.to || e.width != null)) {
+        const f = alignOnRoof(site, { ...a, ...out, from: out.from || a.from, to: out.to || a.to, on: onA }); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width });
       }
       if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
+      const onW = out.on ?? a.on, geo = { ...a, ...out, from: out.from || a.from, to: out.to || a.to };
+      if (onW && (out.on || out.from || out.to || out.width != null || out.bim || out.overhang_m != null)) roofCheck(site, geo, (site.wings || []).find(x => x.id === onW));
       return Object.assign(out, w_);
     }
     case "balconies": {
@@ -224,10 +242,10 @@ export function checkDesign(site, e, str) {
 }
 
 /* the roof block a volume set on a wing stands on: the highest of that wing's blocks (or outlines) under its middle, { p, top } */
-export function roofBlock(site, e) {
-  const m = [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2]; let hit = null;
-  for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && inRing(m, k.p) && (!hit || k.top > hit.top)) hit = k;
-  return hit;
+export function roofBlock(site, e) {   // the level is roof.js's one rule (the level that holds most of the footprint), not the highest under the middle
+  const top = roofHold(site, e)?.kote; if (top == null) return null;
+  for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks : [{ p: b.ring, top: b.top }]) if (k.top != null && Math.abs(k.top - top) < 0.006) return { p: k.p, top: k.top };
+  return { p: null, top };
 }
 /* U3831b: the whole roof at that level, not one block of it: every block of the wing whose top is the chosen block's or up to one
    storey step (3,5 m) below it is one roof, however many small blocks it is cut in (a higher one is a room standing on it, not roof). { rings: the blocks' outlines, pts: all their points, for the axis } */
@@ -650,7 +668,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep, guard, lot) : null, near = lotOf(site, e);
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m ? { overhang_m: e.overhang_m } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   /* a meeting is said on both: the one laid first learns of the one that met it */
   for (const a of added) for (const m of a.ground?.meets || []) {
