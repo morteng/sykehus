@@ -44,8 +44,8 @@ import { SIDES, SIDE_KEYS, SIDE_WORD, bearingOf, turn, norm360, dirDeg, dirWord 
 import { BUILDING } from "./renderkit/materials.js";   // glass, concrete, steel, wood, brick (U3618)
 const MATERIALS = [...BUILDING, "water"];   // a volume of water fills a basin (the kit has the material, not in BUILDING)
 import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
-import { roofHold, roofSay, overSay, roofOf, placeOnRoof, roofCollisions, collisionSay, measureParts, footRing, bimXY, levelRingsOf, roofKotes } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
-export { roofHold, roofSay, overSay, roofOf, placeOnRoof, roofCollisions, measureParts, footRing, bimXY, levelRingsOf, roofKotes };
+import { roofHold, roofSay, overSay, overhangOf, roofOf, placeOnRoof, roofCollisions, collisionSay, measureParts, footRing, bimXY, levelRingsOf, roofKotes } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
+export { roofHold, roofSay, overSay, overhangOf, roofOf, placeOnRoof, roofCollisions, measureParts, footRing, bimXY, levelRingsOf, roofKotes };
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
@@ -111,7 +111,8 @@ function footOf(site, e, out, num) {
     if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
     out.on = w.id; if (e.overhang_m != null) out.overhang_m = num(e.overhang_m, 0, 50, "Fremspringet (overhang_m)");
     if (e.align != null) out.align = String(e.align);
-    if (out.align !== "free") { const f = alignOnRoof(site, out); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width }); }   // U3831
+    if (e.overhang_m != null && String(e.align) === "building") throw new Error("overhang_m og align building går ikke sammen: building krymper og flytter det inn, overhang_m legger det som det står");
+    if (out.align !== "free" && e.overhang_m == null) { const f = alignOnRoof(site, out); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width }); }   // U3831
     if (e.allow_overlap != null) out.allow_overlap = e.allow_overlap === true;
     roofCheck(site, out, w); collideCheck(site, out, w);   // after the align: what still sticks out is refused with its metres, not placed with «taket er for lite»
   } else if (e.base_kote != null) out.base_kote = num(e.base_kote, 0, 120, "Koten for foten (base_kote)");
@@ -215,7 +216,8 @@ export function checkDesign(site, e, str) {
       /* U3831: re-align one on a roof: align building turns it to the building's axis and keeps it inside the roof; a move or a resize does the same unless it is free */
       const onA = out.on ?? a.on;
       if (e.align != null) { if (!["building", "free"].includes(String(e.align))) throw new Error("align er building (langs byggets egen akse, på taket) eller free"); if (String(e.align) === "building" && !onA) throw new Error(`${a.name} står ikke på et tak: align building gjelder bare et bygg med on`); out.align = String(e.align); }
-      if (onA && (out.align ?? a.align) !== "free" && (out.align === "building" || out.from || out.to || e.width != null)) {
+      if (e.overhang_m != null && out.align === "building") throw new Error("overhang_m og align building går ikke sammen: building krymper og flytter det inn, overhang_m legger det som det står");
+      if (onA && (out.align ?? a.align) !== "free" && (out.align === "building" || (out.overhang_m ?? a.overhang_m) == null && (out.from || out.to || e.width != null))) {
         const f = alignOnRoof(site, { ...a, ...out, from: out.from || a.from, to: out.to || a.to, on: onA }); if (f) Object.assign(out, { from: f.from, to: f.to, width: f.width });
       }
       if (e.allow_overlap != null) out.allow_overlap = e.allow_overlap === true;
@@ -696,7 +698,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep, guard, lot) : null, near = lotOf(site, e);
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m ? { overhang_m: e.overhang_m } : {}), ...(e.on && e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m != null ? { overhang_m: e.overhang_m } : {}), ...(e.on && e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
   }
   roofGardenUnder(site, added);
   /* a meeting is said on both: the one laid first learns of the one that met it */

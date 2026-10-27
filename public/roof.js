@@ -103,7 +103,7 @@ export function roofOf(site, wing) {
       return { corners: [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(toXY), length_m: r2(Math.max(du, dv)), width_m: r2(Math.min(du, dv)), axis_bearing_deg: r1(du >= dv ? bearing(cs, sn) : bearing(-sn, cs)), area: du * dv }; };
     const merged = mergeRects(rects), area = rs => rs.reduce((s, r) => s + (r.u1 - r.u0) * (r.v1 - r.v0), 0);
     const levels = [...new Set(rects.map(r => r.top))].sort((a, b) => b - a).map(top => { const rs = rects.filter(r => r.top === top), b = box(rs), a = area(rs);
-      return { kote: top, area_m2: Math.round(a), bounding_rect: { corners: b.corners, length_m: b.length_m, width_m: b.width_m, axis_bearing_deg: b.axis_bearing_deg }, fills_rect: r2(a / b.area) }; });
+      return { kote: top, area_m2: Math.round(a), bounding_rect: { corners: b.corners, length_m: b.length_m, width_m: b.width_m, axis_bearing_deg: b.axis_bearing_deg }, fills_rect: r2(a / b.area), axes: roofAxes(b) }; });
     const all = box(rects);
     const edges = levels.map(l => { const rg = levelRings(rects, l.kote, rot, toXY), big = rg.filter(g => g.area_m2 >= 5).sort((a, b) => b.area_m2 - a.area_m2);
       return { kote: l.kote, rings: big.map(g => ({ ring: g.ring, ...(g.hole ? { hole: true } : {}), lengths_m: g.edges.map(e => r1(e.length_m)), facing_deg: g.edges.map(e => Math.round(e.facing_deg)), ...(g.edges.some(e => e.wall) ? { wall_edges: g.edges.flatMap((e, i) => e.wall ? [i] : []) } : {}) })), ...(rg.length > big.length ? { rings_under_5m2: rg.length - big.length } : {}) }; });
@@ -145,7 +145,7 @@ function nearestOn(p, rings) {
    several, area_m2, outside_m2, overhang_m (the farthest a point of it is off the edge), over: [{ side, m, m2 }] (which edge: øst, sør, vest, nord, by the way it
    points off the roof), on_roof, judged_on }. A rectangle is held against the whole roof; a shape (a railing, a frame) against the level it stands on
    (its kote), because a rail at 69,91 that runs over the 66,41 roof is off its own level. */
-export function roofHold(site, e) {
+export function roofHold(site, e, only = null) {   // only: a kote: the overhang is measured against that level's own edge
   const pcs = piecesOf(site, e.on).flatMap(c => c.pieces); if (!pcs.length) return null;
   const F = footSet(e), bb = pcs.map(k => { const x = k.p.map(p => p[0]), y = k.p.map(p => p[1]); return [Math.min(...x), Math.min(...y), Math.max(...x), Math.max(...y)]; });
   const levelAt = p => { let t = null; for (let i = 0; i < pcs.length; i++) { const b = bb[i]; if (p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3] && inRing(p, pcs[i].p)) t = Math.max(t ?? -Infinity, pcs[i].top); } return t; };
@@ -163,7 +163,7 @@ export function roofHold(site, e) {
   for (const p of extra) if (levelAt(p) == null) outs.push([p, 0]);
   const levels = [...by].map(([kote, m2]) => ({ kote, m2: r1(m2) })).sort((a, b) => b.m2 - a.m2 || b.kote - a.kote), kote = levels.length ? levels[0].kote : null;
   /* what is off: a rectangle off the whole roof; a shape off the level it stands on (its pieces at that kote) */
-  const mine = F && kote != null ? pcs.filter(k => Math.abs(k.top - kote) < 0.06) : pcs, rings = mine.map(k => k.p), off = [];
+  const mine = only != null ? pcs.filter(k => Math.abs(k.top - only) < 0.06) : F && kote != null ? pcs.filter(k => Math.abs(k.top - kote) < 0.06) : pcs, rings = mine.map(k => k.p), off = [];
   if (F) { for (const p of samples) { if (mine.some(k => inRing(p, k.p))) continue; const [q, dist] = nearestOn(p, rings); if (dist > 0.02) off.push([p, cell, q, dist]); } }
   else for (const [p, w] of outs) { const [q, dist] = nearestOn(p, rings); off.push([p, w, q, dist]); }
   const sides = new Map(); let over = 0, out = 0;
@@ -179,6 +179,13 @@ export function overSay(h, wingName) {
   return `stikker ${com(h.overhang_m)} m (${com(h.outside_m2)} m²) ut over takkanten til ${wingName}${sd}`;
 }
 
+/* overhang_m given: what the real shape sticks out per level it stands over (each level's own edge): { overhang_m, levels: [{ kote, overhang_m, outside_m2, over }], say } */
+export function overhangOf(site, e, wingName) {
+  const h = roofHold(site, e); if (!h) return null;
+  const levels = h.levels.map(l => { const q = roofHold(site, e, l.kote); return { kote: l.kote, on_m2: l.m2, overhang_m: q.overhang_m, outside_m2: q.outside_m2, over: q.over }; });
+  const lim = Number(e.overhang_m) || 0;
+  return { overhang_m: h.overhang_m, allowed_m: lim, kote: h.kote, levels, say: `${e.name || "Volumet"}: fremspring ${com(h.overhang_m)} m av ${com(lim)} m tillatt; foten på kote ${com(h.kote)}. Per taknivå: ${levels.map(l => `kote ${com(l.kote)}: ${l.overhang_m > 0.05 ? `stikker ${com(l.overhang_m)} m (${com(l.outside_m2)} m²) ut${l.over.length ? ` (${l.over.map(s => `${s.side} ${com(s.m)} m`).join(", ")})` : ""}` : "innenfor kanten"}`).join("; ")}.` };
+}
 /* the roof's words for the answer: which level, over how many, how far past the edge; "" when it stands cleanly on one level */
 export function roofSay(site, e) {
   const h = roofHold(site, e); if (!h) return null;
@@ -192,17 +199,31 @@ export function roofSay(site, e) {
 /* U-roof: «at» for a roof: { wing, roof: true, along?: «midt» | m from the roof's start end along its axis, gap_m?: m from the roof's left edge
    (looking along the axis from its start), absent = centred across, kote?: which level's rectangle, default the biggest }.
    length (m along the axis) and width (m across) are the footprint; it lies parallel to the axis. -> { from, to, text, kote, axis_bearing_deg } */
-export function placeOnRoof(site, w, at, length, width) {
+/* a roof level's own axes (one copy: about_wing's roof.levels[].axes and placeOnRoof): origin = the corner where the long axis starts on its left edge, u along the
+   axis, v to the left of it (90° counter-clockwise), Lr along and Wr across; bearings 0..360 from north clockwise */
+function roofFrame(b) {
+  const [c0, c1, , c3] = b.corners, ax = [c1[0] - c0[0], c1[1] - c0[1]], aw = [c3[0] - c0[0], c3[1] - c0[1]], A = Math.hypot(...ax), B = Math.hypot(...aw), long = A >= B;
+  const u = long ? [ax[0] / A, ax[1] / A] : [aw[0] / B, aw[1] / B];
+  return { u, v: [-u[1], u[0]], Lr: long ? A : B, Wr: long ? B : A, s0: long ? c0 : c1 };
+}
+const brg = d => r1((((Math.atan2(d[0], d[1]) * 180 / Math.PI) % 360) + 360) % 360);
+const eight = (dx, dy) => { const a = ((Math.atan2(dx, dy) * 180 / Math.PI) % 360 + 360) % 360; return ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(a / 45) % 8]; };
+export function roofAxes(b) {
+  const { u, v, s0 } = roofFrame(b), mid = b.corners.reduce((s, p) => [s[0] + p[0] / 4, s[1] + p[1] / 4], [0, 0]);
+  return { origin: s0.map(r2), origin_is: `${eight(s0[0] - mid[0], s0[1] - mid[1])}hjørnet`, u_bearing_deg: brg(u), v_bearing_deg: brg(v) };   // length and width are the level's bounding_rect (u range, v range)
+}
+export function placeOnRoof(site, w, at, length, width, allowOut = false) {
   if (!(length >= 1 && length <= 250)) throw new Error("length er lengden i meter langs takets akse, mellom 1 og 250");
   if (!(width >= 1 && width <= 120)) throw new Error("width er bredden i meter på tvers av taket, mellom 1 og 120");
   const R = roofOf(site, w.id); if (!R) throw new Error(`${w.name} har ikke noe tak å legge det på`);
   const lv = at.kote != null ? R.levels.find(l => Math.abs(l.kote - +at.kote) < 0.06) : R.levels.slice().sort((a, b) => b.area_m2 - a.area_m2)[0];
   if (!lv) throw new Error(`${w.name} har ikke tak på kote ${at.kote}; takene ligger på ${R.levels.map(l => l.kote).join(", ")}`);
-  const [c0, c1, , c3] = lv.bounding_rect.corners, ax = [c1[0] - c0[0], c1[1] - c0[1]], aw = [c3[0] - c0[0], c3[1] - c0[1]], A = Math.hypot(...ax), B = Math.hypot(...aw), long = A >= B;
-  /* the axis runs along the rectangle's long side; its left is that direction turned 90° counter-clockwise; s0 is the axis' start at the left edge */
-  const u = long ? [ax[0] / A, ax[1] / A] : [aw[0] / B, aw[1] / B], v = [-u[1], u[0]], Lr = long ? A : B, Wr = long ? B : A, s0 = long ? c0 : c1;
-  const alongM = at.along == null || at.along === "midt" ? (Lr - length) / 2 : Number(at.along), gap = at.gap_m == null ? (Wr - width) / 2 : Number(at.gap_m);
-  if (!Number.isFinite(alongM) || !Number.isFinite(gap) || gap < 0) throw new Error("along er «midt» eller meter fra takets ene ende; gap_m er meter fra takets venstre kant (0 eller mer)");
+  const { u, v, Lr, Wr, s0 } = roofFrame(lv.bounding_rect);
+  /* u and v are along and gap_m by the roof's own axes (about_wing roof.levels[].axes): the footprint's corner nearest the origin, in m along and m to the left */
+  if (at.u != null && at.along != null || at.v != null && at.gap_m != null) throw new Error("u er det samme som along, v det samme som gap_m: bruk ett av hvert par");
+  const au = at.u ?? at.along, av = at.v ?? at.gap_m;
+  const alongM = au == null || au === "midt" ? (Lr - length) / 2 : Number(au), gap = av == null ? (Wr - width) / 2 : Number(av);
+  if (!Number.isFinite(alongM) || !Number.isFinite(gap) || (!allowOut && gap < 0)) throw new Error("u (along) er «midt» eller meter fra takets origo langs aksen; v (gap_m) er meter fra takets venstre kant (0 eller mer; negativt bare med overhang_m)");
   const mid = (t, q) => [r2(s0[0] + u[0] * t + v[0] * q), r2(s0[1] + u[1] * t + v[1] * q)], q = gap + width / 2;
   return { from: mid(alongM, q), to: mid(alongM + length, q), kote: lv.kote, axis_bearing_deg: lv.bounding_rect.axis_bearing_deg,
     text: `på taket til ${w.name} (kote ${String(lv.kote).replace(".", ",")}), langs takets akse ${String(lv.bounding_rect.axis_bearing_deg).replace(".", ",")}°: ${String(r1(alongM)).replace(".", ",")} m fra enden og ${String(r1(gap)).replace(".", ",")} m fra venstre kant; taket er ${String(lv.bounding_rect.length_m).replace(".", ",")} × ${String(lv.bounding_rect.width_m).replace(".", ",")} m` };
