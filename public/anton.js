@@ -15,6 +15,8 @@ import { pick } from "./kit/pick.js";
 import { follow } from "./kit/follow.js";
 import { burst } from "./kit/effects.js";
 import { toolLine } from "./toolline.js";
+import { modal } from "./kit/modal.js";
+import { feedbackOf } from "./sketchsend.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
 
@@ -217,11 +219,12 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       li.innerHTML = `<div class="talk-body">Anton har tegnet i «${esc(title || "versjonen")}». <a href="?versjon=${encodeURIComponent(id)}">Vis den</a></div>`; log.append(li); empty();
     }
 
+    const sketchCards = new Map();   // id -> the card in the chat, so a send from the large window marks it too
     const sketchShown = new Set();   // the plans on the page by id (a reload and the stream both bring one)
     // the history first, then live
     const fromHistory = () => fetch("api/anton/historikk").then(r => r.status === 401 ? signedOut() : r.json()).then(h => {
       if (!h) return null;
-      log.textContent = ""; replies.clear(); sketchShown.clear();
+      log.textContent = ""; replies.clear(); sketchShown.clear(); sketchCards.clear();
       for (const it of h.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null);
         else if (it.type === "tool") line("tool", toolLine(it));
@@ -259,23 +262,38 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     let liveChain = Promise.resolve();
     const liveTry = () => { liveChain = liveChain.then(async () => { const r = await tries.run().catch(() => null); if (r) tryRows.thumb(r); else redraw = true; }); };
     on("tool", t => { if (t.label) { const el = line("tool", toolLine(t)); lastStep = toolLine(t); if (isTry(t.key)) tryRows.row(el); } step = stepOf(t.key); state(); });
-    /* U3635: a plan Anton shows before he builds (propose_sketch): the picture to mark up (renderkit's sketch.js), «Bygg det»
-       says so to Anton, the feedback goes as the drawing (the picture with the marks, strokes in metres) and the pins in words */
-    async function sketchCard(s) {
-      if (sketchShown.has(s.id)) return; sketchShown.add(s.id);
-      const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty();
-      const m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
-      createSketch({ host: li, image: s.url, frame: s.frame, title: s.title, legend: s.legend, numbers: s.numbers,
-        onBuild: async () => { const b = li.querySelector(".sk-build"); b.disabled = true; const r0 = b.getBoundingClientRect(); if (await sendIt({ text: `Bygg det: ${s.title}` })) { burst(r0.left + r0.width / 2, r0.top + r0.height / 2, { kind: "leaves" });   // U3884: the click is the person's own
-           li.querySelector(".sk-say").textContent = "Sendt til Anton."; fetch(`api/skisse/${s.id}/sendt`, { method: "POST" }).catch(() => { }); } else b.disabled = false; },
-        onSend: async ({ text, drawing }) => {
-          const pins = drawing.pins.map(p => `Nål ${p.n} (øst ${m1(p.at[0])}, nord ${m1(p.at[1])} m)${p.note ? `: ${p.note}` : ""}`);
-          const { pins: _p, ...draw } = drawing;
-          return sendIt({ text: [`Tilbakemelding på skissen «${s.title}»${text ? `: ${text}` : "."}`, ...pins].join("\n"), drawing: { ...draw, camera: {}, mode: "plan", size: s.size } });
+    let sketchModal = null;          // the one large window open (a new plan replaces it)
+    const markSent = s => { s.sent = true; const li = sketchCards.get(s.id); if (li) { li.querySelector(".sk-say").textContent = "Sendt til Anton."; li.querySelector(".sk-build").disabled = true; } };
+    /* one copy of the plan's wiring, for the card and the large window: «Bygg det» says so to Anton, feedback goes by feedbackOf.
+       close: what the large window does after a send (shows «Sendt til Anton.», then shuts) */
+    function mountSketch(createSketch, host, s, close) {
+      createSketch({ host, image: s.url, frame: s.frame, title: s.title, legend: s.legend, numbers: s.numbers,
+        onBuild: async () => { const b = host.querySelector(".sk-build"); b.disabled = true; const r0 = b.getBoundingClientRect(); if (await sendIt({ text: `Bygg det: ${s.title}` })) { burst(r0.left + r0.width / 2, r0.top + r0.height / 2, { kind: "leaves" });   // U3884: the click is the person's own
+           host.querySelector(".sk-say").textContent = "Sendt til Anton."; markSent(s); fetch(`api/skisse/${s.id}/sendt`, { method: "POST" }).catch(() => { }); close?.(); } else b.disabled = false; },
+        onSend: async d => {
+          const ok = await sendIt(feedbackOf(s, d));
+          if (ok && close) setTimeout(() => { host.querySelector(".sk-say").textContent = "Sendt til Anton."; close(); }, 0);   // sketch.js clears the line when this returns
+          return ok;
         } });
-      if (s.sent) { li.querySelector(".sk-say").textContent = "Sendt til Anton."; li.querySelector(".sk-build").disabled = true; }   // after a reload (U3661)
+      if (s.sent) { host.querySelector(".sk-say").textContent = "Sendt til Anton."; host.querySelector(".sk-build").disabled = true; }   // after a reload (U3661)
     }
-    on("sketch", sketchCard);
+    /* the plan large over the page (Morten 2026-10-27: «present a plan, with a drawing, … like a large modal»): the kit's dialog
+       keeps focus in, shuts on Esc, the × and the dimmed part; the card stays in the chat */
+    async function openSketch(s) {
+      const { createSketch } = await import("./renderkit/sketch.js"); sketchModal?.close();
+      const m = modal({ title: s.title, closeLabel: "Lukk skissen", className: "sk-modal", onClose: () => { m.el.remove(); if (sketchModal === m) sketchModal = null; } });
+      sketchModal = m; mountSketch(createSketch, m.body, s, () => setTimeout(() => m.close(), 1200)); m.open();
+    }
+    /* U3635: a plan Anton shows before he builds (propose_sketch): the picture to mark up (renderkit's sketch.js) as a card in the chat;
+       true when the card is new */
+    async function sketchCard(s) {
+      if (sketchShown.has(s.id)) return false; sketchShown.add(s.id);
+      const { createSketch } = await import("./renderkit/sketch.js"), li = document.createElement("li"); li.className = "talk-item card sketch"; log.append(li); empty(); sketchCards.set(s.id, li);
+      mountSketch(createSketch, li, s);
+      const o = document.createElement("button"); o.type = "button"; o.textContent = "Åpne skissen"; o.onclick = () => openSketch(s); li.querySelector(".sk-act").append(o);
+      return true;
+    }
+    on("sketch", async s => { if (await sketchCard(s)) openSketch(s); });   // a live plan opens large; the ones that come back with the thread stay cards
     on("approval", card);
     on("qr", qrCard);
     on("error", e => line("err", CODES[e.code] || CODES.internal));
