@@ -4,6 +4,7 @@
    «Prosjekter», «Bygg» and «Anton» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
+import { shareActs, publicBox, sharingFor, SHARE_TOAST } from "./sharing.js?v=20261027sh";
 import { applyEdits } from "./edits.js";
 import { createMal, plantAt } from "./mal.js";
 import { searchPlants } from "./plants.js";
@@ -460,7 +461,7 @@ function bindDetails(R) {
   }
 }
 /* the open one's «Detaljer», folded, under its card in the list: its name to change, the changes with «Ta ut …», and «Se før» (the only home of these since the tab became a plain list) */
-const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
+const openDetails = () => `<details class="fc-det"${detailsOpen ? " open" : ""}><summary>Detaljer</summary>${mine() ? `<input class="dr-t" id="drTitle" value="${esc(draft.title)}" maxlength="120" aria-label="Navnet på prosjektet" title="Trykk for å gi det et annet navn">` : ""}${mine() ? `<div class="fc-pub">${publicBox({ version: versionId, sharing: draft.sharing, mine: true }, esc)}</div>` : ""}${detailHtml(mine())}<a class="fc-for" href="./?for">Se før</a></details>`;
 let detailsOpen = false;
 const VIS = { privat: "privat", lenke: "bare med lenke", offentlig: "offentlig" };
 let verRows = [], selecting = false; const picked = new Set();
@@ -633,6 +634,13 @@ async function share(id) {
   else link = new URL(`./?utkast=${encodeURIComponent(draftId)}`, location.href).href;
   try { await navigator.clipboard.writeText(link); toast("Lenken er kopiert. Alle med den ser dette, også uten innlogging."); }
   catch { toast(`Lenken: ${link}`); }
+}
+/* «Vis offentlig i Prosjekter»: the card's globe and the box under «Detaljer» set offentlig; back to lenke from either. The toast undoes it */
+async function setSharing(id, to) {
+  const row = id === versionId && draft?.version ? draft : verRows.find(v => v.version === id), was = row?.sharing || "lenke";
+  const j = await change({ share: id, sharing: to }); if (j.error) { drawDraft(); return toast(`Fikk ikke endret hvem som ser det: ${j.error}`); }
+  if (id === versionId) draft.sharing = j.sharing; drawDraft(); listVersions();
+  toast(SHARE_TOAST[to], { label: "Angre", run: async () => { const b = was === "privat" ? await change({ unshare: id }) : await change({ share: id, sharing: was }); if (b.error) return toast(`Fikk ikke angret: ${b.error}`); if (id === versionId) draft.sharing = b.sharing; drawDraft(); listVersions(); toast("Det er som før."); } });
 }
 async function makePrivate(id) {   // «Del» undone: the link stops working
   const j = await change({ unshare: id }); if (j.error) return toast(`Fikk ikke gjort det privat: ${j.error}`);
@@ -1025,7 +1033,7 @@ ifcLink();
 function versionCard(v) {
   const open = v.version === versionId, sel = selecting && v.mine;
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
-  const acts = v.mine && !selecting ? `<div class="fc-acts">${v.sharing === "offentlig" ? "" : act("vshare", v.sharing === "lenke" ? "Kopier lenken" : "Del: kopierer en lenke", IC.link)}${v.sharing === "privat" ? "" : act("vpriv", "Gjør privat: lenken virker ikke lenger", IC.lock)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
+  const acts = v.mine && !selecting ? `<div class="fc-acts">${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
     + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
     + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts}</div>`
@@ -1053,10 +1061,12 @@ function drawBar() { $("verSel").setAttribute("aria-pressed", String(selecting))
 $("verSel").onclick = () => { selecting = !selecting; picked.clear(); closeAsk(); drawBar(); listVersions(); };
 $("verList").addEventListener("change", e => { const c = e.target.closest("input.vsel"); if (!c) return; c.checked ? picked.add(c.dataset.id) : picked.delete(c.dataset.id); drawBar(); });
 $("verList").addEventListener("click", e => {
-  const b = e.target.closest("[data-vdel], [data-vshare], [data-vpriv], [data-vcopy]"); if (!b) return; const d = b.dataset;
+  const b = e.target.closest("[data-vdel], [data-vshare], [data-vpriv], [data-vcopy], [data-vpub], [data-vlink]"); if (!b) return; const d = b.dataset;
   if (d.vdel) askDelete([verRows.find(v => v.version === d.vdel) || (d.vdel === versionId && draft?.version ? { version: versionId, title: draft.title } : null)].filter(Boolean));
   else if (d.vshare) share(d.vshare); else if (d.vpriv) makePrivate(d.vpriv); else if (d.vcopy) copyVersion(d.vcopy);
+  else if (d.vpub) setSharing(d.vpub, "offentlig"); else if (d.vlink) setSharing(d.vlink, "lenke");
 });
+$("verList").addEventListener("change", e => { const c = e.target.closest("input[data-pub]"); if (c) setSharing(c.dataset.pub, sharingFor(c.checked)); });
 $("verDelSel").onclick = () => askDelete(verRows.filter(v => picked.has(v.version)));
 let asking = [];
 const closeAsk = () => { asking = []; $("verConfirm").hidden = true; };

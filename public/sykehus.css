@@ -644,3 +644,8 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 .ver-list .fc-acts button.icon svg { width: 18px; height: 18px; }
 @media (min-width: 560px) { .fc-row { flex-direction: row; align-items: stretch; } .ver-list .fc-a { flex-direction: row; } .fc-img { width: 168px; flex: none; aspect-ratio: auto; } .fc-b { flex: 1; min-width: 0; } .fc-row .fc-acts { flex-direction: column; justify-content: flex-start; padding: var(--sp-1); } }
 .fc-det li { border-bottom: 0; }
+
+/* «Vis offentlig i Prosjekter»: the box under a project's «Detaljer» */
+.fc-pub { display: grid; gap: 2px; padding: var(--sp-1) 0; }
+.pub-box { display: flex; align-items: center; gap: var(--sp-1); font-weight: 600; cursor: pointer; }
+.pub-note { color: var(--muted); }

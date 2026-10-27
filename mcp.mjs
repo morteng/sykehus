@@ -1230,8 +1230,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           const v = ownVersion(String(a.unshare), req); if (v.sharing !== "privat") { v.sharing = "privat"; versions.save(v); }
           return send(res, 200, versionOut(v, o, req));
         }
-        const v = ownVersion(String(a.share), req);   // «Del»: anyone with the link sees it, signed out too
-        if (v.sharing === "privat") { v.sharing = "lenke"; versions.save(v); }
+        const v = ownVersion(String(a.share), req);   // «Del»: anyone with the link sees it, signed out too; sharing: "offentlig" | "lenke" | "privat" says which (the page's «Vis offentlig»)
+        if (a.sharing !== undefined && !SHARING.includes(a.sharing)) throw toolErr(`sharing er ${SHARING.join(", ")}`);
+        const to = a.sharing ?? (v.sharing === "privat" ? "lenke" : v.sharing); if (v.sharing !== to) { v.sharing = to; versions.save(v); }
         return send(res, 200, versionOut(v, o, req));
       }
       if (me && versions && !a.version && !a.draft && !a.undo) a.version = work().id;
