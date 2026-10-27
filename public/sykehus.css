@@ -118,6 +118,8 @@ body.plan.ed.talk-on:not(.m) .bstack { bottom: 20px; }
 .tabp figcaption { font-size: var(--fs-sm); color: var(--muted); }
 .side-body { font-size: var(--fs-md); }
 .sel-empty { color: var(--muted); }
+.bygg-acts[hidden] { display: none; }
+.ver-list li.ver-h { display: block; border: 0; margin: var(--sp-3) 0 var(--sp-1); } .ver-h h3 { margin: 0; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
 .ver-list { list-style: none; margin: 0; padding: 0; }
 .ver-list li { display: flex; align-items: center; gap: var(--sp-2); border-bottom: 1px solid var(--border); }
 .ver-list a { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; color: var(--text); text-decoration: none; min-height: var(--tap); }

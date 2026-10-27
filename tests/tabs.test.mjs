@@ -57,7 +57,7 @@ test("U3672 (Morten 16:51Z «we don't need this text»): the Prosjekter tab has 
   const html = rd("index.html"), panel = html.slice(html.indexOf('id="p-changes"'), html.indexOf("</section>", html.indexOf('id="p-changes"')));
   assert.doesNotMatch(panel, /<h2/); assert.doesNotMatch(panel, /Forslag til «etter»|Tegnet med Anton over modellen/);
   assert.match(panel, /id="mnp"/); assert.match(panel, /id="verList"/); assert.match(panel, /id="draftRow"/);
-  assert.match(rd("app.js"), /sel-empty">Ingen prosjekter ennå\.<\/li>/); assert.doesNotMatch(rd("app.js"), /Ingen andre prosjekter/);
+  assert.match(rd("sharing.js"), /sel-empty">Ingen prosjekter ennå\.<\/li>/); assert.doesNotMatch(rd("app.js"), /Ingen andre prosjekter/);
   const { steps } = await import("../public/tour.js"), s = steps({ phone: () => false, tab() { } }).find(x => x.title === "Prosjektet ditt");
   assert.match(String(s.el), /p-changes/); assert.doesNotMatch(String(s.el), /h2|etter/);
 });

@@ -4,7 +4,7 @@
    «Prosjekter», «Bygg» and «Anton» (panel.js). */
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
-import { shareActs, publicBox, sharingFor, SHARE_TOAST } from "./sharing.js?v=20261027sh";
+import { shareActs, publicBox, sharingFor, SHARE_TOAST, listHtml } from "./sharing.js?v=20261027sl";
 import { applyEdits } from "./edits.js";
 import { createMal, plantAt } from "./mal.js";
 import { searchPlants } from "./plants.js";
@@ -474,7 +474,7 @@ function drawDraft() {
   if (draft.version && !draft.missing) { $("draftRow").innerHTML = ""; drawList(); return; }   // a saved version is its card in the list below (Morten 2026-10-27)
   if (draft.missing) { $("draftRow").innerHTML = `<div class="draftrow dr"><b>${versionId ? "Versjonen finnes ikke, eller er privat." : "Utkastet finnes ikke lenger"}</b><span class="dr-s">${versionId ? "" : "Utkast varer et døgn. "}Du ser modellen slik den er.</span></div>`; drawList(); return; }
   const status = ownDraft() ? `lagret på denne maskinen et døgn${me.person ? "" : " · logg inn for å beholde det"}` : "delt med lenke · det du endrer her, blir ditt eget";
-  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button><button type="button" data-ny title="Et nytt, tomt prosjekt fra før">Nytt prosjekt</button>` : "";
+  const acts = may ? `<button type="button" class="dr-p" data-del>Del</button>${me.person ? `<button type="button" data-ny title="Et nytt, tomt prosjekt fra før">Nytt prosjekt</button>` : ""}` : "";
   $("draftRow").innerHTML = `<div class="draftrow dr"><div class="dr-h"><b class="dr-t">Utkast</b><span class="dr-s">${status}</span></div>
     <div class="dr-acts">${acts}<a href="./?for">Se før</a></div>${detailHtml(may)}</div>`;
   const R = $("draftRow"); bindDetails(R);
@@ -498,6 +498,7 @@ function fresh() {
   nyttForslag.then(n => n.open());
 }
 $("mnp").onclick = fresh;
+$("mnp").parentElement.hidden = !me.person;   // «Nytt prosjekt» needs the login (the server refuses it too): a visitor does not see it
 /* the name of a building in a change, plainly: a wing's name, a new building's, else what it is; never its id */
 function nameOf(id) {
   if (id === "alle") return "Alle sykehusbyggene";
@@ -1044,7 +1045,7 @@ function drawList() {
   if (draft?.version && !draft.missing && versionId && !rows.some(v => v.version === versionId)) rows.unshift({ version: versionId, title: draft.title, owner: draft.owner, updated: draft.updated, sharing: draft.sharing, mine: mine(), ...(nokkel ? { nokkel } : {}) });
   $("verBar").hidden = !rows.some(v => v.mine); if ($("verBar").hidden) selecting = false; drawBar();
   const keep = $("verList").querySelector(".fc-det")?.open; if (keep != null) detailsOpen = keep;
-  $("verList").innerHTML = rows.length ? rows.map(versionCard).join("") : `<li class="sel-empty">Ingen prosjekter ennå.</li>`;
+  $("verList").innerHTML = listHtml(rows, { signedIn: !!me.person, card: versionCard });
   const R = $("verList").querySelector(".fc.open"); if (R && draft?.version) bindDetails(R);
 }
 function listVersions() {

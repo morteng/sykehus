@@ -22,3 +22,13 @@ export function publicBox(v, esc = s => s) {
 
 /* what to send for a tick: sharing offentlig; an untick: lenke */
 export const sharingFor = checked => (checked ? "offentlig" : "lenke");
+
+/* the «Prosjekter» list as rows (Morten 2026-10-27): signed in, «Dine prosjekter» first, then «Andres offentlige prosjekter»; signed out, one
+   «Offentlige prosjekter». A group with no rows has no heading. No rows at all: the one plain line. card(v) is the page's card for a row. */
+export const EMPTY_LIST = '<li class="sel-empty">Ingen prosjekter ennå.</li>';
+export function listHtml(rows, { signedIn, card }) {
+  if (!rows.length) return EMPTY_LIST;
+  const group = (title, rs) => rs.length ? `<li class="ver-h"><h3>${title}</h3></li>${rs.map(card).join("")}` : "";
+  if (!signedIn) return group("Offentlige prosjekter", rows);
+  return group("Dine prosjekter", rows.filter(v => v.mine)) + group("Andres offentlige prosjekter", rows.filter(v => !v.mine));
+}
