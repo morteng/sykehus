@@ -33,6 +33,18 @@ test("banned species are refused, unknown Latin names get a default size, nonsen
   assert.throws(() => checkEdit(site, [], { kind: "surface", ring: [[0, 0], [1, 0]], surface: "grass" }), /3 til/);
 });
 
+test("wish whCJbfHyRU6: a species is found by its Norwegian name, case and å/ø/æ folded; bulbs too; an unknown one offers near matches", () => {
+  for (const name of ["tulipan", "Tulipan", "TULIPAN", "paskelilje", "Påskelilje", "påskelilje"]) {
+    const c = checkEdit(site, [], { kind: "trees", species: name, points: [[0, 0]] });
+    assert.equal(c.species, /tulip/i.test(name) ? "tulipan" : "paskelilje", name);
+  }
+  assert.equal(after([{ kind: "trees", species: "Påskelilje", points: [[5, 5]] }]).trees.at(-1)[2], 0.4);   // the bulb's own height from the list, not a tree default
+  assert.throws(() => checkEdit(site, [], { kind: "trees", species: "tulipanx 1", points: [[0, 0]] }), /Kjenner ikke/);
+  assert.throws(() => checkEdit(site, [], { kind: "trees", species: "tulip", points: [[0, 0]] }), /Mente du: Tulipan \(tulipan\)/);
+  assert.throws(() => checkEdit(site, [], { kind: "trees", species: "xyzzy!", points: [[0, 0]] }), e => /Kjenner ikke/.test(e.message) && !/Mente du/.test(e.message));
+  assert.throws(() => checkEdit(site, [], { kind: "trees", species: "Rynkerose", points: [[0, 0]] }), /forbudt/);
+});
+
 test("felling takes today's trees inside the ring", () => {
   const n = site.trees.length, [x, y] = site.trees[0];
   const s = after([{ kind: "fell", ring: [[x - 1, y - 1], [x + 1, y - 1], [x + 1, y + 1], [x - 1, y + 1]] }]);

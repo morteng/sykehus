@@ -9,9 +9,12 @@ import RAW from "./hagekart-plants.js";
 export const PLANTS = RAW.filter(p => p.banned || !["bulb", "none"].includes(p.cat))
   .map(p => ({ id: p.id, no: p.no, la: p.la, cat: p.cat, ht: p.ht, sp: p.sp, form: p.look?.form, ...(p.banned ? { banned: true } : {}) }));
 
+/* every plant hagekart lists, bulbs and "none" too: the server (landscape.js plantOf) takes them by name or id although the picker does not offer them */
+export const ALL_PLANTS = RAW.map(p => ({ id: p.id, no: p.no, la: p.la, cat: p.cat, ht: p.ht, sp: p.sp, form: p.look?.form, ...(p.banned ? { banned: true } : {}) }));
+
 /* U3655: the species picker's search over the list above: by Norwegian or Latin name or id, accents and case ignored; the
    banned ones come back too, with the reason, so the picker shows them greyed and the server (landscape.js plantOf) still refuses them */
-const fold = t => String(t ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ø/g, "o").replace(/æ/g, "ae").replace(/å/g, "a");
+export const fold = t => String(t ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ø/g, "o").replace(/æ/g, "ae").replace(/å/g, "a");
 export const BANNED_WHY = "Forbudt å plante i Norge (forskrift om fremmede organismer)";
 export function searchPlants(q, limit = 8) {
   const k = fold(q).trim(); if (!k) return [];

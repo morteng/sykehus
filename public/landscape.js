@@ -27,13 +27,14 @@
 import { pointInRing as inRing, ringArea as signedArea, ringOf, ringDist } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
 import { roofOf } from "./roof.js";
 import { SIDE_KEYS } from "./renderkit/dirs.js";
-import { PLANTS } from "./plants.js";
+import { ALL_PLANTS, fold } from "./plants.js";
 import { checkPaint, checkTerrain, applyPaint, paintPlan, SOIL } from "./paint-edit.js";
 
 export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "soil", "water"];
 export const PATHS = ["gravel", "paving", "asphalt", "wood"];
 const MAX_POINTS = 200, MAX_TREES = 300;
-const BY_ID = new Map(PLANTS.map(p => [p.id, p])), BY_LA = new Map(PLANTS.filter(p => p.la).map(p => [p.la.toLowerCase(), p]));
+const BY_ID = new Map(ALL_PLANTS.map(p => [p.id, p])), BY_LA = new Map(ALL_PLANTS.filter(p => p.la).map(p => [p.la.toLowerCase(), p]));
+const BY_NO = new Map(ALL_PLANTS.filter(p => p.no).map(p => [fold(p.no), p]));   // the Norwegian name, case and å/ø/æ folded (tulipan, Påskelilje and paskelilje all find it)
 /* for a species outside hagekart's list, a size by what it is (pm, 2026-10-25): a tree unless it says shrub */
 const DEFAULT = { tree: { ht: 12, sp: 7, form: "round" }, conifer: { ht: 18, sp: 6, form: "cone" }, shrub: { ht: 2.5, sp: 2, form: "dome" } };
 
@@ -57,10 +58,13 @@ const round1 = v => Math.round(v * 10) / 10;
 /* a species as hagekart knows it, or a Latin name it does not; banned ones refused */
 export function plantOf(s) {
   const k = String(s ?? "").trim(); if (!k) throw new Error("species mangler: hagekarts id (search_plants) eller et latinsk navn");
-  const p = BY_ID.get(k.toLowerCase()) || BY_LA.get(k.toLowerCase());
+  const p = BY_ID.get(k.toLowerCase()) || BY_LA.get(k.toLowerCase()) || BY_NO.get(fold(k));
   if (p?.banned) throw new Error(`${p.no} (${p.la}) er forbudt å plante i Norge.`);
   if (p) return p;
-  if (!/^[A-Z][a-z]+( [a-z×-]+){0,3}$/.test(k)) throw new Error(`Kjenner ikke «${k}». Bruk hagekarts id fra search_plants, eller det latinske navnet (slekt og art).`);
+  if (!/^[A-Z][a-z]+( [a-z×-]+){0,3}$/.test(k)) {
+    const f = fold(k), near = ALL_PLANTS.filter(q => !q.banned && q.no && fold(q.no).includes(f)).slice(0, 3).map(q => `${q.no} (${q.id})`);
+    throw new Error(`Kjenner ikke «${k}». Bruk hagekarts id fra search_plants, det norske navnet eller det latinske navnet (slekt og art).${near.length ? ` Mente du: ${near.join(", ")}?` : ""}`);
+  }
   return { id: null, no: k, la: k, cat: "tree", ...DEFAULT.tree };
 }
 

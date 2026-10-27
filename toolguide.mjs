@@ -93,7 +93,7 @@ export const KINDS = {
   paint: { family: "Landskap", words: "mal paint pensel brush plen lawn gress grass bed grus gravel jord soil hage garden takhage tak taket roof on", example: { kind: "paint", line: [[100, 100], [110, 100]], r: 3, surface: "grass", on: "sentralblokka" }, readback: "show_draft" },
   terrain: { family: "Landskap", words: "terreng terrain flytt jord earth hev senk raise lower flate flatten glatt smooth dam pond terrasse", example: { kind: "terrain", shape: { t: "circle", c: [100, 100], r: 5 }, op: "raise", h: 1 }, readback: "show_draft" },
   path: { family: "Landskap", words: "sti path vei gangvei gravel grus paving belegg takhage tak taket roof on", example: { kind: "path", line: [[100, 100], [120, 100]], width: 2, surface: "gravel", on: "sentralblokka" }, readback: "show_draft" },
-  trees: { family: "Landskap", words: "tre trær trees plant planting art species hage garden takhage tak taket roof on busker", example: { kind: "trees", species: "Betula pendula", points: [[100, 100]], on: "sentralblokka" }, readback: "show_draft" },
+  trees: { family: "Landskap", words: "tre trær trees plant planting art species hage garden takhage tak taket roof on busker", example: { kind: "trees", species: "Betula pendula", points: [[100, 100]], on: "sentralblokka" }, note: "species: hagekarts id, det norske navnet (tulipan, påskelilje; små eller store bokstaver, a for å) eller det latinske navnet; løk og stauder går også; en ukjent art gir forslag", readback: "show_draft" },
   fell: { family: "Landskap", words: "felle fell hogge tre trees fjern remove", example: { kind: "fell", ring: [[100, 100], [120, 100], [120, 110], [100, 110]] }, readback: "show_draft" },
 };
 
