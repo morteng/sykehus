@@ -56,13 +56,18 @@ function selectionOf(s) {
 /* a point the page sends with a message (U3671: the pin Anton asked for): metres east and north on the site, shown to Anton only */
 function pointOf(p) { return p && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.abs(p.x) < 5000 && Math.abs(p.y) < 5000 ? { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : null; }
 const HIDDEN = /\\n\(Nål: [^)]*\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
-export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch }) {
+import { createPersist } from "./persist.mjs";
+export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch, dataDir = process.env.SYKEHUS_VERSIONS_DIR }) {
+  /* what survives a restart (persist.mjs): the pins, the drawings, the turns a restart cut */
+  const keep = createPersist(dataDir);
+  keep.restorePins(pages);
   const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
   const door = login.base + prefix, ready = login.anton;
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   const threads = new Map();   // person → { queue: [turn], running, subs: Set<res>, approvals: Map, sent: [times], stop }
   const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), pics: [], sent: [], stop: null, jobs: new Set(), polling: null }; threads.set(p, t); } return t; };
   /* the drawing a person sent is kept (the last 20) and served from here: the page's policy lets pictures come from its own origin only, so a data: URL in the chat line would show nothing */
+  for (const person of keep.people()) thread(person).pics = keep.picsOf(person);
   const picUrl = id => `api/anton/tegning/${id}`;
   const session = p => `sykehus:${p}`;
   const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -135,13 +140,14 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     const version = own?.id ?? versions?.list({ owner: person, viewer: person }).find(x => x.work)?.id ?? null;
     const ctx = { id: turn.id, person, version, draft: null, picked: turn.job ? pages.picked?.get(person) ?? null : turn.picked ?? null, selection: turn.selection ?? null, point: turn.point ?? null, drawing: !!turn.drawing,
       seen: version ? { id: version, edits: versions.get(version).edits.map(e => JSON.stringify(e)) } : null };
-    (pages.turn ??= new Map()).set(person, ctx); return ctx;
+    (pages.turn ??= new Map()).set(person, ctx); keep.savePins(pages); return ctx;
   }
   async function run(person) {
     const t = thread(person);
     if (t.running) return;
     while (t.queue.length) {
       const turn = t.running = t.queue.shift();
+      if (!turn.job) keep.turnTaken(person, turn);
       if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: picUrl(turn.id) } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
@@ -164,13 +170,13 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       try {
         for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, turn.device, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
       } catch (e) { console.error("anton turn", e); st = 500; j = { error: { code: "internal" } }; }
-      finally { if (pages?.turn?.get(person) === ctx) pages.turn.delete(person); }
+      finally { if (pages?.turn?.get(person) === ctx) { pages.turn.delete(person); keep.savePins(pages); } }
       console.log("anton: turn", turn.id.slice(0, 8), "→", st);
       if (st !== 200) {
         if (refusedDevice(st, j)) { publish(person, "signed_out", { type: "signed_out" }); t.queue.length = 0; }
         publish(person, "error", { type: "error", code: codeOf(j, "unavailable"), reply_to: turn.id });
       }
-      t.running = null; t.stop = null; t.approvals.clear();
+      t.running = null; t.stop = null; t.approvals.clear(); keep.turnEnded(person);
       publish(person, "queue", queueView(t));
     }
   }
@@ -193,10 +199,11 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       const selection = selectionOf(b?.selection);
       const picked = selection?.items.find(i => i.kind === "wing" || i.kind === "building")?.id ?? null;
       const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection, point: pointOf(b?.point), picked };
-      if (drawing) { t.pics.push({ id: turn.id, text, image: drawing.image }); if (t.pics.length > 20) t.pics.shift(); }
+      if (drawing) { keep.keepPic(me.person, turn.id, text, drawing.image); t.pics.push({ id: turn.id, text, image: drawing.image }); if (t.pics.length > 20) t.pics.shift(); }
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
       /* the wing or building picked when it was sent: a facade asked for with no wing named is that one's (mcp.mjs viewOf) */
       if (pages) { pages.picked ??= new Map(); const p = selection?.items.find(i => i.kind === "wing" || i.kind === "building"); if (p) pages.picked.set(me.person, p.id); else pages.picked.delete(me.person); }
+      keep.savePins(pages);
       t.queue.push(turn); publish(me.person, "queue", queueView(t)); run(me.person);
       console.log("anton: turn", turn.id.slice(0, 8), "taken,", t.subs.size, "pages listening");   // no text, no person
       return send(res, 202, { id: turn.id });
@@ -245,6 +252,12 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       const p = pics.find(x => !used.has(x.id) && (x.id === (it.request_id ?? it.id) || ((it.request_id ?? it.id) == null && x.text === it.text)));
       if (p) { used.add(p.id); it.image = picUrl(p.id); }
     }
+    /* a turn a restart cut: its line, after the message it answered (else last), so the page shows it again at every reload */
+    for (const n of keep.notesOf(me.person)) {
+      let at = items.findLastIndex(it => it?.type === "message" && it.from !== "assistant" && (it.request_id ?? it.id) === n.reply_to);
+      if (at < 0) at = items.findLastIndex(it => it?.type === "message" && it.from !== "assistant" && it.text === n.text);
+      items.splice(at < 0 ? items.length : at + 1, 0, { type: "error", code: n.code, reply_to: n.reply_to });
+    }
     if (st === 200) watchJobs(me.person, me.device);   // a job that finished while no page was open, or before a restart of this server
     return send(res, st === 200 ? 200 : 502, { items: items.slice(-50), queue: queueView(thread(me.person)), ...(st === 200 ? {} : { error: codeOf(j, "unavailable") }) });
   }
@@ -259,13 +272,13 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     if (path === "/api/anton/historikk" && req.method === "GET") { await history(res, me); return true; }
     const pic = req.method === "GET" && /^\/api\/anton\/tegning\/([0-9a-f-]{36})$/.exec(path);
     if (pic) {
-      const p = thread(me.person).pics.find(x => x.id === pic[1]);
-      if (!p) send(res, 404, { error: "Tegningen er ikke lenger her." });
-      else { res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, max-age=3600" }); res.end(Buffer.from(p.image.slice(23), "base64")); }
+      const p = thread(me.person).pics.find(x => x.id === pic[1]), bytes = p && (keep.picBytes(p.id) ?? (p.image ? Buffer.from(p.image.slice(23), "base64") : null));
+      if (!bytes) send(res, 404, { error: "Tegningen er ikke lenger her." });
+      else { res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, max-age=3600" }); res.end(bytes); }
       return true;
     }
     if (req.method === "POST") { await post(req, res, me, path); return true; }
     send(res, 404, { error: "Ikke funnet" }); return true;
   }
-  return { route, publish };
+  return { route, publish, flush: keep.flush };
 }

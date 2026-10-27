@@ -27,7 +27,7 @@ const CODES = {
   unavailable: "Anton svarer ikke akkurat nå. Prøv igjen om et minutt.", timeout: "Anton sluttet å svare. Prøv igjen.",
   limit: "Mange meldinger på kort tid. Vent noen minutter.", busy: "Anton er opptatt. Meldingen din venter.",
   too_long: "Meldingen er for lang.", not_allowed: "Anton kan ikke gjøre det for deg.", approval_expired: "Spørsmålet gikk ut. Spør på nytt.",
-  approval_unknown: "Spørsmålet er allerede besvart.", internal: "Noe gikk galt. Prøv igjen.",
+  approval_unknown: "Spørsmålet er allerede besvart.", internal: "Noe gikk galt. Prøv igjen.", restart: "Serveren startet på nytt midt i svaret. Send meldingen igjen.",
 };
 const POSE = "sykehus-pose";
 const json = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }).catch(() => null);
@@ -233,6 +233,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       for (const it of h.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null, it.image);
         else if (it.type === "tool") line("tool", toolLine(it));
+        else if (it.type === "error") line("err", CODES[it.code] || CODES.internal);
         else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }
       empty(); return h;
