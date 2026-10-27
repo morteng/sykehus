@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkEdit, applyEdits } from "../public/edits.js";
-import { roofOf, roofHold, roofSay, placeOnRoof, baseOf } from "../public/design.js";
+import { roofOf, roofHold, roofSay, placeOnRoof, baseOf, alignDelta, alignSay } from "../public/design.js";
 
 const TH = 30 * Math.PI / 180, c = Math.cos(TH), s = Math.sin(TH);
 const X = (u, v) => [Math.round((u * c - v * s) * 100) / 100 + 0, Math.round((u * s + v * c) * 100) / 100 + 0];   // grid -> site
@@ -50,35 +50,37 @@ test("a volume over two blocks: one defined kote (the level holding most), both 
   const say = roofSay(site, e).say; assert.match(say, /2 takhøyder/); assert.match(say, /kote 14/); assert.match(say, /kote 10/);
 });
 
-test("overhang: a volume that sticks out is refused with the metres; overhang_m allows it; the answer says how far", () => {
-  const e = vol(20, 5, 30, 6, {}); const out = { ...e, from: X(25, 5), to: X(55, 5) };   // u 25..55: 15 m past the end at u = 40
-  assert.throws(() => checkEdit(site, [], { ...out, on: "tw" }), /stikker 15 m .* ut over takkanten til Testfløy/);
-  assert.throws(() => checkEdit(site, [], { ...out, on: "tw", overhang_m: 10 }), /mer enn de 10 m som overhang_m tillater/);
-  const ok = checkEdit(site, [], { ...out, on: "tw", overhang_m: 15 });
-  assert.equal(ok.overhang_m, 15); assert.deepEqual(ok.from, out.from, "not moved or shrunk");
-  const sayRoof = roofSay(site, ok); assert.equal(sayRoof.overhang_m, 15); assert.match(sayRoof.say, /stikker 15 m/);
+const BIM = { script: "x", sha: "a".repeat(64), params: {}, box: { min: [0, 0, 0], max: [60, 8, 5] } };   // a construction 60 × 8 m: its size is its script's, never shrunk
+
+test("overhang: a construction that cannot fit the roof is refused with the metres (not placed with «taket er for lite»); overhang_m allows it", () => {
+  const e = { kind: "volume", name: "Glasstak", shape: "bim", bim: BIM, material: "glass", from: X(10, 5), to: X(70, 5), width: 8, height: 5, on: "tw" };
+  assert.throws(() => checkEdit(site, [], e), /stikker 30 m \(240 m²\) ut over takkanten til Testfløy/);
+  assert.throws(() => checkEdit(site, [], { ...e, overhang_m: 1 }), /mer enn de 1 m som overhang_m tillater/);
+  const ok = checkEdit(site, [], { ...e, overhang_m: 35 });
+  assert.equal(ok.overhang_m, 35);
+  const say = roofSay(site, ok); assert.ok(say.overhang_m === 30); assert.match(say.say, /stikker .* m .*ut over takkanten/);
   assert.throws(() => checkEdit(site, [], { ...vol(200, 200, 10, 5), on: "tw" }), /ingen del av grunnflaten ligger på taket/);
 });
 
-test("an exact on is not moved, turned or resized by the check or the after", () => {
-  const e = { ...vol(10, 5, 12.5, 6.5, { id: "n1abcd" }), on: "Testfløy" };   // the wing by name
-  const ok = checkEdit(site, [], e);
-  assert.deepEqual([ok.from, ok.to, ok.width], [e.from, e.to, e.width]); assert.equal(ok.on, "tw");
-  const m = applyEdits(site, [], [ok]); const v = m.site.added.find(x => x.id === "n1abcd");
-  assert.deepEqual([v.from, v.to, v.width], [e.from, e.to, e.width]);
-  assert.equal(v.base_kote ?? baseOf(m.site, v), 10);
+test("a box on the roof is moved inside by align building, and the answer's numbers say how far (m) and how much it was turned (deg)", () => {
+  const raw = { ...vol(36, 5, 10, 6), on: "tw", from: X(30, 5), to: X(46, 5) };   // 6 m past the edge, 1° off
+  const ok = checkEdit(site, [], raw);
+  assert.ok(roofHold(site, { ...ok, on: "tw" }).overhang_m < 0.3, "inside after the align");
+  const d = alignDelta(site, { ...raw, on: "tw" }, ok);
+  assert.ok(d.moved_m > 6 && d.moved_m < 6.5 && !d.shrunk && d.fits, JSON.stringify(d));
+  assert.match(alignSay(d), /flyttet 6,34 m inn på taket/);
+  const big = checkEdit(site, [], { ...vol(20, 5, 60, 6), on: "tw" });   // 60 m on a 40 m roof: made shorter, and the amounts said
+  const d2 = alignDelta(site, { ...vol(20, 5, 60, 6), on: "tw" }, big); assert.ok(d2.shrunk && d2.length_was === 60 && d2.length_now < 41);
+  assert.match(alignSay(d2), /lengde 60 til 19,79 m, bredde 6 til 6 m/);
 });
 
-test("reshape keeps the roof kote when it moves (and on is a field of reshape); it never falls to the ground", () => {
-  const first = checkEdit(site, [], { ...vol(10, 5, 8, 4, { id: "n2abcd" }), on: "tw" });
-  const ed = [first], add = e => { const m = applyEdits(site, [], ed); ed.push(checkEdit(m.site, [], e)); };
-  add({ kind: "reshape", id: "n2abcd", from: X(28, 5), to: X(36, 5) });   // over to the high block
-  let m = applyEdits(site, [], ed), v = m.site.added.find(x => x.id === "n2abcd");
-  assert.equal(v.on, "tw"); assert.equal(baseOf(m.site, v), 14, "kote 14, not the ground (2)");
-  add({ kind: "reshape", id: "n2abcd", on: "Testfløy", overhang_m: 1 });   // reshape with on alone
-  m = applyEdits(site, [], ed); v = m.site.added.find(x => x.id === "n2abcd");
-  assert.equal(v.overhang_m, 1); assert.equal(baseOf(m.site, v), 14);
-  assert.throws(() => checkEdit(m.site, [], { kind: "reshape", id: "n2abcd", from: X(36, 5), to: X(46, 5) }), /stikker .* m .*ut over takkanten/, "moved out past the edge by a reshape: refused");
+test("align free with on keeps the roof kote even when the middle is off the roof (the old rule fell to the ground, kote 2)", () => {
+  const ed = [checkEdit(site, [], { ...vol(10, 5, 8, 4, { id: "n3abcd" }), on: "tw", align: "free" })];
+  const m0 = applyEdits(site, [], ed); assert.equal(baseOf(m0.site, m0.site.added[0]), 10);
+  ed.push(checkEdit(m0.site, [], { kind: "reshape", id: "n3abcd", from: X(33, 5), to: X(55, 5), width: 4, align: "free" }));   // middle at u = 44: off the roof; 7 m of it on kote 14
+  const m = applyEdits(site, [], ed), v = m.site.added[0];
+  assert.deepEqual(v.from, X(33, 5)); assert.equal(v.base_kote, 14, "kote 14, not the ground 2"); assert.equal(v.align, "free");
+  assert.ok(roofSay(m.site, v).overhang_m > 10, "and the overhang is said");
 });
 
 test("at on a roof: along the roof's axis, parallel, inside; placed says where", () => {

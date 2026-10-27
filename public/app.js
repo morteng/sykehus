@@ -22,6 +22,7 @@ import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
 import { createViewCube } from "./renderkit/viewcube.js";
+import { cubeView } from "./cubeview.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
 import { createMeasure } from "./renderkit/measure.js";
@@ -1197,7 +1198,7 @@ let hidden = [];   // the ids the person hid or left out with «Skjul» and «Vi
    goes home; it turns with the camera, and is shown in 3D only. The bottom face is not offered: the orbit does not go under the ground. */
 const cube = createViewCube({ host: document.querySelector(".nz"), inline: true,
   labels: { top: "Topp", front: "Front", back: "Bak", left: "Venstre", right: "Høyre", cube: "Visningskube" },
-  onPick: v => viewer.look({ yaw: v.yaw, pitch: v.pitch, eye: false }) });   // no home button of its own: the column's ⌂ (zhome) is the same move, viewer.reset()
+  onPick: (v0, info) => { const v = cubeView(v0, info); viewer.look({ yaw: v.yaw, pitch: v.pitch, eye: false }); } });   // Topp: north up (cubeview.js)   // no home button of its own: the column's ⌂ (zhome) is the same move, viewer.reset()
 document.querySelector(".nz").prepend(cube.el);
 { const vt = document.querySelector(".vt"), stage = vt.parentElement;   // U3911: the nav column (cube, compass, zoom stack) starts below the toolbar row, wrapped or not
   const under = () => stage.style.setProperty("--vt-bottom", vt.offsetTop + vt.offsetHeight + "px");

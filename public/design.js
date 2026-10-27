@@ -118,6 +118,7 @@ function roofCheck(site, v, w) {
   const h = roofHold(site, v), name = v.name || "Volumet";
   if (!h || !h.on_roof) throw new Error(`${name} står ikke på taket til ${w.name}: ingen del av grunnflaten ligger på taket. about_wing roof har takets hjørner og kote i meter`);
   const ok = Number(v.overhang_m) || 0;
+  if (v.align === "free") return;   // «free» is a placement on purpose (U3831): from and to as given; fit.roof still says how far it sticks out
   if (h.overhang_m > ok + EDGE_SLACK) throw new Error(`${name} stikker ${String(h.overhang_m).replace(".", ",")} m (${String(h.outside_m2).replace(".", ",")} m²) ut over takkanten til ${w.name}${ok ? `, mer enn de ${String(ok).replace(".", ",")} m som overhang_m tillater` : ""}. Flytt det inn, gjør det mindre, eller si hvor mye det får stikke ut med overhang_m (minst ${Math.ceil(h.overhang_m * 10) / 10}). about_wing roof har takets kant i meter`);
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */
@@ -276,12 +277,12 @@ export function alignDelta(site, before, after) {
   const L = v => Math.hypot(v.to[0] - v.from[0], v.to[1] - v.from[1]), ang = v => Math.atan2(v.to[1] - v.from[1], v.to[0] - v.from[0]) * 180 / Math.PI, mid = v => [(v.from[0] + v.to[0]) / 2, (v.from[1] + v.to[1]) / 2], rd = x => Math.round(x * 100) / 100;
   let turn = ((ang(after) - ang(before) + 540) % 360) - 180; if (turn > 90) turn -= 180; else if (turn < -90) turn += 180;
   const chk = alignOnRoof(site, { ...after, on: after.on ?? before.on });
-  return { turned_deg: rd(turn), moved_m: rd(Math.hypot(...mid(after).map((x, i) => x - mid(before)[i]))), shrunk: L(after) < L(before) - 0.1 || after.width < before.width - 0.1, fits: chk ? chk.fits : true };
+  return { turned_deg: rd(turn), moved_m: rd(Math.hypot(...mid(after).map((x, i) => x - mid(before)[i]))), shrunk: L(after) < L(before) - 0.1 || after.width < before.width - 0.1, length_was: rd(L(before)), length_now: rd(L(after)), width_was: rd(before.width), width_now: rd(after.width), fits: chk ? chk.fits : true };
 }
 /* what alignOnRoof did, in words for Anton to pass on (null when it changed nothing worth saying) */
 export function alignSay(f) {
   if (!f) return null;
-  const bits = [Math.abs(f.turned_deg) >= 0.5 && `snudd ${String(Math.abs(f.turned_deg)).replace(".", ",")}° til byggets egen akse`, f.moved_m >= 0.1 && `flyttet ${String(f.moved_m).replace(".", ",")} m inn på taket`, f.shrunk && "gjort mindre så det står innenfor takkanten"].filter(Boolean);
+  const bits = [Math.abs(f.turned_deg) >= 0.5 && `snudd ${String(Math.abs(f.turned_deg)).replace(".", ",")}° til byggets egen akse`, f.moved_m >= 0.1 && `flyttet ${String(f.moved_m).replace(".", ",")} m inn på taket`, f.shrunk && `gjort mindre så det står innenfor takkanten${f.length_was != null ? ` (lengde ${String(f.length_was).replace(".", ",")} til ${String(f.length_now).replace(".", ",")} m, bredde ${String(f.width_was).replace(".", ",")} til ${String(f.width_now).replace(".", ",")} m)` : ""}`].filter(Boolean);
   if (!f.fits) bits.push("får ikke plass innenfor takkanten (taket er for lite): gjør det mindre eller velg align free");
   return bits.length ? `På taket: ${bits.join(", ")}.` : null;
 }
