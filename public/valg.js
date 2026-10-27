@@ -89,7 +89,7 @@ export function createSelection({ site, floors, viewer, onChange = () => {} }) {
     /* the card's «Spør Anton om dette»: its wing or storey, added; a chip's ×: one taken away (by key) */
     add(i) { known.set(key(i), i); if (!items.some(x => key(x) === key(i))) { items = [...items, i].slice(-12); changed(); } },
     remove(k) { const n = items.length; items = items.filter(x => key(x) !== k); if (items.length !== n) changed(); },
-    key,
+    key, itemOf: k => known.get(k) || null,
     /* «Østfløy · 5. etasje · Operasjonsstue 2»: a storey is named once, before its rooms */
     summary() { return items.filter((i, n) => i.kind !== "storey" || !items.slice(0, n).some(x => x.kind === "storey" && x.id === i.id)).map(i => i.label).join(" · "); },
     forMessage() { return items.length ? { items: items.map(({ kind, id, label, storey }) => ({ kind, id, label, ...(storey ? { storey } : {}) })), ids: items.map(i => i.id), summary: this.summary() } : null; },

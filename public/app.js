@@ -20,6 +20,7 @@ import { createSelection, SURFACE_NO, groundName, roadName } from "./valg.js?v=2
 import { ROAD_ID } from "./roads.js";
 import { GROUND_ID } from "./landscape.js";
 import { createPicker, windowTest } from "./renderkit/select.js";
+import { createViewCube } from "./renderkit/viewcube.js";
 import { createBuild, bodyOf, cornersOf } from "./renderkit/build.js";
 import { createShape } from "./renderkit/shape.js";
 import { createMeasure } from "./renderkit/measure.js";
@@ -1160,7 +1161,28 @@ const picker = createPicker({ el: K.el, host: $("stage"), esc: false,
   under: e => { if (placing || measure.active || build?.busy || shapeEd?.busy) return null; lastHit = viewer.hitAt(e.clientX, e.clientY); return valg.keysAt(lastHit, e.clientX, e.clientY); },
   windowKeys: (r, inside) => { lastHit = null; return valg.windowKeys(r, inside, viewer.project, windowTest); },
   onChange: (keys, l, how) => { if (how === "sync") return; valg.setKeys(keys); cardFor(keys); },
-  onHover: keys => viewer.hover(keys.flatMap(idsOf)) });
+  onHover: keys => viewer.hover(keys.flatMap(idsOf)),
+  /* «Velg en annen» (right click): everything under the pointer, nearest first; with «Vis bare denne», «Skjul» and «Vis alt» (U3882) */
+  other: e => { const seen = new Set(); return viewer.hitsAt(e.clientX, e.clientY).flatMap(h => {
+    const keys = valg.keysAt(h, e.clientX, e.clientY), its = keys.map(valg.itemOf).filter(Boolean), by = its.filter(i => i.kind !== "storey"), k = keys.join();
+    if (!keys.length || seen.has(k)) return []; seen.add(k); return [{ label: (by.length ? by : its).map(i => i.label).join(" · "), keys }]; }); },
+  acts: { isolate: "Vis bare denne", hide: "Skjul", showAll: "Vis alt" }, anyHidden: () => hidden.length > 0,
+  onAct: (act, keys) => {
+    const ids = [...new Set(keys.flatMap(idsOf))];
+    if (act === "showAll") hidden = [];
+    else if (act === "hide") hidden = [...new Set([...hidden, ...ids])];
+    else hidden = [...site.buildings.map(b => b.id), ...(site.landscape || []).map(g => g.id)].filter(id => !ids.includes(id));   // everything else (new volumes stay)
+    viewer.setHidden(hidden);
+  } });
+let hidden = [];   // the ids the person hid or left out with «Skjul» and «Vis bare denne»; the after's own tear-down is separate (viewer.setGone)
+
+/* the view cube (renderkit viewcube.js, U3882): a click on a face, an edge or a corner moves the camera there, the house button
+   goes home; it turns with the camera, and is shown in 3D only. The bottom face is not offered: the orbit does not go under the ground. */
+const cube = createViewCube({ host: document.querySelector(".nz"), inline: true,
+  labels: { top: "Topp", front: "Front", back: "Bak", left: "Venstre", right: "Høyre", home: "Tilbake til startvisningen", cube: "Visningskube" },
+  onPick: v => viewer.look({ yaw: v.yaw, pitch: v.pitch, eye: false }), onHome: () => viewer.reset() });
+document.querySelector(".nz").prepend(cube.el);
+viewer.follow(() => { const p = viewer.pose(), three = viewer.view().mode === "3d"; cube.el.hidden = !three; if (three) cube.set(p.yaw, p.pitch); });
 addEventListener("sykehus:valg", () => picker.set(valg.items.map(valg.key), undefined, "sync"));
 
 /* a new building picked gets the build tools (renderkit build.js, U3569, Morten 22:29Z «make it like in a good

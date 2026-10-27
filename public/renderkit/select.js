@@ -11,7 +11,8 @@
    - a click on nothing clears (without a modifier), and so does Esc
    - Shift and a drag draws a window: left to right takes what lies wholly inside (a solid border), right to left what
      it crosses (dashed); Ctrl or Cmd with it adds. A plain drag is the app's own (it orbits or pans).
-   - a right click that does not drag opens «Select other», what lies under the pointer, nearest first (other)
+   - a right click that does not drag opens «Select other», what lies under the pointer, nearest first (other); with acts
+     it also offers «Vis bare denne» (isolate), «Skjul» (hide) and «Vis alt» (show all), labels and the doing the app's (U3882)
    - a double click goes a level up (up)
    - the filter (levels) says what a click takes; it is kept in localStorage under store
    under(e, level) → keys: [] is nothing (a click clears), null is not the picker's (the selection stays)
@@ -52,7 +53,7 @@ export function windowTest(segs, r, inside, project) {
 const MOVE = 6;   // px a press may move and still be a click
 
 export function createPicker({ el, host = el.parentElement, fine = e => e.pointerType !== "touch", orbit = null, levels = null, level = null, store = null,
-  under, windowKeys = () => [], other = null, up = null, onChange = () => {}, onHover = () => {}, esc = true, doc = globalThis.document }) {
+  under, windowKeys = () => [], other = null, acts = null, onAct = () => {}, anyHidden = () => false, up = null, onChange = () => {}, onHover = () => {}, esc = true, doc = globalThis.document }) {
   const get = k => { try { return localStorage.getItem(k); } catch { return null; } }, put = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
   let lvl = (store && levels?.some(l => l[0] === get(store)) ? get(store) : level) ?? levels?.[0]?.[0] ?? null;
   let sel = [], hov = [], down = null, win = null, menu = null, pointers = 0, off = false;
@@ -149,6 +150,19 @@ export function createPicker({ el, host = el.parentElement, fine = e => e.pointe
       b.onpointerenter = () => hover(it.keys);
       b.onclick = () => { const k = it.keys; closeMenu(); set(k, lvl, "other"); };
       menu.append(b);
+    }
+    /* «Vis bare denne», «Skjul», «Vis alt» (U3882): acts = { isolate, hide, showAll } are the app's labels; the first two act
+       on the nearest item, or on the whole selection when the nearest is in it; onAct(act, keys) is the app's (it holds what
+       is hidden); «Vis alt» shows only while anyHidden() */
+    if (acts) {
+      const near = items[0].keys, keys = near.every(k => sel.includes(k)) ? sel.slice() : near.slice(), rows = [["isolate", keys], ["hide", keys], ["showAll", []]];
+      const sep = doc.createElement("hr"); sep.className = "rk-pick-sep"; sep.setAttribute("role", "separator"); menu.append(sep);
+      for (const [act, ks] of rows) {
+        if (!acts[act] || (act === "showAll" && !anyHidden())) continue;
+        const b = doc.createElement("button"); b.type = "button"; b.className = "pmi"; b.dataset.act = act; b.textContent = acts[act]; b.setAttribute("role", "menuitem");
+        b.onclick = () => { closeMenu(); onAct(act, ks); };
+        menu.append(b);
+      }
     }
     (host || el).append(menu); menu.querySelector("button").focus(); void p;
   }

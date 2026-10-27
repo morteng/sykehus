@@ -1128,8 +1128,11 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   new ResizeObserver(size).observe(container); size(); place();
   /* what the after has torn down (U3542, Morten 21:15: in place, no reload): hidden, with the plans' walls and the
      rooms' names inside it, and not picked; the camera, the terrain, the streets and the rest stay as they are */
+  /* what the person hid or isolated (U3882, the view cube's «Skjul» and «Vis bare denne») goes the same way as what the after tore down, and is kept apart from it */
+  let torn = [], hid = [];
+  const setHidden = ids => { hid = [...ids]; setGone(torn); };
   function setGone(ids) {
-    const landWas = landHidden(); goneIds = new Set(ids); if (landHidden() !== landWas) setLandscape(landNow);   // a surface or a path is hidden by its id as a building is (U3649)
+    torn = [...ids]; const landWas = landHidden(); goneIds = new Set([...torn, ...hid]); if (landHidden() !== landWas) setLandscape(landNow);   // a surface or a path is hidden by its id as a building is (U3649)
     const rings = [...goneIds].map(id => site.buildings.find(b => b.id === id)?.ring).filter(Boolean);
     const inside = p => rings.some(r => inRing(p, r));
     for (const [id, g] of meshes) g.visible = !goneIds.has(id);
@@ -1156,7 +1159,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     setRoads, roadOf: id => roadGroups.get(id)?.userData.road || null, standable, ringAt, standAt,
     /* the trees: off, simple or full (drawn again in place); what is drawn now */
     treeMode(m) { if (m && m !== treeMode && ["off", "simple", "full"].includes(m)) { treeMode = m; setTrees(treeList); } return treeMode; },
-    setSun, select, setGone, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
+    setSun, select, setGone, setHidden, setTerrain, setAdded, setLandscape, setGrading, setTrees, setLevels, setRooms, setFloor, setStorey, cutBuilding, setMode, setSection, view, get selected() { return selected; },
     zoom(f) { hand(); zoom(f); },
     /* the parts drawn see-through (ids of new parts), or none; and a small picture of the view as it is (free: the canvas, no server) */
     ghost(ids) { ghostIds = new Set(ids || []); applyGhost(); },
@@ -1212,6 +1215,15 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       }
       if (tree) return { id: tree.t[6], at: [tree.p.x, -tree.p.z, tree.p.y + base] };
       return h ? { id: idOf(h.object), at: [h.point.x, -h.point.z, h.point.y + base] } : null;
+    },
+    /* every id under a pointer, nearest first (the «Velg en annen» menu, U3882) */
+    hitsAt(cx, cy) {
+      const r = el.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+      const out = [], seen = new Set();
+      for (const x of ray.intersectObjects([...[...meshes.values()].filter(g => g.visible), ...[...addedGroups.values()].filter(g => g.visible), ...groundMeshes, ...shownRoads()], true)) {
+        const id = x.object.isMesh && shown(x.object) && idOf(x.object); if (id && !seen.has(id)) { seen.add(id); out.push({ id, at: [x.point.x, -x.point.z, x.point.y + base] }); }
+      }
+      return out;
     },
     hover,
     /* for renderkit build.js: the scene, the camera in use, the canvas, the site's frame, a thing's shapes, a redraw */
