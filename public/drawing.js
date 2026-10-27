@@ -84,14 +84,23 @@ export function planDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
   const pts = f.kind === "wing" ? [...(R?.outline || A.corners), ...parts.flatMap(footRing)] : footRing(f.v);
   let lo = [Math.min(...pts.map(q => q[0])), Math.min(...pts.map(q => q[1]))], hi = [Math.max(...pts.map(q => q[0])), Math.max(...pts.map(q => q[1]))];
   if (f.kind === "part") { const g = Math.max(12, 0.6 * Math.max(hi[0] - lo[0], hi[1] - lo[1])); lo = [lo[0] - g, lo[1] - g]; hi = [hi[0] + g, hi[1] + g]; }
-  const mx = 100, my = 90, sc = fitScale(hi[0] - lo[0], hi[1] - lo[1], W - 2 * mx, H - 2 * my, o.scale), p = sc.p;
-  const cx = (lo[0] + hi[0]) / 2, cy = (lo[1] + hi[1]) / 2, X = q => [W / 2 + (q[0] - cx) * p, H / 2 - (q[1] - cy) * p];
+  const mx = 100, my = 90;
+  /* at [east, north]: a zoom on that point (a corner of the roof edge) at the scale asked (default 1:200), with no demand that the whole thing fits */
+  const at = o.at == null ? null : (Array.isArray(o.at) && o.at.length >= 2 && o.at.slice(0, 2).every(Number.isFinite) ? o.at.slice(0, 2) : (() => { throw new Error("at er et punkt [øst, nord] i meter: midten av tegningen"); })());
+  const sc = at ? (n => { if (!(n >= 10 && n <= 100000)) throw new Error("scale er målestokken som tall, for eksempel 200 for 1:200 (mellom 10 og 100000)"); return { p: PX_PER_M_1_1 / n, N: n, said: `1:${n}` }; })(o.scale ?? 200) : fitScale(hi[0] - lo[0], hi[1] - lo[1], W - 2 * mx, H - 2 * my, o.scale), p = sc.p;
+  const cx = at ? at[0] : (lo[0] + hi[0]) / 2, cy = at ? at[1] : (lo[1] + hi[1]) / 2, X = q => [W / 2 + (q[0] - cx) * p, H / 2 - (q[1] - cy) * p];
   const inView = ring => ring.some(q => { const s = X(q); return s[0] > -W && s[0] < 2 * W && s[1] > -H && s[1] < 2 * H; });
   /* what stands round it, light; then the focus wing's roof, lowest level first, each level in its tone */
   for (const b of site.buildings) if (b.wing !== wingId && b.ring?.length > 2 && inView(b.ring)) Pg(prims, b.ring.map(X), [232, 232, 236], [175, 175, 182], 1);
   const levels = R ? R.levels.map(l => l.kote) : [];
   if (wingId) for (const k of roofPieces(site, wingId).sort((a, b) => a.top - b.top)) Pg(prims, k.p.map(X), TONES[Math.min(TONES.length - 1, Math.max(0, levels.indexOf(k.top)))], null);
   if (R) Pg(prims, R.outline.map(X), null, INK, 2.2);
+  /* each level's own edge, in a colour of its own with its kote (A: the one merged outline hid which edge is at which kote) */
+  const EDGE_COL = [[120, 50, 170], [20, 110, 190], [30, 140, 80]], edgeKotes = [];
+  if (R) for (const lv of R.edges || []) { const col = EDGE_COL[Math.min(EDGE_COL.length - 1, Math.max(0, levels.indexOf(lv.kote)))]; let said = false;
+    for (const g of lv.rings) { const ring = g.ring.map(X); if (!inView(g.ring)) continue; Pg(prims, ring, null, col, 1.8);
+      if (!said) { const k = ring.find(q => q[0] > 30 && q[0] < W - 30 && q[1] > 30 && q[1] < H - 30); if (k) { T(prims, [k[0] + 6, k[1] - 6], kote(lv.kote), { size: 1.5, col, bg: true }); said = true; } } }
+    edgeKotes.push(lv.kote); }
   for (const v of parts) { const ring = footRing(v).map(X); Pg(prims, ring, [255, 205, 150], ORANGE, 2.4);
     const c = mul(ring.reduce(add, [0, 0]), 0.25); T(prims, [c[0], c[1] - 4], v.name, { size: 1.6, anchor: "m", bg: true }); T(prims, [c[0], c[1] + 14], `${kote(v.top_kote)}`, { size: 1.6, anchor: "m", col: ORANGE, bg: true }); }
   /* kotes of the roof levels: one label at the largest block of each */
@@ -109,7 +118,8 @@ export function planDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
   northArrow(prims, W - 50, 60, 0); scaleBar(prims, 40, H - 40, p, W); frameBox(prims, W, H);
   const title = `PLAN ${(f.kind === "wing" ? f.w.name : f.v.name).toUpperCase()}   ${sc.said.toUpperCase()}   NORD OPP`;
   T(prims, [40, 36], title, { size: 2 });
-  const say = `Plan over ${f.kind === "wing" ? f.w.name : f.v.name} i ${sc.said}, nord opp, med mål, akse og kote. ${m.say}` + (f.kind === "wing" && levels.length ? ` Taket ligger på kote ${levels.map(com).join(", ")} (høyeste først).` : "")
+  const say = `Plan over ${f.kind === "wing" ? f.w.name : f.v.name} i ${sc.said}, nord opp${at ? `, sentrert på [${com(r1(at[0]))}, ${com(r1(at[1]))}]` : ""}, med mål, akse og kote. ${m.say}`
+    + (edgeKotes.length ? ` Hvert taknivås kant er tegnet i egen farge med kote (${edgeKotes.map(com).join(", ")}); den svarte linja er hele takets ytterkant.` : "") + (f.kind === "wing" && levels.length ? ` Taket ligger på kote ${levels.map(com).join(", ")} (høyeste først).` : "")
     + (f.kind === "wing" && parts.length ? ` Nytt på taket eller ved siden: ${parts.map(v => `${v.name} (topp kote ${com(v.top_kote)})`).join(", ")}.` : "");
   return { prims, W, H, scale: sc.N, dims, kotes, say, numbers: A };
 }
@@ -223,6 +233,7 @@ export function sectionDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
     + (baseKote != null ? `Foten ligger på kote ${com(baseKote)}. ` : "")
     + (chain.length > 1 ? `Høydeforskjeller: ${chain.slice(1).map((k, i) => `${com(chain[i])} til ${com(k)} er ${com(r2(k - chain[i]))} m`).join("; ")}. ` : "")
     + (iv.parts.length ? `Nytt i snittet: ${[...new Set(iv.parts.map(r => `${r.v.name} (kote ${com(r.base)} til ${com(r.top)}${r.v.shape && r.v.shape !== "box" ? `, tegnet som en kasse opp til toppen fordi formen er ${r.v.shape}` : ""})`))].join("; ")}. ` : "")
-    + `Snittlinjen går fra [${com(r1(A[0]))}, ${com(r1(A[1]))}] til [${com(r1(B[0]))}, ${com(r1(B[1]))}] (øst, nord i m).`;
+    + `Snittlinjen går fra [${com(r1(A[0]))}, ${com(r1(A[1]))}] til [${com(r1(B[0]))}, ${com(r1(B[1]))}] (øst, nord i m). `
+    + `Dette er et snitt gjennom takkotene og terrenget, ikke en fasadetegning: det finnes ingen tegnet fasade (oppriss) av ${f.kind === "wing" ? f.w.name : wing?.name || "bygget"} i dataene, så ingen fasade er tegnet; vinduene står i openings.`;
   return { prims, W, H, scale: sc.N, dims, kotes, say, cut: { kind: cut.kind, from: A.map(r1), to: B.map(r1), length_m: r1(Ld), looking }, crossed, levels: all };
 }

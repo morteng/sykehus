@@ -19,6 +19,7 @@ import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderk
 import { withGarden, frame as lookFrame, say as lookSay, annotate } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
 const withMeshes = s => withGarden(meshesIn(s));
 import { drawTools } from "./drawtools.mjs";   // T5: draw_plan, draw_section
+import { edgeRail } from "./public/roofedge.js";   // edge_rail: a railing round a roof level's edge, as many railing parts   // T5: draw_plan, draw_section
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
@@ -263,7 +264,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   // ---------- tools ----------
   const siteFacts = createSiteFacts();   // U3673: Hagekart's site_report for the plot, kept a day
   const S = (props, required = []) => ({ type: "object", properties: props, required, additionalProperties: false });
-  const REF = { type: ["string", "array"], items: { type: "number" }, description: "A new part (id or name), a wing, or a point [east, north, kote?] in site m" };
+  const REF = { type: ["string", "array"], items: { type: "number" }, description: "A new part (id or name), a wing, a roof level's edge as «wing@kote» (Sentralblokka@69.91), or a point [east, north, kote?] in site m" };
   const WING = { type: "string", description: `Wing name or id: ${wingsAll().map(w => `${w.name} (${w.id})`).join(", ")}` };
   const STOREY = { type: "string", description: "Storey as the hospital numbers them across wings: 1 … 14 or \"5. etasje\"" };
   /* one target for every tool (Morten 21:08Z «make sure to use best practices»; the toolkit audit: one id field, the
@@ -311,6 +312,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     K("part", "A ready-made BIM part the worker builds itself (U3620): use a part FIRST for what it covers, before you write geometry or a script: a swimming pool basin (pool_basin), a stair (stair), a railing (railing), a balcony with slab, glass railing and door (balcony), a greenhouse of 3–8 sides or a geodesic dome (greenhouse). list_parts tells each one's settings with defaults and limits and the IFC it makes; every one carries property sets, quantities (m², m³, weight) and the app's materials, so the person can use it in a drawing or an estimate. Its length runs from -> to (its middle on their middle, its x along them: a balcony's door side is the wall), its foot on the ground. Settings you leave out take their defaults; ask the person only for what they did not say. The result says what it made (worker.printed: the counts, areas and weights): report those figures. Change it later with reshape (id and params), or move and turn it with from/to. A stair that goes DOWN (from a terrace, a balcony or a door to the garden) is the stair part too: the flight climbs from `from` (its foot, in the garden) towards `to` (the terrace side), so put from in the garden and to at the terrace edge, and give params.height as the drop from the terrace's top to the ground (the terrace's top_kote minus the garden's kote), e.g. {height: 1.2, width: 1.2}; do not write a script for it. A word or a size no part has (a shape it cannot make) is not a reason to bend a part: then, and only then, write a construction.", { part: { type: "string", description: "Which part: pool_basin, stair, railing, balcony or greenhouse (list_parts has the settings of each)" }, name: { type: "string" }, from: PT, to: PT,
       params: { type: "object", additionalProperties: { type: ["number", "string", "boolean"] }, description: "Its settings as list_parts names them, e.g. {sides: 3, radius: 3.5} for a triangular greenhouse 6 m on a side (radius = the corner's distance from the middle: side / 1.732 for three); the others take their defaults" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"], description: "For the card; default from what it made" },
       id: { type: "string", description: "Optional, to name it later (it may come back changed: use the id in added)" }, ...FACTS }, ["part", "from", "to"]),
+    K("edge_rail", "A railing round the edge of ONE roof level of a wing (a high glass fence round the roof edge): laid for you as the straight railing part in pieces along that level's edge ring (about_wing roof.edges lists each level's rings, edge lengths and facing), each piece at most 60 m, corners closed, each at that level's kote, grouped by id (n-id 1, 2 …) and name (1/24 …). Use it for any railing round or along a roof edge: never a free construction laid along roof.outline, which is one merged line at one kote and gets over-the-edge and overlap answers for the whole roof. level = a kote of about_wing roof.levels (73.16, 69.91 or 66.41 on Sentralblokka: one call per level). height_m 0.8–1.5 (default 1.1; a high fence 1.2–1.5), inset_m how far in from the edge (default 0.15), infill glass or bars, edges open (default: not the edges that stand against a higher level, where there is no fall) or all. Steps in the edge under 1 m are smoothed and the answer says how many. The answer's placed says the pieces, the length and what was left out; check_fit and measure (a: the part, b: «Sentralblokka@69.91» = that level's edge, deviation) read how close it lies. Not on a roof gives no rail; a level the wing does not have is refused with the levels it has.", { wing: WING, level: { type: "number", description: "The roof level's kote, from about_wing roof.levels" }, height_m: { type: "number", minimum: 0.8, maximum: 1.5 }, inset_m: { type: "number", minimum: 0, maximum: 5 }, infill: { type: "string", enum: ["glass", "bars"] }, edges: { type: "string", enum: ["open", "all"] }, name: { type: "string" }, id: { type: "string", description: "A short prefix (letters and digits, up to 8): the pieces are id1, id2 …" } }, ["wing", "level"]),
     K("import", "A file brought in (U3571): an IFC, STEP, glTF, OBJ or STL, or a DXF or DWG plan (laid flat over the ground), a person uploaded on the page («Hent fil») or that /api/import read (made an IFC by the worker), by its sha (file). It stands like a construction: its box's middle on from -> to, its x along it, its foot on the ground; its size and units are the file's. Say its licence as the source states it («ukjent» if it says none); never use a file whose source forbids it or needs an account.", { file: { type: "string", description: "The sha /api/import gave" }, name: { type: "string" }, from: PT, to: PT,
       source: { type: "string", description: "Where it came from: the manufacturer's page" }, licence: { type: "string", description: "Its licence as the source states it" }, material: { type: "string", enum: ["glass", "concrete", "steel", "wood", "brick"] },
       id: { type: "string" }, ...FACTS }, ["file", "from", "to", "licence"]),
@@ -368,8 +370,18 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     return { ...rest, draft: id };
   }
   /* U3783: a part placed from a wing's facade (at + length + width) becomes the from and to it is stored as, with the receipt's words */
+  /* edge_rail (public/roofedge.js): one edit that is many railing parts. Expanded before the changes are tried; a failure stays a failed change (__bad) and the first piece carries the summary */
+  const edgeNote = new WeakMap();
+  function expandEdits(edits) {
+    return edits.flatMap(e => {
+      if (e?.kind !== "edge_rail") return [e];
+      try { const w = wingOf(site, e.wing); if (!w) throw new Error(`Fant ikke fløyen «${e.wing}»`); const r = edgeRail(site, w, e), p = r.parts.map(x => ({ ...x })); edgeNote.set(p[0], r.say); return p; }
+      catch (x) { return [{ kind: "edge_rail", __bad: x.message }]; }
+    });
+  }
   function placeAt(e) {
-    if (e?.kind !== "volume" || e.at == null) return { e, placed: null };
+    if (e?.__bad) throw new Error(e.__bad);
+    if (e?.kind !== "volume" || e.at == null) return { e, placed: edgeNote.get(e) ?? null };
     if (e.from != null || e.to != null) throw new Error("Gi enten at (fra en fasade) eller from og to, ikke begge");
     const w = wingOf(site, e.at.wing); if (!w) throw new Error(`Fant ikke fløyen «${e.at.wing}»`);
     if (e.at.roof) { const { at, length, ...rest } = e, r = placeOnRoof(site, w, at, Number(length), Number(e.width)); if (e.on != null && wingOf(site, e.on)?.id !== w.id) throw new Error("at.roof legger det på taket til at.wing; on må være samme fløy eller utelates");
@@ -480,7 +492,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         const ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
         /* a later change in the same call to a new building that got another id goes to the id it got */
-        for (const [i, e0] of a.edits.entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
+        for (const [i, e0] of expandEdits(a.edits).entries()) { try { const { e: e1p, placed } = placeAt(e0), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
             /* a new building that differs only in the id it was given is the same one sent again */
             const bare = x => JSON.stringify(x.kind === "volume" ? { ...x, id: undefined } : x);
@@ -528,7 +540,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const who = userOf(req); if (!who) throw toolErr("Skissen vises til en som er logget inn.");
         const open = versions ? versions.get(pages?.open.get(who)) : null, id = open?.owner === who ? open.id : null, base = id ? editsOf(id, req) : [], ok = [], bad = [];
         let cur = applyEdits(site, floors, base);
-        for (const [i, e00] of a.edits.entries()) { try { const { e: e0 } = placeAt(e00), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await withAround(await prepare(e0, cur.site)), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
+        for (const [i, e00] of expandEdits(a.edits).entries()) { try { const { e: e0 } = placeAt(e00), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await withAround(await prepare(e0, cur.site)), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
         if (!ok.length) throw toolErr(`Ingen av endringene kunne tegnes: ${bad.map(b => `nr. ${b.n} (${b.kind}): ${b.error}`).join("; ")}`);
         const s = withMeshes(cur.site), before = new Set((site.added || []).concat(applyEdits(site, floors, base).site.added || []).map(x => x.id));
         const made = (s.added || []).find(x => !before.has(x.id)), want = a.focus || made?.id || ok.map(e => e.wing || e.id).find(Boolean), f = want ? aimAt(s, want) : null;
