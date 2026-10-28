@@ -274,6 +274,10 @@ function section(b, kind, drawn = null) {
 let names = false; try { names = localStorage.getItem("sykehus-navn-valgt") === "på"; } catch { }
 function setNames(on, keep = true) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); if (keep) try { localStorage.setItem("sykehus-navn-valgt", on ? "på" : "av"); } catch { } }
 setNames(names, false); $("names").onclick = () => setNames(!names);
+/* «Fasade»: the elevation over the whole page (fasade-view.js). Its changes go into the draft only when the person presses a button: the same edit() as the page's own */
+$("mfasade").onclick = () => import("./fasade-view.js?v=20261028a").then(m => m.open({ host: document.body, site0, floors0, wingOf: (s, w) => (s.wings || []).find(x => x.id === String(w ?? "").toLowerCase() || x.name.toLowerCase() === String(w ?? "").toLowerCase()),
+  baseEdits: () => draft?.edits || [], commit: async edits => !!(await edit(edits, "Fikk ikke lagret")),
+  send: (text, drawing) => new Promise(res => { let done = false; const t = setTimeout(() => !done && res({ error: "Anton kan ikke svare akkurat nå. Prøv igjen senere." }), 20000); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text, drawing, done: p => Promise.resolve(p).then(r => { done = true; clearTimeout(t); res(r === false ? { error: "Anton kan ikke svare akkurat nå. Logg inn og prøv igjen." } : r); }) } })); }) }));
 $("m3d").onclick = () => { setMode("3d"); viewer.eye(false); pressMode(); }; $("mplan").onclick = () => setMode("plan");
 /* U3605: in «Gateplan» the keys are said once each time one goes there (not on a phone, which has no keys) */
 const EYE_KEYS = "Gateplan: dra for å se deg rundt · W A S D eller piltastene for å gå · Shift går fortere · rull for å gå nærmere";

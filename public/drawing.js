@@ -12,6 +12,7 @@ import { dirWord, norm360 } from "./renderkit/dirs.js";
 
 const r2 = v => Math.round(v * 100) / 100 + 0, r1 = v => Math.round(v * 10) / 10 + 0, com = v => String(v).replace(".", ",");
 const kote = v => (v < 0 ? "-" : "+") + Math.abs(v).toFixed(2).replace(".", ",");
+export { com, kote };   // the facade drawing (fasade.js) writes its numbers the same way
 const INK = [30, 30, 36], DIMC = [0, 84, 150], AXIS = [190, 40, 40], GREY = [120, 120, 128], ORANGE = [235, 110, 20], TEXT_BG = true;
 const TONES = [[140, 140, 148], [176, 176, 184], [208, 208, 216]];   // the roof's levels, the highest darkest
 const PX_PER_M_1_1 = 3779.5;   // pixels per metre at 1:1 on a 96 dpi screen; at 1:N it is this / N

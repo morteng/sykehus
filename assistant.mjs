@@ -42,8 +42,20 @@ function drawingOf(d) {
   const strokes = (Array.isArray(d.strokes) ? d.strokes : []).slice(0, 60).map(s => ({ colour: String(s?.colour ?? "").slice(0, 20),
     points: (Array.isArray(s?.points) ? s.points : []).slice(0, 60).filter(p => Array.isArray(p) && p.length === 3 && p.every(fin) && Math.abs(p[0]) < 2000 && Math.abs(p[1]) < 2000) }));
   const camera = d.camera && typeof d.camera === "object" ? Object.fromEntries(Object.entries(d.camera).filter(([k, v]) => /^[a-z]{1,8}$/.test(k) && fin(v))) : {};
-  return { image, strokes, camera, mode: ["3d", "plan", "section"].includes(d.mode) ? d.mode : "3d", size: Array.isArray(d.size) && d.size.every(fin) ? d.size.slice(0, 2) : null,
+  return { image, strokes, camera, mode: ["3d", "plan", "section", "fasade"].includes(d.mode) ? d.mode : "3d", ...(d.mode === "fasade" && facadeOf(d.facade) ? { facade: facadeOf(d.facade) } : {}), size: Array.isArray(d.size) && d.size.every(fin) ? d.size.slice(0, 2) : null,
     note: "strokes are in site metres [east, north, kote] from the site origin, where each point of the line hit the model; the picture shows what the person saw and drew" };
+}
+
+/* a facade drawing (fasade.js): which side of which building, its frame in site metres and the strokes in the facade's own metres (t from the left end, kote), so Anton can place a change where it was drawn */
+function facadeOf(f) {
+  if (!f || typeof f !== "object") return null;
+  const fin = v => typeof v === "number" && Number.isFinite(v), pair = a => Array.isArray(a) && a.length === 2 && a.every(fin) ? a.map(v => Math.round(v * 1e4) / 1e4) : null;
+  const txt = (v, n) => String(v ?? "").replace(/[\u0000-\u001f]/g, "").slice(0, n), origin = pair(f.origin), along = pair(f.along), out = pair(f.out);
+  if (!origin || !along || !out) return null;
+  return { building: txt(f.building, 80), side: txt(f.side, 20), bearing: fin(f.bearing) ? f.bearing : null, origin, along, out, width_m: fin(f.width_m) ? f.width_m : null, base_kote: fin(f.base_kote) ? f.base_kote : null, top_kote: fin(f.top_kote) ? f.top_kote : null,
+    strokes_m: (Array.isArray(f.strokes_m) ? f.strokes_m : []).slice(0, 60).map(s => ({ colour: txt(s?.colour, 20), points: (Array.isArray(s?.points) ? s.points : []).slice(0, 60).map(pair).filter(Boolean) })),
+    changes: (Array.isArray(f.changes) ? f.changes : []).slice(0, 30).map(c => txt(c, 200)),
+    note: "t (first number) is metres along the facade from its left end seen from outside; the site point of (t, kote) is origin + along * t, at the facade plane; out points away from the wall" };
 }
 
 /* a picture the person attached (the chat box: button, paste or drop): a JPEG, PNG or WebP data URL of at most 2,5 MB, with its name */

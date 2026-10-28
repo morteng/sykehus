@@ -692,3 +692,40 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 body.pk-on .nz, body.pk-on #scale, body.pk-on #bstack, body.pk-on #tip, body.pk-on .vt > :not(.seg2) { display: none !important; }
 #mpk[hidden] { display: none; }
 html.pk-wait .loading { visibility: hidden; }
+
+/* «Fasade»: the elevation over the whole page (fasade-view.js). One screen: sides on top, the drawing, the tools and one big button. */
+#fasade { position: fixed; inset: 0; z-index: 900; background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+#fasade button, #fasade select { min-height: 48px; font: inherit; font-size: var(--fs-md); padding: 0 var(--sp-3); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+#fasade button[aria-pressed="true"] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
+#fasade button:disabled { opacity: .5; }
+.fx-top { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px; align-items: center; border-bottom: 1px solid var(--border); }
+.fx-sides { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+.fx-sides button { min-height: 56px; min-width: 112px; font-size: var(--fs-lg, 1.05rem); }
+.fx-bygg { max-width: 260px; }
+.fx-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; background: var(--panel); user-select: none; -webkit-user-select: none; }
+.fx-pan { position: absolute; left: 0; top: 0; }
+.fx-svg svg { display: block; }
+.fx-ink { position: absolute; inset: 0; pointer-events: none; }
+.fx-hint { margin: 0; padding: 6px 12px; color: var(--muted); font-size: var(--fs-md); text-align: center; }
+.fx-num { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; z-index: 2; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; width: min(520px, calc(100% - 24px)); }
+.fx-num[hidden] { display: none; }
+.fx-row { display: flex; gap: 8px; align-items: center; }
+.fx-row button { min-width: 56px; font-size: 1.4rem; }
+.fx-row .fx-ok { margin-left: auto; font-size: var(--fs-md); background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.fx-in { flex: 1; min-width: 0; height: 56px; font: inherit; font-size: 1.5rem; text-align: center; border: 2px solid var(--accent); border-radius: var(--radius-lg); background: var(--bg); color: var(--text); }
+.fx-bar { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); align-items: stretch; }
+.fx-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fx-pens { display: flex; gap: 6px; align-items: center; }
+.fx-pens[hidden] { display: none; }
+#fasade .dot { width: 48px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+#fasade .dot i { width: 26px; height: 26px; border-radius: 50%; display: block; }
+#fasade .dot[aria-pressed="true"] { background: #fff; border: 3px solid var(--text); }
+.fx-send { flex: 1; min-width: 300px; display: flex; gap: 10px; align-items: stretch; }
+.fx-send textarea { flex: 1; font: inherit; font-size: var(--fs-base); padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); resize: none; color: var(--text); background: var(--bg); }
+.fx-btns { display: flex; flex-direction: column; gap: 6px; }
+#fasade .fx-go { min-height: 64px; min-width: 190px; font-size: 1.15rem; font-weight: 600; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+#fasade .fx-save[hidden] { display: none; }
+.fx-err { margin: 0; color: var(--danger, #b3261e); font-size: var(--fs-md); }
+.fx-err[hidden] { display: none; }
+.fx-senderr { flex-basis: 100%; }
+@media (max-width: 899px) { .fx-sides button { min-width: 0; flex: 1; } .fx-send { min-width: 100%; } .fx-num { bottom: 210px; } }

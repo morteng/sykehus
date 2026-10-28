@@ -1311,7 +1311,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       const tool = TOOLS.find(t => t.name === (a.undo ? "undo_change" : "try_change"));
       const args = a.undo ? { draft: String(a.version || a.draft || ""), n: +a.undo, fromPage: true } : { edits: Array.isArray(a.edits) ? a.edits.slice(0, 50) : [], include_screenshot: false, fromPage: true, ...(a.version ? { version: String(a.version) } : a.draft ? { draft: String(a.draft) } : {}) };
       if (!a.undo && !args.edits.length) throw toolErr("Ingen endring.");
-      if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing", "import", "paint", "terrain", "trees"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg, byggenes navn og opplysninger, maling, terreng og planting.");   // the rest goes through Anton
+      if (!a.undo && args.edits.some(e => !["demolish", "restore", "volume", "reshape", "wing", "level", "import", "paint", "terrain", "trees"].includes(e?.kind))) throw toolErr("Fra siden: riv, nye bygg, byggenes navn og opplysninger, etasjekoter, maling, terreng og planting.");   // the rest goes through Anton
       const out = await tool.run(args, req), mine = out.version && versions.get(out.version);
       if (mine && mine.owner === me) out.nokkel = mine.own;
       if (out.rejected?.length) return send(res, 422, { error: out.rejected.map(r => r.error).filter(Boolean).join(" ") || "Endringen kunne ikke settes inn.", ...out });

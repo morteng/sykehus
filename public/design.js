@@ -391,7 +391,7 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
    20° of it: each with its outward normal n, its bearing, and its axis a -> bb run so that its left is out (flip:
    that is the wall's own end to start); walls under 3 m left out */
 const faceKey = deg => (Math.round(deg / 5) * 5) % 360;   // a facade's bearing, to 5°, so the walls on one face are one
-function* facingWalls(site, wing, side, face = null) {
+export function* facingWalls(site, wing, side, face = null) {
   const [sx, sy] = SIDES[side];
   for (const b of site.buildings.filter(x => x.wing === wing)) {
     const rings = (b.blocks || []).map(k => k.p); if (!rings.length) rings.push(b.ring);
