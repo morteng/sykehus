@@ -239,6 +239,11 @@ export function checkDesign(site, e, str) {
       const w = (site.wings || []).find(x => x.id === String(e.wing ?? "").toLowerCase().trim() || x.name.toLowerCase() === String(e.wing ?? "").toLowerCase().trim());
       if (!w) throw new Error(`Ukjent fløy «${e.wing}»`);
       if (e.face != null) e = { ...e, face: faceAlias(site, w.id, e.face) };   // «sørsiden» of Sentralblokka is 210°
+      /* remove: true takes the building's own balconies off this facade (the base's built-in runs, site.json balconies) and builds none: the page's «Fjern alle»; own ones are then laid with balconies edits (the Fasade view) */
+      if (e.remove === true) {
+        const fs = facadesOf(site, w.id), d = num(e.face, 0, 360, "face (retningen fasaden vender, grader fra nord)") % 360; if (!fs.some(x => turn(x.bearing, d) <= 20)) throw new Error(`${w.name} har ingen fasade som vender ${d}°`);
+        return { kind: "balconies", wing: w.id, remove: true, face: d, ...setOf(e), ...(e.why ? { why: str(String(e.why), 300, "Begrunnelsen") } : {}) };
+      }
       let part = null;
       if (e.part != null) {   // «midten»: a named part of a facade the building's data gives (Sentralblokka's recessed middle on the sørsiden)
         const k = String(e.part).toLowerCase().trim().replace(/^midtpartiet$|^midt$|^midtdelen$/, "midten"), def = site.buildings.filter(b => b.wing === w.id).map(b => b.parts?.[k]).find(Boolean);
@@ -252,12 +257,13 @@ export function checkDesign(site, e, str) {
       const out = { kind: "balconies", wing: w.id, side, depth: num(e.depth, 0.8, 4, "Dybden", BALCONY_DEPTH), railing: e.railing == null ? "glass" : String(e.railing), ...w_ };
       if (!["glass", "steel", "concrete"].includes(out.railing)) throw new Error("railing er glass, steel eller concrete");
       if (part) out.part = part;
+      Object.assign(out, setOf(e)); if (e.exact === true) out.exact = true;
       if (e.along != null) { const al = Array.isArray(e.along) ? e.along.map(Number) : []; if (al.length !== 2 || !al.every(Number.isFinite) || al[0] < 0 || al[1] <= al[0]) throw new Error("along er [fra, til]: meter langs fasaden fra venstre ende sett utenfra, fra mindre enn til"); out.along = al; }
       const f = storey(e.from_storey, "from_storey"), t = storey(e.to_storey, "to_storey"); if (f) out.from_storey = f; if (t) out.to_storey = t;
       if (e.face != null) { const fs = facadesOf(site, w.id), d = num(e.face, 0, 360, "face (retningen fasaden vender, grader fra nord)") % 360; if (!fs.some(x => turn(x.bearing, d) <= 20)) throw new Error(`${w.name} har ingen fasade som vender ${d}°. Fasadene vender ${fs.map(x => `${x.bearing}° (${String(x.length_m).replace(".", ",")} m)`).join(", ")}`); out.face = d; }
       else faceFor(site, w, side);
       /* a whole facade asked with no width: one balcony per window axis (2.5 m), never one slab along all of it (pm 13:06Z: 165 m seen) */
-      if (!e.windows && e.bay == null) { if (balconyParts(site, { ...out, windows: true }).length) e = { ...e, windows: true }; else { e = { ...e, bay: 1.9, gap: 0.6 }; } }
+      if (!e.windows && e.bay == null && !out.exact) { if (balconyParts(site, { ...out, windows: true }).length) e = { ...e, windows: true }; else { e = { ...e, bay: 1.9, gap: 0.6 }; } }
       if (e.windows) { out.windows = true; if (e.bay != null) out.bay = num(e.bay, 1, 2.4, "Bredden på hver balkong (bay; høyst 2,4 m med én per vindu, 2,5 m mellom vinduene)"); }
       else if (e.bay != null) { out.bay = num(e.bay, 1.5, 20, "Bredden på hver balkong (bay)"); out.gap = num(e.gap, 0, 10, "Mellomrommet (gap)", 0.6); }
       if (!balconyParts(site, out).length) throw new Error(`${w.name} har ingen fasade mot ${side} der balkongene kan stå (eller ingen etasjer i det valgte spennet)`);
@@ -360,7 +366,9 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
   for (const { b, wall, L, n, a, bb, flip, lo, hi, bearing } of fw) {
       const dd = [(bb[0] - a[0]) / L, (bb[1] - a[1]) / L], runs = [], face = faces.get(faceKey(bearing)) || faces.set(faceKey(bearing), { bearing: faceKey(bearing), length_m: 0, per_storey: {} }).get(faceKey(bearing));
       face.length_m += L;
-      if (e.windows) {   // U3624: one a window group, centred on it, as the facade's picture draws them (bays.js)
+      if (e.exact && e.along) {   // exactly [from, to] along the facade (the Fasade view's one balcony): each wall takes its share of that stretch
+        const ua = U({ a, bb, L })[0] - u0, lo2 = Math.max(0, e.along[0] - ua), hi2 = Math.min(L, e.along[1] - ua); if (hi2 - lo2 >= 0.3) runs.push([lo2, hi2]);
+      } else if (e.windows) {   // U3624: one a window group, centred on it, as the facade's picture draws them (bays.js)
         for (const [t0, t1] of blindWall(b, wall) ? [] : windowsOn(kindOf(b), wall)) {
           const c = flip ? L - (t0 + t1) / 2 : (t0 + t1) / 2, h = (e.bay ?? t1 - t0 + 0.6) / 2;
           if (c - h >= 0.05 && c + h <= L - 0.05) runs.push([c - h, c + h]);
@@ -486,6 +494,7 @@ export function windowBays(site, wing) {
 export function replacesBuiltIn(site) {
   const runs = (site.buildings || []).flatMap(b => b.balconies || []);
   if (!runs.length) return false;
+  if ((site.added || []).some(a => a.kind === "balconies" && a.remove === true)) return true;
   const near = (p, r) => { const [ax, ay] = r.from, [bx, by] = r.to, L2 = (bx - ax) ** 2 + (by - ay) ** 2, t = Math.max(0, Math.min(1, ((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / L2)); return Math.hypot(p[0] - (ax + t * (bx - ax)), p[1] - (ay + t * (by - ay))) < 0.4; };
   return (site.added || []).filter(a => a.kind === "balconies").flatMap(a => a.parts || []).some(p => p.role === "slab" && p.axis.every(q => runs.some(r => near(q, r))));
 }
@@ -755,7 +764,10 @@ export function deadEdits(edits) {
 }
 
 /* the after's changes laid over the model (copies, made by applyEdits): what is taken away goes, what is built is added */
+/* a balconies edit that names a set (the Fasade view's own: «fasade-210») with a rev: only the edits of the newest rev stand, so a layout laid again replaces the one before */
+const setOf = e => e.set != null ? { set: String(e.set).slice(0, 40), rev: Number.isFinite(+e.rev) ? +e.rev : 0 } : {};
 export function applyDesign(site, floors, edits) {
+  edits = edits.filter(e => e.kind !== "balconies" || !e.set || e.rev === Math.max(...edits.filter(x => x.kind === "balconies" && x.set === e.set).map(x => x.rev ?? 0)));
   applyLandscape(site, edits);
   applyRoads(site, edits);
   applyGrading(site, edits);   // U3616: the ground set to a level, water at its own, before the buildings' pads
@@ -771,7 +783,9 @@ export function applyDesign(site, floors, edits) {
     }
     else if (e.kind === "restore") for (const id of targets(site, e.building, [...vols.keys()])) gone.delete(id);
     else if (e.kind === "reshape") { const v = vols.get(e.id); if (v) { const { kind, id, why, ...set } = e; Object.assign(v, set); if (set.storeys != null && set.height == null) v.height = Math.round(set.storeys * STOREY_M * 100) / 100; } }
-    else if (e.kind === "balconies") {
+    else if (e.kind === "balconies" && e.remove === true) {
+      added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger fjernet mot ${e.face}°, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts: [], count: 0, remove: true, face: e.face, facades: [], facade_say: `Byggets egne balkonger mot ${e.face}° er tatt bort.` });
+    } else if (e.kind === "balconies") {
       const skipped = new Map(), faces = new Map(), parts = balconyParts(site, e, gone, skipped, faces), slabs = parts.filter(p => p.role === "slab");
       /* U3614: each facade used: which way it faces, how long, how many on each storey */
       const used = [...faces.values()].filter(f => Object.keys(f.per_storey).length).map(f => { const ks = Object.values(f.per_storey); return { bearing: f.bearing, length_m: round1(f.length_m), storeys: ks.length, per_storey: Math.min(...ks) === Math.max(...ks) ? ks[0] : `${Math.min(...ks)}–${Math.max(...ks)}`, count: ks.reduce((a, b) => a + b, 0) }; });

@@ -64,7 +64,7 @@
         <span class="seg2" role="group" aria-label="Etasje"><button type="button" id="floorBtn" aria-haspopup="true" aria-expanded="false" aria-controls="floorPop" title="Velg etasje: hele anlegget eller en etasje. Prikk betyr at arkivet har plantegning av etasjen"><span id="floorTxt">Hele anlegget</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button><button type="button" id="floorUp" title="Etasjen over (↑)" aria-label="Etasjen over"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14l5-5 5 5"/></svg></button><button type="button" id="floorDown" title="Etasjen under (↓)" aria-label="Etasjen under"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button></span>
         <div class="flr-pop" id="floorPop" hidden></div>
       </div>
-      <button type="button" class="tgl" id="mfasade" title="Fasaden sett rett på, med mål du kan endre og tegning med pennen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V6h14v14"/><path d="M9 10h2M13 10h2M9 14h2M13 14h2"/></svg>Fasade</button>
+      <button type="button" class="tgl" id="mfasade" data-miniapp="fasade" title="Fasaden sett rett på, med mål du kan endre og tegning med pennen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V6h14v14"/><path d="M9 10h2M13 10h2M9 14h2M13 14h2"/></svg>Fasade</button>
       <button type="button" class="tgl" id="names" aria-pressed="false" title="Vis eller skjul navnene på fløyene og rommene (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10l4 5-4 5H4z"/></svg>Navn</button>
       <button type="button" class="tgl" id="mal" aria-pressed="false" title="Mål avstand mellom to punkter: trykk der du vil starte, og så der du vil slutte (M). Hold Shift og trykk flere punkter for et areal. Esc avslutter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16.5 16.5 3 21 7.5 7.5 21z"/><path d="M7 13l2.5 2.5M10 10l2 2M13 7l2.5 2.5"/></svg>Mål</button>
     </div>
@@ -182,7 +182,8 @@
             <ul class="csugg" id="talkSugg"><li><button type="button" data-say="Vis 5. etasje i plan">Vis 5. etasje i plan</button></li>
               <li><button type="button" data-say="Hvor høyt er Sentralblokka?">Hvor høyt er Sentralblokka?</button></li>
               <li><button type="button" data-say="Hvilke tegninger finnes av Østfløy?">Hvilke tegninger finnes av Østfløy?</button></li>
-              <li><button type="button" data-say="Tegn et prosjekt med meg">Tegn et prosjekt med meg</button></li></ul></div>
+              <li><button type="button" data-say="Tegn et prosjekt med meg">Tegn et prosjekt med meg</button></li>
+              <li><button type="button" data-miniapp="fasade" data-preset='{"focus":"sentralblokka","side":"Sørsiden"}'>Åpne fasadetegning</button></li></ul></div>
           <div id="talkLogin" hidden></div>
         </div>
         <div class="chatpill" id="chat-pill"></div>

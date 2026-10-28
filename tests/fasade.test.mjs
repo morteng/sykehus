@@ -87,3 +87,80 @@ test("the SVG says what is drawn", () => {
   const svg = toSvg(draw(site, { side: "Sørsiden" }));
   assert.match(svg, /SENTRALBLOKKA · SØRSIDEN/); assert.match(svg, /\+20,28/); assert.ok(svg.startsWith("<svg"));
 });
+
+/* ---- the balconies: separate items; remove one, move one, put them back (the balconies edit, set + rev + exact) ---- */
+import { initialLayout, layoutEdits, layoutFromEdits } from "../public/fasade.js";
+import { replacesBuiltIn } from "../public/design.js";
+const south = () => draw(site, { side: "Sørsiden" });
+const slabsOf = d => d.items.map(i => `${i.storey}|${i.x0.toFixed(1)}|${i.x1.toFixed(1)}`).sort();
+test("the built-in balconies are items, one a storey, and the model's replacesBuiltIn is false until an edit replaces them", () => {
+  const d = south(); assert.equal(replacesBuiltIn(site), false);
+  assert.equal(d.items.length, 13); assert.ok(d.items.every(i => i.built && i.kind === "balkong" && i.x1 - i.x0 > 8));
+  assert.equal(initialLayout(d).length, 13);
+});
+test("«Fjern alle»: the remove edit takes the built-in set away in the model and the drawing", () => {
+  const d = south(), [rm] = layoutEdits(d.face, "sentralblokka", [], 1);
+  assert.doesNotThrow(() => checkEdit(site, [], rm));
+  const m = tryEdits(site, [], [], [rm]); assert.equal(replacesBuiltIn(m.site), true);
+  assert.equal(draw(m.site, { side: "Sørsiden" }).items.length, 0);
+});
+test("remove one, move one: the edits lay the same slabs the layout says, and «Tilbakestill» is no edit at all", () => {
+  const d = south(), L = initialLayout(d), moved = L.slice(1).map((it, i) => i === 0 ? { ...it, storey: L[0].storey, t0: it.t0 + 0.4, t1: it.t1 - 0.4 } : it);   // the first removed, the second moved down to its place and made 0,8 m narrower
+  const edits = layoutEdits(d.face, "sentralblokka", moved, 2);
+  const m = tryEdits(site, [], [], edits), after = draw(m.site, { side: "Sørsiden" });
+  assert.equal(after.items.length, 12, "one fewer");
+  const want = moved.map(it => `${it.storey}|${it.t0.toFixed(1)}|${it.t1.toFixed(1)}`).sort(), got = slabsOf(after).map(s => s.replace(/^(.*)\|(.*)\|(.*)$/, "$1|$2|$3"));
+  assert.equal(got.length, want.length);
+  for (const w of want) { const [s, a, b] = w.split("|"); assert.ok(got.some(g => { const [gs, ga, gb] = g.split("|"); return gs === s && Math.abs(ga - a) < 0.35 && Math.abs(gb - b) < 0.35; }), `slab ${w} in the model`); }
+  assert.deepEqual(layoutFromEdits(edits, d.face).length, 12, "the draft's own layout is read back");
+  assert.equal(draw(tryEdits(site, [], [], []).site, { side: "Sørsiden" }).items.length, 13, "restored: no edit, the built-in set again");
+  /* a layout laid again replaces the one before (newest rev), it does not add to it */
+  const again = tryEdits(site, [], [], [...edits, ...layoutEdits(d.face, "sentralblokka", L.slice(0, 3), 3)]);
+  assert.equal(draw(again.site, { side: "Sørsiden" }).items.length, 3);
+});
+
+/* ---- the gizmo (public/gizmo.js): the window rule, the snaps, a drag as the same edit a typed number makes ---- */
+import { pickAt, marquee, choose, snapMove, snapPoint, handlesOf, handleAt, resizeRect, layoutItemOf, typedItem, distribute, arrayOf, selectAll } from "../public/gizmo.js";
+const it = (id, x0, x1, z0, z1, extra = {}) => ({ id, kind: "balkong", x0, x1, z0, z1, ...extra });
+const row = [it("a", 0, 3, 20.08, 20.28), it("b", 4, 7, 20.08, 20.28), it("c", 8, 11, 20.08, 20.28), it("d", 0, 3, 24.04, 24.24)];
+test("window select: left to right takes what is wholly inside, right to left what it crosses; shift adds, and takes away when all are in", () => {
+  assert.deepEqual(marquee(row, [-1, 19], [6, 21]).keys, ["a"], "inside: only a is wholly in");
+  assert.deepEqual(marquee(row, [6, 21], [-1, 19]).keys, ["a", "b"], "crossing: b is touched");
+  const l2r = marquee(row, [-1, 19], [8.5, 21]); assert.equal(l2r.dashed, false); assert.deepEqual(l2r.keys, ["a", "b"]);
+  const r2l = marquee(row, [8.5, 21], [-1, 19]); assert.equal(r2l.dashed, true); assert.deepEqual(r2l.keys, ["a", "b", "c"], "crossing takes c too");
+  assert.deepEqual(choose(["a"], ["b"], true), ["a", "b"]); assert.deepEqual(choose(["a", "b"], ["b"], true), ["a"]); assert.deepEqual(choose(["a"], ["c"], false), ["c"]);
+  assert.equal(pickAt(row, [1, 20.2]).id, "a"); assert.equal(pickAt(row, [50, 50]), null);
+  assert.deepEqual(selectAll(row.map((r, i) => ({ ...r, storey: i < 3 ? "2. etasje" : "3. etasje" })), "balkong", { storey: "2. etasje" }), ["a", "b", "c"]);
+});
+test("snaps: the storey line, a neighbour's edge, equal spacing, the grid, and none with Alt", () => {
+  const lv = [20.28, 24.24], s = snapMove({ x0: 12.1, x1: 15.1, z0: 20.2, z1: 20.4 }, { levels: lv, others: row });
+  assert.equal(s.rect.z1, 20.28); assert.ok(s.snaps.some(x => x.axis === "z" && x.word === "etasjeskille"));
+  const eq = snapMove({ x0: 11.92, x1: 14.92, z0: 20.08, z1: 20.28 }, { levels: lv, others: row.slice(0, 3) });
+  assert.equal(eq.rect.x0, 12, "gaps are 1 m: the next one goes 1 m from c"); assert.match(eq.snaps.find(x => x.axis === "x").word, /^lik avstand 1 m/);
+  const al = snapMove({ x0: 4.15, x1: 7.15, z0: 24.1, z1: 24.3 }, { levels: lv, others: row });
+  assert.equal(al.rect.x0, 4, "in line with b's edge"); assert.equal(al.snaps.find(x => x.axis === "x").word, "i flukt med");
+  const g = snapMove({ x0: 30.03, x1: 33.03, z0: 30.04, z1: 30.24 }, { levels: lv, others: row }); assert.equal(g.rect.x0, 30); assert.equal(g.snaps.at(-1).word, "rutenett 0,1 m");
+  assert.equal(snapMove({ x0: 30.03, x1: 33.03, z0: 30.04, z1: 30.24 }, { off: true }).rect.x0, 30.03);
+  const p = snapPoint([3.1, 20.1], { others: row, levels: lv }); assert.deepEqual(p.p, [3, 20.28], "Fab's endpoint: a's top corner, which is also on the storey line");
+});
+test("handles are 44 px for a finger and 24 for a mouse; a drag of a handle is a resize", () => {
+  const r = { x0: 0, x1: 3, z0: 20.08, z1: 20.28 }, t = handlesOf(r, 10, true), m = handlesOf(r, 10, false);
+  assert.equal(t.length, 8); assert.equal(t[0].size, 44); assert.equal(m[0].size, 24); assert.equal(handleAt(t, [3.2, 20.28]).handle, "ne");
+  assert.equal(handleAt(t, [9, 9]), null);
+  assert.deepEqual(resizeRect(r, "e", [5, 22]), { x0: 0, x1: 5, z0: 20.08, z1: 20.28 }); assert.equal(resizeRect(r, "e", [-4, 0]).x1, 0.3, "never under 0,3 m");
+});
+test("a drag becomes the same edit a typed number makes", () => {
+  const d = south(), L = initialLayout(d), b = L[2], levels = d.levels;
+  const typed = typedItem(b, "bredde", "5,5"), r0 = d.items.find(i => i.id === b.id);
+  const dragged = layoutItemOf(b, resizeRect(r0, "e", [b.t0 + 5.5, r0.z1]), levels);
+  assert.deepEqual({ t0: dragged.t0, t1: dragged.t1, storey: dragged.storey }, { t0: typed.t0, t1: typed.t1, storey: typed.storey });
+  assert.deepEqual(layoutEdits(d.face, "sentralblokka", [dragged], 7), layoutEdits(d.face, "sentralblokka", [typed], 7), "the same edits go to the draft");
+  const mv = layoutItemOf(b, snapMove({ x0: r0.x0, x1: r0.x1, z0: levels[3].kote - 0.2 + 0.03, z1: levels[3].kote + 0.03 }, { levels: levels.map(l => l.kote) }).rect, levels);
+  assert.equal(mv.storey, levels[3].name, "dropped on a storey line it belongs to that storey");
+  assert.equal(typedItem(b, "bredde", "250 cm").t1 - b.t0, 2.5); assert.equal(typedItem(b, "dybde", "9"), null);
+});
+test("distribute and array", () => {
+  const d3 = distribute([it("a", 0, 2, 0, 1), it("b", 3, 5, 0, 1), it("c", 12, 14, 0, 1)]);
+  assert.deepEqual(d3.map(x => x.x0), [0, 6, 12]); const gaps = [d3[1].x0 - d3[0].x1, d3[2].x0 - d3[1].x1]; assert.ok(Math.abs(gaps[0] - gaps[1]) < 0.011);
+  assert.deepEqual(arrayOf(it("a", 0, 3, 20.08, 20.28), 4, 3.2).map(r => r.x0), [6.2, 12.4, 18.6, 24.8]);
+});

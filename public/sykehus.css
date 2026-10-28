@@ -729,3 +729,9 @@ html.pk-wait .loading { visibility: hidden; }
 .fx-err[hidden] { display: none; }
 .fx-senderr { flex-basis: 100%; }
 @media (max-width: 899px) { .fx-sides button { min-width: 0; flex: 1; } .fx-send { min-width: 100%; } .fx-num { bottom: 210px; } }
+.fx-sel { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; z-index: 3; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; width: min(560px, calc(100% - 24px)); }
+.fx-sel[hidden], .fx-more[hidden], .fx-sf label[hidden] { display: none; }
+.fx-sf { display: flex; gap: 8px; } .fx-sf label { flex: 1; display: flex; flex-direction: column; font-size: var(--fs-sm, .85rem); color: var(--muted); }
+.fx-sf input { height: 48px; font: inherit; font-size: 1.2rem; text-align: center; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); color: var(--text); min-width: 0; }
+.fx-sb, .fx-more { display: flex; gap: 8px; flex-wrap: wrap; } .fx-sb button { flex: 1; } .fx-sb .fx-ok { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.fx-hand { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; } .fx-hand div { position: fixed; pointer-events: auto; touch-action: none; border-radius: 50%; background: rgba(31,95,191,.25); border: 3px solid #1f5fbf; box-sizing: border-box; cursor: ew-resize; }
