@@ -21,6 +21,10 @@ const FILES = { "mesh.json": "application/json", "model.ifc": "application/p21",
 export const shaOf = (script, params) => createHash("sha256").update(script + "\0" + JSON.stringify(Object.keys(params).sort().map(k => [k, params[k]]))).digest("hex");
 const meshOf = sha => { try { return JSON.parse(readFileSync(join(DIR, sha, "mesh.json"), "utf8")); } catch { return null; } };
 
+/* IFC names agents get wrong (a name from another schema or an invention): the real IFC4 one, said in the error */
+const IFC_NAMES = { IfcArbitraryClosedProfileDefWithVoids: "IfcArbitraryProfileDefWithVoids" };
+const nameHint = text => Object.entries(IFC_NAMES).filter(([bad]) => text.includes(bad)).map(([bad, good]) => `\nIFC4 har ikke ${bad}: det heter ${good}.`).join("");
+
 /* the worker's words in the page's language, with what the script printed last, for Anton to fix it from */
 function errorOf(j) {
   const e = j.errors?.[0] || {}, tail = String(j.log || "").trim().split("\n").slice(-12).join("\n").slice(-1500);
@@ -34,7 +38,7 @@ function errorOf(j) {
     too_big: "Det skriptet laget er større enn 64 MB",
     sandbox_unavailable: "Arbeideren kan ikke kjøre skript nå (sandkassa starter ikke der); si fra til den som drifter siden",
   }[e.code] || `Arbeideren svarte ikke som ventet (${j.state || "ukjent"})`;
-  return say + (e.code === "script_error" && tail ? `\nSlutten av utskriften:\n${tail}` : "");
+  return say + (e.code === "script_error" ? nameHint(`${e.message}\n${tail}`) + (tail ? `\nSlutten av utskriften:\n${tail}` : "") : "");
 }
 
 /* one job to the worker. A cold `import ifcopenshell` in the sandbox sometimes dies with the script error «KeyboardInterrupt»

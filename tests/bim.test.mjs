@@ -100,6 +100,16 @@ test("prepare: the worker's failure in plain words, with the script's line", asy
   } finally { w.close(); }
 });
 
+test("prepare: a wrong IFC name in the script error is answered with the real IFC4 one", async () => {
+  const w = await fakeWorker(() => ({ state: "failed", errors: [{ code: "script_error", line: 12, message: "RuntimeError: Entity with name 'IfcArbitraryClosedProfileDefWithVoids' not found in schema 'IFC4'" }], log: "Traceback …" }));
+  process.env.SYKEHUS_WORKER = w.url;
+  try {
+    const { prepare } = await import("../bim.mjs");
+    await assert.rejects(prepare({ kind: "construction", name: "X", from: [0, -80], to: [10, -80], script: "boom()", params: {} }, site),
+      m => /linje 12: RuntimeError/.test(m.message) && m.message.includes("IFC4 har ikke IfcArbitraryClosedProfileDefWithVoids: det heter IfcArbitraryProfileDefWithVoids"));
+  } finally { w.close(); }
+});
+
 /* a file brought in (U3571): the bytes to the worker's /blobs, a steps-only job meshes it, kept by its sha */
 test("importFile and prepare: an uploaded IFC is read once, kept by its sha, and stands like a construction", async () => {
   const { createHash } = await import("node:crypto");
