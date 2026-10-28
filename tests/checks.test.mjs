@@ -102,7 +102,8 @@ test("try_change carries checks[] for the change it tried; check_design reads th
   assert.equal(slope.section, "§ 8-6"); assert.match(slope.source, /dibk\.no/); assert.equal(slope.ok, true); assert.match(slope.value, /^1:\d+$/); assert.equal(slope.thing.name, "Hus"); assert.ok(slope.said.length > 10);
   const back = (await call("check_design", { draft: t.draft })).data;
   assert.deepEqual(back.checks, t.checks); assert.equal(back.counted, 2); assert.equal(back.ok + back.brudd + back.ikke_målt, 2);
-  const steep = (await call("try_change", { draft: t.draft, edits: [{ ...v, name: "Bratt", from: [50, 40], to: [70, 40] }], include_screenshot: false })).data;
+  /* the pad skirt (17002c2) moved the ground fit's balance a hand's width, and on sør the 1:20 ramp met the ground at 62 m; mot nord the ground rises steeper than 1:20 the whole way, so the ramp never meets it */
+  const steep = (await call("try_change", { draft: t.draft, edits: [{ ...v, name: "Bratt", from: [50, 40], to: [70, 40], entrance: "nord" }], include_screenshot: false })).data;
   assert.deepEqual(steep.checks.map(c => c.thing.name), ["Bratt", "Bratt"], "only the tried change's rows");
   assert.equal(steep.checks.find(c => c.rule === "atkomst_trinnfri").ok, null);
   const note = (await call("try_change", { draft: t.draft, edits: [{ kind: "note", text: "x", wing: "midtfloy" }], include_screenshot: false })).data;
