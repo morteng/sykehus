@@ -54,21 +54,56 @@ test("the model has no window on the south-west end, and still has them on the o
   assert.ok(w.filter(c => ts(c)[1] < -90).length > 200, "the north-east end keeps its windows");
 });
 
+import { checkEdit } from "../public/edits.js";
 const named = (p, type, name) => [...p.ents.values()].filter(e => e.type === type && stepText(/^'[^']*',[^,]*,'((?:[^']|'')*)'/.exec(e.args)?.[1] || "") === name);
-test("balconies on storeys 2 to 14: a slab and a railing a floor, in the base model", () => {
-  assert.equal(named(base, "IFCSLAB", "Balkongdekke").length, 13); assert.equal(named(base, "IFCRAILING", "Rekkverk").length, 13);
+const SLABS = (m, face) => m.site.added.flatMap(a => a.parts).filter(p => p.role === "slab" && p.face === face);
+const onBack = p => p.axis.every(q => { const [t, s] = ts(q); return t > 7.9 && t < 20.1 && Math.abs(s + 2) < 0.15; });   // the recess back face: 2 m in, between the side parts
+test("the base model has no balcony (the real building has none there), and no balcony part at the SW end", () => {
+  assert.equal(sb.balconies, undefined);
+  assert.equal(named(base, "IFCSLAB", "Balkongdekke").length, 0); assert.equal([...base.ents.values()].filter(e => e.type === "IFCRAILING").length, 0);
+  assert.equal(applyEdits(site, floors, []).site.added?.length ?? 0, 0, "a version with no balconies edit has no added part");
 });
 
-test("a version that tears everything else down keeps the corrected block: the balconies, the windows, nothing on the end's blind walls", () => {
+test("a balconies edit on face 210 (wish wxp5aF4qJLt) stands on the recess back wall, storeys 2 to 14, though the walls are blind", () => {
+  const e = checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, from_storey: "2", to_storey: "14" });
+  const m = applyEdits(site, floors, [e]), slabs = SLABS(m, 210), back = slabs.filter(onBack);
+  assert.ok(back.length > 0, `slabs ${slabs.length}, on the back wall ${back.length}`);
+  const kotes = [...new Set(back.map(p => Math.round(p.profile[2][1] * 100) / 100))].sort((a, b) => a - b);
+  assert.equal(kotes.length, 13, "storeys 2 to 14: " + kotes.join(" ")); assert.equal(kotes[0], 20.28); assert.equal(kotes.at(-1), 65.64);
+  assert.equal(back.length, 65, "5 balconies of 1.9 m (gap 0.6) on the 12 m back wall, on each of 13 storeys"); assert.equal(slabs.length, 143, "all the face-210 walls with a balcony every 2.5 m");
+  const t0 = back.map(p => ts(p.axis[0])[0]).sort((a, b) => a - b); assert.ok(Math.abs(t0[0] - 8.05) < 0.1 && Math.abs(Math.max(...back.map(p => ts(p.axis[1])[0])) - 19.95) < 0.1, "first slab from t 8.05, last to t 19.95 m");
+  const rails = m.site.added.flatMap(a => a.parts).filter(p => p.role === "railing");
+  assert.ok(rails.length >= back.length, "a railing for each slab");
+  /* what stands in the middle: every slab centre between the side parts' ends, t 8 to 20 m */
+  for (const p of back) { const t = (ts(p.axis[0])[0] + ts(p.axis[1])[0]) / 2; assert.ok(t > 8 && t < 20, `slab centre t=${t}`); }
+  globalThis.__sbsw = { all: slabs.length, back: back.length, per_storey: back.length / 13 };
+});
+
+test("a version that tears everything else down keeps the corrected block, and a balconies edit still lands there", () => {
   const m = applyEdits(site, floors, [{ kind: "demolish", building: "alle" }, { kind: "restore", building: "Sentralblokka" }]);
-  const kept = m.site.buildings.filter(b => b.wing === "sentralblokka");
   assert.deepEqual([...new Set(m.site.buildings.filter(b => b.own).map(b => b.wing))], ["sentralblokka"], "only the high block is left of the hospital");
-  const k = kept.find(b => b.id === "sentralblokka");
-  assert.deepEqual(k.blind, sb.blind); assert.deepEqual(k.balconies, sb.balconies); assert.equal(k.walls.length, sb.walls.length);
+  const k = m.site.buildings.find(b => b.id === "sentralblokka");
+  assert.deepEqual(k.blind, sb.blind); assert.equal(k.walls.length, sb.walls.length);
   const left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean)), gone = site.wings.filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
   assert.ok(gone.length >= 10 && !gone.includes("Sentralblokka"), gone.join(", "));
   const after = parseIfc(withoutBuildings(base, gone).text);
-  assert.equal(named(after, "IFCSLAB", "Balkongdekke").length, 13); assert.equal(named(after, "IFCRAILING", "Rekkverk").length, 13);
   assert.equal([...after.ents.values()].filter(e => e.type === "IFCBUILDING").length, 1);
   assert.equal([...after.ents.values()].filter(e => e.type === "IFCWINDOW").length, windowCentres().length, "the high block's windows, all of them and no others");
+  const e = checkEdit(m.site, m.floors, { kind: "balconies", wing: "Sentralblokka", face: 210, from_storey: "2", to_storey: "14" });
+  assert.ok(SLABS(applyEdits(site, floors, [{ kind: "demolish", building: "alle" }, { kind: "restore", building: "Sentralblokka" }, e]), 210).filter(onBack).length > 0);
+});
+
+import { facadeNames, faceAlias } from "../public/design.js";
+test("«sørsiden» of Sentralblokka is face 210, and the other sides have their names from their bearings; other wings are as they were", () => {
+  assert.deepEqual(facadeNames(site, "sentralblokka").map(f => [f.bearing, f.name]).sort((a, b) => a[0] - b[0]),
+    [[30, "nordsiden"], [120, "østsiden"], [210, "sørsiden"], [300, "vestsiden"]]);
+  for (const w of ["sørsiden", "Sørsiden", "sør", "SØR", " sorsiden "]) assert.equal(faceAlias(site, "sentralblokka", w), 210, w);
+  assert.equal(faceAlias(site, "sentralblokka", "nord"), 30); assert.equal(faceAlias(site, "sentralblokka", "øst"), 120); assert.equal(faceAlias(site, "sentralblokka", 210), 210);
+  for (const [w, b] of [["nordsiden", 30], ["Nord", 30], ["østsiden", 120], ["ØST", 120], ["ost", 120], ["vestsiden", 300], ["vest", 300], ["VESTSIDEN", 300]]) assert.equal(faceAlias(site, "sentralblokka", w), b, w);
+  assert.equal(faceAlias(site, "ostfloy", "sørsiden"), "sørsiden", "another wing keeps the word, and checkEdit refuses it as before");
+  assert.deepEqual(facadeNames(site, "ostfloy"), []);
+  const num = checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210 }), named = checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: "sørsiden" });
+  assert.deepEqual(named, num, "the same edit stored");
+  assert.equal(checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: "sør" }).face, 210);
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "ostfloy", face: "sørsiden" }));
 });

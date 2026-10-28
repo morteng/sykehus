@@ -39,6 +39,10 @@ test("rooms of a storey across wings, and openings", async () => {
   assert.ok(ops.rooms.length >= 2 && ops.rooms.every(r => /operasjon/i.test(r.name)));
   const o = (await call("openings", { wing: "ostfloy" })).data;
   assert.ok(o.facades.find(x => x.id === "ostfloy-nord").openings.length > 40);
+  /* Sentralblokka's four sides by name, each with its bearing (Lars's usage; Anton must not ask «sørvest eller sørøst?») */
+  const sb = (await call("about_wing", { wing: "sentralblokka" })).data, names = Object.fromEntries(sb.facade_bearings.filter(x => x.name).map(x => [x.name, x.bearing]));
+  assert.deepEqual(names, { sørsiden: 210, nordsiden: 30, østsiden: 120, vestsiden: 300 });
+  assert.match(sb.facade_bearings.find(x => x.bearing === 210).say, /sørsiden: fasaden som vender 210° \(det ønskene kaller sørvest\)/);
 });
 test("a draft: tried, read back by the page, undone; the shared model is unchanged", async () => {
   const t = (await call("try_change", { edits: [

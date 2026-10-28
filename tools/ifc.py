@@ -33,9 +33,8 @@ import ifcopenshell.api.root, ifcopenshell.api.unit, ifcopenshell.api.context, i
 import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature, ifcopenshell.api.classification, ifcopenshell.api.material, ifcopenshell.api.type
 
 T_WALL, T_SLAB = 0.35, 0.30
-RAIL = 1.1   # a balcony railing's height, m (assumed)
 # the building parts as NS 3451:2022 names them (two digits where the drawings cannot say bearing or not)
-NS3451 = {"222": "Søyler", "23": "Yttervegger", "234": "Vinduer, dører, porter", "24": "Innervegger", "25": "Dekker", "26": "Yttertak", "28": "Trapper, balkonger, ramper"}
+NS3451 = {"222": "Søyler", "23": "Yttervegger", "234": "Vinduer, dører, porter", "24": "Innervegger", "25": "Dekker", "26": "Yttertak"}
 MATERIAL_CATEGORY = {"Betong": "concrete", "Murverk": "masonry"}   # IFC4's own words for them
 MAT_KEY = {"Betong": "concrete"}   # an envelope wing: site.json's word for its material -> the key of public/renderkit/materials.js
 # the wings drawn as a model from the start (U3637: the high block first): their windows from the bay rule, their materials from
@@ -188,23 +187,6 @@ def build(site, floors, only=None, envelope=ENVELOPE):
                 put(b["base"], e); pset(e, "Pset_ColumnCommon", {"IsExternal": True, "LoadBearing": True, "Status": "EXISTING"})
                 qto(e, "Qto_ColumnBaseQuantities", {"Length": hc, "CrossSectionArea": size * size, "GrossVolume": size * size * hc})
                 ns(e, "222"); of(e, mats.get("columns"), mhow)
-            for bal in b.get("balconies", []):   # a run of balcony along a wall (site.json balconies, tools/sb-sw.py): a slab at each storey's floor and a railing at its edge
-                (ax, ay), (bx, by) = bal["from"], bal["to"]; L = math.hypot(bx - ax, by - ay); d = ((bx - ax) / L, (by - ay) / L); out = (d[1], -d[0]); D = bal["depth"]
-                if any(inside(((ax + bx) / 2 + out[0] * 0.5, (ay + by) / 2 + out[1] * 0.5), r) for r in blocks): out = (-out[0], -out[1])   # out is the side no block is on
-                far = lambda s: [(ax + out[0] * s, ay + out[1] * s), (bx + out[0] * s, by + out[1] * s)]
-                for l, s in storeys:
-                    num = l["name"].split(".")[0]
-                    if not (num.isdigit() and bal.get("from_storey", 1) <= int(num) <= bal.get("to_storey", 99)): continue
-                    z, bsrc = l["kote"], bal.get("src", "")
-                    e = element("IfcSlab", "Balkongdekke", [(ax, ay), (bx, by)] + far(D)[::-1], z - T_SLAB, T_SLAB, bsrc, "antatt", predefined_type="FLOOR")
-                    contained.setdefault(s, []).append(e); counts["balcony"] = counts.get("balcony", 0) + 1
-                    pset(e, "Pset_SlabCommon", {"IsExternal": True, "Status": "EXISTING"})
-                    qto(e, "Qto_SlabBaseQuantities", {"Depth": T_SLAB, "Perimeter": 2 * (L + D), "GrossArea": L * D, "GrossVolume": L * D * T_SLAB})
-                    ns(e, "28"); of(e, mats.get("slabs"), mhow)
-                    h = min(RAIL, bal.get("top", z + RAIL) - z)   # the railing at the edge, 1.1 m, to no higher than the recess's roof
-                    if h < 0.3: continue
-                    r = element("IfcRailing", "Rekkverk", far(D - 0.05) + far(D)[::-1], z, h, bsrc, "antatt", predefined_type="GUARDRAIL")
-                    contained.setdefault(s, []).append(r); pset(r, "Pset_RailingCommon", {"IsExternal": True, "Height": h, "Status": "EXISTING"}); ns(r, "28"); of(r, "steel", mhow)
 
         # openings: each window or door of a drawn facade, cut into the outer walls it stands in
         # the high block has no facade drawing with its windows: its windows are the bays the page paints (public/bays.js), a row a

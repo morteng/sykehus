@@ -238,6 +238,7 @@ export function checkDesign(site, e, str) {
     case "balconies": {
       const w = (site.wings || []).find(x => x.id === String(e.wing ?? "").toLowerCase().trim() || x.name.toLowerCase() === String(e.wing ?? "").toLowerCase().trim());
       if (!w) throw new Error(`Ukjent fløy «${e.wing}»`);
+      if (e.face != null) e = { ...e, face: faceAlias(site, w.id, e.face) };   // «sørsiden» of Sentralblokka is 210°
       const side = e.side == null && e.face != null ? SIDE_KEYS[Math.round(norm360(+e.face) / 90) % 4] : String(e.side ?? "").toUpperCase().replace("O", "Ø");
       if (!SIDES[side]) throw new Error("side er N, Ø, S eller V: fasaden balkongene vender mot (eller face: retningen i grader)");
       const names = (w.levels || []).map(l => l.name), storey = (s, what) => { if (s == null) return undefined; const n = /^\d+$/.test(String(s).trim()) ? `${String(s).trim()}. etasje` : String(s).trim(); if (!names.includes(n)) throw new Error(`${what}: ${w.name} har ikke «${n}» (har ${names.join(", ")})`); return n; };
@@ -393,6 +394,21 @@ function* facingWalls(site, wing, side, face = null) {
   }
 }
 /* U3615: a wing's facades: the bearings its outline walls face (to 5°), each with its length, longest first */
+/* the plain names of a turned wing's facades (Lars's wishes say «sørvest», Anton asked «sørvest eller sørøst?»): Sentralblokka, turned 30°, has
+   an end facing 210° that the person calls «sørsiden», the other end 30° «nordsiden», the long faces 120° «østsiden» and 300° «vestsiden»: the
+   nearest of the four sides, one each. Only for the wings listed; a bearing gives its name, a name gives its bearing */
+const NAMED_WINGS = new Set(["sentralblokka"]), SIDE_NAME = { N: "nordsiden", "Ø": "østsiden", S: "sørsiden", V: "vestsiden" };
+export function facadeNames(site, wing) {
+  if (!NAMED_WINGS.has(wing)) return [];
+  const by = facadesOf(site, wing).filter(f => f.length_m >= 6).map(f => ({ bearing: f.bearing, name: SIDE_NAME[SIDE_KEYS[Math.round(f.bearing / 90) % 4]] }));
+  return new Set(by.map(f => f.name)).size === by.length ? by : [];
+}
+/* face given as a name («sørsiden», «sør», any case) -> its bearing on a wing that has names; anything else is as it was */
+export function faceAlias(site, wing, face) {
+  if (typeof face !== "string") return face;
+  const k = face.toLowerCase().trim().replace(/siden$/, "").replace(/^ost$/, "øst").replace(/^sor$/, "sør");
+  return facadeNames(site, wing).find(f => f.name === `${k}siden`)?.bearing ?? face;
+}
 export function facadesOf(site, wing) {
   const m = new Map();
   for (const side of Object.keys(SIDES)) for (const { L, bearing } of facingWalls(site, wing, side)) { const k = faceKey(bearing); m.set(k, (m.get(k) || 0) + L); }

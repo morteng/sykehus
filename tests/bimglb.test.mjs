@@ -73,9 +73,7 @@ test("U3656: no IfcOpeningElement in the GLB (its volume would fill the hole it 
   assert.match(read("tools/glb.py").toString(), /^SKIP = \([^)]*"IfcOpeningElement"/m, "tools/glb.py skips the openings");
   const parts = readGlb(buf("public/" + BIM.sentralblokka)), by = Object.fromEntries(parts.map(p => [p.material, p]));
   assert.ok(by.concrete.indices.length / 3 < 85000, `concrete triangles ${by.concrete.indices.length / 3}: with the openings written as boxes it was 103132`);
-  const rails = ifcCount("Sentralblokka", "IFCRAILING");
-  assert.equal(rails, 13, "a railing on each balcony slab, storeys 2 to 14");
-  assert.equal(by.steel.indices.length / 3, parts.windows * 16 + rails * 12, "a frame: 8 triangles on each of a window's two faces; a railing is a box of 12");
+  assert.equal(by.steel.indices.length / 3, parts.windows * 16, "a frame: 8 triangles on each of a window's two faces");
 });
 
 test("U3656: greenhouse glass stays see-through, the windows of a facade wear their own glazing (the vendored library)", () => {
