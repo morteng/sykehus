@@ -734,7 +734,13 @@ export function applyDesign(site, floors, edits) {
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
   const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan && !e.bim?.nopad && !(e.material === "water" && e.base_kote != null) ? baseOf(site, { ...e, base_kote: undefined }) : null]);
-  if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
+  if (site.terrain?.z && feet.some(([, e]) => e.on == null)) {
+    /* S4: the grid as it was before any pad goes in, kept as site.terrain0 for bim.mjs (a construction's foot is looked up in the
+       ground, not in a pad under a tower). The same shared object, never a copy; not enumerable, so a spread or a structured
+       clone of the site (a picture's worker, the next applyEdits) leaves it behind and no grid is carried twice */
+    Object.defineProperty(site, "terrain0", { value: site.terrain, enumerable: false, writable: true, configurable: true });
+    site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
+  }
   const keep = new Map(), guard = pathCells(site), lot = feet.some(([, e]) => e.on == null) ? lotCells(site) : null;
   for (const [id, e, { parts, base }, free] of feet) {
     /* free: where it would stand of itself, on the ground as it was before any pad */
