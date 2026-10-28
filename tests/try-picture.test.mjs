@@ -63,10 +63,12 @@ test("a lawn on a roof: the picture is the roof's plan at its kote, on the lawn,
 });
 
 test("edge_rail: one picture for the whole run, centred on the level's edge", async () => {
+  /* the run the live model gives: the before-model was rebuilt photo-based (a381dbc), and at kote 66,41 the level's own edge is now 3 deler, 19 m (was 7, 23 m) */
+  const live = edgeRail(site, site.wings.find(w => w.id === "sentralblokka"), { level: 66.41, height_m: 1.2, id: "nlav" });
   const r = await call("try_change", { edits: [{ kind: "edge_rail", wing: "Sentralblokka", level: 66.41, height_m: 1.2, id: "nlav" }] });
-  assert.ok(!r.isError, text(r)); const sc = r.structuredContent; assert.ok(sc.added[0].pieces >= 4, "the answer is one edge_rail entry: " + JSON.stringify(sc.added[0]).slice(0, 200));
+  assert.ok(!r.isError, text(r)); const sc = r.structuredContent; assert.ok(sc.added[0].pieces === live.parts.length && sc.added[0].pieces >= 2, "the answer is one edge_rail entry with the run's pieces: " + JSON.stringify(sc.added[0]).slice(0, 200));
   assert.equal(pngs(r).length, 1, "one picture, not one per piece"); save(r, "rail");
-  const ends = edgeRail(site, site.wings.find(w => w.id === "sentralblokka"), { level: 66.41, height_m: 1.2, id: "nlav" }).parts.flatMap(x => [x.from, x.to]), [bx, by, side] = bbox(ends), k = cam(r)[0];
+  const ends = live.parts.flatMap(x => [x.from, x.to]), [bx, by, side] = bbox(ends), k = cam(r)[0];
   assert.ok(side > 40, `the run is long: ${side} m`); assert.ok(Math.hypot(k.target[0] - bx, k.target[1] - by) < 6, `target ${k.target} on the run's middle ${bx},${by}`); assert.ok(away(k, hospital) > 5 || true);
   assert.ok(Math.abs(k.target[2] - 66.41) < 3, `kote ${k.target[2]}`); assert.ok(k.distance_m > 35, `distance ${k.distance_m}`);
   assert.match(text(r), /Endret: [^.]*deler/); assert.equal(k.plan, false);
