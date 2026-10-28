@@ -35,7 +35,7 @@ import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./la
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
-import { BAY, windowsOn, kindOf } from "./bays.js";   // the window bays (U3624)
+import { BAY, windowsOn, kindOf, blindWall } from "./bays.js";   // the window bays (U3624)
 import { ringFrame, fitInRing } from "./renderkit/frame.js";   // a building's own frame (U3831)
 import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
@@ -347,7 +347,7 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
       const dd = [(bb[0] - a[0]) / L, (bb[1] - a[1]) / L], runs = [], face = faces.get(faceKey(bearing)) || faces.set(faceKey(bearing), { bearing: faceKey(bearing), length_m: 0, per_storey: {} }).get(faceKey(bearing));
       face.length_m += L;
       if (e.windows) {   // U3624: one a window group, centred on it, as the facade's picture draws them (bays.js)
-        for (const [t0, t1] of windowsOn(kindOf(b), wall)) {
+        for (const [t0, t1] of blindWall(b, wall) ? [] : windowsOn(kindOf(b), wall)) {
           const c = flip ? L - (t0 + t1) / 2 : (t0 + t1) / 2, h = (e.bay ?? t1 - t0 + 0.6) / 2;
           if (c - h >= 0.05 && c + h <= L - 0.05) runs.push([c - h, c + h]);
         }

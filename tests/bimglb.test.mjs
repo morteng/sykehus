@@ -39,7 +39,7 @@ test("the reader refuses a file that is not a GLB 2", () => {
 
 /* the windows the IFC file holds for the wing (down the aggregates and the containment, as tests/envelope.test.mjs reads them),
    so the file and the page's model cannot drift: regenerate hoyblokka.glb (tools/glb.py) when tools/ifc.py or bays.js change */
-function ifcWindows(wingName) {
+function ifcCount(wingName, type = "IFCWINDOW") {
   const p = parseIfc(readFileSync(new URL("../public/data/sykehus.ifc", import.meta.url), "utf8")), ids = t => [...t.matchAll(/#(\d+)/g)].map(m => +m[1]), kids = new Map();
   for (const [, e] of p.ents) {
     let m, up, ks;
@@ -50,10 +50,10 @@ function ifcWindows(wingName) {
   const down = id => (kids.get(id) || []).flatMap(k => [k, ...down(k)]);
   const b = [...p.ents].find(([, e]) => e.type === "IFCBUILDING" && e.args.includes(`'${wingName}'`));
   assert.ok(b, `the IFC has no building ${wingName}`);
-  return down(b[0]).filter(k => p.ents.get(k)?.type === "IFCWINDOW").length;
+  return down(b[0]).filter(k => p.ents.get(k)?.type === type).length;
 }
 test("the GLB holds as many windows as the IFC file does for the wing (they cannot drift)", () => {
-  const parts = readGlb(buf("public/" + BIM.sentralblokka)), glass = parts.find(p => p.material === "window_glass"), n = ifcWindows("Sentralblokka");
+  const parts = readGlb(buf("public/" + BIM.sentralblokka)), glass = parts.find(p => p.material === "window_glass"), n = ifcCount("Sentralblokka");
   assert.ok(n > 1000, `IFC windows: ${n}`);
   assert.equal(parts.windows, n, "the count tools/glb.py wrote, against the IFC file's");
   assert.equal(glass.indices.length / 3, n * 12, "a window is a box of 12 triangles: the glass in the file is the count it says");
@@ -72,8 +72,10 @@ test("every material in the file is a key of renderkit's materials.js (the one l
 test("U3656: no IfcOpeningElement in the GLB (its volume would fill the hole it cuts), and a frame ring a window", () => {
   assert.match(read("tools/glb.py").toString(), /^SKIP = \([^)]*"IfcOpeningElement"/m, "tools/glb.py skips the openings");
   const parts = readGlb(buf("public/" + BIM.sentralblokka)), by = Object.fromEntries(parts.map(p => [p.material, p]));
-  assert.ok(by.concrete.indices.length / 3 < 85000, `concrete triangles ${by.concrete.indices.length / 3}: with the 2750 openings written as boxes it was 103132`);
-  assert.equal(by.steel.indices.length / 3, parts.windows * 16, "a frame: 8 triangles on each of a window's two faces");
+  assert.ok(by.concrete.indices.length / 3 < 85000, `concrete triangles ${by.concrete.indices.length / 3}: with the openings written as boxes it was 103132`);
+  const rails = ifcCount("Sentralblokka", "IFCRAILING");
+  assert.equal(rails, 13, "a railing on each balcony slab, storeys 2 to 14");
+  assert.equal(by.steel.indices.length / 3, parts.windows * 16 + rails * 12, "a frame: 8 triangles on each of a window's two faces; a railing is a box of 12");
 });
 
 test("U3656: greenhouse glass stays see-through, the windows of a facade wear their own glazing (the vendored library)", () => {

@@ -42,13 +42,13 @@ def triangles(m):
     s = ifcopenshell.geom.settings(); s.set("use-world-coords", True)
     it = ifcopenshell.geom.iterator(s, m, 4)
     mats = classes()   # the library's say (renderkit materials.js CLASS_MAT): a window's glazing, a member's frame, the rest concrete
-    parts = {k: [] for k in sorted({"concrete", mats["IfcWindow"], mats["IfcMember"]})}
+    parts = {k: [] for k in sorted({"concrete", mats["IfcWindow"], mats["IfcMember"], mats["IfcRailing"]})}
     if it.initialize():
         while True:
             sh = it.get(); g = sh.geometry
             v = np.array(g.verts, dtype=np.float64).reshape(-1, 3); f = np.array(g.faces, dtype=np.uint32).reshape(-1)
             cls = m.by_id(sh.id).is_a()
-            if len(f) and cls not in SKIP: parts[mats["IfcWindow"] if cls == "IfcWindow" else "concrete"].append((v, f))
+            if len(f) and cls not in SKIP: parts[mats["IfcWindow"] if cls == "IfcWindow" else mats["IfcRailing"] if cls == "IfcRailing" else "concrete"].append((v, f))   # a balcony's railing is steel
             if len(f) and cls == "IfcWindow": parts[mats["IfcMember"]].append(frame(v))
             if not it.next(): break
     out = {}

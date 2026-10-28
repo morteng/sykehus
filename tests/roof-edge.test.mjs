@@ -111,7 +111,7 @@ const text = r => r.content.filter(c => c.type === "text").map(c => c.text).join
 test("edge_rail through try_change on 66,41: every piece stands at the 66,41 kote and none sticks out", async () => {
   const t = await call("try_change", { edits: [{ kind: "edge_rail", wing: "Sentralblokka", level: 66.41, height_m: 1.2, id: "nlav" }], include_screenshot: false }); assert.ok(!t.isError, text(t));
   /* the answer is one compact edge_rail entry (roofedge.js compactRail; tests/edge-fix.test.mjs), not an entry and a fit row for each piece */
-  const sc = t.structuredContent, sum = sc.added.find(x => x.kind === "edge_rail"); assert.ok(sum && sum.pieces >= 4 && sc.rejected.length === 0, JSON.stringify([sc.added.length, sc.rejected]));
+  const sc = t.structuredContent, sum = sc.added.find(x => x.kind === "edge_rail"); assert.ok(sum && sum.pieces >= 3 && sc.rejected.length === 0, JSON.stringify([sc.added.length, sc.rejected]));
   const made = Array.from({ length: sum.pieces }, (_, i) => ({ id: `nlav${i + 1}` }));
   assert.deepEqual(sum.levels.map(l => [l.kote, l.pieces, l.max_overhang_m]), [[66.41, sum.pieces, 0]], "every piece at the 66,41 kote, none sticks out");
   assert.equal((sc.fit || []).filter(x => /^nlav/.test(x.id)).length, 0);

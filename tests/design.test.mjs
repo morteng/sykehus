@@ -207,13 +207,13 @@ test("U3624: one balcony per window: centred on the window bays the facade is dr
 
 test("U3614/U3615: «sør» on the turned Sentralblokka is refused with both faces named; face picks one, and the result says each facade used", () => {
   assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", side: "S" }),
-    /^Error: Sentralblokka står skjevt: mot sør vender fasaden mot 210° \(30° fra sør, 31 m lang\) og fasaden mot 120° \(60° fra sør, 165 m lang\)\. Si hvilken med face: 210 eller 120/);
+    /^Error: Sentralblokka står skjevt: mot sør vender fasaden mot 210° \(30° fra sør, 34 m lang\) og fasaden mot 120° \(60° fra sør, 165 m lang\)\. Si hvilken med face: 210 eller 120/);
   const e = checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 210, from_storey: "2", to_storey: "14", depth: 1.5, bay: 4 });
   assert.equal(e.side, "S"); assert.equal(e.face, 210);
   const a = applyEdits(site, floors, [e]).site.added[0];
-  assert.deepEqual(a.facades.map(f => [f.bearing, f.length_m, f.storeys, f.count]), [[210, 31, 13, 38]]);
-  assert.equal(a.facade_say, "Balkonger på fasaden mot 210° (31 m): 2–3 per etasje på 13 etasjer, 38 i alt.");
-  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 170 }), /ingen fasade som vender 170°\. Fasadene vender 120° \(165 m\), 300° \(154 m\), 30° \(44 m\), 210° \(31 m\)/);
+  assert.deepEqual(a.facades.map(f => [f.bearing, f.length_m, f.storeys, f.count]), [[210, 34, 13, 50]]);
+  assert.equal(a.facade_say, "Balkonger på fasaden mot 210° (34 m): 2–4 per etasje på 13 etasjer, 50 i alt.");
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "sentralblokka", face: 170 }), /ingen fasade som vender 170°\. Fasadene vender 120° \(165 m\), 300° \(154 m\), 30° \(44 m\), 210° \(34 m\)/);
 });
 
 test("a whole facade asked with no width is one balcony per window axis, not one slab along all of it (U3690, pm 13:06Z)", () => {

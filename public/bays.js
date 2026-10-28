@@ -32,3 +32,5 @@ export function windowsOn(kind, [ax, ay, bx, by]) {
   }
   return out;
 }
+/* a wall that has no windows in life (site.json buildings[].blind, a list of walls [ax, ay, bx, by], e.g. Sentralblokka's south-west end): the rule gives it none */
+export const blindWall = (b, wall) => (b.blind || []).some(k => k.every((v, i) => Math.abs(v - wall[i]) < 0.011));
