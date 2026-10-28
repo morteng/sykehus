@@ -49,6 +49,7 @@ def patch(site):
     ends = (BACK[:2], BACK[2:])
     sides = [w for w in b["walls"] if abs(math.hypot(w[2] - w[0], w[3] - w[1]) - 2) < 0.1 and any(math.hypot(w[i] - e[0], w[i + 1] - e[1]) < 0.6 for i in (0, 2) for e in ends)]
     b["blind"] = [list(t) for t in sorted({tuple(w[:4]) for w in sw + sides})]
+    b["parts"] = {"midten": {"face": 210, "walls": [BACK]}}   # the recessed middle of the sørsiden: balconies edits take part: "midten"
     b.pop("balconies", None)   # an earlier version of this script wrote a run of them
     return b
 

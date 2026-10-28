@@ -34,3 +34,5 @@ export function windowsOn(kind, [ax, ay, bx, by]) {
 }
 /* a wall that has no windows in life (site.json buildings[].blind, a list of walls [ax, ay, bx, by], e.g. Sentralblokka's south-west end): the rule gives it none */
 export const blindWall = (b, wall) => (b.blind || []).some(k => k.every((v, i) => Math.abs(v - wall[i]) < 0.011));
+/* a wall of a named part of a facade (site.json buildings[].parts: { name: { face, walls: [[ax, ay, bx, by]] } }): what a balconies edit's part limits it to */
+export const partWall = (b, name, wall) => !!b.parts?.[name]?.walls.some(k => k.every((v, i) => Math.abs(v - wall[i]) < 0.011));

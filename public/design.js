@@ -35,7 +35,7 @@ import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./la
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
-import { BAY, windowsOn, kindOf, blindWall } from "./bays.js";   // the window bays (U3624)
+import { BAY, windowsOn, kindOf, blindWall, partWall } from "./bays.js";   // the window bays (U3624)
 import { ringFrame, fitInRing } from "./renderkit/frame.js";   // a building's own frame (U3831)
 import { fitOf, surfaceFit, groundAt, inRing, overlapArea } from "./renderkit/fit.js";   // renderkit (U3559): one copy for every app
 export { fitOf, surfaceFit, groundAt };
@@ -239,11 +239,20 @@ export function checkDesign(site, e, str) {
       const w = (site.wings || []).find(x => x.id === String(e.wing ?? "").toLowerCase().trim() || x.name.toLowerCase() === String(e.wing ?? "").toLowerCase().trim());
       if (!w) throw new Error(`Ukjent fløy «${e.wing}»`);
       if (e.face != null) e = { ...e, face: faceAlias(site, w.id, e.face) };   // «sørsiden» of Sentralblokka is 210°
+      let part = null;
+      if (e.part != null) {   // «midten»: a named part of a facade the building's data gives (Sentralblokka's recessed middle on the sørsiden)
+        const k = String(e.part).toLowerCase().trim().replace(/^midtpartiet$|^midt$|^midtdelen$/, "midten"), def = site.buildings.filter(b => b.wing === w.id).map(b => b.parts?.[k]).find(Boolean);
+        if (!def) throw new Error(`${w.name} har ingen del som heter «${e.part}». ${w.id === "sentralblokka" ? "Delen er midten (part: \"midten\"), den innrykkede midtdelen av sørsiden." : "Bare Sentralblokka har en navngitt del; bruk along: [fra, til] i meter langs fasaden."}`);
+        if (e.face != null && turn(+e.face, def.face) > 20) throw new Error(`Delen «${k}» er på fasaden mot ${def.face}° (sørsiden), ikke ${e.face}°`);
+        part = k; e = { ...e, face: def.face };
+      }
       const side = e.side == null && e.face != null ? SIDE_KEYS[Math.round(norm360(+e.face) / 90) % 4] : String(e.side ?? "").toUpperCase().replace("O", "Ø");
       if (!SIDES[side]) throw new Error("side er N, Ø, S eller V: fasaden balkongene vender mot (eller face: retningen i grader)");
       const names = (w.levels || []).map(l => l.name), storey = (s, what) => { if (s == null) return undefined; const n = /^\d+$/.test(String(s).trim()) ? `${String(s).trim()}. etasje` : String(s).trim(); if (!names.includes(n)) throw new Error(`${what}: ${w.name} har ikke «${n}» (har ${names.join(", ")})`); return n; };
       const out = { kind: "balconies", wing: w.id, side, depth: num(e.depth, 0.8, 4, "Dybden", BALCONY_DEPTH), railing: e.railing == null ? "glass" : String(e.railing), ...w_ };
       if (!["glass", "steel", "concrete"].includes(out.railing)) throw new Error("railing er glass, steel eller concrete");
+      if (part) out.part = part;
+      if (e.along != null) { const al = Array.isArray(e.along) ? e.along.map(Number) : []; if (al.length !== 2 || !al.every(Number.isFinite) || al[0] < 0 || al[1] <= al[0]) throw new Error("along er [fra, til]: meter langs fasaden fra venstre ende sett utenfra, fra mindre enn til"); out.along = al; }
       const f = storey(e.from_storey, "from_storey"), t = storey(e.to_storey, "to_storey"); if (f) out.from_storey = f; if (t) out.to_storey = t;
       if (e.face != null) { const fs = facadesOf(site, w.id), d = num(e.face, 0, 360, "face (retningen fasaden vender, grader fra nord)") % 360; if (!fs.some(x => turn(x.bearing, d) <= 20)) throw new Error(`${w.name} har ingen fasade som vender ${d}°. Fasadene vender ${fs.map(x => `${x.bearing}° (${String(x.length_m).replace(".", ",")} m)`).join(", ")}`); out.face = d; }
       else faceFor(site, w, side);
@@ -344,7 +353,11 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
   const i0 = e.from_storey ? lv.findIndex(l => l.name === e.from_storey) : lv.findIndex(l => l.kote > ground + 2);
   const i1 = e.to_storey ? lv.findIndex(l => l.name === e.to_storey) : lv.length - 1;
   const kotes = lv.slice(Math.max(0, i0), i1 + 1).map(l => l.kote), parts = [];
-  for (const { b, wall, L, n, a, bb, flip, lo, hi, bearing } of facingWalls(site, e.wing, e.side, e.face)) {
+  const fw = [...facingWalls(site, e.wing, e.side, e.face)].filter(f => !e.part || partWall(f.b, e.part, f.wall));   // part: a named part of a facade (site.json parts)
+  /* along: metres from the facade's left end seen from outside, across all its walls (the steps in it included) */
+  const U = f => { const r = [(f.bb[0] - f.a[0]) / f.L, (f.bb[1] - f.a[1]) / f.L]; return [r[0] * f.a[0] + r[1] * f.a[1], r]; };
+  const u0 = e.along && fw.length ? Math.min(...fw.map(f => U(f)[0])) : 0;
+  for (const { b, wall, L, n, a, bb, flip, lo, hi, bearing } of fw) {
       const dd = [(bb[0] - a[0]) / L, (bb[1] - a[1]) / L], runs = [], face = faces.get(faceKey(bearing)) || faces.set(faceKey(bearing), { bearing: faceKey(bearing), length_m: 0, per_storey: {} }).get(faceKey(bearing));
       face.length_m += L;
       if (e.windows) {   // U3624: one a window group, centred on it, as the facade's picture draws them (bays.js)
@@ -354,6 +367,7 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
         }
       } else if (e.bay) { const k = Math.floor((L + e.gap) / (e.bay + e.gap)); const used = k * e.bay + (k - 1) * e.gap; for (let j = 0; j < k; j++) { const t0 = (L - used) / 2 + j * (e.bay + e.gap); runs.push([t0, t0 + e.bay]); } }
       else runs.push([0.1, L - 0.1]);
+      if (e.along) { const ua = U({ a, bb, L })[0] - u0; runs.splice(0, runs.length, ...runs.filter(([t0, t1]) => ua + t0 >= e.along[0] - 0.01 && ua + t1 <= e.along[1] + 0.01)); }
       for (const z of kotes) {
         if (z < lo + 1 || z > hi - 1) continue;
         for (const [t0, t1] of runs) {

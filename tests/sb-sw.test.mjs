@@ -107,3 +107,24 @@ test("«sørsiden» of Sentralblokka is face 210, and the other sides have their
   assert.equal(checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: "sør" }).face, 210);
   assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "ostfloy", face: "sørsiden" }));
 });
+
+test("part: «midten» limits a balconies edit to the recessed middle back wall of the sørsiden: 5 a storey on 13 storeys, none on the side parts", () => {
+  const e = checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", part: "midten", from_storey: "2", to_storey: "14" });
+  assert.equal(e.part, "midten"); assert.equal(e.face, 210);
+  const slabs = SLABS(applyEdits(site, floors, [e]), 210);
+  assert.equal(slabs.length, 65); assert.equal(slabs.filter(onBack).length, 65, "every slab on the back wall, none on a side part");
+  assert.deepEqual(checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", part: "midtpartiet", from_storey: "2", to_storey: "14" }), e);
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "ostfloy", part: "midten" }), /ingen del/);
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", part: "midten", face: 120 }), /sørsiden/);
+});
+
+test("along: [t0, t1] limits a balconies edit to metres along the facade from its left end seen from outside", () => {
+  const all = SLABS(applyEdits(site, floors, [checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, from_storey: "2", to_storey: "14" })]), 210);
+  const e = checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, from_storey: "2", to_storey: "14", along: [0, 12] });
+  assert.deepEqual(e.along, [0, 12]);
+  const some = SLABS(applyEdits(site, floors, [e]), 210);
+  assert.ok(some.length > 0 && some.length < all.length, `${some.length} of ${all.length}`);
+  assert.equal(some.length % 13, 0, "the same on each storey");
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, along: [5, 2] }), /along er/);
+  assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, along: [40, 50] }), /ingen fasade/);
+});
