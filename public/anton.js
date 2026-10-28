@@ -19,6 +19,7 @@ import { modal } from "./kit/modal.js";
 import { feedbackOf } from "./sketchsend.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
+import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=20261028a";   // what the chat box attaches
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -173,18 +174,41 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     document.addEventListener("sykehus:anton-say", e => { if (e.detail?.text) sendIt({ text: e.detail.text, ...(e.detail.point ? { point: e.detail.point } : {}) }); });
     form.onsubmit = e => { e.preventDefault(); if (running && !input.value.trim()) json("api/anton/stopp"); else sendIt(); };
     async function sendIt(drawn) {
-      const text = drawn ? drawn.text : input.value.trim(); if (!text) return false;
-      const sel = valg.forMessage();
-      const r = await json("api/anton", { text, version: version(), ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
+      const text = drawn ? drawn.text : input.value.trim() || (att ? "Se på det jeg la ved." : ""); if (!text) return false;
+      if (!drawn && reading) { line("err", "Vent til vedlegget er lest."); return false; }
+      const sel = valg.forMessage(), withIt = drawn ? {} : fieldsOf(att);   // a drawing carries its own picture: nothing is attached to it
+      const r = await json("api/anton", { text, version: version(), ...withIt, ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; const why = j.error || CODES.unavailable; line("err", why); return drawn ? { error: why } : false; }   // a drawing's window shows the reason too
-      if (!drawn) { input.value = ""; input.oninput(); }
+      if (!drawn) { input.value = ""; input.oninput(); setAtt(null); }
       /* the stream must show the turn taken (queued or running); else the text comes back with a word (pm 21:31Z: the
          first message after load went away and reached no one) */
       const { id } = await r.json().catch(() => ({})); if (id && !seen.has(id)) setTimeout(() => { if (seen.has(id)) return; line("err", "Fikk ikke bekreftet at Anton fikk meldingen; den står i feltet igjen om du vil sende den på nytt."); if (!input.value.trim() && !drawn) { input.value = text; input.oninput(); } }, 8000);
       try { lastStep = ""; said(); panel.reveal("chat"); } catch (x) { console.error(x); }   // the message is taken: nothing after it may keep the drawing's window open
       return true;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
     }
+    /* the attachment: one picture or one file, chosen with the button, pasted into the box or dropped on the pill; it is read first
+       (a picture shrunk, a file taken in as «Hent fil» does) and goes with the next message */
+    let att = null, reading = false;
+    const chipBox = $("talkAtt");
+    function setAtt(a) {
+      att = a; chipBox.hidden = !a; chipBox.replaceChildren();
+      if (!a) return;
+      const name = a.picture?.name || a.attachment?.name || "", x = Object.assign(document.createElement("button"), { type: "button", className: "att-x", title: "Ta bort vedlegget", textContent: "×" });
+      x.setAttribute("aria-label", "Ta bort vedlegget"); x.onclick = () => setAtt(null);
+      chipBox.append(Object.assign(document.createElement("span"), { textContent: `Vedlegg: ${name}` }), x);
+    }
+    async function attach(file) {
+      if (!file || reading) return;
+      reading = true; chipBox.hidden = false; chipBox.replaceChildren(Object.assign(document.createElement("span"), { textContent: `Leser ${file.name || "bildet"} …` }));
+      try { setAtt(isPicture(file) ? { picture: await pictureOf(file) } : { attachment: await uploadFile(file) }); }
+      catch (e) { setAtt(null); line("err", e.message || "Fikk ikke lagt ved fila."); }
+      finally { reading = false; }
+    }
+    $("talkAttach").onclick = () => $("talkFile").click();
+    $("talkFile").onchange = () => { const f = $("talkFile").files?.[0]; $("talkFile").value = ""; attach(f); };
+    input.addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { e.preventDefault(); attach(f); } });
+    for (const t of ["dragover", "drop"]) form.addEventListener(t, e => { if (![...(e.dataTransfer?.types || [])].includes("Files")) return; e.preventDefault(); if (t === "drop") attach(e.dataTransfer.files?.[0]); });
     $("talkTegn").onclick = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
     let gone = false;
     /* U3668: an Anton refusal (401: a device gulden-ai does not know, a revoked one, a restart) says so and leaves the page
@@ -254,7 +278,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     });
     const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { for (const x of [q.running, ...q.waiting]) if (x) seen.add(x.id); running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
-    on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about); lastStep = ""; said(); });
+    on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about ?? (m.attachment ? `fila ${m.attachment}` : undefined)); lastStep = ""; said(); });
     on("text", t => {
       let b = replies.get(t.reply_to); if (!b) { b = line("from-asst", "", "Anton"); replies.set(t.reply_to, b); if (!chatOpen()) unread++; }
       b.raw += t.delta || ""; setMd(b, b.raw); if (step !== "Skriver svaret") { step = "Skriver svaret"; state(); } showReply(b.raw); panel.badge("chat", asking ? "!" : unread);

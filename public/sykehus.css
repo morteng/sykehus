@@ -82,6 +82,10 @@
 /* S8 the pill: Fab's .pill, «Tegn» first; the chips (the kit's g-pick) above the text */
 .pill .tegn { flex: none; display: inline-flex; align-items: center; gap: var(--sp-1); min-height: calc(var(--tap) - .25rem); padding: 0 var(--sp-3); border-radius: var(--radius-lg); font-size: var(--fs-md); }
 .pill .tegn[hidden] { display: none; }
+.pill .att { display: flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); margin-bottom: var(--sp-1); }
+.pill .att[hidden] { display: none; }
+.pill .att span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pill .att-x { flex: none; min-width: 1.75rem; min-height: 1.75rem; border-radius: var(--radius-lg); }
 .pill textarea { font-size: var(--fs-base); }
 .pill.wait .round { opacity: .45; cursor: progress; }   /* early.js: up, not yet listening */
 /* U3564: the stop button breathes while Anton works, a ring going out from it; reduced motion: the ring stands still */
