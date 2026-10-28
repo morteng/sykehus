@@ -158,6 +158,7 @@ function facts(e, str, out) {
     out.entrance = k || null;
   }
   if (e.storeys != null) { const n = +e.storeys; if (!Number.isInteger(n) || n < 1 || n > 30) throw new Error("Etasjene er et helt tall fra 1 til 30"); out.storeys = n; }
+  if (e.group !== undefined) out.group = e.group == null || e.group === "" ? null : str(String(e.group), 40, "Gruppen");   // the name a set of new buildings moves under; "" or null takes it away
   return out;
 }
 const num = (v, lo, hi, what, dflt) => {
@@ -747,7 +748,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep, guard, lot) : null, near = lotOf(site, e);
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m != null ? { overhang_m: e.overhang_m } : {}), ...(e.on && e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m != null ? { overhang_m: e.overhang_m } : {}), ...(e.on && e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), ...(e.group ? { group: e.group } : {}), why: e.why });
   }
   roofGardenUnder(site, added);
   /* a meeting is said on both: the one laid first learns of the one that met it */
