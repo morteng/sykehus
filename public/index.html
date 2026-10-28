@@ -86,7 +86,8 @@
       </div>
       <form class="pill" id="talk-form" hidden>
         <button type="button" class="tegn" id="talkTegn" title="Tegn med pennen på det du ser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>Tegn</button>
-        <div class="pillmid"><div id="talkPick"></div>
+        <button type="button" class="tegn" id="talkAttach" title="Legg ved et bilde eller en fil (du kan også lime inn eller slippe det her)" aria-label="Legg ved"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5 12 19.5a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7L9.7 17.2a1.7 1.7 0 0 1-2.4-2.4l7.4-7.4"/></svg></button><input type="file" id="talkFile" hidden>
+        <div class="pillmid"><div id="talkPick"></div><div class="att" id="talkAtt" hidden></div>
           <label class="sr" for="talkIn">Melding til Anton</label>
           <textarea id="talkIn" rows="1" maxlength="4000" placeholder="Spør Anton, eller be ham vise noe"></textarea>
           <p class="busy" id="talkBusy" role="status"></p>

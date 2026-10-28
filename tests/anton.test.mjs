@@ -139,6 +139,32 @@ test("what is picked goes with the message, tidied, and its summary shows on the
   assert.deepEqual(body.selection.ids, ["ostfloy", "312"]); assert.equal(body.selection.items[1].storey, "3. etasje");
 });
 
+test("a picture or a file attached in the chat box reaches the door unchanged; the caps and the shapes hold", async () => {
+  const SHA = "b".repeat(64), png = "data:image/png;base64," + Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]).toString("base64");
+  const last = () => seen.filter(s => s.path === "/internal/sykehus/chat").at(-1).body;
+  const turn = async extra => { const got = events(cookie, o => o.some(e => e.event === "done")); await new Promise(ok => setTimeout(ok, 200)); const r = await post("/api/anton", { text: "Se her", ...extra }, { cookie }); return { r, ev: r.status === 202 ? await got : [] }; };
+  /* a picture: passed on as it is, shown in the person's own line, served back with its own type */
+  let t = await turn({ picture: { image: png, name: "kart.png" } }); assert.equal(t.r.status, 202);
+  assert.deepEqual(last().picture, { image: png, name: "kart.png" }); assert.equal(last().attachment, undefined); assert.equal(last().drawing, undefined);
+  const id = (await t.r.json()).id, line = t.ev.find(e => e.event === "message"); assert.equal(line.image, `api/anton/tegning/${id}`);
+  const back = await fetch(O + "/" + line.image, { headers: { cookie } }); assert.equal(back.headers.get("content-type"), "image/png"); assert.deepEqual([...Buffer.from(await back.arrayBuffer())], [0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  /* a file brought in by /api/import: id, name and size, nothing else */
+  t = await turn({ attachment: { file: SHA, name: "drivhus.ifc", size_m: [4, 3, 2.5], extra: "x" } }); assert.equal(t.r.status, 202);
+  assert.deepEqual(last().attachment, { file: SHA, name: "drivhus.ifc", size_m: [4, 3, 2.5] }); assert.equal(last().picture, undefined);
+  assert.equal(t.ev.find(e => e.event === "message").attachment, "drivhus.ifc");
+  /* the caps: type, size (2,5 MB of data URL), a drawing with it, a bad file id */
+  const before = seen.length;
+  assert.equal((await post("/api/anton", { text: "x", picture: { image: "data:image/gif;base64,AAAA" } }, { cookie })).status, 400);
+  assert.equal((await post("/api/anton", { text: "x", picture: { image: "data:image/png;base64," + "A".repeat(2.5e6) } }, { cookie })).status, 400, "over 2,5 MB");
+  assert.equal((await post("/api/anton", { text: "x", picture: { image: png }, drawing: { image: "data:image/jpeg;base64,AAAA" } }, { cookie })).status, 400, "a picture and a drawing");
+  assert.equal((await post("/api/anton", { text: "x", attachment: { file: "../../etc/passwd", name: "a" } }, { cookie })).status, 400);
+  assert.equal((await post("/api/anton", { text: "x", attachment: { file: SHA, name: "" } }, { cookie })).status, 400);
+  assert.equal(seen.length, before, "a refused attachment never reaches the door");
+  const edge = "data:image/webp;base64," + "A".repeat(2.5e6 - "data:image/webp;base64,".length); assert.equal(edge.length, 2.5e6);
+  t = await turn({ picture: { image: edge } }); assert.equal(t.r.status, 202, "exactly at the cap is taken");
+  assert.ok(JSON.stringify(last()).length < 4 * 1024 * 1024, "the door's body stays under 4 MB");
+});
+
 test("«Ny samtale» asks gulden-ai for a new thread and empties every page", async () => {
   const got = events(cookie, o => o.some(e => e.event === "cleared"));
   await new Promise(ok => setTimeout(ok, 200));

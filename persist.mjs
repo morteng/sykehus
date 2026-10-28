@@ -52,7 +52,7 @@ export function createPersist(dir = process.env.SYKEHUS_VERSIONS_DIR, clock = ()
   const picFile = id => join(pics, id + ".jpg");
   function keepPic(person, id, text, image) {
     if (!home || !UUID.test(id)) return;
-    guard("write picture", () => { writeFileSync(picFile(id) + ".tmp", Buffer.from(image.slice(23), "base64")); renameSync(picFile(id) + ".tmp", picFile(id)); });
+    guard("write picture", () => { writeFileSync(picFile(id) + ".tmp", Buffer.from(image.slice(image.indexOf(",") + 1), "base64")); renameSync(picFile(id) + ".tmp", picFile(id)); });
     index.push({ id, person, text, at: new Date(clock()).toISOString() });
     const mine = index.filter(x => x.person === person);
     for (const old of mine.slice(0, Math.max(0, mine.length - KEEP))) { index = index.filter(x => x !== old); guard("delete picture", () => unlinkSync(picFile(old.id))); }

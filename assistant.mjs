@@ -6,9 +6,13 @@
 
      GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
      GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
-     POST /api/anton             {text, version?, drawing?, selection?, point?{x,y}}  a message; it waits its turn (5 waiting at most). drawing
+     POST /api/anton             {text, version?, drawing?, picture?, attachment?, selection?, point?{x,y}}  a message; it waits its turn (5 waiting at most). drawing
                                  (tegn.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
-                                 camera, mode, size}, passed on as it is
+                                 camera, mode, size}, passed on as it is.
+                                 picture: {image: a JPEG, PNG or WebP data URL of at most 2,5 MB (the page shrinks a bigger one), name?}, a
+                                 picture the person attached; passed on as it is, never together with a drawing (one picture a turn keeps the
+                                 door's 4 MB body far off). attachment: {file: the sha /api/import gave, name, size_m?: [x, y, z]}, a file
+                                 the page already brought in; passed on as it is
      POST /api/anton/godkjenn    {approval_id, decision: "accept"|"reject"}
      POST /api/anton/stopp       ends the running turn
      POST /api/anton/ny          «Ny samtale»: gulden-ai starts the thread afresh (/new-chat); every page empties
@@ -40,6 +44,22 @@ function drawingOf(d) {
   const camera = d.camera && typeof d.camera === "object" ? Object.fromEntries(Object.entries(d.camera).filter(([k, v]) => /^[a-z]{1,8}$/.test(k) && fin(v))) : {};
   return { image, strokes, camera, mode: ["3d", "plan", "section"].includes(d.mode) ? d.mode : "3d", size: Array.isArray(d.size) && d.size.every(fin) ? d.size.slice(0, 2) : null,
     note: "strokes are in site metres [east, north, kote] from the site origin, where each point of the line hit the model; the picture shows what the person saw and drew" };
+}
+
+/* a picture the person attached (the chat box: button, paste or drop): a JPEG, PNG or WebP data URL of at most 2,5 MB, with its name */
+const PICTURE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+function pictureOf(p) {
+  const image = String(p?.image ?? "");
+  if (!PICTURE.test(image) || image.length > 2.5e6) throw new Error("Bildet kom ikke fram riktig. Prøv igjen.");
+  const name = typeof p.name === "string" ? p.name.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120) : "";
+  return { image, ...(name ? { name } : {}) };
+}
+/* a file already read in through /api/import (its sha is the id); the size is what that answered, metres */
+function attachmentOf(a) {
+  const file = String(a?.file ?? ""), name = typeof a?.name === "string" ? a.name.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120) : "";
+  if (!/^[0-9a-f]{64}$/.test(file) || !name) throw new Error("Fila kom ikke fram riktig. Prøv igjen.");
+  const size = Array.isArray(a.size_m) && a.size_m.length === 3 && a.size_m.every(v => typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 1e6) ? a.size_m.map(v => Math.round(v * 100) / 100) : null;
+  return { file, name, ...(size ? { size_m: size } : {}) };
 }
 
 /* what was picked in the model when it was sent (valg.js): "this", "these" in the message */
@@ -148,10 +168,10 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     while (t.queue.length) {
       const turn = t.running = t.queue.shift();
       if (!turn.job) keep.turnTaken(person, turn);
-      if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing ? { image: picUrl(turn.id) } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
+      if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing || turn.picture ? { image: picUrl(turn.id) } : {}), ...(turn.attachment ? { attachment: turn.attachment.name } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
-        : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+        : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.picture ? { picture: turn.picture } : {}), ...(turn.attachment ? { attachment: turn.attachment } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       /* the turn's own copy of what the person's page said when the message was sent (Morten: «while Anton works, the user
          should be free to move around without that affecting what Anton sees or does»): mcp.mjs reads it, never pages.open, until the turn ends */
       const ctx = pin(person, turn);
@@ -196,10 +216,14 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       const v = versions?.get(String(b?.version ?? "")), version = v && v.owner === me.person ? { id: v.id, title: v.title, changes: v.edits.length } : null;
       let drawing = null;
       if (b?.drawing != null) { try { drawing = drawingOf(b.drawing); } catch (e) { return send(res, 400, { error: e.message }); } }
+      let picture = null, attachment = null;
+      try { if (b?.picture != null) picture = pictureOf(b.picture); if (b?.attachment != null) attachment = attachmentOf(b.attachment); } catch (e) { return send(res, 400, { error: e.message }); }
+      if (picture && drawing) return send(res, 400, { error: "Send én tegning eller ett bilde om gangen." });
       const selection = selectionOf(b?.selection);
       const picked = selection?.items.find(i => i.kind === "wing" || i.kind === "building")?.id ?? null;
-      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, selection, point: pointOf(b?.point), picked };
-      if (drawing) { keep.keepPic(me.person, turn.id, text, drawing.image); t.pics.push({ id: turn.id, text, image: drawing.image }); if (t.pics.length > 20) t.pics.shift(); }
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, picture, attachment, selection, point: pointOf(b?.point), picked };
+      const shown = drawing?.image || picture?.image;
+      if (shown) { keep.keepPic(me.person, turn.id, text, shown); t.pics.push({ id: turn.id, text, image: shown }); if (t.pics.length > 20) t.pics.shift(); }
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)
       /* the wing or building picked when it was sent: a facade asked for with no wing named is that one's (mcp.mjs viewOf) */
       if (pages) { pages.picked ??= new Map(); const p = selection?.items.find(i => i.kind === "wing" || i.kind === "building"); if (p) pages.picked.set(me.person, p.id); else pages.picked.delete(me.person); }
@@ -272,9 +296,9 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     if (path === "/api/anton/historikk" && req.method === "GET") { await history(res, me); return true; }
     const pic = req.method === "GET" && /^\/api\/anton\/tegning\/([0-9a-f-]{36})$/.exec(path);
     if (pic) {
-      const p = thread(me.person).pics.find(x => x.id === pic[1]), bytes = p && (keep.picBytes(p.id) ?? (p.image ? Buffer.from(p.image.slice(23), "base64") : null));
+      const p = thread(me.person).pics.find(x => x.id === pic[1]), bytes = p && (keep.picBytes(p.id) ?? (p.image ? Buffer.from(p.image.slice(p.image.indexOf(",") + 1), "base64") : null));
       if (!bytes) send(res, 404, { error: "Tegningen er ikke lenger her." });
-      else { res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, max-age=3600" }); res.end(bytes); }
+      else { res.writeHead(200, { ...SECURITY, "content-type": bytes[0] === 0x89 ? "image/png" : bytes[0] === 0x52 ? "image/webp" : "image/jpeg", "cache-control": "private, max-age=3600" }); res.end(bytes); }
       return true;
     }
     if (req.method === "POST") { await post(req, res, me, path); return true; }
