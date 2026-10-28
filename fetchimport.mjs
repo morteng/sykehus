@@ -6,7 +6,8 @@
    socket reached checked again after it connected (a DNS rebind gets no further); at most 100 MB, counted as it
    comes; 60 s in all. Any other host: a link for the person to open, not a fetch.
 
-   Libraries: Poly Haven (models, CC0, its API) and the FreeCAD parts library (STEP, CC-BY 3.0, its index.html).
+   Libraries: Poly Haven (models, CC0, its API), the FreeCAD parts library (STEP, CC-BY 3.0, its index.html) and Wikimedia Commons
+   (pictures: drawings and old photos; licence per file, unknown or all rights reserved = link only).
    Those that need an account or forbid automated downloads are named in LINK_ONLY with a search link. */
 import https from "node:https";
 import dns from "node:dns";
@@ -129,11 +130,30 @@ export function libraries(fetchUrl = fetcherOf()) {
     for (const m of doc.meshes || []) for (const p of m.primitives || []) delete p.material;
     return { bytes: Buffer.from(JSON.stringify(doc)), filename: `${id}.gltf`, url: `https://polyhaven.com/a/${id}`, licence: "CC0" };
   }
+  /* Wikimedia Commons pictures (drawings, old photos): the licence is read from each file's own metadata. An unknown or
+     all-rights-reserved licence gives a link only (no url to fetch); NC and ND are allowed and said, never blocked */
+  const plain = v => String(v ?? "").replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  const FREE = /^(cc0|cc[ -]by|pd\b|public domain|gfdl|free art|attribution|no restrictions|ogl|nlod)/i, RESERVED = /all rights reserved|non-?free|fair use|unknown|ukjent/i;
+  function commonsLicence(m) {
+    const name = plain(m?.LicenseShortName?.value) || plain(m?.UsageTerms?.value);
+    if (!name || RESERVED.test(name) || !FREE.test(name)) return { licence: name || "ukjent", open: false };
+    const notes = [/(?:^|[ -])nc(?:[ -]|$)/i.test(name) && "NC: ikke til kommersiell bruk", /(?:^|[ -])nd(?:[ -]|$)/i.test(name) && "ND: ikke bearbeidelser"].filter(Boolean);
+    return { licence: name, open: true, ...(notes.length ? { restriction: notes.join("; ") } : {}), ...(/by/i.test(name) ? { attribution: plain(m?.Artist?.value) || "navngi forfatteren" } : {}) };
+  }
+  async function commons(q) {
+    const api = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=12&gsrsearch=${encodeURIComponent(q)}&prop=imageinfo&iiprop=url%7Cmime%7Csize%7Cextmetadata&iiextmetadatafilter=LicenseShortName%7CUsageTerms%7CArtist%7CDateTimeOriginal`;
+    const pages = Object.values(JSON.parse((await fetchUrl(api)).bytes.toString("utf8")).query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+    return pages.filter(p => p.imageinfo?.[0]).map(p => { const i = p.imageinfo[0], L = commonsLicence(i.extmetadata), page = `https://commons.wikimedia.org/wiki/${encodeURIComponent(String(p.title).replace(/ /g, "_"))}`;
+      return { title: String(p.title).replace(/^File:/, ""), library: "Wikimedia Commons", licence: L.licence, ...(L.restriction ? { restriction: L.restriction } : {}), ...(L.attribution ? { attribution: L.attribution } : {}),
+        format: i.mime, ...(i.width ? { size_px: [i.width, i.height] } : {}), ...(plain(i.extmetadata?.DateTimeOriginal?.value) ? { date: plain(i.extmetadata.DateTimeOriginal.value) } : {}),
+        ...(L.open ? { url: i.url } : { link_only: true, why: `lisensen er ${L.licence}: åpne siden selv` }), page }; });
+  }
   return {
     async find(query) {
       const ws = words(query); if (!ws.length) throw toolErr("Hva skal letes etter? (på engelsk finner bibliotekene mest: greenhouse, window, bench)");
-      const [ph, fc] = await Promise.all([polyhaven(ws).catch(e => ({ error: e.message })), freecad(ws).catch(e => ({ error: e.message }))]);
-      return { query, found: [...(Array.isArray(fc) ? fc : []), ...(Array.isArray(ph) ? ph : [])], ...(ph.error || fc.error ? { unavailable: [ph.error && `Poly Haven: ${ph.error}`, fc.error && `FreeCAD-biblioteket: ${fc.error}`].filter(Boolean) } : {}),
+      const [ph, fc, cm] = await Promise.all([polyhaven(ws).catch(e => ({ error: e.message })), freecad(ws).catch(e => ({ error: e.message })), commons(String(query)).catch(e => ({ error: e.message }))]);
+      return { query, found: [...(Array.isArray(fc) ? fc : []), ...(Array.isArray(ph) ? ph : [])], pictures: Array.isArray(cm) ? cm : [],
+        ...(ph.error || fc.error || cm.error ? { unavailable: [ph.error && `Poly Haven: ${ph.error}`, fc.error && `FreeCAD-biblioteket: ${fc.error}`, cm.error && `Wikimedia Commons: ${cm.error}`].filter(Boolean) } : {}),
         link_only: LINK_ONLY.map(l => ({ name: l.name, link: l.search(query), why: l.why })) };
     },
     /* the bytes of what find gave (polyhaven:<id>, or a URL on the list), with the licence the library states */
