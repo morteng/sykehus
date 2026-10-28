@@ -34,6 +34,7 @@ import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts
 import { loadCosts, summarize as areaSummary } from "./area.mjs";   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
 import { createSiteFacts } from "./sitefacts.mjs";
+import { createHeritage, KINDS as HERITAGE_KINDS } from "./heritage.mjs";
 import { readPart } from "./partmerge.mjs";
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { sunOf } from "./public/renderkit/sunpick.js";
@@ -272,6 +273,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const appHtml = origin => `<!doctype html><html lang="nb"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="${origin}/"><title>Sykehustomta</title></head><body><script type="module" src="${origin}/mcp-app.js"></script></body></html>`;
 
   // ---------- tools ----------
+  const heritage = createHeritage({ site });   // Riksantikvaren's open records round the lot
   const siteFacts = createSiteFacts();   // U3673: Hagekart's site_report for the plot, kept a day
   const S = (props, required = []) => ({ type: "object", properties: props, required, additionalProperties: false });
   const REF = { type: ["string", "array"], items: { type: "number" }, description: "A new part (id or name), a wing, a roof level's edge as «wing@kote» (Sentralblokka@69.91), or a point [east, north, kote?] in site m" };
@@ -502,6 +504,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "site_facts", title: "Tomtas fare og kulturminner", ro: true, schema: S({}),
       description: "What is known about the plot itself (U3673): NVE hazard zones (flood, quick clay, snow and rock slides, soil and flood slides), NGU radon, heritage listings within 50 m (Riksantikvaren), invasive plants within 500 m, and zoning (not fetched for Drammen). From Hagekart, kept a day; each fact has its source. They are screening maps, not a decision: say what they mean and name the limits early when a change touches them (a big excavation or fill in a quick-clay zone, a demolition or new building on or beside a listed site, planting an invasive species).",
       run: async () => siteFacts() },
+    { name: "heritage_records", title: "Kulturminner rundt tomta", ro: true, schema: S({ radius_m: { type: "number", minimum: 0, maximum: 500, description: "Metres to grow the lot's outline by (default 100)" },
+      kinds: { type: "array", items: { type: "string", enum: HERITAGE_KINDS }, description: "Only these registers (default all four)" }, limit: { type: "integer", minimum: 1, maximum: 50, description: "Records per register (default 25)" } }),
+      description: "The heritage records themselves round the plot (Riksantikvaren's open data, api.ra.no): Kulturminner, Freda bygninger, SEFRAK-bygninger (built before 1900) and Kulturmiljøer inside the lot's outline grown by radius_m. Each record has source, id, name, type, protection where it has one, and a link to open it. Say that these are open data from Riksantikvaren, name the register and give the link; counts says how many matched against how many came back. Registers, not a decision: site_facts has the hazards and the 50 m summary.",
+      run: async a => heritage(a) },
     { name: "about_wing", tgt: "read", title: "Én fløy", ro: true, schema: S({ wing: WING, target: TARGET, draft: OLD }, ["wing"]),
       description: "One wing as on its card: names and aliases, years built, storeys, construction, facade, footprint, ground and roof kote, each storey's kote with how it is known (tegning = read off a drawing, beregnet = worked out, antatt = assumed) and its source, the storeys with a drawn plan, its drawn facades, and the documents it is identified from, with download links.",
       run: async (a, req) => { const m = model(a.draft, req), w = wingOf(m.site, a.wing) || wingOrErr(a.wing); return { ...wingOut(w, true), ...(a.draft ? { draft: a.draft, notes: m.notes.filter(n => n.wing === w.id) } : {}) }; } },
