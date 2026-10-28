@@ -17,8 +17,9 @@
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { stampVolumeIds } from "./public/design.js";
 
-export const MAX_PER_OWNER = 50, MAX_EDITS = 300, TRASH_DAYS = 30, EMPTY_DAYS = 7;
+export const MAX_PER_OWNER = 50, MAX_EDITS = 500, TRASH_DAYS = 30, EMPTY_DAYS = 7;
 const ID = /^v[A-Za-z0-9_-]{8}$/;
 export const SHARING = ["privat", "lenke", "offentlig"];
 /* a real person, for the Prosjekter tab's list for others (the auth layer has no flag for it, so by name): test, qa, coretest, anton, admin
@@ -35,6 +36,8 @@ export function createVersions(dir = process.env.SYKEHUS_VERSIONS_DIR, clock = (
     try { const v = JSON.parse(readFileSync(join(dir, f), "utf8")); if (v.id === f.slice(0, -5)) { v.sharing ||= v.public ? "offentlig" : "privat"; delete v.public; v.key ||= newKey(); v.own ||= newKey(); all.set(v.id, v); } } catch (e) { console.error("versions: skipping", f, e.message); }
   }
   const write = v => { const p = join(dir, v.id + ".json"), t = p + ".tmp"; writeFileSync(t, JSON.stringify(v)); renameSync(t, p); };
+  /* S1: a stored version from before the stable ids gets each new building's id written in, once (only when an edit lacks one) */
+  for (const v of all.values()) if (Array.isArray(v.edits) && stampVolumeIds(v.edits)) write(v);
   const live = v => !v.deleted, trashed = v => v.deleted && clock() - Date.parse(v.deleted) < TRASH_DAYS * 864e5;
   /* a deleted version past its 30 days: the file and the record go */
   const sweep = () => { sweepEmpty(); for (const v of [...all.values()]) if (v.deleted && !trashed(v)) { try { unlinkSync(join(dir, v.id + ".json")); } catch (e) { if (e.code !== "ENOENT") console.error("versions: purge", v.id, e.message); } all.delete(v.id); } };
@@ -60,7 +63,7 @@ export function createVersions(dir = process.env.SYKEHUS_VERSIONS_DIR, clock = (
     create(owner, title, edits = []) {
       if ([...all.values()].filter(v => v.owner === owner && live(v)).length >= MAX_PER_OWNER) throw new Error(`Høyst ${MAX_PER_OWNER} versjoner per person`);
       let id; do id = "v" + randomBytes(6).toString("base64url"); while (all.has(id) || existsSync(join(dir, id + ".json")));
-      const now = new Date(clock()).toISOString(), v = { id, owner, title, edits: edits.slice(0, MAX_EDITS), sharing: "privat", key: newKey(), own: newKey(), created: now, updated: now };
+      const now = new Date(clock()).toISOString(), v = { id, owner, title, edits: (stampVolumeIds(edits), edits.slice(0, MAX_EDITS)), sharing: "privat", key: newKey(), own: newKey(), created: now, updated: now };
       write(v); all.set(id, v); return v;
     },
     save(v) { if (v.edits.length > MAX_EDITS) throw new Error(`En versjon holder høyst ${MAX_EDITS} endringer`); v.updated = new Date(clock()).toISOString(); write(v); all.set(v.id, v); for (const f of watchers) try { f(v); } catch (e) { console.error("versions watcher:", e.message); } return v; },
