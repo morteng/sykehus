@@ -25,6 +25,12 @@ function piecesOf(site, wing) {
     }
     out.push(c);
   }
+  /* a new volume's id (not a wing's): its own top is the roof, so a spire or a roof part can stand on a building just added */
+  const v = out.length ? null : (site.added || []).find(a => a.kind === "volume" && a.id === wing && a.from && a.to && a.base_kote != null);
+  if (v) {
+    const d = [v.to[0] - v.from[0], v.to[1] - v.from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L * v.width / 2, d[0] / L * v.width / 2], th = Math.atan2(d[1], d[0]);
+    out.push({ id: v.id, th, pieces: [{ p: [[v.from[0] + n[0], v.from[1] + n[1]], [v.to[0] + n[0], v.to[1] + n[1]], [v.to[0] - n[0], v.to[1] - n[1]], [v.from[0] - n[0], v.from[1] - n[1]]], top: kk(v.top_kote ?? v.base_kote + v.height), th }] });
+  }
   return out;
 }
 /* T5: a wing's roof pieces as they are ({ p: 4 corners or the ring, top, building }): one copy for the drawings (drawing.js) */
