@@ -542,7 +542,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         /* the person's own changes to this version since Anton's last call in the turn (the page's change goes through this same tool, one at a time, so none comes in mid-call) */
         const mine = [], gone = [], str = x => JSON.stringify(x), seen0 = before && v && ctx.seen?.id === v.id ? ctx.seen.edits : null;
-        const railIds = new Set(), ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS; let pushed = 0, pruned = 0;
+        const railIds = new Set(), ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS; let pushed = 0, pruned = 0; const touched = new Set();
         stampVolumeIds(d.edits);   // S1: a draft from before the stable ids gets them (a version got them on load); no-op when every volume has one
         /* a later change in the same call to a new building that got another id goes to the id it got */
         const queue = expandEdits(a.edits, railIds).map((e, i) => ({ e, i }));
@@ -561,6 +561,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
                 gone.push(str(d.edits.splice(k, 1)[0])); replaced = `Erstattet de eldre balkongene på fasaden mot ${both.map(b => `${b}°`).join(" og ")} (endring nr. ${k + 1}); bare de nye står.`; }
             }
             /* S1b: tearing down a new building takes its volume and its reshapes out of the list, as balconies are replaced above, instead of adding a demolish that keeps all of them */
+            if ((c.kind === "volume" || c.kind === "reshape") && c.id != null) touched.add(c.id);
             let spliced = null;
             if (c.kind === "demolish" && typeof c.building === "string") { const k = c.building.toLowerCase(), hit = d.edits.map((x, j) => j).filter(j => ["volume", "reshape"].includes(d.edits[j].kind) && String(d.edits[j].id).toLowerCase() === k);
               if (hit.some(j => d.edits[j].kind === "volume")) { const nm = d.edits[hit.find(j => d.edits[j].kind === "volume")].name; for (const j of [...hit].reverse()) gone.push(str(d.edits.splice(j, 1)[0])); spliced = `Tok ${nm ? `«${nm}»` : "det nye bygget"} helt bort: ${hit.length} endring${hit.length === 1 ? "" : "er"} (bygget og det som ble gjort med det) er fjernet fra listen.`; } }
@@ -588,9 +589,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const fit0 = quiet ? [] : fitOf(m.site);
         for (const f of fit0) { const a = (m.site.added || []).find(x => x.id === f.id && x.on); if (!a) continue; const r = roofSay(m.site, a); if (r) f.roof = { on: r.on, kote: r.kote, levels: r.levels, overhang_m: r.overhang_m, outside_m2: r.outside_m2, ...(r.say ? { say: r.say } : {}) }; const col = roofCollisions(m.site, a); if (col.length) (f.roof ||= {}).overlap = col.map(c => ({ with: c.name, m2: c.m2 })); }   /* T2: kept with allow_overlap, listed here */
         const fit = quiet ? [] : [...fit0, ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit({ ...m.site, landscape: m.site.landscape.filter(l => !l.on) }, wayRings) : []), ...padFit(m.site, wayRings)];
-        const { added: okOut, fit: fitOut, built: builtOut, checks: checksOut } = compactRail(ok, fit, railIds, after?.built, checks);   // an edge_rail's pieces as one entry
+        const { added: okOut, fit: fitOut, built: builtOut, checks: checksOut } = compactRail(ok, fit, railIds, after?.built?.filter(b => b.kind === "volume" ? touched.has(b.id) : ok.some(e => e.kind === b.kind)), checks);   // S2: only what this call touched; the rest are counted (built_n)   // an edge_rail's pieces as one entry
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
         const named = { ...(Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {}), ...(pruned ? { tidied: `Ryddet bort ${pruned} døde endringer (revne nye bygg) for å gjøre plass.` } : {}) };
+        const builtN = (all, shown) => ({ total: all.length, listed: shown.length, say: all.length > shown.length ? `Bare det dette kallet rørte er listet (${shown.length} av ${all.length} nye bygg og balkonger i prosjektet); show_draft har alle.` : undefined });
         let out;
         /* what changed under Anton: the person's edits (not his own) since he last looked; he is told, and the next call counts from here */
         const meanwhile = (() => { if (!before || !v) return null; const sub = (x, y) => { const c = new Map(); for (const k of y) c.set(k, (c.get(k) || 0) + 1); return x.filter(k => { const n = c.get(k) || 0; if (n) { c.set(k, n - 1); return false; } return true; }); };
@@ -599,9 +601,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           if (!add.length && !del.length) return null;
           const kinds = [...new Set(add.map(k => JSON.parse(k).kind))];
           return { added: add.length, removed: del.length, kinds, say: `Personen endret prosjektet mens du jobbet: ${add.length} ny${add.length === 1 ? "" : "e"} endring${add.length === 1 ? "" : "er"}${kinds.length ? ` (${kinds.join(", ")})` : ""}${del.length ? ` og ${del.length} tatt bort` : ""}. Endringene dine ligger oppå dem; se over før du bygger videre.` }; })();
-        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: ok.length > 0 }; }
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after: after.built ? { ...after, built: builtOut, built_n: builtN(after.built, builtOut) } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: ok.length > 0 }; }
         else { d.t = Date.now(); keepDraft(d);
-          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: false,
+          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after: after.built ? { ...after, built: builtOut, built_n: builtN(after.built, builtOut) } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
         if (a.include_screenshot === false || !ok.length) return out;
         /* the picture of what it made: aimed at what the call changed (tryshot.mjs), the camera fields (camera.mjs) over that; with a focus, look's own aim */
