@@ -23,14 +23,26 @@ export async function downscale(file, { max = MAX_EDGE, bitmap = createImageBitm
 export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => fetch(...a), shrink = downscale }) {
   const $ = s => root.querySelector(s);
   const form = $("#phForm"), file = $("#phFile"), wing = $("#phWing"), side = $("#phSide"), note = $("#phNote"), year = $("#phYear"), go = $("#phGo"), list = $("#phList"), say = $("#phSay");
-  let busy = false;
+  const drop = $("#phDrop"), pick = $("#phPick"); let busy = false;
+  /* the chosen files as small pictures, each with a way to leave it out before it is sent (the input's own list is rebuilt) */
+  function showPick() {
+    if (!pick) return; const fs = [...(file.files || [])]; pick.hidden = !fs.length;
+    pick.innerHTML = fs.map((f, i) => `<li><img alt="" src="${esc(URL.createObjectURL(f))}"><button type="button" data-out="${i}" title="Ta bort fra utvalget" aria-label="Ta bort ${esc(f.name || "bildet")} fra utvalget">×</button></li>`).join("");
+  }
+  const setFiles = fs => { const dt = new DataTransfer(); fs.forEach(f => dt.items.add(f)); file.files = dt.files; showPick(); };
+  file.onchange = showPick;
+  if (pick) pick.onclick = e => { const i = e.target.closest("[data-out]")?.dataset.out; if (i != null) setFiles([...file.files].filter((_, j) => j !== +i)); };
+  if (drop) {
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); }; drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); const fs = [...(e.dataTransfer?.files || [])].filter(f => /^image\//.test(f.type)); if (fs.length) setFiles([...file.files, ...fs]); };
+  }
   const speak = t => { say.textContent = t; say.hidden = !t; };
   async function load() {
     const r = await fetchImpl("api/bilder").catch(() => null);
     if (!r || !r.ok) { list.innerHTML = ""; if (r?.status === 401) speak(WORDS.signedOut); return; }
     const j = await r.json(); if (!wing.options.length) wing.innerHTML = j.wings.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
     list.innerHTML = j.photos.length ? j.photos.map(p => `<li data-id="${esc(p.id)}"><a href="api/bilder/${esc(p.id)}" target="_blank" rel="noopener"><img loading="lazy" src="api/bilder/${esc(p.id)}" alt="${esc(p.wing_name)}, fasade ${esc(p.side)}"></a>
-      <div><b>${esc(p.wing_name)}</b> · ${esc(p.side)}${p.year ? ` · ${p.year}` : ""}${p.note ? `<br><small>${esc(p.note)}</small>` : ""}</div><button type="button" class="sm quiet" data-del="${esc(p.id)}" title="${WORDS.del}" aria-label="${WORDS.del}">Slett</button></li>`).join("") : `<li class="sel-empty">${WORDS.empty}</li>`;
+      <div><b>${esc(p.wing_name)}</b> · ${esc(p.side)}${p.year ? ` · ${p.year}` : ""}${p.note ? `<br><small>${esc(p.note)}</small>` : ""}</div><button type="button" class="ph-del" data-del="${esc(p.id)}" title="${WORDS.del}" aria-label="${WORDS.del}">×</button></li>`).join("") : `<li class="ph-empty">${WORDS.empty}<small>Legg til bilder over: Anton kan se på dem.</small></li>`;
   }
   list.onclick = async e => {
     const id = e.target.closest("[data-del]")?.dataset.del; if (!id) return;
@@ -48,7 +60,7 @@ export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => 
         if (!r.ok) { bad++; if (r.status === 401) { speak(WORDS.signedOut); break; } speak((await r.json().catch(() => ({}))).error || WORDS.failed); }
       } catch { bad++; speak(WORDS.unreadable); }
     }
-    busy = false; go.disabled = false; file.value = ""; note.value = "";
+    busy = false; go.disabled = false; file.value = ""; note.value = ""; showPick();
     if (!bad) { speak(""); toast(WORDS.sent); }
     await load();
   };

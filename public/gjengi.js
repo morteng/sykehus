@@ -7,7 +7,7 @@
 import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, lookFor, viewpointFor } from "./photo-set.js";
 import { LENSES, ASPECTS, frameRect, frameFov, viewFov, hFov, poseFromCam, frameSvg, frustumSvg } from "./renderkit/photoframe.js";
 import { bearingOf } from "./sunlight.js";
-import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO } from "./gjengi-no.js";
+import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO, framePatch } from "./gjengi-no.js";
 import { spotOfView, flyTo, isStale, retakeBody, retake, total, whyNot, hasWork, NEEDS_WORK } from "./photospots.js";
 const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -19,6 +19,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   let st = null, busy = false, on = false, prevTab = "changes", prevMode = "3d", tick = null, sig = "", selSpot = null;
   /* the person's choice over what the view has by itself; null is «valgt av seg selv» */
   const pick = { lens: null, mm: null, aspect: null, look: null, size: null, viewpoint: null };
+  const hand = { lens: false, aspect: false };   // set once the person changes the lens or the shape themselves: a style picked later leaves it
   const pose = () => viewer.pose();
   const vpNow = () => pick.viewpoint || (pose().eye || pose().pitch < 0.35 ? "øyehøyde" : "fugleperspektiv");
   const lookNow = () => pick.look || lookFor(vpNow());
@@ -51,16 +52,23 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   function drawBar() {
     $("pfLens").innerHTML = chips(Object.entries(LENSES).map(([id]) => [id, LENS_NO[id].no, LENS_NO[id].tip]), lensNow(), "ln", "Linse");
     $("pfAspect").innerHTML = chips(ASPECTS.map(id => [id, id, ASPECT_NO[id]]), aspectNow(), "as", "Bildeform");
-    for (const b of $("pfLens").querySelectorAll("[data-ln]")) b.onclick = () => { const same = b.dataset.ln === pick.lens; pick.lens = same ? null : b.dataset.ln; pick.mm = same ? null : LENSES[b.dataset.ln].mm; layout(); };
-    for (const b of $("pfAspect").querySelectorAll("[data-as]")) b.onclick = () => { pick.aspect = b.dataset.as === pick.aspect ? null : b.dataset.as; layout(); };
+    for (const b of $("pfLens").querySelectorAll("[data-ln]")) b.onclick = () => { hand.lens = true; const same = b.dataset.ln === pick.lens; pick.lens = same ? null : b.dataset.ln; pick.mm = same ? null : LENSES[b.dataset.ln].mm; layout(); };
+    for (const b of $("pfAspect").querySelectorAll("[data-as]")) b.onclick = () => { hand.aspect = true; pick.aspect = b.dataset.as === pick.aspect ? null : b.dataset.as; layout(); };
   }
   function drawCam() {
     const lk = lookNow(), sz = sizeNow(), p = pose();
-    cam.innerHTML = `<b>Stil</b><div class="gj-row">${chips(Object.entries(LOOK_NO).map(([id, o]) => [id, o.no, o.tip]), lk, "lk")}</div>
-      <b>Sola</b><div class="gj-row"><button type="button" id="gjSun" title="Velg dato og klokkeslett for lyset">${esc(sunLabel() || "Sola")}</button></div>
-      <b>Størrelse og pris</b><div class="gj-row">${Object.keys(SIZES).map(id => `<button type="button" data-sz="${id}" aria-pressed="${id === sz}" title="${esc(SIZE_NO[id])}: bildet lages i ${id}. Prisen er omtrent ${usd(priceOf(id))}">${esc(SIZE_NO[id])} ${usd(priceOf(id))}</button>`).join("")}</div>
+    cam.innerHTML = `<div class="gj-grp"><b>Stil</b><div class="gj-row">${chips(Object.entries(LOOK_NO).map(([id, o]) => [id, o.no, o.tip]), lk, "lk")}</div>
+      <p class="gj-sum" title="Linsen og bildeformen følger stilen. Du kan bytte dem i rammen på bildet"><span id="gjSum"></span></p></div>
+      <div class="gj-grp"><b>Sola</b><div class="gj-row"><button type="button" id="gjSun" title="Velg dato og klokkeslett for lyset">${esc(sunLabel() || "Sola")}</button></div></div>
+      <div class="gj-grp"><b>Størrelse og pris</b><div class="gj-row">${Object.keys(SIZES).map(id => `<button type="button" data-sz="${id}" aria-pressed="${id === sz}" title="${esc(SIZE_NO[id])}: bildet lages i ${id}. Prisen er omtrent ${usd(priceOf(id))}">${esc(SIZE_NO[id])} ${usd(priceOf(id))}</button>`).join("")}</div></div>
       <small>${pick.lens || pick.aspect || pick.look ? "Du har valgt selv." : "Valgt av seg selv etter det du ser."}${p.eye ? " Øyehøyde 1,7 m over bakken." : ""}</small>`;
-    for (const b of cam.querySelectorAll("[data-lk]")) b.onclick = () => { pick.look = b.dataset.lk === lookFor(vpNow()) ? null : b.dataset.lk; draw(); layout(); };
+    $("gjSum").textContent = `${LENS_NO[lensNow()]?.no || `${mmNow()} mm`} · ${ASPECT_NO[aspectNow()] || aspectNow()}`;
+    for (const b of cam.querySelectorAll("[data-lk]")) b.onclick = () => {
+      pick.look = b.dataset.lk === lookFor(vpNow()) ? null : b.dataset.lk;
+      const f = framePatch(b.dataset.lk, hand);   // the style's lens and shape, unless the person set them
+      if (f.lens) { pick.lens = f.lens; pick.mm = LENSES[f.lens].mm; } if (f.aspect) pick.aspect = f.aspect;
+      draw(); layout();
+    };
     for (const b of cam.querySelectorAll("[data-sz]")) b.onclick = () => { pick.size = b.dataset.sz; draw(); };
     $("gjSun").onclick = () => $("sunBtn").click();
   }
@@ -73,7 +81,8 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
     say.textContent = !st.on ? "Gjengi er ikke slått på her ennå."
       : !st.signed_in ? `Logg inn for å gjengi: hvert bilde koster penger (omtrent ${usd(est)}).`
       : !w.versjon && !w.utkast ? "Gjør en endring eller åpne et prosjekt først: bildene lagres i prosjektet."
-      : `Rammen er bildet: det du ser i den blir sendt. Brukt i ${m}: ${usd(st.month_usd)} av ${usd(st.cap_usd)}.${room ? "" : " Grensen er nådd denne måneden."}`;
+      : "Rammen er bildet: det du ser i den blir sendt.";
+    $("gjCost").textContent = st.on && st.signed_in ? `Brukt i ${m}: ${usd(st.month_usd)} av ${usd(st.cap_usd)}.${room ? "" : " Grensen er nådd denne måneden."}` : "";
     const reason = why(), label = reason || `Ta bildet · ca. ${usd(est)}`;   // a grey shutter says why on itself, in the view and in the drawer
     for (const b of [go, shotBtn]) { b.disabled = !!reason; b.setAttribute("aria-label", reason ? `Ta bildet: ${reason}` : label); }
     go.textContent = reason ? `Ta bildet: ${reason}` : label; $("pfPrice").textContent = reason || `ca. ${usd(est)}`; shotBtn.title = label;
@@ -180,7 +189,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   }
   syncTab(); setInterval(syncTab, 500);
   addEventListener("sykehus:panel", e => { if (e.detail === "photo") enter(); else { prevTab = e.detail; leave(); } });
-  $("pfExit").onclick = $("pfX").onclick = () => panel.show(prevTab);   // «Avslutt» in the drawer, and on the view: a phone's drawer is at peek
+  $("pfX").onclick = () => panel.show(prevTab);   // «Avslutt» on the view (the tabs leave it too)
   addEventListener("keydown", e => { if (e.key !== "Escape" || !on) return; if (!result.hidden) { result.hidden = true; result.innerHTML = ""; } else panel.show(prevTab); });
   go.onclick = shotBtn.onclick = shoot;
   new ResizeObserver(() => { if (on) layout(); }).observe(view);

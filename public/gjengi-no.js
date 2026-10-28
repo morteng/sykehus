@@ -36,3 +36,15 @@ export const LENS_NO = {
   "drone": { no: "Drone", tip: "Fra lufta, vid linse (24 mm): tomta og omgivelsene i ett bilde." },
 };
 export const ASPECT_NO = { "3:2": "3:2 foto", "16:9": "16:9 bred", "1:1": "1:1 kvadrat", "4:5": "4:5 stående", "2:3": "2:3 høy" };
+/* the lens and picture shape a style starts with (ids of LENSES and ASPECTS in renderkit photoframe.js); the one table the Gjengi tab
+   reads when a style is picked. The person's own lens or shape afterwards stays. */
+export const LOOK_FRAME = {
+  "arkitektfoto": { lens: "24", aspect: "3:2" },
+  "blåtime": { lens: "35", aspect: "16:9" },
+  "konkurransebilde": { lens: "50", aspect: "16:9" },
+  "drone": { lens: "drone", aspect: "16:9" },
+  "hvitmodell": { lens: "50", aspect: "4:5" },
+  "skisse": { lens: "50", aspect: "3:2" },
+};
+/* what picking a style changes: its lens and shape, each left alone when the person set it by hand (hand: {lens, aspect}) */
+export const framePatch = (look, hand = {}) => { const f = LOOK_FRAME[look]; return f ? { ...(hand.lens ? {} : { lens: f.lens }), ...(hand.aspect ? {} : { aspect: f.aspect }) } : {}; };
