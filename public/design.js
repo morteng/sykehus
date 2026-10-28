@@ -33,7 +33,7 @@
 import { applyTerrain } from "./paint-edit.js";
 import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./landscape.js";
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
-import { batterZ, balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
+import { balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
 import { BAY, windowsOn, kindOf } from "./bays.js";   // the window bays (U3624)
 import { ringFrame, fitInRing } from "./renderkit/frame.js";   // a building's own frame (U3831)
@@ -99,16 +99,21 @@ export function bimPlace(e, base) {
 }
 /* from -> to as long as the box and through the same middle and direction; width and height the box's */
 export function bimBody(from, to, box) {
+  /* a part whose box is not numbers (a worker part that left a side out) gave «bredde NaN» on the volume; refused here with what it was */
+  if (![box?.min, box?.max].every(q => Array.isArray(q) && q.length >= 3 && q.slice(0, 3).every(Number.isFinite))) throw new Error(`Delens mål er ikke tall (box ${JSON.stringify(box)}): lengde, bredde og høyde må være tall. Kjør delen på nytt med settingene list_parts nevner`);
   const L = Math.max(1, box.max[0] - box.min[0]), c = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2], d = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1, u = [(to[0] - from[0]) / d, (to[1] - from[1]) / d], r = v => Math.round(v * 100) / 100;
   return { from: [r(c[0] - u[0] * L / 2), r(c[1] - u[1] * L / 2)], to: [r(c[0] + u[0] * L / 2), r(c[1] + u[1] * L / 2)], width: r(Math.max(1, box.max[1] - box.min[1])), height: r(Math.max(1, box.max[2] - box.min[2])) };
 }
+/* what an `on` names: a wing that stands, or a new volume already in the after (id, from try_change's result), { id, name } */
+const roofHost = (site, on) => { const k = String(on).toLowerCase().trim(); return (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k) || (site.added || []).find(a => a.kind === "volume" && a.id.toLowerCase() === k && a.from && a.to) || null; };
+const onHint = site => `on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")}) eller id-en til et nytt volum (${(site.added || []).filter(a => a.kind === "volume").map(a => a.id).join(", ") || "ingen ennå"})`;
 /* where a new building's foot stands: on a wing's roof (on), at a kote (base_kote), else on the ground under it */
 function footOf(site, e, out, num) {
   if (e.align != null && !["building", "free"].includes(String(e.align))) throw new Error("align er building (langs byggets egen akse, på taket) eller free (from og to som de står)");
   if (String(e.align) === "building" && e.on == null) throw new Error("align building gjelder et bygg på et tak: si hvilken fløy med on");
   if (e.on != null) {
-    const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k);
-    if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`);
+    const w = roofHost(site, e.on);
+    if (!w) throw new Error(onHint(site));
     out.on = w.id; if (e.overhang_m != null) out.overhang_m = num(e.overhang_m, 0, 50, "Fremspringet (overhang_m)");
     if (e.align != null) out.align = String(e.align);
     if (e.overhang_m != null && String(e.align) === "building") throw new Error("overhang_m og align building går ikke sammen: building krymper og flytter det inn, overhang_m legger det som det står");
@@ -214,7 +219,7 @@ export function checkDesign(site, e, str) {
         if (e.height != null) out.height = num(e.height, ["water", "glass"].includes(out.material ?? a.material) ? 0.1 : 1, 80, "Høyden");   // a slab of water or glass from 0.1, as a volume
       }
       /* on / overhang_m: a reshape may put it on a roof or say how far it may stick out; the roof it already stands on is kept (never silently the ground) */
-      if (e.on != null) { const k = String(e.on).toLowerCase().trim(), w = (site.wings || []).find(x => x.id === k || x.name.toLowerCase() === k); if (!w) throw new Error(`on er en fløy som står (${(site.wings || []).map(x => x.name).join(", ")})`); out.on = w.id; }
+      if (e.on != null) { const w = roofHost(site, e.on); if (!w) throw new Error(onHint(site)); out.on = w.id; }
       if (e.overhang_m != null) out.overhang_m = num(e.overhang_m, 0, 50, "Fremspringet (overhang_m)");
       /* U3831: re-align one on a roof: align building turns it to the building's axis and keeps it inside the roof; a move or a resize does the same unless it is free */
       const onA = out.on ?? a.on;
@@ -226,7 +231,7 @@ export function checkDesign(site, e, str) {
       if (e.allow_overlap != null) out.allow_overlap = e.allow_overlap === true;
       if (Object.keys(out).length < 3) throw new Error("Si hva som skal endres");
       const onW = out.on ?? a.on, geo = { ...a, ...out, from: out.from || a.from, to: out.to || a.to };
-      if (onW && (out.on || out.from || out.to || out.width != null || out.bim || out.overhang_m != null)) { const w = (site.wings || []).find(x => x.id === onW); roofCheck(site, geo, w); collideCheck(site, { ...geo, ...out, base_kote: undefined }, w); }
+      if (onW && (out.on || out.from || out.to || out.width != null || out.bim || out.overhang_m != null)) { const w = roofHost(site, onW); roofCheck(site, geo, w); collideCheck(site, { ...geo, ...out, base_kote: undefined }, w); }
       return Object.assign(out, w_);
     }
     case "balconies": {
@@ -282,7 +287,7 @@ export function roofBlock(site, e) {   // the level is roof.js's one rule (the l
 export function roofRoom(site, e) {
   const h = roofBlock(site, e); if (!h) return null;
   const rings = []; for (const b of site.buildings.filter(b => b.wing === e.on)) for (const k of b.blocks?.length ? b.blocks.map(k => ({ p: k.p, top: k.top })) : [{ p: b.ring, top: b.top }]) if (k.top != null && k.top <= h.top + 0.3 && k.top >= h.top - 3.5) rings.push(k.p);
-  return { top: h.top, rings, pts: rings.flat() };
+  return rings.length ? { top: h.top, rings, pts: rings.flat() } : null;   // none: a new volume's roof (on = its id) has no building rings to align to; it is placed as asked
 }
 /* the roof a volume set on a wing stands on: the highest of that wing's blocks (or outlines) under its middle */
 export function roofUnder(site, e) { return roofBlock(site, e)?.top ?? null; }
@@ -514,6 +519,10 @@ function volumeParts(site, e) {
    unless a kote is asked: where the cut and the fill are the same (balancedFoot, U3566 f), balanced: true. */
 /* PAD_FAR: a foot set more than this over or under the ground (base_kote) stands on its own, on posts or in a pit: no pad */
 const PAD_M = 3, FALL = 1 / 50, WALL_M = 1.5, PAD_FAR = 3;
+/* the pad's skirt (wish w6bJkpPlLw6): the batter eased at both ends (smoothstep) so the slope leaves the pad and meets the ground without a kink.
+   Its run is SKIRT times the 1:SLOPE batter's, so the steepest part of the curve (1.5 x the mean) is still 1:SLOPE */
+const SKIRT = 1.5;
+const skirtZ = (z0, zp, dist) => { const run = Math.abs(z0 - zp) * SLOPE * SKIRT; if (!(run > 0) || dist >= run) return z0; const t = dist / run; return zp + (z0 - zp) * t * t * (3 - 2 * t); };
 /* U3566 (b), TEK17 § 8-6 (gangatkomst to a byggverk with universal design; § 8-5 for a building with homes): a step-free
    entrance: level with the floor on a landing of 1.6 m (LANDING, room to turn), then a ramp to the ground, 1.8 m wide
    (ENTRY_W), with a rest for every 0.6 m it rises. The law's numbers are 1:15 (1:12 on up to 5 m), a rest of 1.6 m
@@ -553,7 +562,7 @@ function padGround(site, a, base, write = true, keep = null, guard = null, lot =
     /* off: how far out from the wall; the fall to PAD_M, then the slope to the ground */
     const du = Math.max(0, Math.abs(x * u[0] + y * u[1]) - L / 2), dv = Math.max(0, Math.abs(-x * u[1] + y * u[0]) - a.width / 2), off = Math.hypot(du, dv);
     const zp = base - FALL * Math.min(off, PAD_M), dist = Math.max(0, off - PAD_M);
-    let z = batterZ(z0, zp, dist, SLOPE);
+    let z = skirtZ(z0, zp, dist);
     /* in the entrance's way: level with the floor on the landing, then the ramp till it meets the ground */
     if (face) {
       const al = x * u[0] + y * u[1], ac = x * nv[0] + y * nv[1], t = (face.fu ? face.fu * al : face.fn * ac) - face.off0, lat = face.fu ? ac : al;
@@ -733,7 +742,9 @@ export function applyDesign(site, floors, edits) {
     } else if (e.kind === "volume") vols.set(e.id ?? `volum-${vols.size + 1}`, { ...e });
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
-  const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan && !e.bim?.nopad && !(e.material === "water" && e.base_kote != null) ? baseOf(site, { ...e, base_kote: undefined }) : null]);
+  const added0 = site.added, pending = [];   // a volume on another new one (on = its id) reads that one's top from site.added, so it is there as each foot is worked out
+  const feet = [...vols].map(([id, e]) => { site.added = pending; const vp = volumeParts(site, e); pending.push({ id, kind: "volume", from: e.from, to: e.to, width: e.width, base_kote: vp.base, top_kote: vp.base + e.height }); return [id, e, vp, e.on == null && !e.bim?.plan && !e.bim?.nopad && !(e.material === "water" && e.base_kote != null) ? baseOf(site, { ...e, base_kote: undefined }) : null]; });
+  site.added = added0;   // the pads, paths and the entrance read the ground without the new buildings, as before
   if (site.terrain?.z && feet.some(([, e]) => e.on == null)) {
     /* S4: the grid as it was before any pad goes in, kept as site.terrain0 for bim.mjs (a construction's foot is looked up in the
        ground, not in a pad under a tower). The same shared object, never a copy; not enumerable, so a spread or a structured

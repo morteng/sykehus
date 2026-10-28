@@ -131,8 +131,8 @@ test("a step-free entrance: a landing level with the floor, a ramp of 1:20 to th
   assert.ok(Math.abs(groundAt(m.site, [-5, -68.8]) - a.ground.kote) < 0.011, "the landing by the door is the floor's kote");
   assert.match(groundText(a.ground), /Trinnfri inngang mot sør/);
   assert.throws(() => add([], { ...v, entrance: "opp" }), /N, Ø, S eller V/);
-  /* where the ground falls faster than 1:20 the ramp never meets it: said so */
-  const steep = applyEdits(site, floors, add([], { ...v, id: "nBratt", from: [50, 40], to: [70, 40] })).site.added[0];
+  /* where the ground falls faster than 1:20 the ramp never meets it: said so (base_kote fixed: the balanced foot moved 0.1 m with the eased skirt and that put this ramp just inside its 80 m) */
+  const steep = applyEdits(site, floors, add([], { ...v, id: "nBratt", from: [50, 40], to: [70, 40], base_kote: 21.5 })).site.added[0];
   assert.equal(steep.ground.entrance.ok, false); assert.match(groundText(steep.ground), /trenger heis, en annen inngang/);
   const off = applyEdits(site, floors, [...c, checkEdit(m.site, m.floors, { kind: "reshape", id: a.id, entrance: null })]).site.added[0];
   assert.equal(off.entrance, undefined); assert.equal(off.ground.entrance, undefined);
