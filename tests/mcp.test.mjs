@@ -168,3 +168,13 @@ test("summary (T6): a draft's 3-storey 20x10 box is 600 m² BTA, and no price me
   assert.equal(s.totals.bta_m2, 600); assert.equal(s.cost.nok_low, null); assert.match(s.note, /beregnet/);
   const tool = (await rpc("tools/list")).tools.find(x => x.name === "summary"); assert.ok(tool.description.length / 3.6 <= 800);
 });
+
+test("S2: a try_change answer lists only the buildings it touched, plus counts, and stays inside a budget", async () => {
+  const vols = Array.from({ length: 12 }, (_, i) => ({ kind: "volume", name: `Hus ${i + 1}`, shape: "box", from: [-60 + i * 12, -70], to: [-52 + i * 12, -70], width: 6, height: 4 }));
+  const first = (await call("try_change", { include_screenshot: false, edits: vols })).data;
+  const r = await call("try_change", { draft: first.draft, include_screenshot: false, edits: [{ kind: "volume", name: "Ett til", shape: "box", from: [100, -70], to: [108, -70], width: 6, height: 4 }] });
+  assert.equal(r.data.after.built.length, 1); assert.equal(r.data.after.built[0].name, "Ett til");
+  assert.equal(r.data.after.built_n.total, 13); assert.equal(r.data.after.built_n.listed, 1); assert.match(r.data.after.built_n.say, /1 av 13/);
+  const one = JSON.stringify(r.data).length; assert.ok(one < 6000, `the answer is ${one} characters`);
+  assert.equal((await call("show_draft", { draft: first.draft })).data.after.built.length, 13, "show_draft still lists all");
+});

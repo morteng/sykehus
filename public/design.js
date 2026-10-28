@@ -665,6 +665,46 @@ export function entranceText(n) {
 const profArea = p => Math.abs(ringArea(p));
 const round1 = v => Math.round(v * 10) / 10;
 
+/* S1 stable ids. A new building sent with no id was numbered by where it stood in the replay (volum-N, N = how many stood
+   before it), so a demolish moved every later number and the next unnamed one could land on an existing id. Now every stored
+   volume edit carries its id. replayVolumes walks the edits by the same rules applyDesign uses and says, for each edit
+   index, the id a volume edit gets (its own, else today's rule) and which ids a demolish takes away. */
+const skipsVolumes = e => (e.kind === "demolish" || e.kind === "reshape") && GROUND_ID.test(e.building ?? e.id) || (e.kind === "demolish" || e.kind === "restore") && ROAD_ID.test(e.building);
+function replayVolumes(edits) {
+  const live = new Set(), idAt = new Map(), takes = new Map();
+  edits.forEach((e, i) => {
+    if (skipsVolumes(e)) return;
+    if (e.kind === "demolish" && live.has(e.building)) { live.delete(e.building); takes.set(i, e.building); }
+    else if (e.kind === "volume") { const id = e.id ?? `volum-${live.size + 1}`; live.add(id); idAt.set(i, id); }
+  });
+  return { idAt, takes };
+}
+/* the migration: writes into each volume edit without an id the id today's rule gives it, so the replay means what it meant.
+   In place; true when it changed something; running it again changes nothing */
+export function stampVolumeIds(edits) {
+  let n = 0;
+  for (const [i, id] of replayVolumes(edits).idAt) if (edits[i].id == null) { edits[i].id = id; n++; }
+  return n > 0;
+}
+/* the id for a new building sent with none: one past the highest volum-N stored, never one that is taken */
+export function nextVolumeId(edits) {
+  const taken = new Set(edits.filter(e => e.kind === "volume").map(e => e.id)), top = Math.max(0, ...[...taken].map(id => +/^volum-(\d+)$/.exec(String(id))?.[1] || 0));
+  let n = top + 1; while (taken.has(`volum-${n}`)) n++;
+  return `volum-${n}`;
+}
+/* the edits that no longer do anything: a new building's volume and reshapes up to the demolish that took it, and that demolish.
+   Indexes, ascending; a building made again under the same id after the demolish is live */
+export function deadEdits(edits) {
+  const dead = new Set(), open = new Map();   // id -> the indexes of its volume and reshape edits since it last started
+  edits.forEach((e, i) => {
+    if (skipsVolumes(e)) return;
+    if (e.kind === "volume" && e.id != null) { open.set(e.id, [...(open.get(e.id) || []), i]); }
+    else if (e.kind === "reshape" && open.has(e.id)) open.get(e.id).push(i);
+    else if (e.kind === "demolish" && open.has(e.building)) { for (const k of open.get(e.building)) dead.add(k); dead.add(i); open.delete(e.building); }
+  });
+  return [...dead].sort((a, b) => a - b);
+}
+
 /* the after's changes laid over the model (copies, made by applyEdits): what is taken away goes, what is built is added */
 export function applyDesign(site, floors, edits) {
   applyLandscape(site, edits);
@@ -694,7 +734,13 @@ export function applyDesign(site, floors, edits) {
   }
   /* every foot first, on the ground as it was, then the pads into the after's own copy of the grid */
   const feet = [...vols].map(([id, e]) => [id, e, volumeParts(site, e), e.on == null && !e.bim?.plan && !e.bim?.nopad && !(e.material === "water" && e.base_kote != null) ? baseOf(site, { ...e, base_kote: undefined }) : null]);
-  if (site.terrain?.z && feet.some(([, e]) => e.on == null)) site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
+  if (site.terrain?.z && feet.some(([, e]) => e.on == null)) {
+    /* S4: the grid as it was before any pad goes in, kept as site.terrain0 for bim.mjs (a construction's foot is looked up in the
+       ground, not in a pad under a tower). The same shared object, never a copy; not enumerable, so a spread or a structured
+       clone of the site (a picture's worker, the next applyEdits) leaves it behind and no grid is carried twice */
+    Object.defineProperty(site, "terrain0", { value: site.terrain, enumerable: false, writable: true, configurable: true });
+    site.terrain = { ...site.terrain, z: site.terrain.z.slice() };
+  }
   const keep = new Map(), guard = pathCells(site), lot = feet.some(([, e]) => e.on == null) ? lotCells(site) : null;
   for (const [id, e, { parts, base }, free] of feet) {
     /* free: where it would stand of itself, on the ground as it was before any pad */

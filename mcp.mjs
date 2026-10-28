@@ -27,7 +27,7 @@ import { edgeRail, compactRail } from "./public/roofedge.js";   // edge_rail: a 
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
-import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, overhangOf, roofOf, roofSay, roofCollisions, measureParts, checkFit } from "./public/design.js";
+import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, overhangOf, roofOf, roofSay, roofCollisions, measureParts, checkFit, stampVolumeIds, nextVolumeId, deadEdits } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
@@ -72,7 +72,7 @@ const dirDeg = d => dirOf(d) ?? (() => { throw toolErr(`Unknown direction "${d}"
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, sitePhotos = null }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, render = picture, sitePhotos = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const libs = libraries();
@@ -457,7 +457,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     : { site: withMeshes(site), note: ", modellen slik den var før (målet har ingen endringer ennå, så dette er den delte førmodellen)" };
   async function look(s, a = {}, edits = []) {
     if (a.saved) {   // a saved view, as the page shows it (U3527): its camera, its «før» on the before
-      const st = a.saved.state, png = await picture(withMeshes(st.era === "før" ? site : s), { ...viewOpts(st, s), width: a.width || 1024, height: a.height || 640 });
+      const st = a.saved.state, png = await render(withMeshes(st.era === "før" ? site : s), { ...viewOpts(st, s), width: a.width || 1024, height: a.height || 640 });
       return { png, text: `Bildet: den lagrede visningen «${a.saved.name}»${st.caption ? ` (${st.caption.replace(/\.$/, "")})` : ""}${st.cam === "eye" ? "; i øyehøyde, men med smalere linse enn siden" : ""}. Nordpilen øverst til høyre.` };
     }
     s = withMeshes(s);   // a construction's triangles, from what the worker made
@@ -472,7 +472,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     /* a new building's pad (U3566), as the picture shows it: what is dug out and filled, and at which side */
     const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground || fa?.lot ? `${fa.name}: ${fa.ground ? groundText(fa.ground) : ""}${lotText(fa.lot) ? ` ${lotText(fa.lot)}` : ""}`.trim() : "";
     const before = a.era === "før", prior = before ? priorOf(edits) : null, cam = usedCamera(cm, a.era, prior?.note);
-    let png = await picture(before ? prior.site : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
+    let png = await render(before ? prior.site : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
     png = annotate(png, { plan: !!v.plan, dist, target: fr.target, levels: before ? null : fr.levels, width: W, height: H });
     const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8], seen = f ? lookSay(s, { ...fr, dist }, f, v, fr) : "";
     return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, midt i bildet ${f.name}` : ""}. Nordpilen øverst til høyre${v.plan ? "; målestokken nederst til venstre er 50 m" : ""}.${seen ? " I bildet: " + seen : ""}${pad ? " " + pad : ""} ${cam.say}`, camera: cam.num };
@@ -548,10 +548,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         else if (a.draft) d = draftOf(a.draft); else { if (drafts.size >= MAX_DRAFTS) for (const [k, x] of drafts) if (Date.now() - x.t > DRAFT_MS || drafts.size >= MAX_DRAFTS) dropDraft(k); d = { id: newId(), t: Date.now(), edits: [] }; drafts.set(d.id, d); }
         /* the person's own changes to this version since Anton's last call in the turn (the page's change goes through this same tool, one at a time, so none comes in mid-call) */
         const mine = [], gone = [], str = x => JSON.stringify(x), seen0 = before && v && ctx.seen?.id === v.id ? ctx.seen.edits : null;
-        const railIds = new Set(), ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS;
+        const railIds = new Set(), ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS; let pushed = 0, pruned = 0; const touched = new Set();
+        stampVolumeIds(d.edits);   // S1: a draft from before the stable ids gets them (a version got them on load); no-op when every volume has one
         /* a later change in the same call to a new building that got another id goes to the id it got */
         const queue = expandEdits(a.edits, railIds).map((e, i) => ({ e, i }));
-        for (let qi = 0; qi < queue.length; qi++) { const { e: e00, i, synth } = queue[qi], sw = splitWater(e00), water = sw.water, e0 = water != null && water !== false && sw.e.id == null ? { ...sw.e, id: "basseng" } : sw.e; try {   /* a basin with water has an id, so the water can be named from it and both reshaped later */ const { e: e1p, placed } = placeAt(e0, e0?.kind === "part" && e0.at != null ? (await listParts().catch(() => ({})))[e0.part]?.params : null), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = synth ? null : fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c = checkEdit(m.site, m.floors, e1); if (d.edits.length >= max) throw new Error(`At most ${max} changes`);
+        for (let qi = 0; qi < queue.length; qi++) { const { e: e00, i, synth } = queue[qi], sw = splitWater(e00), water = sw.water, e0 = water != null && water !== false && sw.e.id == null ? { ...sw.e, id: "basseng" } : sw.e; try {   /* a basin with water has an id, so the water can be named from it and both reshaped later */ const { e: e1p, placed } = placeAt(e0, e0?.kind === "part" && e0.at != null ? (await listParts().catch(() => ({})))[e0.part]?.params : null), e = e1p?.kind !== "volume" && e1p?.id != null && ids[e1p.id] ? { ...e1p, id: ids[e1p.id] } : e1p, f = synth ? null : fieldsOf(e); if (f) throw new Error(f); const m = applyEdits(site, floors, d.edits), pe = await withAround(await prepare(e, m.site)), { _ran, ...e1 } = pe, c0 = checkEdit(m.site, m.floors, e1), c = c0.kind === "volume" && c0.id == null ? { ...c0, id: nextVolumeId(d.edits) } : c0;   /* S1: every stored new building has its own id, one that no demolish moves */
+            if (d.edits.length >= max) { const dead = deadEdits(d.edits); for (const j of [...dead].reverse()) gone.push(str(d.edits.splice(j, 1)[0])); pruned += dead.length;   /* S1c: the dead ones (a torn-down new building and what was done to it) go first */
+              if (d.edits.length >= max) throw new Error(`Versjonen har ${d.edits.length} endringer, og grensen er ${max}. ${dead.length ? `${dead.length} døde endringer (revne nye bygg) ble ryddet bort nå, men det er ikke nok` : "Ingen av dem er døde"}: resten gjør noe. Slå sammen eller fjern noen endringer, eller start et nytt prosjekt.`); }
             /* one already there is not added again (21:23Z: Anton sent «demolish alle» and every restore with each try, 56 changes and no pool) */
             /* a new building that differs only in the id it was given is the same one sent again */
             const bare = x => JSON.stringify(x.kind === "volume" ? { ...x, id: undefined } : x);
@@ -563,7 +566,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
                 const both = balconyFaces(m.site, x).filter(b => fc.has(b)); if (!both.length) continue;
                 gone.push(str(d.edits.splice(k, 1)[0])); replaced = `Erstattet de eldre balkongene på fasaden mot ${both.map(b => `${b}°`).join(" og ")} (endring nr. ${k + 1}); bare de nye står.`; }
             }
-            d.edits.push(c); mine.push(str(c)); ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (replaced) ok[ok.length - 1] = { ...ok[ok.length - 1], replaced }; if (placed) ok[ok.length - 1] = { ...ok[ok.length - 1], placed }; if (c.kind === "volume" || c.kind === "reshape") { const prev = c.kind === "reshape" ? (m.site.added || []).find(x => x.id === c.id) : null, on = c.on ?? prev?.on, geo = prev ? { ...prev, ...c } : c, say = on && (geo.overhang_m != null ? overhangOf(m.site, geo, null)?.say : (c.align ?? prev?.align) !== "free" && alignSay(alignDelta(m.site, prev ? { ...prev, ...e } : e, geo))); if (say) ok[ok.length - 1] = { ...ok[ok.length - 1], on_roof: say }; }   /* U3831: what setting it along the roof's own axis did */ if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id;
+            /* S1b: tearing down a new building takes its volume and its reshapes out of the list, as balconies are replaced above, instead of adding a demolish that keeps all of them */
+            if ((c.kind === "volume" || c.kind === "reshape") && c.id != null) touched.add(c.id);
+            let spliced = null;
+            if (c.kind === "demolish" && typeof c.building === "string") { const k = c.building.toLowerCase(), hit = d.edits.map((x, j) => j).filter(j => ["volume", "reshape"].includes(d.edits[j].kind) && String(d.edits[j].id).toLowerCase() === k);
+              if (hit.some(j => d.edits[j].kind === "volume")) { const nm = d.edits[hit.find(j => d.edits[j].kind === "volume")].name; for (const j of [...hit].reverse()) gone.push(str(d.edits.splice(j, 1)[0])); spliced = `Tok ${nm ? `«${nm}»` : "det nye bygget"} helt bort: ${hit.length} endring${hit.length === 1 ? "" : "er"} (bygget og det som ble gjort med det) er fjernet fra listen.`; } }
+            if (!spliced) { d.edits.push(c); mine.push(str(c)); pushed++; } ok.push(_ran ? { ...slim(c), worker: { printed: _ran.result, triangles: _ran.triangles, buildings: _ran.buildings, storeys: _ran.storeys, foot_kote: _ran.foot_kote, top_kote: _ran.top_kote, ...(_ran.warning ? { warning: _ran.warning } : {}) } } : slim(c)); if (spliced) replaced = spliced; if (replaced) ok[ok.length - 1] = { ...ok[ok.length - 1], replaced }; if (placed) ok[ok.length - 1] = { ...ok[ok.length - 1], placed }; if (c.kind === "volume" || c.kind === "reshape") { const prev = c.kind === "reshape" ? (m.site.added || []).find(x => x.id === c.id) : null, on = c.on ?? prev?.on, geo = prev ? { ...prev, ...c } : c, say = on && (geo.overhang_m != null ? overhangOf(m.site, geo, null)?.say : (c.align ?? prev?.align) !== "free" && alignSay(alignDelta(m.site, prev ? { ...prev, ...e } : e, geo))); if (say) ok[ok.length - 1] = { ...ok[ok.length - 1], on_roof: say }; }   /* U3831: what setting it along the roof's own axis did */ if (c.kind === "volume" && e.id != null && c.id !== String(e.id)) ids[e.id] = c.id;
             if (water != null && water !== false && c.bim?.part === "pool_basin") queue.splice(qi + 1, 0, { e: poolWater(c, water), i, synth: true });   /* the water goes in right after its basin, as one more change under the same index */
           } catch (x) { bad.push({ index: i, error: `${synth ? "Vannet i bassenget (bassenget står): " : ""}${x.message || "Endringen kunne ikke settes inn."}` }); } }
         /* nothing went in (Anton 2026-10-27: the answer was long and said saved: true): a short answer that leads with the reason, counts applied and rejected,
@@ -587,9 +595,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const fit0 = quiet ? [] : fitOf(m.site);
         for (const f of fit0) { const a = (m.site.added || []).find(x => x.id === f.id && x.on); if (!a) continue; const r = roofSay(m.site, a); if (r) f.roof = { on: r.on, kote: r.kote, levels: r.levels, overhang_m: r.overhang_m, outside_m2: r.outside_m2, ...(r.say ? { say: r.say } : {}) }; const col = roofCollisions(m.site, a); if (col.length) (f.roof ||= {}).overlap = col.map(c => ({ with: c.name, m2: c.m2 })); }   /* T2: kept with allow_overlap, listed here */
         const fit = quiet ? [] : [...fit0, ...((m.site.landscape || []).some(l => l.kind === "surface") ? surfaceFit({ ...m.site, landscape: m.site.landscape.filter(l => !l.on) }, wayRings) : []), ...padFit(m.site, wayRings)];
-        const { added: okOut, fit: fitOut, built: builtOut, checks: checksOut } = compactRail(ok, fit, railIds, after?.built, checks);   // an edge_rail's pieces as one entry
+        const { added: okOut, fit: fitOut, built: builtOut, checks: checksOut } = compactRail(ok, fit, railIds, after?.built?.filter(b => b.kind === "volume" ? touched.has(b.id) : ok.some(e => e.kind === b.kind)), checks);   // S2: only what this call touched; the rest are counted (built_n)   // an edge_rail's pieces as one entry
         /* an id that was not free or not of the form: the one each got (pm 23:31Z) */
-        const named = Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {};
+        const named = { ...(Object.keys(ids).length ? { ids, ids_note: "The id asked for was taken or not of the form (n and 4-12 letters/digits); each new building got the id shown. Use that one." } : {}), ...(pruned ? { tidied: `Ryddet bort ${pruned} døde endringer (revne nye bygg) for å gjøre plass.` } : {}) };
+        const builtN = (all, shown) => ({ total: all.length, listed: shown.length, say: all.length > shown.length ? `Bare det dette kallet rørte er listet (${shown.length} av ${all.length} nye bygg og balkonger i prosjektet); show_draft har alle.` : undefined });
         let out;
         /* what changed under Anton: the person's edits (not his own) since he last looked; he is told, and the next call counts from here */
         const meanwhile = (() => { if (!before || !v) return null; const sub = (x, y) => { const c = new Map(); for (const k of y) c.set(k, (c.get(k) || 0) + 1); return x.filter(k => { const n = c.get(k) || 0; if (n) { c.set(k, n - 1); return false; } return true; }); };
@@ -598,14 +607,14 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           if (!add.length && !del.length) return null;
           const kinds = [...new Set(add.map(k => JSON.parse(k).kind))];
           return { added: add.length, removed: del.length, kinds, say: `Personen endret prosjektet mens du jobbet: ${add.length} ny${add.length === 1 ? "" : "e"} endring${add.length === 1 ? "" : "er"}${kinds.length ? ` (${kinds.join(", ")})` : ""}${del.length ? ` og ${del.length} tatt bort` : ""}. Endringene dine ligger oppå dem; se over før du bygger videre.` }; })();
-        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: ok.length > 0 }; }
+        if (v) { if (ok.length) versions.save(v); out = { ...versionOut(v, originOf(req), req), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, ...(meanwhile ? { changed_meanwhile: meanwhile } : {}), ...(after ? { after: after.built ? { ...after, built: builtOut, built_n: builtN(after.built, builtOut) } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: ok.length > 0 }; }
         else { d.t = Date.now(); keepDraft(d);
-          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after: after.built ? { ...after, built: builtOut } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: false,
+          out = { draft: d.id, link: draftUrl(originOf(req), d.id), added: okOut, applied: ok.length, rejected_n: bad.length, rejected: bad, ...named, changes_in_draft: d.edits.length, ...(after ? { after: after.built ? { ...after, built: builtOut, built_n: builtN(after.built, builtOut) } : after } : {}), ...(fitOut.length ? { fit: fitOut } : {}), ...(checksOut.length ? { checks: checksOut } : {}), saved: false,
             note: "Ikke lagret: utkastet varer et døgn. Lagre det som en egen versjon med new_version (from: utkastet), som krever innlogging." }; }
         if (a.include_screenshot === false || !ok.length) return out;
         /* the picture of what it made: aimed at what the call changed (tryshot.mjs), the camera fields (camera.mjs) over that; with a focus, look's own aim */
         const pic = a.picture || {}, last = ok.findLast(e => e.kind === "volume" || e.kind === "reshape"), id = last && (last.id ?? m.site.added?.findLast(x => x.kind === "volume" && x.name === last.name)?.id);
-        try { const sh = pic.focus ? null : await tryShot({ prior: applyEdits(site, floors, d.edits.slice(0, d.edits.length - ok.length)).site, s: withMeshes(m.site), edits: d.edits.slice(-ok.length), a, picture, ground: groundAt, annotate, before: cameras(a.picture).some(c => c.era === "før") ? priorOf(d.edits) : null, dirDeg, err: toolErr });
+        try { const sh = pic.focus ? null : await tryShot({ prior: applyEdits(site, floors, d.edits.slice(0, d.edits.length - pushed)).site, s: withMeshes(m.site), edits: pushed ? d.edits.slice(-pushed) : [], a, picture, ground: groundAt, annotate, before: cameras(a.picture).some(c => c.era === "før") ? priorOf(d.edits) : null, dirDeg, err: toolErr });
           const shots = sh ? sh.images : await Promise.all(cameras({ view_name: a.view_name, ...pic, focus: pic.focus ?? (id && m.site.added?.some(x => x.id === id) ? id : null) }).map(c => look(m.site, c, d.edits)));
           const cams = shots.map(x => x.camera).filter(Boolean), so = cams.length ? { ...out, picture: { cameras: cams } } : out;
           return { _result: { content: [{ type: "text", text: JSON.stringify(out) }, ...shots.flatMap((x, i) => [{ type: "image", data: x.png.toString("base64"), mimeType: "image/png" }, { type: "text", text: (shots.length > 1 ? `Bilde ${i + 1}: ` : "") + x.text }])], structuredContent: so } };
@@ -807,13 +816,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (!wishes) throw toolErr("Ønsker tas ikke imot på denne serveren.");
         const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
         /* U3832: the picture of the model the wish is about (the page's own snapshot path, look), kept with the wish */
-        let png = null;
+        let png = null, why = null;
         if (a.picture !== false) {
           const open = versions ? versions.get(openId(who)) : null, pick = v && versions.visible(v, who) ? v : open?.owner === who ? open : null;
-          if (pick) try { const m = model(pick.id, req), last = m.site.added?.findLast(x => x.kind === "volume"), r = await look(m.site, { view_name: a.view_name, focus: a.focus ?? last?.id ?? null }); png = r.png; }
-          catch (e) { console.warn("send_wish picture:", e.message); }
+          if (!pick) why = "ingen åpen versjon å ta det av";
+          else try {
+            const m = model(pick.id, req), last = m.site.added?.findLast(x => x.kind === "volume"), focus = a.focus ?? last?.id ?? null;
+            /* the real reason comes back (the look timed out, 20 s); one retry as a plan view at a smaller size */
+            for (const cam of [{ view_name: a.view_name, focus }, { view_name: "plan", focus, width: 640, height: 400 }]) {
+              try { png = (await look(m.site, cam)).png; break; } catch (e) { console.warn("send_wish picture:", e.message); why = e.message || "bildet kunne ikke tegnes"; if (cam.view_name === "plan") why += " (prøvde også et planbilde i mindre størrelse)"; }
+            }
+            if (png) why = null;
+          } catch (e) { console.warn("send_wish picture:", e.message); why = e.message || "bildet kunne ikke tegnes"; }
         }
-        try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link, png }); return { sent: true, wish: w.id, status: w.status, picture: !!w.picture, receipt: png ? "Sendt, med bilde. Morten ser det." : "Sendt. Morten ser det.", ...(png ? {} : a.picture === false ? {} : { note: "Bildet kom ikke med: ingen åpen versjon å ta det av." }), see_them: `${originOf(req)}/ (Ønsker)` }; }
+        try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link, png }); return { sent: true, wish: w.id, status: w.status, picture: !!w.picture, receipt: png ? "Sendt, med bilde. Morten ser det." : "Sendt. Morten ser det.", ...(png ? {} : a.picture === false ? {} : { note: `Bildet kom ikke med: ${why}.`.replace(/\.\.$/, ".") }), see_them: `${originOf(req)}/ (Ønsker)` }; }
         catch (e) { throw toolErr(e.message); } } },
     { name: "check_design", tgt: "read", title: "Sjekk mot byggereglene", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "Holds the after (a version or draft) against the building rules (TEK17, rules/tek17.json) that its parts and its step-free entrance can answer (U3678): a stair's rise and tread (2 × opptrinn + inntrinn), its width and handrail, a railing's or balcony's railing height where there is a fall, a balcony door's size, a ramp's slope. Each row: the rule, its §, the thing it is about, status (ok, brudd, or ikke målt), the value, the limit and a plain sentence. «ikke målt» is never ok: the model does not hold that number. A row with verify: true is a rule or number not yet read against the law text: say «etter min lesning av TEK17» and that it is to be confirmed, never that the design is approved. Nothing is changed. Only what the rules can measure is listed: a clean list is not a building permit.",
