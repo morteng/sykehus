@@ -164,3 +164,78 @@ test("distribute and array", () => {
   assert.deepEqual(d3.map(x => x.x0), [0, 6, 12]); const gaps = [d3[1].x0 - d3[0].x1, d3[2].x0 - d3[1].x1]; assert.ok(Math.abs(gaps[0] - gaps[1]) < 0.011);
   assert.deepEqual(arrayOf(it("a", 0, 3, 20.08, 20.28), 4, 3.2).map(r => r.x0), [6.2, 12.4, 18.6, 24.8]);
 });
+
+/* ---- the doors: the person's own, as openings edits (set + rev + one exact door each) on the drawing and in the model ---- */
+import { openingsEdits, openingsFromEdits, doorSet } from "../public/fasade.js";
+const east = () => draw(site, { side: "Østsiden" });
+test("a window made a door: the edit is checked, the model gets a wooden leaf, the drawing draws it and hides the window", () => {
+  const d = east(), w = d.windowRects[10], W = d.face.width_m;
+  const door = { id: "d1", t0: w.t0, t1: w.t1, z0: 39.3, z1: w.z1, win: [w.t0, w.t1, w.z0, w.z1] };
+  const edits = openingsEdits(d.face, "sentralblokka", [door], 5);
+  assert.equal(edits[0].remove, true); assert.equal(edits[1].set, doorSet(d.face.bearing));
+  const tidy = edits.map(e => checkEdit(site, [], e));
+  assert.equal(tidy[0].remove, true);
+  assert.deepEqual(tidy[1].window, [Math.round((W - w.t1) * 100) / 100, Math.round((W - w.t0) * 100) / 100, w.z0, w.z1], "the window's place, along from the right end as the edit's own along");
+  const m = tryEdits(site, [], [], edits), a = (m.site.added || []).find(x => x.kind === "openings");
+  assert.ok(a, "the model has the doors"); assert.equal(a.count, 1);
+  assert.equal(a.parts[0].role, "door"); assert.equal(a.parts[0].mat, "wood");
+  const zs = a.parts[0].profile.map(q => q[1]); assert.equal(Math.min(...zs), 39.3); assert.equal(Math.max(...zs), w.z1);
+  const after = draw(m.site, { side: "Østsiden" });
+  assert.equal(after.windows, d.windows - 1, "the window behind the door is hidden");
+  const items = after.items.filter(i => i.kind === "dør");
+  assert.equal(items.length, 1);
+  assert.ok(Math.abs(items[0].x0 - w.t0) < 0.6 && Math.abs(items[0].x1 - w.t1) < 0.6, "the door stands where the window was");
+  const back = openingsFromEdits(edits, d.face);
+  assert.equal(back.length, 1);
+  assert.ok(Math.abs(back[0].t0 - w.t0) < 0.01 && Math.abs(back[0].t1 - w.t1) < 0.01, "the layout reads back at the same place");
+  assert.deepEqual(back[0].win, [w.t0, w.t1, w.z0, w.z1], "the window it replaces, in t metres again");
+});
+test("a door of his own where he tapped, and «Tilbakestill» (the remove edit) takes the set away again", () => {
+  const d = south();
+  const edits = openingsEdits(d.face, "sentralblokka", [{ id: "d2", t0: 10, t1: 11.2, z0: 16.4, z1: 18.5 }], 6);
+  const after = draw(tryEdits(site, [], [], edits).site, { side: "Sørsiden" });
+  const items = after.items.filter(i => i.kind === "dør");
+  assert.equal(items.length, 1); assert.ok(items[0].z0 > 16 && items[0].z1 < 19, "from the floor to 2,1 m up");
+  const rm = checkEdit(site, [], openingsEdits(d.face, "sentralblokka", [], 7)[0]);
+  assert.equal(rm.remove, true);
+  const gone = tryEdits(site, [], [], [...edits, rm]);
+  assert.equal(draw(gone.site, { side: "Sørsiden" }).items.some(i => i.kind === "dør"), false, "«Tilbakestill»: no door left");
+  assert.deepEqual(openingsFromEdits([...edits, rm], d.face), [], "and the draft reads an empty set back");
+});
+test("a door is refused when it makes no sense: too low, or on a facade the wing does not have", () => {
+  assert.throws(() => checkEdit(site, [], { kind: "openings", wing: "sentralblokka", face: 210, along: [10, 11.2], sill: 16.4, head: 16.5, set: "apninger-210", rev: 1 }), /høy/);
+  assert.throws(() => checkEdit(site, [], { kind: "openings", wing: "sentralblokka", face: 95, along: [10, 11.2], sill: 16.4, head: 18.5 }), /har ingen fasade/);
+});
+test("a doors layout laid again replaces the one before (the newest rev of the set), as the balconies do", () => {
+  const d = east();
+  const first = openingsEdits(d.face, "sentralblokka", [{ id: "d1", t0: 30, t1: 31.2, z0: 39.3, z1: 41.4 }], 10);
+  const second = openingsEdits(d.face, "sentralblokka", [{ id: "d2", t0: 40, t1: 41.2, z0: 20.28, z1: 22.38 }], 11);
+  const items = draw(tryEdits(site, [], [], [...first, ...second]).site, { side: "Østsiden" }).items.filter(i => i.kind === "dør");
+  assert.equal(items.length, 1, "only the newest rev stands");
+});
+test("the drawing takes the person's doors and balconies together; the window a door stands in is hidden", () => {
+  const base = south(), w = base.windowRects[0], L = initialLayout(base).slice(0, 2);
+  const doors = [{ id: "dA", t0: 12, t1: 13.2, z0: 20.28, z1: 22.38 }, { id: "dB", t0: w.t0, t1: w.t1, z0: 66, z1: w.z1, win: [w.t0, w.t1, w.z0, w.z1] }];
+  const after = draw(site, { side: "Sørsiden", layout: L, doors });
+  assert.equal(after.items.filter(i => i.kind === "dør").length, 2);
+  assert.equal(after.items.filter(i => i.kind === "balkong").length, 2);
+  assert.equal(after.windows, base.windows - 1, "the covered window is hidden");
+});
+
+/* ---- the balconies' «Understøttet»: struts in the model, brackets in the drawing, a calm note under what hangs free ---- */
+test("«Understøttet» on: steel struts under the supported balconies in the model, brackets in the drawing; the free-hanging ones get a note", () => {
+  const d = south(), layout = initialLayout(d).map((it, i) => ({ ...it, support: i < 2 }));
+  const edits = layoutEdits(d.face, "sentralblokka", layout, 8);
+  assert.equal(edits.filter(e => e.support).length, 2);
+  for (const e of edits) assert.doesNotThrow(() => checkEdit(site, [], e));
+  const m = tryEdits(site, [], [], edits);
+  const struts = (m.site.added || []).filter(x => x.kind === "balconies" && x.support).flatMap(x => x.parts).filter(p => p.role === "support");
+  assert.equal(struts.length, 4, "two struts under each supported balcony");
+  assert.ok(struts.every(p => p.mat === "steel" && p.profile.every(q => q[1] < p.profile[0][1] + 0.2)), "under the slab, in steel");
+  const after = draw(m.site, { side: "Sørsiden" });
+  assert.equal(after.items.filter(i => i.support).length, 2);
+  assert.equal(after.prims.filter(q => q.t === "poly" && q.fill === null && q.w === 1.6).length, 4, "a bracket drawn under each end");
+  const svg = toSvg(after), hanging = after.items.filter(i => !i.support).length, notes = (svg.match(/henger fritt/g) || []).length;
+  assert.ok(notes > 0 && notes <= hanging, `${notes} notes under the ${hanging} balconies that hang free, one calm sentence each`);
+  assert.deepEqual(layoutFromEdits(edits, d.face).filter(i => i.support).length, 2, "the draft reads the switch back");
+});

@@ -733,5 +733,6 @@ html.pk-wait .loading { visibility: hidden; }
 .fx-sel[hidden], .fx-more[hidden], .fx-sf label[hidden] { display: none; }
 .fx-sf { display: flex; gap: 8px; } .fx-sf label { flex: 1; display: flex; flex-direction: column; font-size: var(--fs-sm, .85rem); color: var(--muted); }
 .fx-sf input { height: 48px; font: inherit; font-size: 1.2rem; text-align: center; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); color: var(--text); min-width: 0; }
+.fx-sf input[type=checkbox] { height: 30px; width: 30px; align-self: center; margin-top: 9px; accent-color: var(--accent); }   /* «Understøttet»: en vanlig avkrysningsboks, ikke et tallfelt */
 .fx-sb, .fx-more { display: flex; gap: 8px; flex-wrap: wrap; } .fx-sb button { flex: 1; } .fx-sb .fx-ok { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .fx-hand { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; } .fx-hand div { position: fixed; pointer-events: auto; touch-action: none; border-radius: 50%; background: rgba(31,95,191,.25); border: 3px solid #1f5fbf; box-sizing: border-box; cursor: ew-resize; }

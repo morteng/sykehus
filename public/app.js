@@ -704,6 +704,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   if (e.kind === "demolish") return `Rives: ${nameOf(e.building)}${why}`;
   if (e.kind === "restore") return `Beholdes: ${nameOf(e.building)}${why}`;
   if (e.kind === "balconies") return `Balkonger på ${w} mot ${e.face != null ? `${e.face}°` : { N: "nord", Ø: "øst", S: "sør", V: "vest" }[e.side]}, ${String(e.depth).replace(".", ",")} m dype${e.windows ? ", én per vindu" : ""}${e.bay ? `, ${String(e.bay).replace(".", ",")} m brede` : ""}${why}`;
+  if (e.kind === "openings") return e.remove ? `Dørene på ${w} mot ${e.face}° fjernet${why}` : `Dør på ${w} mot ${e.face}°, ${String(e.along[0]).replace(".", ",")}–${String(e.along[1]).replace(".", ",")} m fra venstre${why}`;
   if (e.kind === "reshape") {
     const was = /^(flate|sti|tre)-\d+$/.test(e.id) ? nameOf(e.id) : draft?.edits?.find(x => x.kind === "volume" && x.id === e.id)?.name || "nytt bygg", what = [];
     if (e.surface) what.push((SURFACE_NO[e.surface] || e.surface).toLowerCase()); if (e.ring || e.line) what.push("ny form");

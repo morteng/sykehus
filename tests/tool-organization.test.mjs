@@ -22,12 +22,12 @@ const list = async () => (await rpc("tools/list")).tools;
 const seen = t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema, outputSchema: t.outputSchema });
 const tokens = o => JSON.stringify(o).length / 4;
 
-test("the budget: the whole list 13 400 tokens (12 000 at T3; summary, draw_plan and draw_section came after, then list_site_photos, look_at_site_photo and heritage_records, then clone, group, move/turn/length on reshape and preview: 13 400), try_change 4 000 (3 700 before clone and group; 3 500 at T3), any other tool 800, the instructions 1 000", async () => {
+test("the budget: the whole list 13 600 tokens (12 000 at T3; summary, draw_plan and draw_section came after, then list_site_photos, look_at_site_photo and heritage_records, then clone, group, move/turn/length on reshape and preview: 13 400, then doors on a facade, the openings kind: 13 600), try_change 4 200 (3 700 before clone and group; 3 500 at T3, 4 000 before openings), any other tool 800, the instructions 1 000", async () => {
   const tools = await list(), per = Object.fromEntries(tools.map(t => [t.name, tokens(seen(t))]));
   const total = Object.values(per).reduce((a, b) => a + b, 0);
   console.log(`budget: total ${Math.round(total)} tokens, ${tools.length} tools, try_change ${Math.round(per.try_change)}, largest other ${Object.entries(per).filter(([n]) => n !== "try_change").sort((a, b) => b[1] - a[1])[0].map(x => typeof x === "number" ? Math.round(x) : x).join(" ")}`);
-  assert.ok(total <= 13400, `the list is ${Math.round(total)} tokens`);
-  assert.ok(per.try_change <= 4000, `try_change is ${Math.round(per.try_change)} tokens`);
+  assert.ok(total <= 13600, `the list is ${Math.round(total)} tokens`);
+  assert.ok(per.try_change <= 4200, `try_change is ${Math.round(per.try_change)} tokens`);
   for (const [n, v] of Object.entries(per)) if (n !== "try_change") assert.ok(v <= 800, `${n} is ${Math.round(v)} tokens`);
   const i = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
   console.log(`budget: instructions ${Math.round(tokens(i.instructions))} tokens`);

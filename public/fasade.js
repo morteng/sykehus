@@ -111,7 +111,7 @@ export function facadeDrawing(site, o, wingOf, { W = 1180, H = 720, dark = false
   const n = [Math.sin(rad(B)), Math.cos(rad(B))], rv = [-n[1], n[0]];   // n points out of the wall; rv is the viewer's right (a south face: east)
   const rs = { dot: p => dot(p, rv) };
   const wing = f.kind === "wing" ? f.w : null, levels = (wing?.levels || []).filter(l => l.kote != null).slice().sort((a, b) => a.kote - b.kote);
-  const walls = [], wins = [], bals = [], vols = [], doors = [];
+  const walls = [], bals = [], vols = [], doors = []; let wins = [];
   /* the walls that face this way, each a rectangle: x along the facade, kote from lo to hi, q how far out it stands */
   if (wing) {
     for (const w of facingWalls(site, wing.id, "N", B)) {
@@ -137,9 +137,9 @@ export function facadeDrawing(site, o, wingOf, { W = 1180, H = 720, dark = false
     } else for (const w of walls) wins.push(...ruleWindows(site, wing, w.w, rs, levels));
     /* balconies: a person's own (a balconies edit's parts) and the base's built-in runs unless a person's replace them */
     const near = p => walls.some(w => Math.abs(dot(p, n) - w.q) < 3);
-    if (o.layout) for (const it of o.layout) { const l = levels.find(x => x.name === it.storey); if (l) bals.push({ x0: it.t0 + X0, x1: it.t1 + X0, z0: l.kote - 0.2, z1: l.kote, depth: it.depth, id: it.id, storey: it.storey, built: !!it.built }); }
+    if (o.layout) for (const it of o.layout) { const l = levels.find(x => x.name === it.storey); if (l) bals.push({ x0: it.t0 + X0, x1: it.t1 + X0, z0: l.kote - 0.2, z1: l.kote, depth: it.depth, id: it.id, storey: it.storey, built: !!it.built, support: !!it.support }); }
     else for (const a of site.added || []) if (a.kind === "balconies") for (const p of a.parts || []) if (p.role === "slab" && p.face != null && turn(p.face, B) <= 20) {
-      const xa = dot(p.axis[0], rv), xb = dot(p.axis[1], rv), zs = p.profile.map(q => q[1]); bals.push({ x0: Math.min(xa, xb), x1: Math.max(xa, xb), z0: Math.min(...zs), z1: Math.max(...zs), depth: Math.max(...p.profile.map(q => q[0])), id: `egen:${a.id}:${Math.round(Math.min(xa, xb) * 10)}:${Math.max(...zs)}`, storey: levels.find(l => Math.abs(l.kote - Math.max(...zs)) < 0.011)?.name, built: false });
+      const xa = dot(p.axis[0], rv), xb = dot(p.axis[1], rv), zs = p.profile.map(q => q[1]); bals.push({ x0: Math.min(xa, xb), x1: Math.max(xa, xb), z0: Math.min(...zs), z1: Math.max(...zs), depth: Math.max(...p.profile.map(q => q[0])), id: `egen:${a.id}:${Math.round(Math.min(xa, xb) * 10)}:${Math.max(...zs)}`, storey: levels.find(l => Math.abs(l.kote - Math.max(...zs)) < 0.011)?.name, built: false, support: a.support === true });
     }
     if (!o.layout && !replacesBuiltIn(site)) for (const b of site.buildings.filter(x => x.wing === wing.id)) for (const run of b.balconies || []) {
       const d = [run.to[0] - run.from[0], run.to[1] - run.from[1]], L = Math.hypot(...d);
@@ -147,6 +147,17 @@ export function facadeDrawing(site, o, wingOf, { W = 1180, H = 720, dark = false
       const xa = dot(run.from, rv), xb = dot(run.to, rv);
       for (const l of levels) { const k = parseInt(l.name, 10); if (Number.isFinite(k) && k >= (run.from_storey ?? 1) && k <= (run.to_storey ?? 99) && l.kote <= (run.top ?? 1e9) && walls.some(w => Math.abs(dot(run.from, n) - w.q) < 3 && Math.min(xa, xb) < w.x1 + 0.1 && Math.max(xa, xb) > w.x0 - 0.1 && l.kote >= w.z0 - 0.3 && l.kote <= w.z1)) bals.push({ x0: Math.min(xa, xb), x1: Math.max(xa, xb), z0: l.kote - 0.2, z1: l.kote, depth: run.depth, built: true, storey: l.name, id: `bygd:${l.name}:${Math.round(Math.min(xa, xb) * 10)}` }); }
     }
+    /* dørene lagt på (openings-editene): fra oppsettet mens det redigeres, ellers fra modellens egne endringer; en dør med
+       window skjuler vinduet den står i, så det ikke stikker frem under en dør gjort mindre (matchet på midten, med sikkert
+       grep: langs-målet går gjennom veggenes egen deling, som balkongenes, og kan ligge noen desimeter fra tegningens) */
+    const covered = [];
+    if (o.doors) for (const it of o.doors) { if (it.win) covered.push({ x0: it.win[0] + X0, x1: it.win[1] + X0, z0: it.win[2], z1: it.win[3] }); doors.push({ x0: it.t0 + X0, x1: it.t1 + X0, z0: it.z0, z1: it.z1, id: it.id }); }
+    else for (const a of site.added || []) if (a.kind === "openings") {
+      if (a.covered) for (const w of a.covered) covered.push({ x0: X0 + width - w[1], x1: X0 + width - w[0], z0: w[2], z1: w[3] });
+      for (const p of a.parts || []) if (p.role === "door" && p.face != null && turn(p.face, B) <= 20) { const xa = dot(p.axis[0], rv), xb = dot(p.axis[1], rv), zs = p.profile.map(q => q[1]);
+        doors.push({ x0: Math.min(xa, xb), x1: Math.max(xa, xb), z0: Math.min(...zs), z1: Math.max(...zs), id: `egen:${a.id}:${doors.length}` }); }
+    }
+    wins = wins.filter(g => !covered.some(c => Math.abs((c.x0 + c.x1) / 2 - (g.x0 + g.x1) / 2) < 0.6 && Math.abs((c.z0 + c.z1) / 2 - (g.z0 + g.z1) / 2) < 0.6));
   }
   /* the new buildings in front of this side, or on its roof */
   for (const v of site.added || []) {
@@ -176,7 +187,11 @@ export function facadeDrawing(site, o, wingOf, { W = 1180, H = 720, dark = false
   for (const w of bodies.slice().sort((a, b) => a.q - b.q)) rect(w, mix(C.wallFar, C.wallNear, qs.length > 1 ? qs.indexOf(Math.round(w.q * 10)) / (qs.length - 1) : 1), C.ink, 1.4);
   for (const g of wins) rect({ ...g, x0: g.x0, x1: g.x1 }, C.glass, C.glassLine, 0.8);
   for (const d of doors) rect(d, C.door, C.ink, 1);
-  for (const bl of bals) { rect(bl, (o.selected || []).includes(bl.id) ? C.pillLine : C.slab, null); if (bl.id && o.selected?.includes(bl.id)) rect({ ...bl, z0: bl.z0 - 0.15, z1: bl.z1 + 0.15 }, null, C.pillLine, 2); const y = px(0, bl.z1 + 1.1)[1], a = px(bl.x0 - X0, 0)[0], c = px(bl.x1 - X0, 0)[0]; Ln([a, y], [c, y], C.slab, 1); }
+  for (const bl of bals) { rect(bl, (o.selected || []).includes(bl.id) ? C.pillLine : C.slab, null); if (bl.id && o.selected?.includes(bl.id)) rect({ ...bl, z0: bl.z0 - 0.15, z1: bl.z1 + 0.15 }, null, C.pillLine, 2); const y = px(0, bl.z1 + 1.1)[1], a = px(bl.x0 - X0, 0)[0], c = px(bl.x1 - X0, 0)[0]; Ln([a, y], [c, y], C.slab, 1);
+    /* understøttet: en støtte tegnet under hver ende; ellers, høyt over bakken: én rolig setning under dekket, aldri et stopp */
+    if (bl.support) { const yt = px(0, bl.z0)[1], yb = px(0, bl.z0 - 0.85)[1]; for (const bx of [bl.x0 + 0.2, bl.x1 - 0.9]) { const x = px(bx - X0, 0)[0]; Pg([[x, yt], [x, yb], [x + 0.7 * p, yt]], null, C.slab, 1.6); } }
+    else { const g = gnd.reduce((b, q) => Math.abs(q[0] - (bl.x0 + bl.x1) / 2 + X0) < Math.abs(b[0] - (bl.x0 + bl.x1) / 2 + X0) ? q : b, gnd[0]); if (bl.z0 - g[1] > 6) T([px((bl.x0 + bl.x1) / 2 - X0, bl.z0 - 1.3)[0], px(0, bl.z0 - 1.3)[1]], `Balkongen henger fritt ${fm(bl.z0 - g[1])} m over bakken.`, { fs: 12, col: C.muted, bg: true }); }
+  }
   for (const v of vols) { rect(v, C.vol, C.volLine, 2.2); const q = px((v.x0 + v.x1) / 2 - X0, v.z1); T([q[0], q[1] - 6 - (f.kind === "part" ? 22 : 0)], v.vol.name, { fs: 14, anchor: "m", bold: true, bg: true, col: C.volLine }); }
   for (let i = 1; i < gnd.length; i++) Ln(px(...gnd[i - 1]), px(...gnd[i]), C.ground, 2.4);
   /* storey lines, a name and an editable kote on the left, the heights between them on the right */
@@ -261,7 +276,7 @@ export function facadeDrawing(site, o, wingOf, { W = 1180, H = 720, dark = false
   T([10, 46], `${wins.length ? `${wins.length} vinduer` : "Ingen vinduer tegnet"}${nb ? ` · ${nb} balkonger` : ""}${vols.length && f.kind === "wing" ? ` · ${vols.length} nytt` : ""}`, { fs: 14, col: C.muted });
   { const m = [5, 10, 20, 50].find(v => v * p >= 90) || 50, x = 12, y = H - 14, L = m * p;
     Ln([x, y], [x + L, y], C.ink, 2); Ln([x, y - 5], [x, y + 5], C.ink, 2); Ln([x + L, y - 5], [x + L, y + 5], C.ink, 2); T([x + L + 8, y + 5], `${m} m`, { fs: 13, col: C.muted }); }
-  return { prims, dims, W, H, p, toPx: px, toM, world, say, width_m: width, base_kote: baseLo, top_kote: roofTop, levels: zs, items: bals.filter(b => b.id).map(b => ({ id: b.id, kind: "balkong", x0: r2(b.x0 - X0), x1: r2(b.x1 - X0), z0: r2(b.z0), z1: r2(b.z1), storey: b.storey, depth: b.depth, built: b.built })), windows: wins.length, balconies: nb, volumes: vols.map(v => v.vol.id), sample, paper: C.paper, ink: C.ink,
+  return { prims, dims, W, H, p, toPx: px, toM, world, say, width_m: width, base_kote: baseLo, top_kote: roofTop, levels: zs, items: [...bals.filter(b => b.id).map(b => ({ id: b.id, kind: "balkong", x0: r2(b.x0 - X0), x1: r2(b.x1 - X0), z0: r2(b.z0), z1: r2(b.z1), storey: b.storey, depth: b.depth, built: b.built, support: !!b.support })), ...doors.filter(dd => dd.id).map(dd => ({ id: dd.id, kind: "dør", x0: r2(dd.x0 - X0), x1: r2(dd.x1 - X0), z0: r2(dd.z0), z1: r2(dd.z1) }))], windowRects: wins.map(g => ({ t0: r2(g.x0 - X0), t1: r2(g.x1 - X0), z0: r2(g.z0), z1: r2(g.z1) })), windows: wins.length, balconies: nb, volumes: vols.map(v => v.vol.id), sample, paper: C.paper, ink: C.ink,
     face: { building: f.name, wing: wing?.id ?? null, side: side.name, key: side.key, bearing: B, origin: world(0, 0).slice(0, 2), along: rv.map(v => Math.round(v * 1e4) / 1e4), out: n.map(v => Math.round(v * 1e4) / 1e4), width_m: width, base_kote: baseLo, top_kote: roofTop }, sides, focus: f.kind === "wing" ? f.w.id : f.v.id };
 }
 const ruleOnly = (site, wing, walls, n) => !(site.facades || []).some(fc => fc.building === wing?.id && Math.abs(dot([fc.to[0] - fc.from[0], fc.to[1] - fc.from[1]], n)) < 0.2 * Math.hypot(fc.to[0] - fc.from[0], fc.to[1] - fc.from[1]) && walls.some(w => Math.abs(dot(fc.from, n) - w.q) < 3));
@@ -339,11 +354,28 @@ export const initialLayout = d => d.items.filter(i => i.built).map(i => ({ id: i
    seen from outside (design.js balconyParts measures it along the wall's own run, which goes toward the viewer's left), so t is turned: width - t */
 export function layoutEdits(face, wing, layout, rev = Date.now()) {
   const set = balconySet(face.bearing), why = "balkongene lagt på fasadetegningen", base = { kind: "balconies", wing, face: face.bearing, set, rev, why };
-  return [{ ...base, remove: true }, ...layout.map(it => ({ ...base, from_storey: it.storey, to_storey: it.storey, along: [r2(Math.max(0, face.width_m - it.t1)), r2(face.width_m - it.t0)], depth: it.depth, exact: true, railing: "glass" }))];
+  return [{ ...base, remove: true }, ...layout.map(it => ({ ...base, from_storey: it.storey, to_storey: it.storey, along: [r2(Math.max(0, face.width_m - it.t1)), r2(face.width_m - it.t0)], depth: it.depth, exact: true, railing: "glass", ...(it.support ? { support: true } : {}) }))];;
 }
 /* the layout the draft already carries for this facade (the newest rev of its set), else null */
 export function layoutFromEdits(edits, face) {
   const set = balconySet(face.bearing), mine = edits.filter(e => e.kind === "balconies" && e.set === set && !e.remove), rev = Math.max(0, ...mine.map(e => e.rev ?? 0));
   const cur = mine.filter(e => (e.rev ?? 0) === rev); if (!edits.some(e => e.kind === "balconies" && e.set === set && e.remove)) return null;
-  return cur.map((e, i) => ({ id: `egen:${i}:${e.from_storey}`, storey: e.from_storey, t0: r2(face.width_m - e.along[1]), t1: r2(face.width_m - e.along[0]), depth: e.depth }));
+  return cur.map((e, i) => ({ id: `egen:${i}:${e.from_storey}`, storey: e.from_storey, t0: r2(face.width_m - e.along[1]), t1: r2(face.width_m - e.along[0]), depth: e.depth, ...(e.support ? { support: true } : {}) }));
+}
+
+/* ---------- the doors as items: a layout of one facade, and the edits that make it (the openings edit, design.js) ---------- */
+export const doorSet = B => `apninger-${B}`;
+/* the layout as openings edits: the remove edit takes the person's own doors of the set away (his «Tilbakestill»), then one exact door each.
+   along and window count from the facade's RIGHT end seen from outside (as the balconies edit does), so t is turned: width - t.
+   win is the door's own window [t0, t1, z0, z1] in t metres; the edit carries it in along metres, so the drawing finds it again */
+export function openingsEdits(face, wing, doors, rev = Date.now()) {
+  const set = doorSet(face.bearing), why = "dørene lagt på fasadetegningen", base = { kind: "openings", wing, face: face.bearing, set, rev, why }, toAlong = w => [r2(Math.max(0, face.width_m - w[1])), r2(face.width_m - w[0])];
+  return [{ ...base, remove: true }, ...doors.map(it => ({ ...base, along: toAlong([it.t0, it.t1]), sill: r2(it.z0), head: r2(it.z1), ...(it.win ? { window: [...toAlong([it.win[0], it.win[1]]), r2(it.win[2]), r2(it.win[3])] } : {}) }))];
+}
+/* the layout the draft already carries for this facade (the newest rev of its set), else null; win turned back to t metres */
+export function openingsFromEdits(edits, face) {
+  const set = doorSet(face.bearing), mine = edits.filter(e => e.kind === "openings" && e.set === set);
+  if (!mine.some(e => e.remove === true)) return null;
+  const rev = Math.max(0, ...mine.map(e => e.rev ?? 0));
+  return mine.filter(e => (e.rev ?? 0) === rev && e.remove !== true).map(e => ({ id: `dør:${e.along[0]}:${e.sill}`, t0: r2(face.width_m - e.along[1]), t1: r2(face.width_m - e.along[0]), z0: e.sill, z1: e.head, ...(e.window ? { win: [r2(face.width_m - e.window[1]), r2(face.width_m - e.window[0]), e.window[2], e.window[3]] } : {}) }));
 }
