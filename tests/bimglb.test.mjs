@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BIM, readGlb } from "../public/bimglb.js";
+import { BIM, BIM_EXTRA, readGlb } from "../public/bimglb.js";
 import { gzipSync } from "node:zlib";
 import { MATERIALS, CLASS_MAT } from "../public/renderkit/materials.js";
 import { parseIfc } from "../ifcfilter.mjs";
@@ -80,4 +80,13 @@ test("U3656: greenhouse glass stays see-through, the windows of a facade wear th
   assert.equal(MATERIALS.glass.look.transparent, true); assert.ok(MATERIALS.glass.look.opacity < 0.6);
   assert.equal(CLASS_MAT.IfcWindow, "window_glass"); assert.equal(CLASS_MAT.IfcPlate, "glass");
   assert.notEqual(MATERIALS.window_glass.look.transparent, true);
+});
+
+test("the built-in balconies are a file of their own: 13 slabs and 13 railings, a box of 12 triangles each, so a person's balconies can replace them", () => {
+  const parts = readGlb(buf("public/" + BIM_EXTRA.sentralblokka)), by = Object.fromEntries(parts.map(p => [p.material, p]));
+  assert.deepEqual(Object.keys(by).sort(), ["concrete", "steel"]);
+  assert.equal(by.concrete.indices.length / 3, 13 * 12); assert.equal(by.steel.indices.length / 3, 13 * 12);
+  const main = readGlb(buf("public/" + BIM.sentralblokka)), ys = [...by.concrete.positions].filter((_, i) => i % 3 === 1);
+  assert.ok(Math.min(...ys) > 19.9 && Math.max(...ys) <= 65.7, "from the 2nd storey's floor to the 14th");
+  assert.equal(ifcCount("Sentralblokka", "IFCRAILING"), 13); assert.ok(main.find(p => p.material === "steel"));
 });

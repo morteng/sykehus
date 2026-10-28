@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { parseIfc, withoutBuildings, stepText } from "../ifcfilter.mjs";
 import { applyEdits } from "../public/edits.js";
 import { readGlb } from "../public/bimglb.js";
+import { facadeNames, faceAlias, replacesBuiltIn } from "../public/design.js";
 
 const read = f => readFileSync(new URL("../" + f, import.meta.url));
 const site = JSON.parse(read("public/data/site.json")), floors = JSON.parse(read("public/data/floors.json")).floors;
@@ -56,12 +57,26 @@ test("the model has no window on the south-west end, and still has them on the o
 
 import { checkEdit } from "../public/edits.js";
 const named = (p, type, name) => [...p.ents.values()].filter(e => e.type === type && stepText(/^'[^']*',[^,]*,'((?:[^']|'')*)'/.exec(e.args)?.[1] || "") === name);
-const SLABS = (m, face) => m.site.added.flatMap(a => a.parts).filter(p => p.role === "slab" && p.face === face);
+const SLABS = (m, face) => (m.site.added || []).flatMap(a => a.parts).filter(p => p.role === "slab" && p.face === face);
 const onBack = p => p.axis.every(q => { const [t, s] = ts(q); return t > 7.9 && t < 20.1 && Math.abs(s + 2) < 0.15; });   // the recess back face: 2 m in, between the side parts
-test("the base model has no balcony (the real building has none there), and no balcony part at the SW end", () => {
-  assert.equal(sb.balconies, undefined);
-  assert.equal(named(base, "IFCSLAB", "Balkongdekke").length, 0); assert.equal([...base.ents.values()].filter(e => e.type === "IFCRAILING").length, 0);
-  assert.equal(applyEdits(site, floors, []).site.added?.length ?? 0, 0, "a version with no balconies edit has no added part");
+test("the base model has the balconies the photos show: a slab and a railing on each of storeys 2 to 14 on the recess back wall", () => {
+  assert.equal(sb.balconies.length, 1); assert.deepEqual([sb.balconies[0].from_storey, sb.balconies[0].to_storey, sb.balconies[0].depth], [2, 14, 1.8]);
+  assert.equal(named(base, "IFCSLAB", "Balkongdekke").length, 13); assert.equal(named(base, "IFCRAILING", "Rekkverk").length, 13);
+  assert.equal(replacesBuiltIn(applyEdits(site, floors, []).site), false, "no edit: the built-in run stands");
+});
+
+test("a person's balconies edit on that wall replaces the built-in run, never stands on top of it: no edit 13 slabs, an edit on midten or with other bay and gap none of the built-in", () => {
+  const drop = [["IFCSLAB", "Balkongdekke"], ["IFCRAILING", "Rekkverk"]], count = (edits, face) => {
+    const m = applyEdits(site, floors, edits.map(x => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", from_storey: "2", to_storey: "14", ...x }))), r = replacesBuiltIn(m.site);
+    const after = parseIfc(withoutBuildings(base, [], r ? drop : []).text);
+    return { replaced: r, builtIn: named(after, "IFCSLAB", "Balkongdekke").length, rails: named(after, "IFCRAILING", "Rekkverk").length, added: SLABS(m, face).length };
+  };
+  assert.deepEqual(count([], 210), { replaced: false, builtIn: 13, rails: 13, added: 0 });
+  assert.deepEqual(count([{ part: "midten" }], 210), { replaced: true, builtIn: 0, rails: 0, added: 65 });
+  assert.deepEqual(count([{ face: "sørsiden", bay: 3, gap: 1 }], 210).replaced, true);
+  assert.equal(count([{ face: "sørsiden", bay: 3, gap: 1 }], 210).builtIn, 0);
+  assert.deepEqual(count([{ face: 120 }], 120).replaced, false, "balconies on the east side leave the built-in run");
+  assert.deepEqual(count([{ face: 210, along: [0, 8] }], 210).replaced, false, "only the left pier: the recess run stays");
 });
 
 test("a balconies edit on face 210 (wish wxp5aF4qJLt) stands on the recess back wall, storeys 2 to 14, though the walls are blind", () => {
@@ -93,7 +108,7 @@ test("a version that tears everything else down keeps the corrected block, and a
   assert.ok(SLABS(applyEdits(site, floors, [{ kind: "demolish", building: "alle" }, { kind: "restore", building: "Sentralblokka" }, e]), 210).filter(onBack).length > 0);
 });
 
-import { facadeNames, faceAlias } from "../public/design.js";
+
 test("«sørsiden» of Sentralblokka is face 210, and the other sides have their names from their bearings; other wings are as they were", () => {
   assert.deepEqual(facadeNames(site, "sentralblokka").map(f => [f.bearing, f.name]).sort((a, b) => a[0] - b[0]),
     [[30, "nordsiden"], [120, "østsiden"], [210, "sørsiden"], [300, "vestsiden"]]);
@@ -127,4 +142,13 @@ test("along: [t0, t1] limits a balconies edit to metres along the facade from it
   assert.equal(some.length % 13, 0, "the same on each storey");
   assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, along: [5, 2] }), /along er/);
   assert.throws(() => checkEdit(site, floors, { kind: "balconies", wing: "Sentralblokka", face: 210, along: [40, 50] }), /ingen fasade/);
+});
+
+test("the long faces' windows: none in the ground storey, a blind strip from the end's corner (26 m east, 7.5 m west), the grid after it", () => {
+  const w = windowCentres(), axial = c => -ts(c)[1], t = c => ts(c)[0];
+  assert.equal(w.filter(c => c[2] < 20.28).length, 0, "no window below the 2nd storey (pilotis)");
+  const east = w.filter(c => t(c) < 1 && axial(c) > 1), west = w.filter(c => t(c) > 26.5 && axial(c) > 1);
+  assert.equal(east.filter(c => axial(c) < 26).length, 0, "east strip"); assert.ok(east.filter(c => axial(c) < 29).length > 0 && east.length > 200, `east ${east.length}`);
+  assert.equal(west.filter(c => axial(c) < 7.5).length, 0, "west strip"); assert.ok(west.filter(c => axial(c) < 13).length > 0 && west.length > 200, `west ${west.length}`);
+  assert.equal(new Set(w.map(c => Math.round(c[2] / 3.76))).size, 13, "one row a storey, from the 2nd to the 14th");
 });

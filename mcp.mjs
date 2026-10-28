@@ -28,7 +28,7 @@ import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good s
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
 import { needsExpand, expandChange, briefOf, CASTLE } from "./editkit.mjs";   // move, turn, copy, group, castle parts, the short list
-import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, facadeNames, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, overhangOf, roofOf, roofSay, roofCollisions, measureParts, checkFit, stampVolumeIds, nextVolumeId, deadEdits } from "./public/design.js";
+import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, facadeNames, replacesBuiltIn, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, overhangOf, roofOf, roofSay, roofCollisions, measureParts, checkFit, stampVolumeIds, nextVolumeId, deadEdits } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
@@ -1331,7 +1331,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
       /* the balconies are the worker's part (U3690): one run a size, each written in where it stands */
       const parts = new Map(); for (const [size, { width, depth }] of balconySizes(m.site)) parts.set(size, readPart(await partIfc("balcony", { width, depth, door: false })));
-      body = Buffer.from(withAdded(withoutBuildings(base, gone).text, base, m.site, site, parts).text, "utf8");
+      body = Buffer.from(withAdded(withoutBuildings(base, gone, replacesBuiltIn(m.site) ? [["IFCSLAB", "Balkongdekke"], ["IFCRAILING", "Rekkverk"]] : []).text, base, m.site, site, parts).text, "utf8");
       if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
     }
     return body;

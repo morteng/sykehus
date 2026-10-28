@@ -19,9 +19,9 @@ import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
 import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
 import { texturedMaterial, worldUV, skyEnvironment } from "./renderkit/materials-three.js";
 import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
-import { bimPlace } from "./design.js";
+import { bimPlace, replacesBuiltIn } from "./design.js";
 import { planAdded, addedKey } from "./added-cache.js";
-import { BIM, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
+import { BIM, BIM_EXTRA, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
 import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
 import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
 import { createSkyBodies } from "./skybodies.js";   // the sun's disc and the moon in the sky, visual only
@@ -287,8 +287,9 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   }
   function loadBim(b, grp) {
-    fetch(BIM[b.wing]).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))).then(async buf => {
-      const old = [...grp.children], parts = readGlb(buf), cutPlane = [cuts.get(b.id)];
+    const files = [BIM[b.wing], ...(BIM_EXTRA[b.wing] && !replacesBuiltIn(site) ? [BIM_EXTRA[b.wing]] : [])];   // the built-in balconies, unless a balconies edit stands on them
+    Promise.all(files.map(f => fetch(f).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))).then(async bufs => {
+      const old = [...grp.children], parts = bufs.flatMap(buf => [...readGlb(buf)]), cutPlane = [cuts.get(b.id)];
       const pic = Q.pbr && MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, clippingPlanes: cutPlane } }).catch(() => null) : null;
       for (const p of parts) {
         const glass = p.material === "window_glass", M = MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};

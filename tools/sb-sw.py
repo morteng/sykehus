@@ -1,4 +1,4 @@
-"""Sentralblokka's south-west end (210°) as it is built: the middle part steps in, it has no windows, and (Morten's correction) no balconies (the wishes of 2026-10-28: wRkafPSR5DS, w6_3xCgLV3U, wrAHKl9gB-e, wxp5aF4qJLt). tools/massing.py
+"""Sentralblokka's south-west end (210°) as it is built: the middle part steps in, it has no windows, and a balcony on each storey (the wishes of 2026-10-28: wRkafPSR5DS, w6_3xCgLV3U, wrAHKl9gB-e, wxp5aF4qJLt). tools/massing.py
 took the end from the laser, which saw a 6 x 2 m box standing out in the middle at roof 66.41; that box is not there. Run this
 after massing.py when site.json is rebuilt (the numbers below are the massing's own, on its 1 m grid); it is safe to run twice.
 
@@ -9,8 +9,10 @@ What it does to buildings[sentralblokka]:
     parts' face: the middle part is recessed, side to side;
   - writes `blind`: the walls with no windows (every wall of this end, and the recess's two side faces); tools/ifc.py gives
     them none of the bay rule's windows (a rule, where no drawing of the facade exists);
-  - builds no balconies: the real building has none there (Morten 2026-10-28). `blind` means no windows and nothing else; a person's
-    own balconies edit (face 210) stands on the recess back wall as on any wall.
+  - writes `balconies`: one run along the back face, storeys 2 to 14, a slab and a railing a floor (tools/ifc.py); a person's own
+    balconies edit on that wall replaces it (design.js replacesBuiltIn);
+  - writes `window_rule`: no windows below the 2nd storey, a blind strip from the end's corner on each long face (tools/ifc.py);
+  - writes `parts.midten`, the recess back wall, for balconies edits (part: "midten").
 Then regenerate the model: tools/ifc.py (sykehus.ifc) and tools/glb.py (hoyblokka.glb)."""
 import sys, json, math
 
@@ -20,6 +22,7 @@ GONE_WALLS = [[-33.07, -35.94, -32.01, -34.24], [-37.1, -31.06, -38.16, -32.76],
 BACK = [-29.46, -35.83, -39.64, -29.47]   # the joined back face, ground to the roof (69.91): the 14th floor (65.64) must have a wall to put a balcony on
 RING_GONE = [[-32.2, -34.13], [-33.28, -35.79], [-37.94, -32.8], [-36.87, -31.15]]   # the outline's corners round the box
 END = (-35.0, -31.0)   # the end's middle, site m
+DEPTH = 1.8   # a balcony slab (m): nearly the recess depth (2 m), the front edge close to the side parts (photo, straight on)
 SW_BEARING = (200, 220)   # a wall whose outward normal bears this way is at the south-west end
 
 def same(a, b): return all(abs(x - y) < 0.011 for x, y in zip(a, b))
@@ -50,7 +53,12 @@ def patch(site):
     sides = [w for w in b["walls"] if abs(math.hypot(w[2] - w[0], w[3] - w[1]) - 2) < 0.1 and any(math.hypot(w[i] - e[0], w[i + 1] - e[1]) < 0.6 for i in (0, 2) for e in ends)]
     b["blind"] = [list(t) for t in sorted({tuple(w[:4]) for w in sw + sides})]
     b["parts"] = {"midten": {"face": 210, "walls": [BACK]}}   # the recessed middle of the sørsiden: balconies edits take part: "midten"
-    b.pop("balconies", None)   # an earlier version of this script wrote a run of them
+    # Morten's photos (2026-10-28): the real building HAS balconies on the recessed middle, a slab on each of storeys 2 to 14
+    b["balconies"] = [{"from": BACK[:2], "to": BACK[2:], "depth": DEPTH, "from_storey": 2, "to_storey": 14, "top": 69.91,
+                       "src": "foto 2026-10-28 (sørsiden rett forfra og skrått): innsnittet har en betongplate og rekkverk i hver etasje 2–14; dybden antatt"}]
+    # the long faces' windows: none in the ground storey (open on columns under the canopy), a blind strip next to the end's corner,
+    # measured off the photos of the west (7.5 m) and east (26 m) faces: rough, perspective, not drawn
+    b["window_rule"] = {"from_kote": 20.28, "end_origin": [-23.74, -41.77], "end_out": [-0.53, -0.8475], "end_width_m": 27.5, "blind_from_end_m": {"120": 26, "300": 7.5}}
     return b
 
 if __name__ == "__main__":

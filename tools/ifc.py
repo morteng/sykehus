@@ -33,8 +33,9 @@ import ifcopenshell.api.root, ifcopenshell.api.unit, ifcopenshell.api.context, i
 import ifcopenshell.api.spatial, ifcopenshell.api.pset, ifcopenshell.api.feature, ifcopenshell.api.classification, ifcopenshell.api.material, ifcopenshell.api.type
 
 T_WALL, T_SLAB = 0.35, 0.30
+RAIL = 1.1   # a balcony railing's height, m (assumed)
 # the building parts as NS 3451:2022 names them (two digits where the drawings cannot say bearing or not)
-NS3451 = {"222": "Søyler", "23": "Yttervegger", "234": "Vinduer, dører, porter", "24": "Innervegger", "25": "Dekker", "26": "Yttertak"}
+NS3451 = {"222": "Søyler", "23": "Yttervegger", "234": "Vinduer, dører, porter", "24": "Innervegger", "25": "Dekker", "26": "Yttertak", "28": "Trapper, balkonger, ramper"}
 MATERIAL_CATEGORY = {"Betong": "concrete", "Murverk": "masonry"}   # IFC4's own words for them
 MAT_KEY = {"Betong": "concrete"}   # an envelope wing: site.json's word for its material -> the key of public/renderkit/materials.js
 # the wings drawn as a model from the start (U3637: the high block first): their windows from the bay rule, their materials from
@@ -187,6 +188,23 @@ def build(site, floors, only=None, envelope=ENVELOPE):
                 put(b["base"], e); pset(e, "Pset_ColumnCommon", {"IsExternal": True, "LoadBearing": True, "Status": "EXISTING"})
                 qto(e, "Qto_ColumnBaseQuantities", {"Length": hc, "CrossSectionArea": size * size, "GrossVolume": size * size * hc})
                 ns(e, "222"); of(e, mats.get("columns"), mhow)
+            for bal in b.get("balconies", []):   # a run of balcony along a wall (site.json balconies, tools/sb-sw.py): a slab at each storey's floor and a railing at its edge
+                (ax, ay), (bx, by) = bal["from"], bal["to"]; L = math.hypot(bx - ax, by - ay); d = ((bx - ax) / L, (by - ay) / L); out = (d[1], -d[0]); D = bal["depth"]
+                if any(inside(((ax + bx) / 2 + out[0] * 0.5, (ay + by) / 2 + out[1] * 0.5), r) for r in blocks): out = (-out[0], -out[1])   # out is the side no block is on
+                far = lambda s: [(ax + out[0] * s, ay + out[1] * s), (bx + out[0] * s, by + out[1] * s)]
+                for l, s in storeys:
+                    num = l["name"].split(".")[0]
+                    if not (num.isdigit() and bal.get("from_storey", 1) <= int(num) <= bal.get("to_storey", 99)): continue
+                    z, bsrc = l["kote"], bal.get("src", "")
+                    e = element("IfcSlab", "Balkongdekke", [(ax, ay), (bx, by)] + far(D)[::-1], z - T_SLAB, T_SLAB, bsrc, "antatt", predefined_type="FLOOR")
+                    contained.setdefault(s, []).append(e); counts["balcony"] = counts.get("balcony", 0) + 1
+                    pset(e, "Pset_SlabCommon", {"IsExternal": True, "Status": "EXISTING"})
+                    qto(e, "Qto_SlabBaseQuantities", {"Depth": T_SLAB, "Perimeter": 2 * (L + D), "GrossArea": L * D, "GrossVolume": L * D * T_SLAB})
+                    ns(e, "28"); of(e, mats.get("slabs"), mhow)
+                    h = min(RAIL, bal.get("top", z + RAIL) - z)   # the railing at the edge, 1.1 m, to no higher than the recess's roof
+                    if h < 0.3: continue
+                    r = element("IfcRailing", "Rekkverk", far(D - 0.05) + far(D)[::-1], z, h, bsrc, "antatt", predefined_type="GUARDRAIL")
+                    contained.setdefault(s, []).append(r); pset(r, "Pset_RailingCommon", {"IsExternal": True, "Height": h, "Status": "EXISTING"}); ns(r, "28"); of(r, "steel", mhow)
 
         # openings: each window or door of a drawn facade, cut into the outer walls it stands in
         # the high block has no facade drawing with its windows: its windows are the bays the page paints (public/bays.js), a row a
@@ -197,6 +215,14 @@ def build(site, floors, only=None, envelope=ENVELOPE):
             keys = [(b["id"], wi, (x0, y0, x1, y1), b.get("lift", b["base"]) if lo is None else lo, hi, b["base"]) for b in bs for wi, (x0, y0, x1, y1, lo, hi) in enumerate(b.get("walls", [])) if not blind(b, (x0, y0, x1, y1))]
             bands = [(l["kote"], (levels[i + 1]["kote"] if i + 1 < len(levels) else max(b["top"] for b in bs))) for i, l in enumerate(levels)]
             bay = js_bays([list(k[2]) for k in keys], [l["kote"] for l in levels], base, max(b["top"] for b in bs) - base)
+            def far_from_corner(w, u, rule):   # True when the window at u m along wall w stands outside the blind strip next to the end's corner (site.json window_rule)
+                (x0, y0, x1, y1), L = w, math.hypot(w[2] - w[0], w[3] - w[1]); px, py = x0 + (x1 - x0) / L * u, y0 + (y1 - y0) / L * u
+                (ox, oy), (nx, ny) = rule["end_origin"], rule["end_out"]
+                axial = -((px - ox) * nx + (py - oy) * ny)   # m in from the end's plane
+                if abs((x1 - x0) * nx + (y1 - y0) * ny) < 0.7 * L: return True   # a wall across the building (an end, a step), not a long face: no strip
+                t = (px - ox) * ny - (py - oy) * nx   # along the end, from its east corner
+                return axial >= rule["blind_from_end_m"]["120" if t < rule["end_width_m"] / 2 else "300"]
+            rule = next((b["window_rule"] for b in bs if b.get("window_rule")), None)
             for k, spans in zip(keys, bay["spans"]):
                 ops = []
                 for s0 in spans:
@@ -205,6 +231,7 @@ def build(site, floors, only=None, envelope=ENVELOPE):
                         for l, t, rt, bt in bay["windows"]:
                             z0, z1 = top - bt, top - t
                             # only a window that stands inside one storey, and inside the wall (never over a floor, never past the roof)
+                            if rule and not (z0 >= rule["from_kote"] and far_from_corner(k[2], s0 + (l + rt) / 2, rule)): continue   # a pilotis storey with none, a blind strip at the corner
                             if z0 >= k[3] and z1 <= k[4] - 0.3 and any(lo_ <= z0 and z1 <= hi_ for lo_, hi_ in bands): ops.append({"kind": "window", "u": [round(s0 + l, 3), round(s0 + rt, 3)], "z": [round(z0, 3), round(z1, 3)]})
                 if ops: by_bay.append({"building": w["id"], "from": k[2][:2], "to": k[2][2:], "openings": ops, "src": ["fasaderegelen (public/bays.js): vinduene i hver bukt"], "how": "regel, ikke målt", "wall": (k[0], k[1])})
         for f in [f for f in site.get("facades", []) if f["building"] == w["id"]] + by_bay:

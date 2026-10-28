@@ -480,6 +480,15 @@ export function windowBays(site, wing) {
     const b = site.buildings.find(x => x.wing === wing);
     return bays ? { face: f.bearing, length_m: f.length_m, bays, bay_m: BAY, picture: b && kindOf(b) === "tower" ? "par av vinduer i en nisje" : "vindusbånd" } : null; }).filter(Boolean);
 }
+/* the balconies the wing was built with (site.json balconies: a run along a wall, a slab and a railing a floor in the base model) are replaced
+   by a person's own balconies edit that stands on that wall: true when any added balcony slab lies on a built-in run, so the base's are left out
+   (the page does not draw them, the IFC does not write them) and nothing is there twice */
+export function replacesBuiltIn(site) {
+  const runs = (site.buildings || []).flatMap(b => b.balconies || []);
+  if (!runs.length) return false;
+  const near = (p, r) => { const [ax, ay] = r.from, [bx, by] = r.to, L2 = (bx - ax) ** 2 + (by - ay) ** 2, t = Math.max(0, Math.min(1, ((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / L2)); return Math.hypot(p[0] - (ax + t * (bx - ax)), p[1] - (ay + t * (by - ay))) < 0.4; };
+  return (site.added || []).filter(a => a.kind === "balconies").flatMap(a => a.parts || []).some(p => p.role === "slab" && p.axis.every(q => runs.some(r => near(q, r))));
+}
 /* pm 11:35Z: the facades a balconies edit puts balconies on (bearings), so a later one on the same face replaces it */
 export function balconyFaces(site, e) {
   const faces = new Map(); balconyParts(site, e, new Set(), new Map(), faces);

@@ -37,19 +37,22 @@ def frame(v):
         F += [[o + i, o + (i + 1) % 4, o + 4 + i] for i in range(4)] + [[o + (i + 1) % 4, o + 4 + (i + 1) % 4, o + 4 + i] for i in range(4)]
     return np.array(V), np.array(F, dtype=np.uint32).reshape(-1)
 
-def triangles(m):
-    """{material key: (positions Nx3 float32 in glTF axes, indices uint32)} from the model's own geometry, openings cut"""
+def triangles(m, balconies=False):
+    """{material key: (positions Nx3 float32 in glTF axes, indices uint32)} from the model's own geometry, openings cut. The wing's built-in
+    balconies (IfcSlab "Balkongdekke", IfcRailing "Rekkverk") are a file of their own (balconies=True): a person's own balconies edit
+    replaces them, and the page then leaves that file out"""
     s = ifcopenshell.geom.settings(); s.set("use-world-coords", True)
     it = ifcopenshell.geom.iterator(s, m, 4)
     mats = classes()   # the library's say (renderkit materials.js CLASS_MAT): a window's glazing, a member's frame, the rest concrete
-    parts = {k: [] for k in sorted({"concrete", mats["IfcWindow"], mats["IfcMember"]})}
+    parts = {k: [] for k in sorted({"concrete", mats["IfcWindow"], mats["IfcMember"], mats["IfcRailing"]})}
     if it.initialize():
         while True:
             sh = it.get(); g = sh.geometry
             v = np.array(g.verts, dtype=np.float64).reshape(-1, 3); f = np.array(g.faces, dtype=np.uint32).reshape(-1)
-            cls = m.by_id(sh.id).is_a()
-            if len(f) and cls not in SKIP: parts[mats["IfcWindow"] if cls == "IfcWindow" else "concrete"].append((v, f))
-            if len(f) and cls == "IfcWindow": parts[mats["IfcMember"]].append(frame(v))
+            el = m.by_id(sh.id); cls = el.is_a()
+            if (cls in ("IfcSlab", "IfcRailing") and el.Name in ("Balkongdekke", "Rekkverk")) != balconies: pass
+            elif len(f) and cls not in SKIP: parts[mats["IfcWindow"] if cls == "IfcWindow" else mats["IfcRailing"] if cls == "IfcRailing" else "concrete"].append((v, f))   # a balcony's railing is steel
+            if len(f) and cls == "IfcWindow" and not balconies: parts[mats["IfcMember"]].append(frame(v))
             if not it.next(): break
     out = {}
     for k, ps in parts.items():
@@ -95,3 +98,7 @@ if __name__ == "__main__":
     parts = triangles(m)
     open(out, "wb").write(glb(parts, len(m.by_type("IfcWindow"))))
     print({k: (len(p), len(i) // 3) for k, (p, i) in parts.items()}, "->", out)
+    bal = triangles(m, balconies=True)   # the built-in balconies: public/bimglb.js BIM_EXTRA
+    if bal:
+        out2 = out[:-4] + "-balkonger.glb"; open(out2, "wb").write(glb(bal, 0))
+        print({k: (len(p), len(i) // 3) for k, (p, i) in bal.items()}, "->", out2)

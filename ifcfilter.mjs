@@ -22,10 +22,12 @@ export function parseIfc(text) {
 }
 
 /* the buildings' names (as the wings are named) to take out → the file without them */
-export function withoutBuildings(parsed, names) {
+export function withoutBuildings(parsed, names, elements = []) {
   const { lines, ents } = parsed, want = new Set(names);
   const nameOf = e => stepText((/^'(?:[^']|'')*',[^,]*,'((?:[^']|'')*)'/.exec(e.args) || [])[1] || "");
-  const roots = [...ents].filter(([, e]) => e.type === "IFCBUILDING" && want.has(nameOf(e))).map(([id]) => id);
+  const roots = [...ents].filter(([, e]) => e.type === "IFCBUILDING" && want.has(nameOf(e))).map(([id]) => id), nBuildings = roots.length;
+  /* elements = [[«IFCSLAB», «Balkongdekke»], …]: single elements to take out too (the built-in balconies a person's own replace) */
+  for (const [id, e] of ents) if (elements.some(([t, n]) => e.type === t && nameOf(e) === n)) roots.push(id);
   if (!roots.length) return { text: lines.join("\n"), removed: [] };
   /* down from each building: what it aggregates and contains, an element's openings, what fills them */
   const down = new Map(), add = (a, b) => { if (!down.has(a)) down.set(a, []); down.get(a).push(b); };
@@ -55,5 +57,5 @@ export function withoutBuildings(parsed, names) {
   const kept = reach([...ents.keys()].filter(id => !off.has(id) && !theirs.has(id)), off);
   for (const id of theirs) if (!kept.has(id)) off.add(id);
   const text = lines.filter((l, i) => { const m = /^#(\d+)=/.exec(l); return !m || !off.has(+m[1]); }).map(l => { const m = /^#(\d+)=([A-Z0-9_]+)\(/.exec(l); return m && out.has(+m[1]) ? `#${m[1]}=${m[2]}(${out.get(+m[1])});` : l; }).join("\n");
-  return { text, removed: roots.map(id => nameOf(ents.get(id))), entities: off.size };
+  return { text, removed: roots.slice(0, nBuildings).map(id => nameOf(ents.get(id))), removed_elements: roots.length - nBuildings, entities: off.size };
 }

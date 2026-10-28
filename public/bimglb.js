@@ -2,6 +2,8 @@
    (tools/ifc.py ENVELOPE names the same wings; tests/bimglb.test.mjs holds the two together). And the small reader of that GLB:
    per material, float32 positions (x east, y up as kote, z -north; stored as int16 on one box) and 16- or 32-bit indices. Not a general glTF loader. */
 export const BIM = { sentralblokka: "data/hoyblokka.glb" };
+/* the wing's built-in balconies, a file of their own: a person's balconies edit on that wall replaces them (design.js replacesBuiltIn), and the page leaves this file out */
+export const BIM_EXTRA = { sentralblokka: "data/hoyblokka-balkonger.glb" };
 
 export function readGlb(buf) {
   const dv = new DataView(buf);
