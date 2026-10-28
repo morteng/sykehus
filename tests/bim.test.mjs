@@ -91,12 +91,47 @@ test("prepare: a construction runs in the worker, stands where the page draws it
   } finally { w.close(); }
 });
 
+/* Borg: a plateau graded to 15.5, a tower on it whose own pad later reads 11 in the after's terrain */
+test("prepare: a reshape keeps the ground it stood on or was sent; the ground before the building's own pad counts", async () => {
+  process.env.SYKEHUS_VERSIONS_DIR = mkdtempSync(join(tmpdir(), "bim-"));
+  const w = await fakeWorker(() => ({ state: "done", result: { ok: 1 }, files: { "mesh.json": "/jobs/x/files/mesh.json", "model.ifc": "/jobs/x/files/model.ifc" } }));
+  process.env.SYKEHUS_WORKER = w.url;
+  const grid = z => ({ x0: -200, y1: 100, res: 100, w: 4, h: 4, z: new Array(16).fill(z) });
+  const padded = { ...site, terrain: grid(11), terrain0: grid(15.5) };
+  try {
+    const { prepare } = await import("../bim.mjs");
+    const tower = await prepare({ kind: "construction", name: "Tårn", from: [-10, -80], to: [10, -80], script: "print('tower')", params: { floors: 3, ground: 15.5 } }, site);
+    assert.equal(tower.bim.params.ground, 15.5); assert.equal(tower.base_kote, 15.5);
+    const m = applyEdits(site, floors, add([], tower)), added = { ...padded, added: m.site.added };
+    const re = await prepare({ kind: "reshape", id: m.site.added[0].id, params: { floors: 4 } }, added);
+    assert.equal(re.bim.params.floors, 4); assert.equal(re.bim.params.ground, 15.5, "a shape change keeps the ground, not the 11 of its own pad");
+    const sent = await prepare({ kind: "reshape", id: m.site.added[0].id, params: { floors: 5, ground: 14 } }, added);
+    assert.equal(sent.bim.params.ground, 14, "a ground sent with the reshape is kept"); assert.equal(sent.base_kote, 14, "and the page stands it there");
+    const kote = await prepare({ kind: "reshape", id: m.site.added[0].id, params: { floors: 6 }, base_kote: 13 }, added);
+    assert.equal(kote.bim.params.ground, 13);
+    const moved = await prepare({ kind: "reshape", id: m.site.added[0].id, from: [-10, -40], to: [10, -40] }, added);
+    assert.equal(moved.bim.params.ground, 15.5, "a move looks the ground up again, in the terrain before the pads");
+    const fresh = await prepare({ kind: "construction", name: "Tårn 2", from: [-10, -40], to: [10, -40], script: "print('tower2')", params: {} }, padded);
+    assert.equal(fresh.bim.params.ground, 15.5, "a new one stands on the plateau, not on the pads in the after's grid");
+  } finally { w.close(); }
+});
+
 test("prepare: the worker's failure in plain words, with the script's line", async () => {
   const w = await fakeWorker(() => ({ state: "failed", errors: [{ code: "script_error", line: 7, message: "NameError: name 'math' is not defined" }], log: "Traceback …\nNameError: name 'math' is not defined" }));
   process.env.SYKEHUS_WORKER = w.url;
   try {
     const { prepare } = await import("../bim.mjs");
     await assert.rejects(prepare({ kind: "construction", name: "X", from: [0, -80], to: [10, -80], script: "boom()", params: {} }, site), /linje 7: NameError/);
+  } finally { w.close(); }
+});
+
+test("prepare: a wrong IFC name in the script error is answered with the real IFC4 one", async () => {
+  const w = await fakeWorker(() => ({ state: "failed", errors: [{ code: "script_error", line: 12, message: "RuntimeError: Entity with name 'IfcArbitraryClosedProfileDefWithVoids' not found in schema 'IFC4'" }], log: "Traceback …" }));
+  process.env.SYKEHUS_WORKER = w.url;
+  try {
+    const { prepare } = await import("../bim.mjs");
+    await assert.rejects(prepare({ kind: "construction", name: "X", from: [0, -80], to: [10, -80], script: "boom()", params: {} }, site),
+      m => /linje 12: RuntimeError/.test(m.message) && m.message.includes("IFC4 har ikke IfcArbitraryClosedProfileDefWithVoids: det heter IfcArbitraryProfileDefWithVoids"));
   } finally { w.close(); }
 });
 

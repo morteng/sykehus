@@ -21,6 +21,10 @@ const FILES = { "mesh.json": "application/json", "model.ifc": "application/p21",
 export const shaOf = (script, params) => createHash("sha256").update(script + "\0" + JSON.stringify(Object.keys(params).sort().map(k => [k, params[k]]))).digest("hex");
 const meshOf = sha => { try { return JSON.parse(readFileSync(join(DIR, sha, "mesh.json"), "utf8")); } catch { return null; } };
 
+/* IFC names agents get wrong (a name from another schema or an invention): the real IFC4 one, said in the error */
+const IFC_NAMES = { IfcArbitraryClosedProfileDefWithVoids: "IfcArbitraryProfileDefWithVoids" };
+const nameHint = text => Object.entries(IFC_NAMES).filter(([bad]) => text.includes(bad)).map(([bad, good]) => `\nIFC4 har ikke ${bad}: det heter ${good}.`).join("");
+
 /* the worker's words in the page's language, with what the script printed last, for Anton to fix it from */
 function errorOf(j) {
   const e = j.errors?.[0] || {}, tail = String(j.log || "").trim().split("\n").slice(-12).join("\n").slice(-1500);
@@ -34,7 +38,7 @@ function errorOf(j) {
     too_big: "Det skriptet laget er større enn 64 MB",
     sandbox_unavailable: "Arbeideren kan ikke kjøre skript nå (sandkassa starter ikke der); si fra til den som drifter siden",
   }[e.code] || `Arbeideren svarte ikke som ventet (${j.state || "ukjent"})`;
-  return say + (e.code === "script_error" && tail ? `\nSlutten av utskriften:\n${tail}` : "");
+  return say + (e.code === "script_error" ? nameHint(`${e.message}\n${tail}`) + (tail ? `\nSlutten av utskriften:\n${tail}` : "") : "");
 }
 
 /* one job to the worker. A cold `import ifcopenshell` in the sandbox sometimes dies with the script error «KeyboardInterrupt»
@@ -256,7 +260,10 @@ function importBim(e) {
 
 /* the kote design.js stands a construction on: the lowest ground under its box's footprint over from -> to, or the
    roof it is on, or the kote asked */
-const footOf = (site, from, to, box, at = {}, foot) => Math.round(baseOf(site, { ...bimBody(from, to, box), on: at.on, base_kote: at.base_kote, ...(foot ? { bim: { box, foot } } : {}) }) * 100) / 100;
+/* the ground as it was graded before any building's own pad went into it: applyDesign may leave that grid as site.terrain0
+   (a pad at 11 under a tower must not pull a 15.5 plateau down to 11 when the tower is reshaped); without it, the after's */
+const groundSite = site => site.terrain0 ? { ...site, terrain: site.terrain0 } : site;
+const footOf = (site, from, to, box, at = {}, foot) => Math.round(baseOf(groundSite(site), { ...bimBody(from, to, box), on: at.on, base_kote: at.base_kote, ...(foot ? { bim: { box, foot } } : {}) }) * 100) / 100;
 /* run it so its IFC stands where the page draws it (pm 00:58Z: the script was given 12.7 from a guess at its width, the
    page stood its 30 m foot on 11.6): once its box is known, the foot under that box, and once more if it moved; and
    say so if the script did not put its foot at params.ground */
@@ -285,7 +292,7 @@ export async function prepare(e, site) {
     const { kind, part, params = {}, material, ...rest } = e, specs = await listParts(), spec = specs[part];
     if (!spec) throw toolErr(`Det finnes ingen del som heter «${part}». Delene er: ${Object.keys(specs).join(", ")} (list_parts sier hva hver tar).`);
     const pts = [e.from, e.to].every(q => Array.isArray(q) && q.length === 2 && q.every(Number.isFinite)), L = pts ? Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) : 0;
-    const p = { ...params }; if (p.ground == null && pts) p.ground = Math.round(baseOf(site, { from: e.from, to: e.to, width: Math.max(1, L), on: e.on, base_kote: e.base_kote }) * 100) / 100;
+    const p = { ...params }; if (p.ground == null && pts) p.ground = Math.round(baseOf(groundSite(site), { from: e.from, to: e.to, width: Math.max(1, L), on: e.on, base_kote: e.base_kote }) * 100) / 100;
     const nm = rest.name || spec.no || part, { r, p: pp } = await placed(site, q => runPart(part, q, nm), p, e.from, e.to, { on: e.on, base_kote: e.base_kote }, params.ground != null || !pts);
     delete r.warning;   // a part's foot is its own (a pool basin is dug under the ground): its box says how deep
     if (params.ground != null && e.on == null && e.base_kote == null) rest.base_kote = pp.ground;
@@ -299,7 +306,7 @@ export async function prepare(e, site) {
     /* ground: where design.js will stand its foot (the lowest ground under it, or the roof it is on), its from -> to
        taken as its width too until the script has said how wide it is */
     const pts = [e.from, e.to].every(q => Array.isArray(q) && q.length === 2 && q.every(Number.isFinite)), L = pts ? Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]) : 0;
-    const p = { ...params }; if (p.ground == null && pts) p.ground = Math.round(baseOf(site, { from: e.from, to: e.to, width: Math.max(1, L), on: e.on, base_kote: e.base_kote }) * 100) / 100;
+    const p = { ...params }; if (p.ground == null && pts) p.ground = Math.round(baseOf(groundSite(site), { from: e.from, to: e.to, width: Math.max(1, L), on: e.on, base_kote: e.base_kote }) * 100) / 100;
     const { r, p: pp } = await placed(site, q => runBim(script, q), p, e.from, e.to, { on: e.on, base_kote: e.base_kote }, params.ground != null || !pts);
     Object.assign(p, pp);
     if (!r.buildings) throw toolErr(`Skriptet laget ${Object.entries(r.classes || {}).map(([k, n]) => `${n} ${k}`).join(", ") || "ingenting"}, men ingen IfcBuilding: legg det under IfcProject > IfcSite > IfcBuilding > IfcBuildingStorey`);
@@ -315,8 +322,15 @@ export async function prepare(e, site) {
     /* a file brought in has no script: it moves and turns as it is */
     if (a.bim.file) { if (e.params) throw toolErr(`${a.name} er en innhentet fil: den har ingen parametre å endre`); return e; }
     const { params, ...rest } = e, from = e.from || a.from, to = e.to || a.to;
-    const p0 = { ...a.bim.params, ...(params || {}) }; p0.ground = footOf(site, from, to, a.bim.box, { on: e.on ?? a.on }, a.bim.foot);
-    const { r, p } = await placed(site, a.bim.part ? q => runPart(a.bim.part, q, a.name) : q => runBim(a.bim.script, q), p0, from, to, { on: e.on ?? a.on }, false);
+    const p0 = { ...a.bim.params, ...(params || {}) }, moved = !!(e.from || e.to || e.on), kept = Number.isFinite(p0.ground) && !moved;
+    /* a ground the reshape was sent (params.ground, or base_kote) is kept, and so is the one it stood on when it only changes
+       shape: the foot is looked up again only when it moves (the old ground was the lowest under a pad it has since graded) */
+    if (Number.isFinite(+params?.ground)) p0.ground = +params.ground;
+    else if (Number.isFinite(+e.base_kote)) p0.ground = +e.base_kote;
+    else if (!kept) p0.ground = footOf(site, from, to, a.bim.box, { on: e.on ?? a.on }, a.bim.foot);
+    const asked = kept || Number.isFinite(+params?.ground) || Number.isFinite(+e.base_kote);
+    if (Number.isFinite(+params?.ground) && e.on == null && a.on == null && e.base_kote == null) rest.base_kote = p0.ground;   // the page stands it there too
+    const { r, p } = await placed(site, a.bim.part ? q => runPart(a.bim.part, q, a.name) : q => runBim(a.bim.script, q), p0, from, to, { on: e.on ?? a.on }, asked);
     return { ...rest, bim: a.bim.part ? { part: a.bim.part, script: null, params: r.params ?? p, sha: r.sha, box: r.box, classes: r.classes, ...ft(r), ...(a.bim.nopad ? { nopad: true } : {}) } : { script: a.bim.script, params: p, sha: r.sha, box: r.box, classes: r.classes, ...ft(r) }, _ran: r };
   }
   /* a construction as it was kept (a draft's edits shown again, or replayed into one's own version): its script and
