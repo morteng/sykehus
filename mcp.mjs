@@ -71,7 +71,7 @@ const dirDeg = d => dirOf(d) ?? (() => { throw toolErr(`Unknown direction "${d}"
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, sitePhotos = null }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, render = picture, sitePhotos = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const libs = libraries();
@@ -455,7 +455,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     : { site: withMeshes(site), note: ", modellen slik den var før (målet har ingen endringer ennå, så dette er den delte førmodellen)" };
   async function look(s, a = {}, edits = []) {
     if (a.saved) {   // a saved view, as the page shows it (U3527): its camera, its «før» on the before
-      const st = a.saved.state, png = await picture(withMeshes(st.era === "før" ? site : s), { ...viewOpts(st, s), width: a.width || 1024, height: a.height || 640 });
+      const st = a.saved.state, png = await render(withMeshes(st.era === "før" ? site : s), { ...viewOpts(st, s), width: a.width || 1024, height: a.height || 640 });
       return { png, text: `Bildet: den lagrede visningen «${a.saved.name}»${st.caption ? ` (${st.caption.replace(/\.$/, "")})` : ""}${st.cam === "eye" ? "; i øyehøyde, men med smalere linse enn siden" : ""}. Nordpilen øverst til høyre.` };
     }
     s = withMeshes(s);   // a construction's triangles, from what the worker made
@@ -470,7 +470,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     /* a new building's pad (U3566), as the picture shows it: what is dug out and filled, and at which side */
     const fa = a.focus && (s.added || []).find(x => x.id === a.focus || x.name === a.focus), pad = fa?.ground || fa?.lot ? `${fa.name}: ${fa.ground ? groundText(fa.ground) : ""}${lotText(fa.lot) ? ` ${lotText(fa.lot)}` : ""}`.trim() : "";
     const before = a.era === "før", prior = before ? priorOf(edits) : null, cam = usedCamera(cm, a.era, prior?.note);
-    let png = await picture(before ? prior.site : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
+    let png = await render(before ? prior.site : fr.site, { ...v, ...(tilt != null ? { tilt } : {}), target: cm.target, dist, focus: before ? [] : fr.focus, accent: !before && fr.accent, width: W, height: H });
     png = annotate(png, { plan: !!v.plan, dist, target: fr.target, levels: before ? null : fr.levels, width: W, height: H });
     const deg = v.from ?? 0, side = ["nord", "nordøst", "øst", "sørøst", "sør", "sørvest", "vest", "nordvest"][Math.round(((deg % 360) + 360) % 360 / 45) % 8], seen = f ? lookSay(s, { ...fr, dist }, f, v, fr) : "";
     return { png, text: `Bildet: ${v.plan ? "plan, rett ovenfra, nord opp" : `sett fra ${side}, ${Math.round(tilt)}° over bakken`}, ${Math.round(dist)} m unna${f ? `, midt i bildet ${f.name}` : ""}. Nordpilen øverst til høyre${v.plan ? "; målestokken nederst til venstre er 50 m" : ""}.${seen ? " I bildet: " + seen : ""}${pad ? " " + pad : ""} ${cam.say}`, camera: cam.num };
@@ -810,13 +810,20 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (!wishes) throw toolErr("Ønsker tas ikke imot på denne serveren.");
         const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
         /* U3832: the picture of the model the wish is about (the page's own snapshot path, look), kept with the wish */
-        let png = null;
+        let png = null, why = null;
         if (a.picture !== false) {
           const open = versions ? versions.get(openId(who)) : null, pick = v && versions.visible(v, who) ? v : open?.owner === who ? open : null;
-          if (pick) try { const m = model(pick.id, req), last = m.site.added?.findLast(x => x.kind === "volume"), r = await look(m.site, { view_name: a.view_name, focus: a.focus ?? last?.id ?? null }); png = r.png; }
-          catch (e) { console.warn("send_wish picture:", e.message); }
+          if (!pick) why = "ingen åpen versjon å ta det av";
+          else try {
+            const m = model(pick.id, req), last = m.site.added?.findLast(x => x.kind === "volume"), focus = a.focus ?? last?.id ?? null;
+            /* the real reason comes back (the look timed out, 20 s); one retry as a plan view at a smaller size */
+            for (const cam of [{ view_name: a.view_name, focus }, { view_name: "plan", focus, width: 640, height: 400 }]) {
+              try { png = (await look(m.site, cam)).png; break; } catch (e) { console.warn("send_wish picture:", e.message); why = e.message || "bildet kunne ikke tegnes"; if (cam.view_name === "plan") why += " (prøvde også et planbilde i mindre størrelse)"; }
+            }
+            if (png) why = null;
+          } catch (e) { console.warn("send_wish picture:", e.message); why = e.message || "bildet kunne ikke tegnes"; }
         }
-        try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link, png }); return { sent: true, wish: w.id, status: w.status, picture: !!w.picture, receipt: png ? "Sendt, med bilde. Morten ser det." : "Sendt. Morten ser det.", ...(png ? {} : a.picture === false ? {} : { note: "Bildet kom ikke med: ingen åpen versjon å ta det av." }), see_them: `${originOf(req)}/ (Ønsker)` }; }
+        try { const w = wishes.add(who, { text: a.text, tried: a.tried, version: v ? v.id : "", link, png }); return { sent: true, wish: w.id, status: w.status, picture: !!w.picture, receipt: png ? "Sendt, med bilde. Morten ser det." : "Sendt. Morten ser det.", ...(png ? {} : a.picture === false ? {} : { note: `Bildet kom ikke med: ${why}.`.replace(/\.\.$/, ".") }), see_them: `${originOf(req)}/ (Ønsker)` }; }
         catch (e) { throw toolErr(e.message); } } },
     { name: "check_design", tgt: "read", title: "Sjekk mot byggereglene", ro: true, schema: S({ target: TARGET, draft: OLD }),
       description: "Holds the after (a version or draft) against the building rules (TEK17, rules/tek17.json) that its parts and its step-free entrance can answer (U3678): a stair's rise and tread (2 × opptrinn + inntrinn), its width and handrail, a railing's or balcony's railing height where there is a fall, a balcony door's size, a ramp's slope. Each row: the rule, its §, the thing it is about, status (ok, brudd, or ikke målt), the value, the limit and a plain sentence. «ikke målt» is never ok: the model does not hold that number. A row with verify: true is a rule or number not yet read against the law text: say «etter min lesning av TEK17» and that it is to be confirmed, never that the design is approved. Nothing is changed. Only what the rules can measure is listed: a clean list is not a building permit.",

@@ -58,3 +58,27 @@ test("U3832: a wish about a version carries a picture of it: kept, served to its
   const none = (await call("send_wish", { text: "Bare et ønske uten bilde", picture: false }, as("lars"))).structuredContent;
   assert.equal(none.picture, false); assert.equal(none.receipt, "Sendt. Morten ser det.");
 });
+
+/* S3: the real reason a picture is missing, and one retry as a small plan view. A stubbed renderer (no real look runs). */
+test("send_wish: a look that times out is told as it was, after one retry with a smaller plan view", async () => {
+  const { createMcp } = await import("../mcp.mjs"), { createVersions } = await import("../versions.mjs"), { createWishes } = await import("../wishes.mjs");
+  const { readFileSync } = await import("node:fs");
+  const site = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url), "utf8")), d2 = mkdtempSync(join(tmpdir(), "sykehus-wishpic-"));
+  const versions = createVersions(d2), seen = [];
+  const mk = render => createMcp({ site, floors: [], docs: null, docUrl: f => f, SECURITY: {}, readJson: async () => ({}), versions, wishes: createWishes({ dir: d2 }), auth: { userOf: r => r.headers["remote-user"] || null, count() {} }, pages: { open: new Map(), show: () => false }, render });
+  const lars = { headers: { "remote-user": "lars", host: "localhost" } }, v = versions.create("lars", "Prøve");
+  const send = (m, args) => m.TOOLS.find(t => t.name === "send_wish").run({ text: "Et ønske", version_id: v.id, ...args }, lars);
+  const slow = mk(async (s, o) => { seen.push({ plan: !!o.plan, width: o.width }); throw new Error("Bildet tok for lang tid."); });
+  const r = await send(slow, {});
+  assert.equal(r.sent, true); assert.equal(r.picture, false);
+  assert.equal(seen.length, 2, "tried twice, no more"); assert.deepEqual(seen[1], { plan: true, width: 640 }, "the second is a plan at a smaller size");
+  assert.match(r.note, /Bildet tok for lang tid/); assert.doesNotMatch(r.note, /ingen åpen versjon/);
+  /* a grey RGB PNG of the size asked, filter 0, as the kit's own (lookglue.decode reads that) */
+  const { deflateSync, crc32 } = await import("node:zlib"), grey = (W, H) => { const raw = Buffer.alloc((W * 3 + 1) * H, 200); for (let y = 0; y < H; y++) raw[y * (W * 3 + 1)] = 0;
+    const ch = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]), c = Buffer.alloc(4); c.writeUInt32BE(crc32(td) >>> 0); return Buffer.concat([l, td, c]); };
+    const ih = Buffer.alloc(13); ih.writeUInt32BE(W, 0); ih.writeUInt32BE(H, 4); ih[8] = 8; ih[9] = 2;
+    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), ch("IHDR", ih), ch("IDAT", deflateSync(raw)), ch("IEND", Buffer.alloc(0))]); };
+  let k = 0;
+  const flaky = mk(async (s, o) => { if (k++ === 0) throw new Error("Bildet tok for lang tid."); return grey(o.width, o.height); });
+  const ok = await send(flaky, {}); assert.equal(ok.picture, true); assert.equal(ok.note, undefined, "the retry made it");
+});
