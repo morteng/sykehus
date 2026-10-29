@@ -56,7 +56,7 @@ test("try_change names a missing field, per kind", async () => {
 });
 
 test("a balconies edit may carry support («Understøttet»): the field crosses into the model", async () => {
-  const r = (await call("try_change", { edits: [{ kind: "balconies", wing: "sentralblokka", face: 210, along: [1, 2], depth: 1.5, support: true, why: "Understøttet på" }], include_screenshot: false })).structuredContent;
+  const r = (await call("try_change", { edits: [{ kind: "balconies", wing: "Sentralblokka", face: 210, bay: 3.6, gap: 1.2, depth: 1.5, support: true, why: "Understøttet på" }], include_screenshot: false })).structuredContent;
   assert.equal(r.rejected_n, 0, JSON.stringify(r.rejected));
   assert.equal(r.added.filter(e => e.support).length, 1, "the page's support switch is not refused for its field");
 });
