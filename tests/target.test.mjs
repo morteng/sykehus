@@ -55,6 +55,12 @@ test("try_change names a missing field, per kind", async () => {
   assert.match(r.rejected[2].error, /kind «taket» finnes ikke/); assert.match(r.rejected[3].error, /demolish tar ikke side/);
 });
 
+test("a balconies edit may carry support («Understøttet»): the field crosses into the model", async () => {
+  const r = (await call("try_change", { edits: [{ kind: "balconies", wing: "sentralblokka", face: 210, along: [1, 2], depth: 1.5, support: true, why: "Understøttet på" }], include_screenshot: false })).structuredContent;
+  assert.equal(r.rejected_n, 0, JSON.stringify(r.rejected));
+  assert.equal(r.added.filter(e => e.support).length, 1, "the page's support switch is not refused for its field");
+});
+
 test("undo_change: a version id, a draft id, none (the open version), and a wrong one", async () => {
   assert.ok(!(await call("undo_change", { target: V, n: 1 })).isError);
   assert.ok(!(await call("undo_change", { target: D, n: 1 }, {})).isError);
