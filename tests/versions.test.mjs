@@ -102,7 +102,8 @@ test("«Riv» from the page: a new draft, one more in it, «Angre», and a versi
   assert.equal(b.j.changes_in_draft, 2);
   const u = await post({ draft: a.j.draft, undo: 1 });
   assert.equal(u.status, 200); assert.equal(u.j.changes_in_draft, 1); assert.equal(u.j.removed.building, "Østfløy");
-  assert.equal((await post({ edits: [{ kind: "balconies", wing: "Østfløy", side: "S" }] })).status, 400);   // from the page: riv, new buildings and facts only
+  assert.equal((await post({ edits: [{ kind: "part", part: "rekkverk", from: [-15, -62], to: [5, -62] }] })).status, 400);   // a part is Anton's to place: the page sends riv, nye bygg, opplysninger, etasjekoter, maling, terreng og planting
+  assert.equal((await post({ edits: [{ kind: "balconies", wing: "Østfløy", side: "S" }] })).status, 422);   // the fasade edits are the page's now (4ae4d4e): this one passes the gate and is refused by the check (Østfløy stands skew, it needs face)
   assert.equal((await post({ edits: [{ kind: "demolish", building: "Finnes ikke" }] })).status, 422);
   const v = (await call("new_version", { title: "Riv fra siden" }, morten)).out;
   assert.equal((await post({ version: v.version, edits: [{ kind: "demolish", building: "Vestfløy" }] })).status, 400);   // not signed in on the page
