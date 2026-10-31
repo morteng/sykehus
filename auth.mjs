@@ -150,7 +150,7 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
   }
   function issue(res, g) {
     const access = token(), refresh = token(), now = Date.now() / 1000;
-    Object.assign(g, { access_hash: sha64(access), access_exp: Math.floor(now + ACCESS_TTL), refresh_hash: sha64(refresh), refresh_exp: Math.floor(now + REFRESH_TTL) }); save();
+    Object.assign(g, { access_hash: sha64(access), access_exp: Math.floor(now + ACCESS_TTL), spent: [...(g.spent || []).slice(-9), g.refresh_hash].filter(Boolean), refresh_hash: sha64(refresh), refresh_exp: Math.floor(now + REFRESH_TTL) }); save();
     return send(res, 200, { access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL, refresh_token: refresh, scope: SCOPE });
   }
   async function tokenEndpoint(req, res) {
@@ -168,6 +168,8 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
     }
     if (b.grant_type === "refresh_token") {
       const h = sha64(String(b.refresh_token || "")), g = store.grants.find(x => x.refresh_hash === h);
+      const reused = !g && store.grants.find(x => (x.spent || []).includes(h));   /* a rotated token shown again: a thief or a copy, so the whole grant goes (as Fab's oauth.py does) */
+      if (reused) { store.grants.splice(store.grants.indexOf(reused), 1); save(); return bad("invalid_grant", "Refresh token reused: the grant is revoked"); }
       if (!g || g.refresh_exp < Date.now() / 1000 || (b.client_id && b.client_id !== g.client_id)) return bad("invalid_grant", "Refresh token not valid");
       return issue(res, g);
     }

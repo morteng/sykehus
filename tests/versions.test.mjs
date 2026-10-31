@@ -91,6 +91,11 @@ test("claude.ai's way in: register, consent behind gulden.no, code with PKCE, to
   const usage = await (await fetch(O + "/api/bruk")).json(), today = Object.values(usage.days)[0];
   assert.ok(today.calls > 5 && today.logins.lars >= 1 && today.logins.morten >= 1); assert.equal(usage.grants[0].owner, "lars");
   assert.equal((await fetch(O + "/api/bruk", { headers: { "x-forwarded-for": "203.0.113.9" } })).status, 403, "the counts are not for the outside");
+  const refresh = rt => fetch(O + "/oauth/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: rt, client_id: reg.client_id }) }).then(async r => ({ status: r.status, j: await r.json() }));
+  const r1 = await refresh(t.refresh_token); assert.equal(r1.status, 200); assert.notEqual(r1.j.refresh_token, t.refresh_token);
+  const reuse = await refresh(t.refresh_token); assert.equal(reuse.status, 400); assert.equal(reuse.j.error, "invalid_grant");
+  assert.equal((await refresh(r1.j.refresh_token)).status, 400, "the reuse revoked the whole grant: the newest token is dead too");
+  assert.equal((await call("new_version", { title: "Etter bruk" }, { authorization: `Bearer ${r1.j.access_token}` })).status, 401, "and its access token");
 });
 
 /* the page's «Riv» and «Angre» (U3542), and the IFC without what the after tears down */

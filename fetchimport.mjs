@@ -29,6 +29,15 @@ export const LINK_ONLY = [
   { name: "GrabCAD", host: "grabcad.com", search: q => `https://grabcad.com/library?query=${encodeURIComponent(q)}`, why: "krever konto" },
 ];
 
+/* the eight 16-bit groups of an IPv6 text (:: and a dotted tail expanded), or null */
+function groups6(ip) {
+  let s = ip.toLowerCase().split("%")[0]; const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
+  if (m) { if (!net.isIPv4(m[1])) return null; const [a, b, c, d] = m[1].split(".").map(Number); s = s.slice(0, m.index) + ((a << 8) | b).toString(16) + ":" + ((c << 8) | d).toString(16); }
+  const [h, t, extra] = s.split("::"); if (extra !== undefined) return null;
+  const hs = h ? h.split(":") : [], ts = t === undefined ? [] : t ? t.split(":") : [];
+  const fill = t === undefined ? 0 : 8 - hs.length - ts.length; if (fill < 0 || (t === undefined && hs.length !== 8)) return null;
+  const all = [...hs, ...Array(fill).fill("0"), ...ts].map(x => parseInt(x, 16)); return all.length === 8 && all.every(Number.isInteger) ? all : null;
+}
 /* an address a fetch must never reach: this box, its networks, the cloud's metadata, multicast */
 export function privateIp(ip) {
   if (net.isIPv4(ip)) {
@@ -36,9 +45,12 @@ export function privateIp(ip) {
     return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
   }
   if (net.isIPv6(ip)) {
-    const s = ip.toLowerCase(), v4 = /^(?:0*:)*:?(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/.exec(s) || /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(s);
-    if (v4) return privateIp(v4[1]);
-    return s === "::" || s === "::1" || /^f[cd]/.test(s) || /^fe[89ab]/.test(s) || /^ff/.test(s) || /^64:ff9b:/.test(s) || /^2001:db8:/.test(s);
+    const g = groups6(ip); if (!g) return true;
+    const v4 = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`, head5 = g.slice(0, 5).every(x => x === 0);
+    if (head5 && (g[5] === 0xffff || g[5] === 0)) return privateIp(v4(g[6], g[7]));       /* ::ffff:a.b.c.d or ::ac11:1 (hex), ::a.b.c.d */
+    if (g.slice(0, 4).every(x => x === 0) && g[4] === 0xffff && g[5] === 0) return privateIp(v4(g[6], g[7])); /* ::ffff:0:a.b.c.d */
+    if (g[0] === 0x2002) return true;                        /* 6to4: its own inside is not ours to fetch */
+    return g.every(x => x === 0) || (g.slice(0, 7).every(x => x === 0) && g[7] === 1) || (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00 || g[0] === 0x64 && g[1] === 0xff9b || (g[0] === 0x2001 && (g[1] === 0 || g[1] === 0xdb8));
   }
   return true;
 }

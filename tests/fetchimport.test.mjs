@@ -21,8 +21,9 @@ test("only https to the hosts on the list; github.com only for raw and release f
 
 test("private, loopback, link-local, CGNAT and the like are inside; public addresses are not", () => {
   for (const ip of ["10.1.2.3", "127.0.0.1", "169.254.169.254", "100.64.0.1", "100.127.255.255", "172.16.0.1", "172.31.9.9", "192.168.1.1", "0.0.0.0", "224.0.0.1", "198.18.0.1",
-    "::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:10.0.0.1", "::ffff:127.0.0.1", "ff02::1", "not-an-ip"]) assert.equal(privateIp(ip), true, ip);
-  for (const ip of ["8.8.8.8", "185.199.108.133", "100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "2606:4700::1111", "2a04:4e42::644"]) assert.equal(privateIp(ip), false, ip);
+    "::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:10.0.0.1", "::ffff:127.0.0.1", "ff02::1", "not-an-ip",
+    "::ffff:172.17.0.1", "::ffff:100.64.0.1", "::ffff:ac11:1", "::ffff:6440:1", "::ffff:7f00:1", "::ffff:a00:1", "::ffff:a9fe:a9fe", "::ffff:c0a8:1", "0:0:0:0:0:ffff:ac11:1", "::ffff:0:172.17.0.1", "::172.17.0.1", "::ac11:1", "2002:ac11:1::1", "64:ff9b::ac11:1", "fe80::1%eth0", "fe9f::1", "::ffff:172.17.0.1.5", "1::2::3"]) assert.equal(privateIp(ip), true, ip);
+  for (const ip of ["8.8.8.8", "185.199.108.133", "100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "2606:4700::1111", "2a04:4e42::644", "::ffff:8.8.8.8", "::ffff:808:808", "::ffff:ac0f:1", "::ffff:6380:1"]) assert.equal(privateIp(ip), false, ip);
 });
 
 test("a host on the list whose name points inside is not fetched; one off the list is not even looked up", async () => {
