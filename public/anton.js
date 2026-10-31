@@ -22,9 +22,10 @@ import { feedbackOf } from "./sketchsend.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
 import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=20261028a";   // what the chat box attaches
+import { esc as kitEsc } from "./kit/html.js";
 
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const esc = s => kitEsc(s ?? ""); // null-safe; the escaping is the kit's (kit/html.js)
 const SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 4.5 19 11.5 17.6 12.9 13 8.3V20h-2V8.3L6.4 12.9 5 11.5z"/></svg>`, STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`;
 const doorWords = (code, turn = false) => doorSentence(code, { lang: "nb", name: "Anton", turn });   // the kit's one table (U3976)
 const POSE = "sykehus-pose";

@@ -38,6 +38,7 @@ import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
 import { sharedOpen, firstView, prospektOpen, renderProspekt, bindLightbox, } from "./prospekt-pane.js?v=1";
 import { figures } from "./prospekt-view.js";
+import { esc } from "./kit/html.js";
 
 /* floors.json is built locally from the drawings; without it the page shows the site alone. The storeys are the
    wings' own (site.json wings[].levels): one name, a kote in each wing that has it. */
@@ -96,7 +97,6 @@ const drawnSections = drawnSections0.filter(d => !d.wing || wings.some(w => w.id
 const $ = id => document.getElementById(id);
 const kote = v => (v >= 0 ? "+" : "") + v.toFixed(2).replace(".", ",");
 const num = v => Math.round(v).toLocaleString("nb-NO");
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 /* the panel; a version or a draft opens on «Prosjekter», where it is told what it is; else the tab last open, Anton first */
 const panel = createPanel({ start: draft ? "changes" : null, onChange: t => dispatchEvent(new CustomEvent("sykehus:panel", { detail: t })) });
@@ -276,7 +276,7 @@ let names = false; try { names = localStorage.getItem("sykehus-navn-valgt") === 
 function setNames(on, keep = true) { names = on; viewer.setNames(on); $("names").setAttribute("aria-pressed", String(on)); if (keep) try { localStorage.setItem("sykehus-navn-valgt", on ? "på" : "av"); } catch { } }
 setNames(names, false); $("names").onclick = () => setNames(!names);
 /* «Fasade»: the elevation over the whole page (fasade-view.js). Its changes go into the draft only when the person presses a button: the same edit() as the page's own */
-const openFasade = (preset = {}, keep = {}) => import("./fasade-view.js?v=20261028a").then(m => m.open({ ...preset, keep, host: document.body, site0, floors0, wingOf: (s, w) => (s.wings || []).find(x => x.id === String(w ?? "").toLowerCase() || x.name.toLowerCase() === String(w ?? "").toLowerCase()),
+const openFasade = (preset = {}, keep = {}) => import("./fasade-view.js?v=20261031es").then(m => m.open({ ...preset, keep, host: document.body, site0, floors0, wingOf: (s, w) => (s.wings || []).find(x => x.id === String(w ?? "").toLowerCase() || x.name.toLowerCase() === String(w ?? "").toLowerCase()),
   baseEdits: () => draft?.edits || [], commit: async edits => !!(await edit(edits, "Fikk ikke lagret")),
   send: (text, drawing) => new Promise(res => { let done = false; const t = setTimeout(() => !done && res({ error: "Anton kan ikke svare akkurat nå. Prøv igjen senere." }), 20000); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text, drawing, done: p => Promise.resolve(p).then(r => { done = true; clearTimeout(t); res(r === false ? { error: "Anton kan ikke svare akkurat nå. Logg inn og prøv igjen." } : r); }) } })); }) }));
 import("./miniapp.js?v=1").then(m => { m.registerMiniapp("fasade", { open: openFasade }); m.openFromAddress(); });   // the button, the chat's chip and ?fasade=… all open it through the one miniapp.js
@@ -533,7 +533,7 @@ const nameIt = () => { detailsOpen = true; drawList(); const t = $("drTitle"); i
    one's own, named as typed), opens it, goes to Anton and hands over the first turn; signed out, it opens «Logg inn» first */
 let nyttForslag = null;
 function fresh() {
-  nyttForslag ||= import("./nytt-forslag.js?v=20261027dp").then(({ startNew }) => startNew({
+  nyttForslag ||= import("./nytt-forslag.js?v=20261031es").then(({ startNew }) => startNew({
     signedIn: () => !!me.person, login: () => { toast("Logg inn for å begynne et prosjekt."); $("meBtn")?.click(); },
     mine: async () => (await fetch("api/versjoner").then(r => r.json()).catch(() => ({}))).versions?.filter(v => v.mine) || [],
     fx: b => fxBox("leaves", b),
@@ -1150,7 +1150,7 @@ listVersions(); addEventListener("sykehus:versjoner", listVersions);
 
 /* the card over the pick (float.js) */
 let pickActs = null;
-import("./float.js?v=20261026t").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
+import("./float.js?v=20261031es").then(m => pickActs = m.createFloat({ viewer, site, valg, panel, stage: $("stage"), bstack: $("bstack"),
   onRiv: riv, onSave: saveFacts, onMove: a => { syncBuild(); build.move(); }, onTurn: turnNew,
   onStoreys: () => { panel.reveal("selected"); $("info").querySelector("[data-storey]")?.closest(".oc-row")?.scrollIntoView({ block: "start", behavior: "smooth" }); },
 })).catch(e => console.error("float:", e));
@@ -1225,9 +1225,9 @@ import("./tour.js?v=20261027zmp").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261031pill").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
+import("./anton.js?v=20261031es").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
-import("./gjengi.js?v=20261027gjlight").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
+import("./gjengi.js?v=20261031es").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
   materials: () => [...(site.added || []), ...(site.landscape || [])].filter(a => typeof a.material === "string").map(a => ({ name: String(a.name || a.id || "").slice(0, 40), material: a.material })),
   work: () => versionId ? { versjon: versionId, nokkel } : draftId && draft && !draft.missing ? { utkast: draftId } : {} })).catch(e => console.error("gjengi:", e));

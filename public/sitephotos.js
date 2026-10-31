@@ -2,8 +2,8 @@
    browser (a phone's camera picture is 12 MB), sent to /api/bilder (sitephotos.mjs) with its wing, facade side, note and year, listed,
    viewed and deleted here; Anton reads them with the connector's look_at_site_photo. Only the person's own are ever shown. */
 import { ownPictureHTML } from "./kit/picture.js";
+import { esc } from "./kit/html.js";
 export const MAX_EDGE = 2000, SIDES = ["nord", "øst", "sør", "vest", "ukjent"];
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 /* the size a picture is sent at: as it is when small enough, else the long edge brought to max */
 export function fitSize(w, h, max = MAX_EDGE) { const k = Math.min(1, max / Math.max(w, h)); return { w: Math.round(w * k), h: Math.round(h * k) }; }
 /* the address a photo is sent to; the filename is never sent */

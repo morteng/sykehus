@@ -3,7 +3,7 @@
    and what the person sent before with its status («Det du har sendt», the Ønsker list). It goes to /api/feedback (wishes.mjs), which
    files it in gulden-ai's one report store (U3978), where Fab's feedback goes too; the list reads the person's own reports back from there. */
 import { feedback } from "./kit/feedback.js";
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+import { esc } from "./kit/html.js";
 const ST = { ny: "ny", sett: "sett", laget: "laget", nei: "ikke nå" };
 
 export const KINDS = [

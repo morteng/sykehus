@@ -10,8 +10,8 @@ import { bearingOf } from "./sunlight.js";
 import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO, framePatch } from "./gjengi-no.js";
 import { ownPictureHTML } from "./kit/picture.js";
 import { spotOfView, flyTo, isStale, retakeBody, retake, total, whyNot, hasWork, NEEDS_WORK } from "./photospots.js";
+import { esc } from "./kit/html.js";
 const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 /* a picture of the app (api/gjengi/…) through the scaler (U3992); a data: or blob: address is a picture made in this browser, shown as it is */
 const pic = (url, w, alt, cls = "", style = "") => /^(data|blob):/.test(url) ? `<img${cls ? ` class="${cls}"` : ""} src="${esc(url)}" alt="${esc(alt)}"${style ? ` style="${style}"` : ""}>` : ownPictureHTML(url, { w, alt, class: cls || undefined }).replace(/^<img/, style ? `<img style="${style}"` : "<img");
 const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];

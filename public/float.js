@@ -13,8 +13,8 @@
 import { SURFACE_NO, groundName, roadName } from "./valg.js?v=20261027zn";
 import { groundAt } from "./renderkit/fit.js";
 import { basinText } from "./grading.js";
+import { esc } from "./kit/html.js";
 const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "water"], PATHS = ["gravel", "paving", "asphalt", "wood"];   // landscape.js's
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const num = v => Math.round(v).toLocaleString("nb-NO");
 /* a construction's parameters by the names Anton is told to use (mcp.mjs construction), in the page's words */
 const PARAM = { base: "Side ved foten, m", length: "Lengde, m", width: "Bredde, m", height: "Høyde, m", module: "Modul, m", profile: "Profil, m", top: "Topp, m", storeys: "Etasjer", pitch: "Takvinkel, °", span: "Spenn, m" };

@@ -9,10 +9,11 @@
      send(text, drawing)  to Anton (anton.js sendIt); resolves true, or { error } */
 import { facadeDrawing, sidesOf, editsFor, readRef, tryEdits, sayChange, strokeWords, strokeToSite, toSvg, fm, initialLayout, layoutEdits, layoutFromEdits, openingsEdits, openingsFromEdits } from "./fasade.js";
 import { pickAt, marquee, choose, snapMove, snapPoint, handlesOf, moveRect, resizeRect, layoutItemOf, typedItem, alignItems, distribute, arrayOf, selectAll, hudText } from "./gizmo.js";
+import { esc as kitEsc } from "./kit/html.js";
 
 const COLOURS = [["Rød", "#c8102e"], ["Blå", "#1f5fbf"], ["Svart", "#23211e"]];
 const $ = (el, s) => el.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const esc = s => kitEsc(s ?? ""); // null-safe; the escaping is the kit's (kit/html.js)
 const keyOf = r => JSON.stringify(r);
 
 export function open({ host = document.body, site0, floors0, baseEdits, wingOf, commit, send, focus = "sentralblokka", side = "Sørsiden", keep = {} }) {

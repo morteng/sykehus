@@ -7,6 +7,7 @@
    A trace file: { id, storey, kote, height, wing, building, how, doc, page, title, size: [w, h] (pt),
                    cp: [[sx, sy, x, y], ...] (sheet pt to site m), walls: [[[sx, sy], ...], ...], rooms: [{ name, area_m2, at: [sx, sy] }] } */
 import * as THREE from "./vendor/three.module.js";
+import { esc } from "./kit/html.js";
 
 /* sheet points (y down) to site metres by a similarity fitted to the control points (least squares in complex numbers) */
 export function fitOf(cp) {
@@ -31,7 +32,6 @@ export async function startTrace({ viewer, site, container, setMode }) {
   document.body.append(ui);
   let t = null, fit = null, sheetMesh = null, wallMesh = null, tool = "flytt", thick = 0.25, pending = null, placing = null, drag = null;
   const marks = document.createElement("div"); marks.style.cssText = "position:absolute;inset:0;pointer-events:none;font-size:12px"; container.append(marks);
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const B = (id, label, on) => `<button data-t="${id}" aria-pressed="${!!on}" style="min-height:38px;font-size:15px;padding:0 10px">${label}</button>`;
 
   function render() {

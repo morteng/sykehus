@@ -25,6 +25,7 @@ import { facingWalls, facadeNames, facadesOf, replacesBuiltIn } from "./design.j
 import { WINDOWS, kindOf, rowsOf, windowsOn, blindWall } from "./bays.js";
 import { checkEdit, applyEdits } from "./edits.js";
 import { isBalcony, com, kote } from "./drawing.js";
+import { esc } from "./kit/html.js";
 
 const r2 = v => Math.round(v * 100) / 100 + 0;
 export const fm = v => (Math.round(v * 100) / 100 + 0).toFixed(2).replace(".", ",");   // a length in metres, always two decimals
@@ -334,7 +335,6 @@ export const strokeToSite = (stroke, world, colourName) => {
 };
 
 /* ---------- the primitives as SVG, for the page ---------- */
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const rgb = c => c ? `rgb(${c[0]},${c[1]},${c[2]})` : "none";
 export function toSvg(d) {
   const f = v => Math.round(v * 10) / 10, out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${d.W} ${d.H}" width="${d.W}" height="${d.H}" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif"><rect width="${d.W}" height="${d.H}" fill="${rgb(d.paper)}"/>`];

@@ -2,6 +2,7 @@
    before or a copy of one of one's own, a name (optional), a start card, a wish. «Start» makes the version, opens it, and
    hands the first turn to Anton, which says what to do when the wish is clear or not. The text of that turn is firstTurn(). */
 import { modal } from "./kit/modal.js";
+import { esc } from "./kit/html.js";
 
 export const CARDS = [
   { id: "behold", label: "Behold høyblokka", say: "Behold høyblokka og bygg rundt den.", icon: '<path d="M7 21V4h10v17"/><path d="M10 8h4M10 12h4M10 16h4"/>' },
@@ -10,7 +11,6 @@ export const CARDS = [
   { id: "boliger", label: "Boliger", say: "Gjør tomta om til boliger.", icon: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>' },
   { id: "blank", label: "Som i dag", say: "", icon: '<rect x="5" y="4" width="14" height="16" rx="2"/>' },
 ];
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 /* what Anton is told: the choices in plain words, then how to begin; no name means Anton names it when the idea is clear */
 export function firstTurn({ name = "", card = "blank", wish = "", from = null }) {
