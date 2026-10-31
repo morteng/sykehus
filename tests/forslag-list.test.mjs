@@ -43,19 +43,19 @@ test("(b) signed in as morten: own of every sharing first, then the public ones 
   assert.deepEqual((await listed("testperson")).map(v => v.version).slice(0, 1), [ids.testPub]);   // a fixture sees its own
 });
 
-test("(c) the picture: 404 for what the viewer may not see, a JPEG for what they may; the card's key opens a private one", async () => {
+test("(c) the picture: 404 for what the viewer may not see, a PNG for what they may; the card's key opens a private one", async () => {
   const get = (id, h, q = "") => fetch(`${O}/api/versjon/${id}/bilde.jpg${q}`, { headers: h });
   assert.equal((await get(ids.mortenPriv, {})).status, 404);
   assert.equal((await get(ids.mortenPriv, as("pappa"))).status, 404);
   assert.equal((await get(ids.farLink, {})).status, 404);
   assert.equal((await get("vnotthere1", {})).status, 404);
-  const own = await get(ids.mortenPriv, as("morten")); assert.equal(own.status, 200); assert.equal(own.headers.get("content-type"), "image/jpeg");
-  const b = Buffer.from(await own.arrayBuffer()); assert.deepEqual([...b.subarray(0, 3)], [0xff, 0xd8, 0xff]); assert.deepEqual([...b.subarray(-2)], [0xff, 0xd9]);
-  assert.equal(b.readUInt16BE(b.indexOf(Buffer.from([0xff, 0xc0])) + 5), 300);   // SOF0: height 300 (480 wide)
+  const own = await get(ids.mortenPriv, as("morten")); assert.equal(own.status, 200); assert.equal(own.headers.get("content-type"), "image/png");
+  const b = Buffer.from(await own.arrayBuffer()); assert.deepEqual([...b.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+  assert.equal(b.readUInt32BE(16), 480); assert.equal(b.readUInt32BE(20), 300);   // IHDR: 480 wide, 300 high
   const key = (await listed("morten")).find(v => v.version === ids.mortenPriv).nokkel;
   assert.equal((await get(ids.mortenPriv, {}, `?nokkel=${key}`)).status, 200);
   assert.equal((await get(ids.farPub, {})).status, 200);
-  assert.ok(readdirSync(join(dir, "v", "_state", "thumbs")).includes(`${ids.mortenPriv}.v${V}.jpg`));
+  assert.ok(readdirSync(join(dir, "v", "_state", "thumbs")).includes(`${ids.mortenPriv}.v${V}.png`));
 });
 
 test("(d) concurrent requests for one version share one drawing; at most two at once; a new save draws again", async () => {

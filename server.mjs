@@ -40,6 +40,7 @@ import { createStreets } from "./gater.mjs";
 import { createSnow } from "./snow.mjs";
 import { createWishes } from "./wishes.mjs";
 import { createSitePhotos } from "./sitephotos.mjs";
+import { createPx } from "./px.mjs";   // a person's own pictures through the scaler, signed (U3992)
 import { createGuide } from "./guide.mjs";
 import { importFile, MAX_IMPORT } from "./bim.mjs";
 import { createRenderings } from "./gjengi.mjs";
@@ -101,14 +102,28 @@ const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFi
 const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
 const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
-const sitePhotos = createSitePhotos({ wings: site.wings || [], SECURITY, personOf: login.personOf, readBytes });   // the person's own photos of the real building (needs SYKEHUS_VERSIONS_DIR)
+const pxSources = {}, px = createPx({ SECURITY, personOf: login.personOf, sources: pxSources });   // filled in below, once the stores exist
+const sitePhotos = createSitePhotos({ wings: site.wings || [], SECURITY, personOf: login.personOf, readBytes, px });   // the person's own photos of the real building (needs SYKEHUS_VERSIONS_DIR)
 const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   // the guide's «seen», on the person (U3658)
 /* the person's open pages, as Anton's tools need them: the version the pill has open (assistant.mjs sets it with each
    turn) and a way to move those pages to a view (show_building); one object, filled in by both */
 const pages = { open: new Map(), show: () => false };
-const gjengi = createRenderings({ SECURITY, readJson, login, versions });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, sitePhotos, pages, photos: gjengi, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
-const prospekt = createProspekt({ SECURITY, login, versions, photos: gjengi, site, floors, siteFacts: () => mcp.siteFacts(), stills: mcp.stills });   // the read-only page of a shared project
+const gjengi = createRenderings({ SECURITY, readJson, login, versions, px });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
+const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, sitePhotos, pages, photos: gjengi, px, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
+const prospekt = createProspekt({ SECURITY, px, login, versions, photos: gjengi, site, floors, siteFacts: () => mcp.siteFacts(), stills: mcp.stills });   // the read-only page of a shared project
+/* who may open what, and where the scaler fetches it (px.mjs): the access rules are the routes' own, said once more for the signed address */
+const SHOWN = (v, id) => (gjengi?.rendersOf(v.id) || []).some(r => r.prospekt && r.id === id);
+Object.assign(pxSources, {
+  foto: { may: (who, id) => !!who && sitePhotos?.fileOf(id)?.person === who, bytes: id => sitePhotos?.fileOf(id) },
+  bilde: { may: (who, vid, id, key) => { const v = versions?.get(vid); return !!v && prospekt.open(v, key, who) && SHOWN(v, id); },
+    bytes: (vid, id) => { const f = gjengi?.bytesOf(id); return f && { type: { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[f.ext], bytes: f.bytes }; } },
+  modell: { may: (who, vid, id, key) => { const v = versions?.get(vid); return !!v && prospekt.open(v, key, who) && mcp.stills.list.some(x => x.id === id); },
+    bytes: async (vid, id) => { const v = versions?.get(vid), b = v && (await mcp.stills.of(v)).get(id); return b && { type: "image/png", bytes: b }; } },
+  forslag: { may: (who, vid, _stamp, key) => { const v = versions?.get(vid); return !!v && versions.visible(v, who, key); },
+    bytes: async vid => { const v = versions?.get(vid); return v && await mcp.thumbOf(v); } },
+  gjengi: { may: (who, id) => !!who && !!gjengi?.bytesOf(id), bytes: id => { const f = gjengi?.bytesOf(id); return f && { type: { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[f.ext], bytes: f.bytes }; } },
+  skisse: { may: (who, id) => !!who && mcp.sketchBytes(id)?.person === who, bytes: id => { const k = mcp.sketchBytes(id); return k && { type: "image/png", bytes: k.bytes }; } },
+});
 const anton = createAssistant({ SECURITY, readJson, login, versions, pages });
 mcp.setNotifier((person, event, data) => anton.publish(person, event, data));   // a sketch Anton shows reaches the person's page (U3635)
 const streets = createStreets({ site, SECURITY });
@@ -119,6 +134,7 @@ createServer(async (req, res) => {
     const url = new URL(req.url, "http://x"); let path = decodeURIComponent(url.pathname);
     if (/^\/prospekt\/[^/]+\/?$/.test(path)) path = "/prospekt.html";   // the page reads the id from its address
     if (path === "/mcp") return await mcp.handleMcp(req, res);
+    if (await px.route(req, res, path)) return;   // Caddy's forward_auth (/px-may) and the scaler's source (/internal/px-src/)
     if (path === "/mcp/server-card") return mcp.handleCard(req, res);
     if (await auth.route(req, res, url) || await streets.route(req, res, path, url) || await snow.route(req, res, path, url)) return;
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path) || await sitePhotos?.route(req, res, path, url) || await guide?.route(req, res, path)) return;

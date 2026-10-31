@@ -12,16 +12,15 @@ const PUB = join(ROOT, "public");
 const RAW = /<img\b|createElement\(["']img["']\)|new Image\(/;
 const CSS_RAW = /background(?:-image)?\s*:[^;{}]*url\(/;
 const SKIP = /^(public\/(kit|renderkit|vendor)\/|public\/(three|jsqr))|(^|\/)(node_modules|tests|\.git)\//;
-const AUTH = "a version's own picture (renders, stills, site photos, drawn sheets) behind its sharing key: the scaler fetches anonymously, so it needs signed addresses (U3973 follow-up)";
-const LOCAL = "a picture made in this browser (snapshot, upload preview): nothing to scale on a server";
+const LOCAL = "a picture made in this browser (snapshot, upload preview, the drawing the person sent, a data: address): nothing to scale on a server";
 const EXEMPT = {
-  "public/app.js": [6, "snapshots are LOCAL; the drawn sheet and the wish thumbnails are static 64 px WebP or AUTH"],
-  "public/anton.js": [2, AUTH + " (Anton's sketches and tries)"],
+  "public/app.js": [4, "snapshots are LOCAL; the drawn sheet and the wish thumbnails are static 64 px WebP"],
+  "public/anton.js": [2, LOCAL],
   "public/fasade-view.js": [1, LOCAL],
-  "public/gjengi.js": [3, AUTH],
+  "public/gjengi.js": [1, LOCAL + " (the compare view's data: address, in pic())"],
   "public/mcp-app.js": [1, LOCAL],
-  "public/prospekt-view.js": [3, AUTH],
-  "public/sitephotos.js": [2, AUTH + " / " + LOCAL],
+  "public/prospekt-view.js": [1, "the lightbox's own element: prospekt-pane.js sets its src with ownScaled() at 1600 px"],
+  "public/sitephotos.js": [1, LOCAL],
   "public/tegn.js": [1, LOCAL],
   "public/viewer.js": [1, LOCAL],
 };
@@ -63,7 +62,7 @@ test("the instrument sees a raw picture (the control: zero matches is not an abs
 
 test("no picture skips the helper", () => {
   const bad = Object.entries(sites()).filter(([f, n]) => n > (EXEMPT[f]?.[0] ?? 0)).map(([f, n]) => `${f}: found ${n}, allowed ${EXEMPT[f]?.[0] ?? 0}`);
-  assert.deepEqual(bad, [], "show a picture with picture() from public/kit/picture.js; only a person's own picture is exempt, by a row in EXEMPT with its reason");
+  assert.deepEqual(bad, [], "show a picture with picture() from public/kit/picture.js; a person's own picture goes through ownPictureHTML() (the route redirects to a signed address, px.mjs); EXEMPT is for a picture made in this browser");
 });
 
 test("an exemption is still needed", () => {

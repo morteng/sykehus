@@ -1,12 +1,12 @@
 {
-  "kits": "e9f60f83fd94051aaf1c623f109d55bb76f64720",
+  "kits": "1505c9adcf7ef7ec2eaabc38e9385b01ebb6f4a8",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "e0f3a7ac8d6d4cb83437eefc7812d1f2c70f12b4",
+    "kit.css": "206790031b65c51a6473584b7bb817730f1c9279",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
@@ -23,6 +23,8 @@
     "html.js": "fddaca736d72d73ab32408e89c42ef4cfb634ebd",
     "effects.js": "4a4282e7d2aa28137bdabccf49d3f0e25ab5216e",
     "pill.js": "bdf2c6747827172928030ca7b26f5b6a21b0c1fe",
-    "picture.js": "4cc7b385ca4ed6b37ce88f307ce8dc4b38cd39c5"
+    "picture.js": "ce68e7c81e7714cbbe0364ad88ccf9cb101d7509",
+    "picture-signed.js": "1b58969fdbc55ae279f455f775905f271826cede",
+    "upload-caps.js": "abff4629745152650c084a4a6096f199117ce2c2"
   }
 }

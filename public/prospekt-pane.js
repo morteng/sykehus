@@ -2,6 +2,7 @@
    One content builder (prospekt-view.js) is mounted here; the old page /prospekt/<id> only sends on to the main page with this view picked (prospekt.js).
    Which view opens first: a shared project that is not the person's own opens on the Prospekt; the owner's opens on 3D; ?vis=prospekt / ?vis=3d asks. */
 import { prospektHtml, GONE, LIGHTBOX_HTML } from "./prospekt-view.js";
+import { ownScaled } from "./kit/picture.js";
 
 export const sharedOpen = draft => !!draft?.version && !draft.missing && draft.sharing !== "privat";   // the Prospekt exists for a shared project only (the server answers privat with 404)
 export function firstView({ shared, owner, asked }) {
@@ -28,7 +29,7 @@ export async function renderProspekt(el, { id, nokkel, explore, fetch: get = fet
 export function bindLightbox(pane, figs) {
   pane.insertAdjacentHTML("beforeend", LIGHTBOX_HTML);
   const lb = pane.querySelector("[data-pklb]"), q = s => lb.querySelector(s); let at = 0;
-  const show = i => { const all = figs(); if (!all.length) return; at = (i + all.length) % all.length; const f = all[at]; q("[data-img]").src = f.url; q("[data-img]").alt = f.caption; q("[data-cap]").textContent = f.caption; q("[data-dl]").href = f.url; lb.hidden = false; q("[data-n]").hidden = q("[data-p]").hidden = all.length < 2; };
+  const show = i => { const all = figs(); if (!all.length) return; at = (i + all.length) % all.length; const f = all[at]; q("[data-img]").src = ownScaled(f.url, 1600); q("[data-img]").alt = f.caption; q("[data-cap]").textContent = f.caption; q("[data-dl]").href = f.url; lb.hidden = false; q("[data-n]").hidden = q("[data-p]").hidden = all.length < 2; };
   const close = () => { lb.hidden = true; q("[data-img]").removeAttribute("src"); };
   pane.addEventListener("click", e => { const b = e.target.closest("[data-lb]"); if (b) show(+b.dataset.lb); });
   q("[data-x]").onclick = close; q("[data-n]").onclick = () => show(at + 1); q("[data-p]").onclick = () => show(at - 1);

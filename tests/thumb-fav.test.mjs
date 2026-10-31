@@ -40,10 +40,10 @@ test("(d) a private project's favourite is not served to someone who may not see
   assert.equal((await s.pic(priv, {})).status, 404); assert.equal((await s.pic(priv, as("pappa"))).status, 404);
   const own = await s.pic(priv, as("morten")); assert.equal(own.headers.get("content-type"), "image/jpeg"); assert.deepEqual(Buffer.from(await own.arrayBuffer()), pv);
 });
-test("(b) with no starred render the drawn picture is served (a JPEG), token is the save time", async () => {
+test("(b) with no starred render the drawn picture is served (a PNG), token is the save time", async () => {
   put(recs.map(r => ({ ...r, fav: false })), {}); const t = await boot();
-  try { const r = await t.pic(pub); assert.equal(r.status, 200); assert.equal(r.headers.get("content-type"), "image/jpeg");
-    const b = Buffer.from(await r.arrayBuffer()); assert.deepEqual([...b.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+  try { const r = await t.pic(pub); assert.equal(r.status, 200); assert.equal(r.headers.get("content-type"), "image/png");
+    const b = Buffer.from(await r.arrayBuffer()); assert.deepEqual([...b.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
     const row = (await t.list("morten")).find(v => v.version === pub); assert.equal(row.thumb, row.updated);
   } finally { t.stop(); }
 });

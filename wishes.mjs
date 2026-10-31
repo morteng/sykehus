@@ -11,6 +11,7 @@
      GET  /api/onsker/<id>.png the picture kept with a wish (U3832: send_wish and the feedback dialog attach one), its person's or an admin's
      POST /api/onsker          {text, tried?, version?}  a new wish, from the page
      POST /api/onsker/<id>     {status, note?}  an admin's answer */
+import { UPLOAD_CAPS } from "./public/kit/upload-caps.js";   // the one table of upload caps (U3992)
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -60,7 +61,7 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     let png = null;
     if (b.screenshot != null) {
       const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(b.screenshot)); png = m ? Buffer.from(m[1], "base64") : null;
-      if (!png || png.length > 1024 * 1024 || !png.subarray(0, 8).equals(PNG)) return [png && png.length > 1024 * 1024 ? 413 : 400, { code: "bad_image" }];
+      if (!png || png.length > UPLOAD_CAPS.wishPng || !png.subarray(0, 8).equals(PNG)) return [png && png.length > UPLOAD_CAPS.wishPng ? 413 : 400, { code: "bad_image" }];
     }
     const now = Date.now(), q = (hour.get(person) || []).filter(t => now - t < 3600e3);
     if (q.length >= 10) return [429, { code: "limit", retry_at: new Date(q[0] + 3600e3 + 1000).toISOString() }];

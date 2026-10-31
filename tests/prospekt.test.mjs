@@ -123,9 +123,9 @@ test("a shown render is served as stored, with its own type; a wrong extension o
   assert.equal((await get(`/api/prospekt/${pub}/bilde/${R.l1}.jpg`)).status, 404, "another project's render");
 });
 
-test("the model's stills are drawn on the server for a shared project only: a JPEG for offentlig, the same 404 for privat, lenke without key and an unknown still", async () => {
+test("the model's stills are drawn on the server for a shared project only: a PNG for offentlig (the scaler cuts and encodes it), the same 404 for privat, lenke without key and an unknown still", async () => {
   const j = JSON.parse((await get(`/api/prospekt/${pub}`)).text), r = await fetch(`${s.O}/${j.stills[0].url}`), b = Buffer.from(await r.arrayBuffer());
-  assert.equal(r.status, 200); assert.equal(r.headers.get("content-type"), "image/jpeg"); assert.deepEqual([...b.subarray(0, 3)], [0xff, 0xd8, 0xff]); assert.ok(b.length > 5000, "a real picture");
+  assert.equal(r.status, 200); assert.equal(r.headers.get("content-type"), "image/png"); assert.deepEqual([...b.subarray(0, 4)], [0x89, 0x50, 0x4e, 0x47]); assert.ok(b.length > 5000, "a real picture");
   for (const p of [`/api/prospekt/${priv}/modell/sorvest.jpg`, `/api/prospekt/${lnk.version}/modell/sorvest.jpg`, `/api/prospekt/vzzzzzzzz/modell/sorvest.jpg`]) assert.equal((await get(p)).text, gone.text, p);
   assert.equal((await get(`/api/prospekt/${pub}/modell/finnesikke.jpg`)).status, 404);
 });
@@ -160,15 +160,15 @@ test("the page markup: full-bleed hero with the title, facts column, renders the
     stills: [{ title: "Modellen sett fra sørvest", url: "s1" }], numbers: { volumes: [{ name: "Hus", storeys: 3, footprint_m2: 288, bta_m2: 864, bra_m2: null, foot_kote: 22, top_kote: 31.6, storey_kotes: [22, 25.2, 28.4] }], bta_m2: 864, bra_m2: null, demolished: { count: 0 }, how: "Beregnet." },
     limits: [{ line: "Kvikkleire.", how: "Fra NVE" }], limits_say: null };
   const h = prospektHtml(base, { links: { explore: "./?versjon=v1&vis=3d" } });
-  assert.match(h, /class="pk-hero-img" data-lb="1"[^>]*><img src="u2"/, "the hero is the chosen render, first and large");
+  assert.match(h, /class="pk-hero-img" data-lb="1"[^>]*><img src="u2\?w=1024"/, "the hero is the chosen render, first and large");
   assert.ok(h.indexOf('class="pk-hero') < h.indexOf('class="pk-facts"') && h.indexOf('class="pk-facts"') < h.indexOf("<h2>Bilder") && h.indexOf("<h2>Bilder") < h.indexOf("<h2>Modellen") && h.indexOf("<h2>Modellen") < h.indexOf("Tomta og begrensninger"), "order: hero, facts, pictures, model, limits");
-  assert.match(h, /data-lb="0"[^>]*><img src="u1"/); assert.match(h, /data-lb="2"[^>]*><img src="s1"/); assert.match(h, /<figcaption>Modellen sett fra sørvest<\/figcaption>/); assert.match(h, /Gjengitt bilde, 26\. oktober 2026/);
+  assert.match(h, /data-lb="0"[^>]*><img src="u1\?w=480"/); assert.match(h, /data-lb="2"[^>]*><img src="s1\?w=480"/); assert.match(h, /<figcaption>Modellen sett fra sørvest<\/figcaption>/); assert.match(h, /Gjengitt bilde, 26\. oktober 2026/);
   assert.match(h, /<a class="pk-btn" data-explore href="\.\/\?versjon=v1&amp;vis=3d">Utforsk i 3D<\/a>/); assert.match(h, /Laget med Sykehustomta/);
   assert.ok(!/canvas|<script|webgl|viewer/i.test(h), "no live 3D in the page");
   assert.match(h, /<dt>BRA<\/dt><dd>ikke oppgitt/); assert.match(h, /<dt>Høyeste kote<\/dt><dd>\+31,6 m/); assert.match(h, /etasjer \+22 · \+25,2 · \+28,4/);
   assert.ok(h.includes("A &lt;b&gt;&amp;&quot; hus") && !h.includes("<b>&"), "title escaped"); assert.match(h, /Av lars/);
   assert.ok(!/<h2>Bilder/.test(prospektHtml({ ...base, renders: [base.renders[1]] })), "only the hero: no «Bilder»");
-  const bare = prospektHtml({ ...base, hero: null, renders: [] }); assert.match(bare, /class="pk-hero-img" data-lb="0"[^>]*><img src="s1"/, "no render: the first still is the hero");
+  const bare = prospektHtml({ ...base, hero: null, renders: [] }); assert.match(bare, /class="pk-hero-img" data-lb="0"[^>]*><img src="s1\?w=1024"/, "no render: the first still is the hero");
   assert.ok(!/<h2>Modellen/.test(bare), "and is not shown twice"); assert.match(GONE, /Fant ikke prospektet/);
 });
 test("which view opens first: a shared project's Prospekt for a visitor and for anyone not the owner; 3D for the owner; ?vis= asks; a project with no Prospekt opens on 3D", () => {

@@ -8,9 +8,12 @@ import { VIEWPOINTS, LOOKS, SIZES, DEFAULT_SIZE, lookFor, viewpointFor } from ".
 import { LENSES, ASPECTS, frameRect, frameFov, viewFov, hFov, poseFromCam, frameSvg, frustumSvg } from "./renderkit/photoframe.js";
 import { bearingOf } from "./sunlight.js";
 import { LOOK_NO, SIZE_NO, LENS_NO, ASPECT_NO, framePatch } from "./gjengi-no.js";
+import { ownPictureHTML } from "./kit/picture.js";
 import { spotOfView, flyTo, isStale, retakeBody, retake, total, whyNot, hasWork, NEEDS_WORK } from "./photospots.js";
 const usd = v => `$${Number(v || 0).toFixed(2).replace(".", ",")}`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+/* a picture of the app (api/gjengi/…) through the scaler (U3992); a data: or blob: address is a picture made in this browser, shown as it is */
+const pic = (url, w, alt, cls = "", style = "") => /^(data|blob):/.test(url) ? `<img${cls ? ` class="${cls}"` : ""} src="${esc(url)}" alt="${esc(alt)}"${style ? ` style="${style}"` : ""}>` : ownPictureHTML(url, { w, alt, class: cls || undefined }).replace(/^<img/, style ? `<img style="${style}"` : "<img");
 const MONTH = ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"];
 const $ = id => document.getElementById(id);
 
@@ -86,7 +89,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
     const reason = why(), label = reason || `Ta bildet · ca. ${usd(est)}`;   // a grey shutter says why on itself, in the view and in the drawer
     for (const b of [go, shotBtn]) { b.disabled = !!reason; b.setAttribute("aria-label", reason ? `Ta bildet: ${reason}` : label); }
     go.textContent = reason ? `Ta bildet: ${reason}` : label; $("pfPrice").textContent = reason || `ca. ${usd(est)}`; shotBtn.title = label;
-    list.innerHTML = (st.pictures || []).map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener" title="Åpne i full størrelse"><img src="${esc(p.url)}" alt="Gjengitt bilde ${esc(new Date(p.at).toLocaleString("nb-NO"))}" loading="lazy"></a>
+    list.innerHTML = (st.pictures || []).map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener" title="Åpne i full størrelse">${pic(p.url, 160, `Gjengitt bilde ${new Date(p.at).toLocaleString("nb-NO")}`)}</a>
       <span class="gj-r"><button type="button" class="gj-fav" data-fav="${esc(p.id)}" aria-pressed="${p.fav}" title="${p.fav ? "Ta bort som favoritt" : "Behold som favoritt"}" aria-label="${p.fav ? "Ta bort som favoritt" : "Behold som favoritt"}">${p.fav ? "★" : "☆"}</button>
       <a href="${esc(p.download)}" download>Last ned</a><small>${esc(new Date(p.at).toLocaleDateString("nb-NO"))} · ${usd(p.cost_usd)}${p.wish ? ` · ${esc(p.wish)}` : ""}</small></span></li>`).join("");
     for (const b of list.querySelectorAll("[data-fav]")) b.onclick = () => fav(b.dataset.fav, b.getAttribute("aria-pressed") !== "true");
@@ -97,7 +100,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   function drawSpots() {
     const box = $("gjSpots"), all = spots(); box.hidden = !all.length; $("gjSpotsH").hidden = !all.length; box.innerHTML = all.map(p => {
       const stale = isStale(p, changes()), t = `${LOOK_NO[p.spot.look]?.no || "Bilde"}, ${p.spot.mm} mm, ${p.spot.aspect || ""}, ${new Date(p.at).toLocaleDateString("nb-NO")}${stale ? ". Modellen er endret siden" : ""}`;
-      return `<button type="button" class="pf-spot" data-spot="${esc(p.id)}" aria-pressed="${p.id === selSpot}" title="${esc(t)}. Trykk for å gå dit"><img src="${esc(p.url)}" alt="${esc(t)}" loading="lazy">${stale ? '<i class="pf-new" aria-label="Modellen er endret siden"></i>' : ""}</button>`; }).join("");
+      return `<button type="button" class="pf-spot" data-spot="${esc(p.id)}" aria-pressed="${p.id === selSpot}" title="${esc(t)}. Trykk for å gå dit">${pic(p.url, 160, t)}${stale ? '<i class="pf-new" aria-label="Modellen er endret siden"></i>' : ""}</button>`; }).join("");
     for (const b of box.querySelectorAll("[data-spot]")) b.onclick = () => selectSpot(b.dataset.spot);
     const p = all.find(x => x.id === selSpot), d = $("gjSpot"); d.hidden = !p; if (!p) return;
     const stale = isStale(p, changes()), re = latestRetake(p.id), est = priceOf(sizeNow());
@@ -163,7 +166,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   }
   function showResult({ before, after, pic, beforeText, afterText }) {
     result.hidden = false;
-    result.innerHTML = `<div class="pf-res"><div class="pf-cmp" style="aspect-ratio:${aspectNow().replace(":", " / ")}"><img class="pf-after" src="${esc(after)}" alt="${esc(afterText)}">${before ? `<img class="pf-before" src="${esc(before)}" alt="${esc(beforeText)}" style="clip-path:inset(0 50% 0 0)"><input type="range" min="0" max="100" value="50" aria-label="Dra for å sammenligne ${esc(beforeText.toLowerCase())} og ${esc(afterText.toLowerCase())}"><span class="pf-l">${esc(beforeText)}</span><span class="pf-r">${esc(afterText)}</span>` : ""}</div>
+    result.innerHTML = `<div class="pf-res"><div class="pf-cmp" style="aspect-ratio:${aspectNow().replace(":", " / ")}">${pic(after, 1024, afterText, "pf-after")}${before ? `${pic(before, 1024, beforeText, "pf-before", "clip-path:inset(0 50% 0 0)")}<input type="range" min="0" max="100" value="50" aria-label="Dra for å sammenligne ${esc(beforeText.toLowerCase())} og ${esc(afterText.toLowerCase())}"><span class="pf-l">${esc(beforeText)}</span><span class="pf-r">${esc(afterText)}</span>` : ""}</div>
       <div class="gj-row"><button type="button" id="pfAgain">Ta et nytt</button><button type="button" id="pfSave" aria-pressed="${!!pic?.fav}">${pic?.fav ? "Lagret ★" : "Lagre"}</button><a class="pf-dl" href="${esc(pic?.download || after)}" download>Last ned</a></div></div>`;
     const range = result.querySelector("input[type=range]"), bef = result.querySelector(".pf-before");
     if (range) range.oninput = () => { bef.style.clipPath = `inset(0 ${100 - +range.value}% 0 0)`; };

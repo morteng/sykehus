@@ -1,6 +1,7 @@
 /* «Bilder» (under Bygg): the person's own photos of the building as it stands. A photo is made at most 2000 px on its long edge in the
    browser (a phone's camera picture is 12 MB), sent to /api/bilder (sitephotos.mjs) with its wing, facade side, note and year, listed,
    viewed and deleted here; Anton reads them with the connector's look_at_site_photo. Only the person's own are ever shown. */
+import { ownPictureHTML } from "./kit/picture.js";
 export const MAX_EDGE = 2000, SIDES = ["nord", "øst", "sør", "vest", "ukjent"];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 /* the size a picture is sent at: as it is when small enough, else the long edge brought to max */
@@ -41,7 +42,7 @@ export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => 
     const r = await fetchImpl("api/bilder").catch(() => null);
     if (!r || !r.ok) { list.innerHTML = ""; if (r?.status === 401) speak(WORDS.signedOut); return; }
     const j = await r.json(); if (!wing.options.length) wing.innerHTML = j.wings.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
-    list.innerHTML = j.photos.length ? j.photos.map(p => `<li data-id="${esc(p.id)}"><a href="api/bilder/${esc(p.id)}" target="_blank" rel="noopener"><img loading="lazy" src="api/bilder/${esc(p.id)}" alt="${esc(p.wing_name)}, fasade ${esc(p.side)}"></a>
+    list.innerHTML = j.photos.length ? j.photos.map(p => `<li data-id="${esc(p.id)}"><a href="api/bilder/${esc(p.id)}" target="_blank" rel="noopener">${ownPictureHTML(`api/bilder/${p.id}`, { w: 240, alt: `${p.wing_name}, fasade ${p.side}` })}</a>
       <div><b>${esc(p.wing_name)}</b> · ${esc(p.side)}${p.year ? ` · ${p.year}` : ""}${p.note ? `<br><small>${esc(p.note)}</small>` : ""}</div><button type="button" class="ph-del" data-del="${esc(p.id)}" title="${WORDS.del}" aria-label="${WORDS.del}">×</button></li>`).join("") : `<li class="ph-empty">${WORDS.empty}<small>Legg til bilder over: Anton kan se på dem.</small></li>`;
   }
   list.onclick = async e => {

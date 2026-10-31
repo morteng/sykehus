@@ -323,7 +323,7 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 
 /* ---- the help button (src/help.ts) */
 .g-help{display:inline-flex;vertical-align:middle}
-.g-help__pop{position:fixed;inset:auto;margin:0;width:min(24rem,calc(100vw - 2 * var(--sp-4)));padding:var(--sp-3);background:var(--panel);color:var(--text);
+.g-help__pop{position:fixed;inset:auto;margin:0;overflow:auto;width:min(24rem,calc(100vw - 2 * var(--sp-4)));padding:var(--sp-3);background:var(--panel);color:var(--text);
   border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);font-size:var(--fs-sm);line-height:1.5}
 .g-help__pop p{margin:0}.g-help__pop p+p{margin-top:var(--sp-2)}
 .g-help__btn:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}

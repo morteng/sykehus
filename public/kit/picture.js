@@ -52,3 +52,35 @@ export const PICTURE_CASES = [
     { path: "/static/d.svg", opts: { w: 24, h: 24, alt: "" }, from: { origin: "http://laser:8000" } },
     { path: "/static/../x.jpg", opts: { w: 100, alt: "" }, from: { origin: "http://laser:8000" } },
 ];
+// ---- a person's own picture (U3992) -------------------------------------------------------------------------------------------
+// A picture behind a login is not an address the browser can sign (the key stays on the server). The app's own route answers
+// `<path>?w=<bucket>` for a person who may see it with a redirect to the signed scaler address (picture-signed.ts signed(), made on
+// the server), so the page writes the same markup as for any picture: src at the shown width, srcset 1x/2x. Without the width the
+// route answers the file as it is; that is the fallback for an app with no signing key, never what a page asks for.
+/** `<path>` with the bucketed width the app's route reads (`w`), joined with `?` or `&`. */
+export function ownScaled(path, w) {
+    return `${path}${path.includes("?") ? "&" : "?"}w=${bucket(w)}`;
+}
+/** The <img> markup for a person's own picture: src at the shown width, srcset 1x/2x, width/height, lazy and async. */
+export function ownPictureHTML(path, o) {
+    const one = ownScaled(path, o.w);
+    const two = ownScaled(path, o.w * 2);
+    const a = {
+        src: one,
+        srcset: one !== two ? `${one} 1x, ${two} 2x` : undefined,
+        width: Math.round(o.w),
+        height: o.h === undefined ? undefined : Math.round(o.h),
+        alt: o.alt,
+        class: o.class,
+        loading: o.eager ? undefined : "lazy",
+        fetchpriority: o.eager ? "high" : undefined,
+        decoding: "async",
+    };
+    return `<img${attrs(a)}>`;
+}
+/** The same <img> as an element. */
+export function ownPicture(path, o, doc = document) {
+    const t = doc.createElement("template");
+    t.innerHTML = ownPictureHTML(path, o);
+    return t.content.firstElementChild;
+}

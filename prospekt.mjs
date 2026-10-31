@@ -3,7 +3,7 @@
 
    GET /api/prospekt/<versionId>[?nokkel=]                         the public-safe JSON (PROSPEKT_KEYS, nothing else)
    GET /api/prospekt/<versionId>/bilde/<renderId>.<ext>[?nokkel=]  a render the owner lets show, full size
-   GET /api/prospekt/<versionId>/modell/<still>.jpg[?nokkel=]      a still of the model drawn server-side (mcp.mjs stills): no live 3D in the Prospekt
+   GET /api/prospekt/<versionId>/modell/<still>.jpg[?nokkel=]      a still of the model drawn server-side (mcp.mjs stills, a PNG; the name stays): no live 3D in the Prospekt
    GET /prospekt/<versionId> and /prospekt.html?v=<id>             the page (public/prospekt.html), by server.mjs
 
    Who may open it is decided from the version's sharing on EVERY request: offentlig: anyone; lenke: with the link's key (v.key), or its owner;
@@ -33,7 +33,7 @@ export function limitsOf(f) {
     ...(f.heritage_within_50m || []).map(h => ({ line: `Kulturminne ${Number.isFinite(+h.distance_m) ? Math.round(h.distance_m) + " m unna" : "i nærheten"}: ${str(h.name)}${h.protection ? ` (${str(h.protection)})` : ""}`, how: "Fra Riksantikvarens register (Kulturminnesøk)" }))].filter(l => l.line);
 }
 
-export function createProspekt({ SECURITY = {}, login, versions, photos, site, floors = [], siteFacts = async () => ({}), stills = { list: [], of: async () => new Map() }, costs = () => loadCosts() }) {
+export function createProspekt({ SECURITY = {}, px = null, login, versions, photos, site, floors = [], siteFacts = async () => ({}), stills = { list: [], of: async () => new Map() }, costs = () => loadCosts() }) {
   const json = (res, n, o) => res.writeHead(n, { ...SECURITY, "content-type": "application/json; charset=utf-8", "cache-control": "no-store", vary: "cookie" }).end(JSON.stringify(o));
   const none = res => json(res, 404, { error: "Fant ikke prospektet." });   // one answer for a private, a missing and a wrongly keyed project
   /* the owner opens their own project's Prospekt shared or not (the preview while working, Morten 2026-10-28); nobody else gets a privat one, and a link key never opens it */
@@ -51,12 +51,14 @@ export function createProspekt({ SECURITY = {}, login, versions, photos, site, f
       if (m[2]) {
         const r = shown.find(x => x.id === m[2] && x.ext === m[3]), f = r && photos.bytesOf(r.id);
         if (!f) return none(res), true;
+        if (await px?.redirect(req, res, "bilde", v.id, r.id, url, v.sharing === "lenke" ? key : null)) return true;   // U3992: through the scaler, signed
         return res.writeHead(200, { ...SECURITY, "content-type": TYPES[f.ext], "cache-control": "private, max-age=3600", vary: "cookie", "content-length": f.bytes.length }).end(f.bytes), true;
       }
       if (m[4]) {   // a still of the model, drawn on the first request
         if (!stills.list.some(x => x.id === m[4])) return none(res), true;
+        if (await px?.redirect(req, res, "modell", v.id, m[4], url, v.sharing === "lenke" ? key : null)) return true;   // U3992: the still is drawn when the scaler asks
         let bytes; try { bytes = (await stills.of(v)).get(m[4]); } catch (e) { console.error("prospekt still:", v.id, e.message); return json(res, 500, { error: "Bildet kunne ikke lages." }), true; }
-        return res.writeHead(200, { ...SECURITY, "content-type": "image/jpeg", "cache-control": "private, max-age=600", vary: "cookie", "content-length": bytes.length }).end(bytes), true;
+        return res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=600", vary: "cookie", "content-length": bytes.length }).end(bytes), true;
       }
       const ordered = [...shown].sort((a, b) => (b.hero - a.hero) || b.at.localeCompare(a.at));
       let c; try { c = costs(); } catch { c = { prices: [], bra_factor: null }; }

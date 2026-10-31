@@ -5,6 +5,7 @@ const nb = (n, d = 0) => Number(n).toLocaleString("nb-NO", { maximumFractionDigi
 const kote = k => (k == null ? "" : `+${nb(k, 1)}`);
 const day = t => new Date(t).toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
 /* the picture viewer's markup, once: the viewing area mounts it beside the page (prospekt-pane.js) */
+import { ownPictureHTML } from "./kit/picture.js";
 export const LIGHTBOX_HTML = `<div class="pk-lb" data-pklb hidden role="dialog" aria-modal="true" aria-label="Bilde"><button type="button" class="pk-lb-x" data-x aria-label="Lukk">×</button><button type="button" class="pk-lb-n pk-lb-p" data-p aria-label="Forrige bilde">‹</button><img data-img alt=""><button type="button" class="pk-lb-n pk-lb-f" data-n aria-label="Neste bilde">›</button><div class="pk-lb-b"><span data-cap></span><a data-dl download>Last ned</a></div></div>`;
 export const GONE = `<div class="pk-gone"><h1>Fant ikke prospektet</h1><p>Prosjektet finnes ikke, eller det er ikke delt. Be eieren om en lenke, eller se <a href="./">de delte prosjektene</a>.</p></div>`;
 
@@ -34,12 +35,12 @@ export function limitsHtml(limits, say) {
   if (!limits?.length) return `<p class="pk-note">${esc(say || "Ingen begrensninger funnet i kartene vi leser.")}</p>`;
   return `<ul class="pk-lim">${limits.map(l => `<li><span>${esc(l.line)}</span><small>${esc(l.how)}</small></li>`).join("")}</ul>`;
 }
-const fig = (f, i, cls = "") => `<figure class="pk-fig${cls}"><button type="button" data-lb="${i}" aria-label="Se bildet større: ${esc(f.caption)}"><img src="${esc(f.url)}" alt="${esc(f.caption)}" loading="lazy"></button><figcaption>${esc(f.caption)}</figcaption></figure>`;
+const fig = (f, i, cls = "") => `<figure class="pk-fig${cls}"><button type="button" data-lb="${i}" aria-label="Se bildet større: ${esc(f.caption)}">${ownPictureHTML(f.url, { w: 480, alt: f.caption })}</button><figcaption>${esc(f.caption)}</figcaption></figure>`;
 
 export function prospektHtml(j, { links = {} } = {}) {
   const all = figures(j), heroAt = Math.max(0, all.findIndex(f => f.id === j.hero)), hero = all[heroAt];
   const renders = all.filter((f, i) => f.kind === "render" && i !== heroAt), stills = all.filter((f, i) => f.kind === "still" && i !== heroAt), at = f => all.indexOf(f);
-  return `<header class="pk-hero${hero ? "" : " none"}">${hero ? `<button type="button" class="pk-hero-img" data-lb="${heroAt}" aria-label="Se bildet større"><img src="${esc(hero.url)}" alt="${esc(hero.caption)}"></button>` : ""}`
+  return `<header class="pk-hero${hero ? "" : " none"}">${hero ? `<button type="button" class="pk-hero-img" data-lb="${heroAt}" aria-label="Se bildet større">${ownPictureHTML(hero.url, { w: 1024, alt: hero.caption, eager: true })}</button>` : ""}`
       + `<div class="pk-hero-t"><p class="pk-kick">Prospekt · Gamle Drammen sykehus</p><h1>${esc(j.title)}</h1><p class="pk-by">Av ${esc(j.owner)}</p>`
       + `<p class="pk-go">${links.explore ? `<a class="pk-btn" data-explore href="${esc(links.explore)}">Utforsk i 3D</a>` : ""}${links.edit ? `<a class="pk-btn quiet" href="${esc(links.edit)}">Åpne i redigering</a>` : ""}</p></div></header>`
     + `<div class="pk-body"><aside class="pk-side"><h2>Fakta</h2>${factsHtml(j)}<p class="pk-how">${esc(j.numbers?.how)}</p></aside>`

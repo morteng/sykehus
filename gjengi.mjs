@@ -16,6 +16,7 @@
    GET  /api/gjengi/<id>.<ext>[?last-ned]          the picture, full size; ?last-ned as a download
 
    Kept in <dir>/index.json (every picture, its cost and its work; written whole and renamed) and <dir>/<id>.<ext>. */
+import { UPLOAD_CAPS } from "./public/kit/upload-caps.js";   // the one table of upload caps (U3992)
 import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -26,7 +27,7 @@ const URL_ = "https://openrouter.ai/api/v1/chat/completions";
 const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
 const ASPECTS = [["1:1", 1], ["4:5", 4 / 5], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
 const MAX_PROSPEKT = 24;   // the renders a Prospekt shows, newest first
-const ID = /^[a-z0-9]{16}$/, MAX_IN = 6 * 1024 * 1024;
+const ID = /^[a-z0-9]{16}$/, MAX_IN = UPLOAD_CAPS.render;
 /* The view is the only geometry the model gets (U3526: the first prompt let it invent hills and houses behind the site). The prompt runs in this order, kept
    short: the geometry lock (first), the light (direction, height, colour: sunlight.js), the materials in view, the camera (lens and framing only), people and planting. */
 const GEOMETRY = "This image is a view of a 3D model of a site in Bragernes, Drammen, Norway. It is the only geometry: make it a photorealistic architectural rendering of exactly this view. "
@@ -80,7 +81,7 @@ export function spotOf(b) {
 }
 const WISH = " The person also asks for this; it may change only materials, light, people and planting, never the geometry: ";
 
-export function createRenderings({ SECURITY = {}, readJson, login, versions, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
+export function createRenderings({ SECURITY = {}, readJson, login, versions, px = null, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
   key = process.env.SYKEHUS_OPENROUTER_API_KEY || "", model = process.env.SYKEHUS_RENDER_MODEL || "google/gemini-3.1-flash-image", cap = +(process.env.SYKEHUS_RENDER_CAP_USD || 20),
   size = process.env.SYKEHUS_RENDER_SIZE || DEFAULT_SIZE, fetchImpl = fetch, now = () => new Date() } = {}) {
   if (!dir) return null;
@@ -215,6 +216,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, dra
         const r = all.find(x => x.id === m[1] && !x.failed); if (!r) return json(res, 404, { error: "Fant ikke bildet." });
         if (m[3] && req.method === "GET") {
           if (m[3] !== r.ext) return json(res, 404, { error: "Ikke funnet" });
+          if (px && who && !url.searchParams.has("last-ned") && await px.redirect(req, res, "gjengi", r.id, r.ext, url)) return true;   // U3992: signed in, through the scaler
           const body = readFileSync(join(dir, `${r.id}.${r.ext}`));
           return res.writeHead(200, { ...SECURITY, "content-type": { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[r.ext], "cache-control": "private, max-age=86400",
             ...(url.searchParams.has("last-ned") ? { "content-disposition": `attachment; filename="sykehustomta-${r.at.slice(0, 10)}-${r.id.slice(0, 6)}.${r.ext}"` } : {}) }).end(body), true;

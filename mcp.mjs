@@ -11,14 +11,13 @@ import { wingOf, checkEdit, applyEdits } from "./public/edits.js";
 import { nearWays } from "./public/paint-edit.js";
 import { MAX_EDITS as MAX_VERSION_EDITS, SHARING, TRASH_DAYS, isPerson } from "./versions.mjs";
 import { createThumbs, drawCard, cardOpts } from "./thumbs.mjs";   // the Prosjekter tab's card pictures
-import { encodeJpeg } from "./jpeg.mjs";
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
 import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
-import { withGarden, frame as lookFrame, say as lookSay, annotate, decode as decodePng } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
+import { withGarden, frame as lookFrame, say as lookSay, annotate } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
 const withMeshes = s => withGarden(meshesIn(s));
 import { tryShot, changeArea } from "./tryshot.mjs";   // try_change's picture: aimed at what the call changed
 import { cameraProps, aimCamera, cameras, usedCamera } from "./camera.mjs";   // one camera for look and try_change's picture
@@ -73,7 +72,7 @@ const dirDeg = d => dirOf(d) ?? (() => { throw toolErr(`Unknown direction "${d}"
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const round1 = v => Math.round(v * 10) / 10;
 
-export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, render = picture, sitePhotos = null }) {
+export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY, readJson, versions = null, auth = null, wishes = null, pages, ways = null, places = null, photos = null, render = picture, sitePhotos = null, px = null }) {
   /* who is asking (auth.mjs): a login name, or null; looking and trying need none */
   const userOf = req => auth?.userOf(req) ?? null;
   const libs = libraries();
@@ -1219,23 +1218,26 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       thumb: photos?.favoriteOf(v.id)?.id || v.updated, ...(mine(v) ? { mine: true, ...(v.sharing === "lenke" ? { pkey: v.key } : {}), ...(v.work ? { work: true } : {}), ...(v.sharing === "offentlig" ? {} : { nokkel: v.own }) } : {}) })), you: me }, { "access-control-allow-origin": "*", vary: "cookie" });
   }
   /* the Prospekt's stills of the model (Morten 2026-10-27: no live 3D in the Prospekt, only pictures): the after drawn from the south-west, the north-east and straight down,
-     1600x1000 JPEG by the same renderer as look and the card; kept in memory per save, at most 8 projects */
+     1600x1000 PNG (the scaler cuts and encodes them, U3992) by the same renderer as look and the card; kept in memory per save, at most 8 projects */
   const STILLS = [{ id: "sorvest", title: "Modellen sett fra sørvest", zoom: 0.8, opts: { from: 225, tilt: 32 } }, { id: "nordost", title: "Modellen sett fra nordøst", zoom: 0.62, opts: { from: 45, tilt: 32 } }, { id: "plan", title: "Plan, nord opp (streken nederst er 50 m)", zoom: 0.62, opts: { plan: true } }];
   const stillCache = new Map();
   const stillsOf = v => {
     const k = v.id + "@" + v.updated; if (stillCache.has(k)) return stillCache.get(k);
     const after = applyEdits(site, floors, v.edits).site, s = withMeshes(after), area = changeArea(site, s, v.edits);
-    const p = Promise.all(STILLS.map(async st => { const base = cardOpts(site, area), png = await picture(s, { ...base, ...st.opts, dist: Math.round(base.dist * st.zoom), width: 1600, height: 1000 }), { px, W, H } = decodePng(png); return [st.id, encodeJpeg(px, W, H, 82)]; })).then(e => new Map(e));
+    const p = Promise.all(STILLS.map(async st => { const base = cardOpts(site, area), png = await picture(s, { ...base, ...st.opts, dist: Math.round(base.dist * st.zoom), width: 1600, height: 1000 }); return [st.id, png]; })).then(e => new Map(e));
     p.catch(() => stillCache.delete(k)); stillCache.set(k, p); if (stillCache.size > 8) stillCache.delete(stillCache.keys().next().value); return p;
   };
   /* GET /api/versjon/<id>/bilde.jpg: the card's picture (thumbs.mjs), seen by whoever may see the version itself */
-  const thumbs = versions ? createThumbs({ render: async v => { const after = applyEdits(site, floors, v.edits).site, s = withMeshes(after), area = changeArea(site, s, v.edits), png = await drawCard({ site, s, area, picture }), { px, W, H } = decodePng(png); return encodeJpeg(px, W, H, 78); } }) : null;
+  const thumbs = versions ? createThumbs({ render: async v => { const after = applyEdits(site, floors, v.edits).site, s = withMeshes(after), area = changeArea(site, s, v.edits); return await drawCard({ site, s, area, picture }); } }) : null;
+  /* the card's picture as bytes: the starred Gjengi picture as it is stored, else the drawn one (a PNG; the scaler cuts and encodes it) */
+  const thumbOf = async v0 => { const fav = photos?.favoriteOf(v0.id); return fav ? { type: { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[fav.ext] || "image/jpeg", bytes: fav.bytes } : { type: "image/png", bytes: await thumbs.get(v0) }; };
   async function handleThumb(req, res, id) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
-    const v0 = versions?.get(id), key = new URL(req.url, "http://x").searchParams.get("nokkel");
+    const u = new URL(req.url, "http://x"), v0 = versions?.get(id), key = u.searchParams.get("nokkel");
     if (!v0 || !versions.visible(v0, userOf(req), key)) return send(res, 404, { error: "Versjonen finnes ikke." }, { "access-control-allow-origin": "*" });
-    try { const fav = photos?.favoriteOf(id), bytes = fav ? fav.bytes : await thumbs.get(v0);   // the starred Gjengi picture as it is stored; else the drawn one
-      res.writeHead(200, { ...SECURITY, "content-type": fav ? { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[fav.ext] || "image/jpeg" : "image/jpeg", "content-length": bytes.length, "cache-control": "private, max-age=3600", vary: "cookie" }); return res.end(bytes);
+    try { if (px && await px.redirect(req, res, "forslag", id, (photos?.favoriteOf(id)?.id || String(Date.parse(v0.updated))).replace(/[^A-Za-z0-9_-]/g, "-"), u, key)) return;   // U3992: through the scaler, signed
+      const { type, bytes } = await thumbOf(v0);
+      res.writeHead(200, { ...SECURITY, "content-type": type, "content-length": bytes.length, "cache-control": "private, max-age=3600", vary: "cookie" }); return res.end(bytes);
     } catch (e) { console.error("thumb:", id, e.message); return send(res, 500, { error: "Bildet kunne ikke lages." }); }
   }
   /* POST /api/endring: the page's «Riv» and «Angre» (U3542), the same as try_change and undo_change: {edits, draft?,
@@ -1351,7 +1353,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { siteFacts, stills: { list: STILLS.map(({ id, title }) => ({ id, title })), of: stillsOf }, handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
+  return { siteFacts, stills: { list: STILLS.map(({ id, title }) => ({ id, title })), of: stillsOf }, thumbOf, sketchBytes: sid => { const k = sketchMeta(sid); try { return k ? { person: k.person, bytes: readFileSync(join(SK, sid + ".png")) } : null; } catch { return null; } }, handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
     setNotifier: f => { notify = f; },
     /* GET /api/skisse/<id>.png: a plan Anton showed this person */
     handleSketch: (req, res, rest, person) => {
@@ -1362,6 +1364,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         res.writeHead(ok ? 200 : 404, { ...SECURITY, "content-type": "application/json" }); return res.end(JSON.stringify(ok ? { sent: true } : { error: "Finnes ikke." })); }
       const m = /^([A-Za-z0-9_-]{8})\.png$/.exec(rest), k = m && sketchMeta(m[1]);
       if (!k || !person || k.person !== person) { res.writeHead(404, { ...SECURITY, "content-type": "application/json" }); return res.end(JSON.stringify({ error: "Finnes ikke." })); }
+      if (px && req.method === "GET") return px.redirect(req, res, "skisse", m[1], "p", new URL(req.url, "http://x")).then(done => { if (!done) { res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(readFileSync(join(SK, m[1] + ".png"))); } });
       res.writeHead(200, { ...SECURITY, "content-type": "image/png", "cache-control": "private, max-age=3600" }); res.end(readFileSync(join(SK, m[1] + ".png"))); },
     /* GET /api/skisser: the plans shown to this person lately, oldest first, for the page to show again after a reload */
     handleSketches: (req, res, person) => { res.writeHead(person ? 200 : 401, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(person ? { sketches: sketchesOf(person) } : { error: "signed_out" })); } };

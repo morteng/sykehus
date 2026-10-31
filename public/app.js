@@ -13,7 +13,7 @@ import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
 import { burst, burstAt } from "./kit/effects.js";
-import { pictureHTML } from "./kit/picture.js";
+import { pictureHTML, ownPictureHTML } from "./kit/picture.js";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
 import { lngLatToUtm } from "./utm.js";
@@ -496,7 +496,7 @@ const prospektHref = v => `?versjon=${encodeURIComponent(v.version)}${v.sharing 
 let detailsOpen = false;
 /* «Bilder i prospektet»: the open project's Gjengi pictures, each with a tick (shown in the Prospekt) and «Hovedbilde» (the first, large one); owner only, through POST /api/endring { prospekt } */
 let pkList = { id: null, pics: [] };
-const pkHtml = () => pkList.id !== versionId || !pkList.pics.length ? "" : `<b class="pk-h">Bilder i prospektet</b><ul class="pk-list">${pkList.pics.map(p => `<li><label><input type="checkbox" data-pkshow="${esc(p.id)}"${p.prospekt ? " checked" : ""}><img src="${esc(p.url)}" alt="" loading="lazy" width="96" height="64"></label><button type="button" class="pk-pickhero" data-pkhero="${esc(p.id)}" aria-pressed="${!!p.hero}" title="Det store bildet øverst i prospektet">${p.hero ? "Hovedbilde" : "Velg hovedbilde"}</button></li>`).join("")}</ul>`;
+const pkHtml = () => pkList.id !== versionId || !pkList.pics.length ? "" : `<b class="pk-h">Bilder i prospektet</b><ul class="pk-list">${pkList.pics.map(p => `<li><label><input type="checkbox" data-pkshow="${esc(p.id)}"${p.prospekt ? " checked" : ""}>${ownPictureHTML(p.url, { w: 96, h: 64, alt: "" })}</label><button type="button" class="pk-pickhero" data-pkhero="${esc(p.id)}" aria-pressed="${!!p.hero}" title="Det store bildet øverst i prospektet">${p.hero ? "Hovedbilde" : "Velg hovedbilde"}</button></li>`).join("")}</ul>`;
 async function pkLoad() {
   if (!mine()) return; const id = versionId;
   const j = await fetch(`api/gjengi?versjon=${encodeURIComponent(id)}`).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -1083,7 +1083,7 @@ function versionCard(v) {
   const pk = v.sharing !== "privat" && !selecting && me.person ? `<a class="fc-pk" href="${esc(prospektHref(v))}" title="Åpne prospektet: bilder og tall, uten innlogging" aria-label="Prospekt: ${esc(v.title)}">Prospekt</a>` : "";
   const acts = v.mine && !selecting ? `<div class="fc-acts">${pk}${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
-    + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}<img src="${esc(thumbSrc(v))}" alt="" loading="lazy" width="480" height="300"></span>`
+    + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}${ownPictureHTML(thumbSrc(v), { w: 480, h: 300, alt: "" })}</span>`
     + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts || (pk ? `<div class="fc-acts">${pk}</div>` : "")}</div>`
     + `${open && draft && !draft.missing ? openDetails() : ""}</li>`;
 }

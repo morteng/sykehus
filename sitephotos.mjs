@@ -11,8 +11,9 @@
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { UPLOAD_CAPS, capWords } from "./public/kit/upload-caps.js";   // the one table of upload caps (U3992)
 
-export const MAX_BYTES = 8 * 1024 * 1024, PER_PERSON = 60;
+export const MAX_BYTES = UPLOAD_CAPS.sitePhoto, PER_PERSON = 60;
 export const SIDES = ["nord", "øst", "sør", "vest", "ukjent"];
 const ID = /^p[A-Za-z0-9_-]{10}$/;
 /* what the first bytes say it is; the browser's claim and the filename are not read */
@@ -24,7 +25,7 @@ export function kindOf(b) {
 }
 const fail = (code, message) => Object.assign(new Error(message), { code, photo: true });
 
-export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings = [], SECURITY = {}, personOf = () => null, readBytes } = {}) {
+export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings = [], SECURITY = {}, personOf = () => null, readBytes, px = null } = {}) {
   if (!dir) return null;
   const home = join(dir, "_bilder"); mkdirSync(home, { recursive: true });
   const all = new Map();
@@ -36,7 +37,7 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     if (!person) throw fail("signed_out", "Logg inn for å legge til bilder.");
     const kind = bytes?.length ? kindOf(bytes) : null;
     if (!kind) throw fail("bad_image", "Bildet må være JPEG, PNG eller WebP.");
-    if (bytes.length > MAX_BYTES) throw fail("too_big", "Bildet er over 8 MB.");
+    if (bytes.length > MAX_BYTES) throw fail("too_big", `Bildet er over ${capWords("sitePhoto")}.`);
     const w = wingOf(wing); if (!w) throw fail("bad_wing", "Velg hvilken fløy bildet viser.");
     const s = SIDES.includes(side) ? side : "ukjent";
     const y = year == null || year === "" ? null : Math.trunc(+year); if (y != null && !(y >= 1800 && y <= 2100)) throw fail("bad_year", "Året må være mellom 1800 og 2100.");
@@ -52,6 +53,8 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     const p = person && ID.test(String(id)) ? all.get(String(id)) : null; if (!p || p.person !== person) return null;
     try { return { ...out(p), data: readFileSync(join(home, `${p.id}.${p.ext}`)), type: { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[p.ext] }; } catch { return null; }
   }
+  /* the bytes of a photo for the scaler (px.mjs), whoever it belongs to; the person is checked by /px-may */
+  const fileOf = id => { const p = ID.test(String(id)) ? all.get(String(id)) : null; if (!p) return null; try { return { person: p.person, type: { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[p.ext], bytes: readFileSync(join(home, `${p.id}.${p.ext}`)) }; } catch { return null; } };
   function remove(person, id) {
     const p = person && ID.test(String(id)) ? all.get(String(id)) : null; if (!p || p.person !== person) return false;
     all.delete(p.id); for (const f of [`${p.id}.${p.ext}`, `${p.id}.json`]) try { unlinkSync(join(home, f)); } catch { }
@@ -68,7 +71,7 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     if (path === "/api/bilder" && req.method === "POST") {
       if (!sameOrigin(req)) { json(res, 403, { error: "Feil opphav" }); return true; }
       try {
-        const q = url.searchParams, b = await readBytes(req, MAX_BYTES + 1).catch(e => { throw e.big ? fail("too_big", "Bildet er over 8 MB.") : e; });
+        const q = url.searchParams, b = await readBytes(req, MAX_BYTES + 1).catch(e => { throw e.big ? fail("too_big", `Bildet er over ${capWords("sitePhoto")}.`) : e; });
         json(res, 201, add(me, b, { wing: q.get("fløy"), side: q.get("side"), note: q.get("note"), year: q.get("år") }));
       } catch (e) { json(res, e.photo ? (e.code === "too_big" ? 413 : 400) : 500, { error: e.photo ? e.message : "Noe gikk galt.", code: e.code }); }
       return true;
@@ -76,6 +79,7 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     const id = path.slice("/api/bilder/".length);
     if (req.method === "GET") {
       const p = read(me, id); if (!p) { json(res, 404, { error: "Fant ikke bildet." }); return true; }
+      if (px && await px.redirect(req, res, "foto", p.id, String(p.bytes), url)) return true;   // U3992: through the scaler, signed
       res.writeHead(200, { ...SECURITY, "content-type": p.type, "content-length": p.data.length, "cache-control": "private, max-age=3600" }); res.end(p.data); return true;
     }
     if (req.method === "DELETE") {
@@ -84,5 +88,5 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     }
     json(res, 405, { error: "GET, POST eller DELETE" }); return true;
   }
-  return { add, mine, read, remove, route };
+  return { add, mine, read, fileOf, remove, route };
 }

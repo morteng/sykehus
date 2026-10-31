@@ -1,5 +1,5 @@
-/* The picture on each card of the Forslag tab: a bird's-eye view of a version's after, 480x300 JPEG, kept at
-   <versions dir>/_state/thumbs/<id>.jpg (persist.mjs's _state). The file's mtime is the version's `updated`, so a saved
+/* The picture on each card of the Forslag tab: a bird's-eye view of a version's after, 480x300 PNG (the scaler cuts it to the width shown and writes WebP, U3992; there is no JPEG encoder here), kept at
+   <versions dir>/_state/thumbs/<id>.v3.png (persist.mjs's _state). The file's mtime is the version's `updated`, so a saved
    change makes the next request draw it again; a file with any other time is stale. The list never waits for a picture:
    the image route draws on the first request, concurrent requests for one version share one drawing, and at most
    LIMIT are drawn at once. render(version) -> Promise<Buffer> is given by the caller (mcp.mjs). */
@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 export const LIMIT = 2;
 /* the renderer's settings version: bump it when the card's picture is drawn differently, so no file drawn the old way is reused */
-export const V = 2;
+export const V = 3;   // 3: a PNG (U3992), no JPEG encoder
 const TAN_SIDE = 2.2;
 /* How the card's picture is drawn (Morten 2026-10-27: «it has red shit on it»): a clean bird's-eye view, natural colours, no accent, no focus,
    no scale bar or caption. The whole hospital site, widened to hold the box of what the project changed (changeArea's box) with a margin;
@@ -25,7 +25,7 @@ export function createThumbs({ dir = process.env.SYKEHUS_VERSIONS_DIR, render })
   const home = dir ? join(dir, "_state", "thumbs") : null, flying = new Map(), waiting = [];
   let busy = 0;
   if (home) try { mkdirSync(home, { recursive: true }); } catch (e) { console.error("thumbs: mkdir", e.message); }
-  const file = id => join(home, `${id}.v${V}.jpg`), stamp = v => Math.floor(Date.parse(v.updated) / 1000) * 1000;
+  const file = id => join(home, `${id}.v${V}.png`), stamp = v => Math.floor(Date.parse(v.updated) / 1000) * 1000;
   const cached = v => { try { const p = file(v.id); return statSync(p).mtimeMs === stamp(v) ? readFileSync(p) : null; } catch { return null; } };
   const keep = (v, bytes) => { try { const p = file(v.id), t = p + ".tmp"; writeFileSync(t, bytes); utimesSync(t, stamp(v) / 1000, stamp(v) / 1000); renameSync(t, p); } catch (e) { console.error("thumbs: write", v.id, e.message); } };
   const slot = () => new Promise(ok => { if (busy < LIMIT) { busy++; ok(); } else waiting.push(ok); });
@@ -41,6 +41,6 @@ export function createThumbs({ dir = process.env.SYKEHUS_VERSIONS_DIR, render })
     const p = draw(v).finally(() => flying.delete(k)); flying.set(k, p); return p;
   }
   /* a version gone for good: its picture goes too */
-  const drop = id => { if (home) for (const f of [file(id), join(home, id + ".jpg")]) try { unlinkSync(f); } catch {} };
+  const drop = id => { if (home) for (const f of [file(id), join(home, id + ".jpg"), join(home, `${id}.v2.jpg`)]) try { unlinkSync(f); } catch {} };
   return { get, drop };
 }
