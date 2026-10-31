@@ -1,7 +1,7 @@
 // The one way to show a picture (U3973). A picture is never served as it is: the stack's scaler (imgproxy, under
 // /px/ on every app host) cuts it to the width it is drawn at and writes WebP, and this file writes the <img> that asks for it.
 // A server that draws pages writes the same markup with its twin (Fab: ukit.py picture(); compared byte for byte with
-// dist/picture.sample.json). The scaler holds no key: its Caddy block admits only a width in WIDTHS, the app's own
+// dist/picture.sample.json). The scaler holds no key (the first path segment, its signature, is `_`): its Caddy block admits only a width in WIDTHS, the app's own
 // source prefix and no «..», so a width outside WIDTHS is not an address it answers (404).
 import { attrs } from "./html.js";
 /** The widths the scaler answers. A shown width rounds UP to the next one, so the picture is never softer than drawn. */
@@ -19,7 +19,7 @@ export function scaled(path, w, from) {
     if (!SAFE.test(path) || path.includes("..") || RAW.test(path))
         return null;
     const src = from.origin === "local" ? `local://${path}` : `${from.origin.replace(/\/+$/, "")}${path}`;
-    return `${from.base ?? "/px"}/rs:fit:${bucket(w)}:0/plain/${src}`;
+    return `${from.base ?? "/px"}/_/rs:fit:${bucket(w)}:0/plain/${src}`;
 }
 /** The <img> markup: src at the shown width, srcset 1x/2x, width/height, lazy and async. A path the scaler cannot take is written as it is. */
 export function pictureHTML(path, o, from) {
