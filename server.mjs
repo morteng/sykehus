@@ -13,8 +13,8 @@
 
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
-  /api/onsker             wishes for what it cannot do yet (wishes.mjs)
-  /api/feedback           the «Tilbakemelding» dialog's reports, kept as wishes (wishes.mjs)
+  /api/onsker             what a person sent, from gulden-ai's one report store (wishes.mjs)
+  /api/feedback           the «Tilbakemelding» dialog's reports, filed in that store (wishes.mjs)
   /api/bilder             the person's own photos of the building: list, add, view, delete (sitephotos.mjs)
   /api/guide              the guide's «seen» for a person signed in (guide.mjs)
   /api/gjengi             «Gjengi»: a view made a realistic picture by an image model, within the month's cap (gjengi.mjs)
@@ -101,7 +101,7 @@ async function handleImport(req, res) {
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
 const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
-const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf });
+const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf, login });
 const pxSources = {}, px = createPx({ SECURITY, personOf: login.personOf, sources: pxSources });   // filled in below, once the stores exist
 const sitePhotos = createSitePhotos({ wings: site.wings || [], SECURITY, personOf: login.personOf, readBytes, px });   // the person's own photos of the real building (needs SYKEHUS_VERSIONS_DIR)
 const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   // the guide's «seen», on the person (U3658)

@@ -92,12 +92,13 @@ function selectionOf(s) {
 function pointOf(p) { return p && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.abs(p.x) < 5000 && Math.abs(p.y) < 5000 ? { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : null; }
 const HIDDEN = /\\n\(Nål: [^)]*\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
 import { createPersist } from "./persist.mjs";
+import { createDoor, whyOf, codeOf } from "./door.mjs";   // one way to call gulden-ai's door (U3978)
 export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch, dataDir = process.env.SYKEHUS_VERSIONS_DIR }) {
   /* what survives a restart (persist.mjs): the pins, the drawings, the turns a restart cut */
   const keep = createPersist(dataDir);
   keep.restorePins(pages);
   const prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, "");
-  const door = login.base + prefix, ready = login.anton;
+  const ready = login.anton;
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   const threads = new Map();   // person → { queue: [turn], running, subs: Set<res>, approvals: Map, sent: [times], stop }
   const thread = p => { let t = threads.get(p); if (!t) { t = { queue: [], running: null, subs: new Set(), approvals: new Map(), pics: [], sent: [], stop: null, jobs: new Set(), polling: null }; threads.set(p, t); } return t; };
@@ -112,16 +113,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   if (pages) pages.show = (person, view) => { const t = threads.get(person); if (!t?.subs.size) return false; publish(person, "show", { type: "show", ...view }); return true; };
   versions?.watch?.(v => publish(v.owner, "steps", { type: "steps", version: v.id, title: v.title, changes: v.edits.length, updated: v.updated }));
 
-  /* why a fetch to gulden-ai failed: undici's "fetch failed" hides it in e.cause (ECONNREFUSED, UND_ERR_SOCKET, a reset) */
-  const whyOf = e => [e.name, e.message, e.cause?.code, e.cause?.message].filter(Boolean).join(" / ");
-  const call = async (path, body, query, device) => {
-    const q = query ? "?" + new URLSearchParams(query) : "";
-    try {
-      const r = await fetchImpl(door + path + q, { method: body ? "POST" : "GET", headers: { authorization: `Bearer ${login.bearer}`, accept: "application/json", "x-door-device": device, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000) });
-      return [r.status, await r.json().catch(() => ({}))];
-    } catch (e) { console.error("anton", path, whyOf(e)); return [503, { error: { code: "unavailable" } }]; }
-  };
-  const codeOf = (j, d) => typeof j?.error?.code === "string" ? j.error.code : typeof j?.code === "string" ? j.code : d;
+  const { url: door, call } = createDoor({ login, fetchImpl, prefix });
   /* gulden-ai refused the device (revoked in Settings › People, or one it does not know): every page says Anton cannot answer; the person stays signed in to sykehus (U3668) */
   const refusedDevice = (st, j) => st === 401 || codeOf(j, "") === "device_revoked";
 

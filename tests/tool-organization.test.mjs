@@ -8,12 +8,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { KINDS, READBACK, FAMILY } from "../toolguide.mjs";
+import { stubDoor, BEARER } from "./stub-door.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "sykehus-t3-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9300 + Math.floor(Math.random() * 90);
+const door = await stubDoor(), dir = mkdtempSync(join(tmpdir(), "sykehus-t3-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9300 + Math.floor(Math.random() * 90);
 const O = `http://localhost:${PORT}`, as = n => ({ "remote-user": n, "x-sykehus-proxy-auth": secret });
-const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret }, stdio: ["ignore", "pipe", "inherit"] });
+const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, SYKEHUS_ASSISTANT_URL: door.url, SYKEHUS_ASSISTANT_TOKEN: BEARER, SYKEHUS_COOKIE_SECRET: "cookie-secret-for-tests-0123456789012345" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
-after(() => srv.kill());
+after(() => { srv.kill(); door.close(); });
 let id = 0;
 const rpc = async (method, params, h = {}) => { const r = await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", ...h }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }) })).json(); if (r.error) throw new Error(r.error.message); return r.result; };
 const call = async (name, args = {}, h = {}) => { const r = await rpc("tools/call", { name, arguments: args }, h); return { ...r, data: r.structuredContent }; };

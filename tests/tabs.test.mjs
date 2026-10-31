@@ -24,21 +24,29 @@ test("the bar has «Tilbakemelding» where Gjengi was, and Gjengi is a tab after
 });
 
 
+/* gulden-ai's door, in memory: the dialog's report is filed there (U3978) and read back from there */
 function route(person) {
-  const w = createWishes({ dir: mkdtempSync(join(tmpdir(), "fb-")), readJson: async req => req.body, personOf: () => person ? { person } : null });
+  const filed = [], fetchImpl = async (url, init) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith("/feedback")) { filed.push({ ...JSON.parse(init.body), id: "rp-" + (filed.length + 1), status: "ny", note: null }); return new Response(JSON.stringify({ id: "rp-" + filed.length }), { status: 200 }); }
+    return new Response(JSON.stringify({ items: filed.map(r => ({ id: r.id, at: r.at, text: r.text.split("\n")[0], status: r.status, note: r.note, ref: r.design_id ?? null })) }), { status: 200 });
+  };
+  const w = createWishes({ dir: mkdtempSync(join(tmpdir(), "fb-")), readJson: async req => req.body, personOf: () => person ? { person } : null, login: { base: "http://door.test", bearer: "b" }, fetchImpl });
   const call = async (method, path, body) => { let code, out; const res = { writeHead: c => { code = c; }, end: b => { out = JSON.parse(b); } }; await w.route({ method, body, headers: {} }, res, path); return [code, out]; };
-  return { w, call };
+  return { w, call, filed };
 }
 const PNG = "data:image/png;base64," + Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), Buffer.from("x")]).toString("base64");
 
-test("the dialog's kinds are the ones the route takes; a report is kept as a wish with its kind, context and picture, and is listed with its status", async () => {
-  const { w, call } = route("lars");
+test("the dialog's kinds are the ones the route takes; a report is filed in the one store with its kind, context and picture, and is listed with its status", async () => {
+  const { w, call, filed } = route("lars");
   assert.deepEqual(KINDS.map(k => k.id), ["bug", "idea", "question", "other"]); assert.equal(WORDS.thanks, "Sendt. Takk!");
   const [code, out] = await call("POST", "/api/feedback", { kind: "idea", text: " Et snitt gjennom drivhuset ", page: "/", tab: "chat", version: "vabcdefgh", screenshot: PNG });
-  assert.equal(code, 200); assert.match(out.id, /^w/);
+  assert.equal(code, 200); assert.equal(out.id, "rp-1");
+  assert.deepEqual([filed[0].person, filed[0].kind, filed[0].text, filed[0].page, filed[0].tab, filed[0].design_id], ["lars", "idea", "Et snitt gjennom drivhuset", "/", "chat", "vabcdefgh"]);
+  assert.match(filed[0].attachment_ref, /^w[A-Za-z0-9_-]{10}$/, "the picture is kept here and named in the report");
   const [, list] = await call("GET", "/api/onsker");
-  assert.equal(list.wishes[0].text, "[Ide] Et snitt gjennom drivhuset"); assert.equal(list.wishes[0].status, "ny"); assert.match(list.wishes[0].tried, /side \/, fane chat, med bilde/);
-  assert.equal(w.mine("lars").length, 1);
+  assert.equal(list.wishes[0].text, "Et snitt gjennom drivhuset"); assert.equal(list.wishes[0].status, "ny");
+  assert.equal((await w.mine("lars")).length, 1);
 });
 
 test("signed out is refused; a bad kind, a bad picture and a text too long have their codes; the 11th in an hour says when", async () => {
@@ -47,7 +55,7 @@ test("signed out is refused; a bad kind, a bad picture and a text too long have 
   assert.equal((await call("POST", "/api/feedback", { kind: "nope", text: "x" }))[1].code, "bad_request");
   assert.deepEqual(await call("POST", "/api/feedback", { kind: "bug", text: "x", screenshot: "data:image/png;base64,AAAA" }), [400, { code: "bad_image" }]);
   assert.equal((await call("POST", "/api/feedback", { kind: "bug", text: "x".repeat(4001) }))[0], 413);
-  for (let i = 0; i < 10; i++) assert.equal((await call("POST", "/api/feedback", { kind: "bug", text: "n" + i }))[0], 200);
+  for (let i = 0; i < 10; i++) assert.equal((await call("POST", "/api/feedback", { kind: "bug", text: "Feil nummer " + i }))[0], 200);
   const [code, out] = await call("POST", "/api/feedback", { kind: "bug", text: "eleven" });
   assert.equal(code, 429); assert.equal(out.code, "limit"); assert.ok(Date.parse(out.retry_at) > Date.now());
 });

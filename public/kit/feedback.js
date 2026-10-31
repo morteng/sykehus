@@ -46,7 +46,7 @@ export async function pagePicture(doc, o = {}) {
         c.width = Math.round(W * s);
         c.height = Math.round(H * s);
         const g = c.getContext("2d");
-        g.fillStyle = win.getComputedStyle(doc.body).backgroundColor || "#fff";
+        g.fillStyle = win.getComputedStyle(doc.body).backgroundColor || "white";
         g.fillRect(0, 0, c.width, c.height);
         g.drawImage(img, 0, 0, c.width, c.height);
         const url = c.toDataURL("image/png");
@@ -55,12 +55,18 @@ export async function pagePicture(doc, o = {}) {
     }
     return null;
 }
+/** The form in a part of the page the app owns, shaped as a modal: open shows it, close tells the app it is done. */
+function inline(host, done) {
+    return { el: host, body: host, get isOpen() { return !host.hidden; }, open() { host.hidden = false; }, close() { done?.(); }, setTitle() { } };
+}
 export function feedback(o) {
     const doc = o.doc ?? document, win = doc.defaultView, w = o.words, MAX = o.max ?? 4000;
-    const dot = doc.createElement("i");
-    dot.className = "g-fb-dot";
-    dot.hidden = true;
-    o.button.append(dot);
+    const dot = o.button?.querySelector(".g-fb-dot") ?? doc.createElement("i");
+    if (!dot.isConnected) {
+        dot.className = "g-fb-dot";
+        dot.hidden = true;
+        o.button?.append(dot);
+    }
     const waiting = () => { try {
         return JSON.parse(win.localStorage.getItem(o.queueKey) || "[]");
     }
@@ -101,7 +107,7 @@ export function feedback(o) {
         if (sent)
             o.toast(w.sentLater);
     }
-    const m = modal({ doc, title: w.title, closeLabel: w.close, className: "g-fb" });
+    const m = o.host ? inline(o.host, o.onDone) : modal({ doc, title: w.title, closeLabel: w.close, className: "g-fb" });
     m.body.innerHTML = `<form class="g-fb-form">
     <div class="g-fb-kinds" role="group">${o.kinds.map(k => `<button type="button" data-kind="${k.id}" aria-pressed="false"></button>`).join("")}</div>
     <label class="g-fb-sr"></label><textarea rows="5" maxlength="${MAX}"></textarea>
@@ -216,9 +222,11 @@ export function feedback(o) {
             return say(w.tooLong);
         say(w.notSent);
     };
-    o.button.setAttribute("aria-haspopup", "dialog");
     const open = () => { q(".g-fb-ctx").textContent = o.context().line; say(""); count(); o.onOpen?.(); m.open(); };
-    o.button.addEventListener("click", open);
+    if (!o.host && o.button) {
+        o.button.setAttribute("aria-haspopup", "dialog");
+        o.button.addEventListener("click", open);
+    }
     keep(waiting());
     win.addEventListener("online", flush);
     if (waiting().length)
