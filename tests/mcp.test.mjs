@@ -78,6 +78,14 @@ test("a new building is never refused over its id: the server makes one (pm 23:3
   const other = (await call("try_change", { edits: [garden("ntakhage1", 48)], include_screenshot: false, draft })).data;
   assert.equal(other.added[0].id, "ntakhage12"); assert.equal(other.changes_in_draft, 5);
 });
+test("show_building picture: true draws the default 3D view too (U3996: a phone's chat shows it, not the live frame)", async () => {
+  const r = await rpc("tools/call", { name: "show_building", arguments: { mode: "3d", picture: true } });
+  const img = r.content.find(c => c.type === "image");
+  assert.ok(img, "the result carries a picture"); assert.equal(img.mimeType, "image/png");
+  assert.equal(Buffer.from(img.data, "base64").subarray(1, 4).toString(), "PNG");
+  const none = await rpc("tools/call", { name: "show_building", arguments: { mode: "3d" } });
+  assert.ok(!none.content.some(c => c.type === "image"), "no picture unless asked for");
+});
 test("show_building gives the app its view", async () => {
   const r = await rpc("tools/call", { name: "show_building", arguments: { storey: "6", wing: "Østre nordfløy", mode: "plan" } });
   assert.equal(r.structuredContent.view.storey, "6. etasje"); assert.equal(r.structuredContent.view.mode, "plan");
