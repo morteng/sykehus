@@ -15,7 +15,7 @@
    toMetres(frame, size, [x, y]) and toPixels(frame, size, [e, n]) are the mapping, for the app's own tests.
    Classes (the app styles them): sk, sk-large (enlarged: the app makes it fill the screen), sk-stage, sk-legend, sk-nums, sk-tools, sk-sw, sk-dot, sk-pins, sk-feed, sk-act; the icon buttons are `button.icon` with a title.
    No three.js; plain DOM and a canvas. */
-export const COLOURS = [["Rød", "#c8102e"], ["Blå", "#1f5fbf"], ["Svart", "#23211e"]];
+export const COLOURS = [["Rød", "#c8102e"], ["Blå", "#1f5fbf"], ["Svart", "#23211e"]]; // redline 30 exception (colour): pen colours are stored in the sketch, the same on every theme
 export const toMetres = (frame, [W, H], [x, y]) => [frame.centre[0] + (x - W / 2) / frame.k, frame.centre[1] - (y - H / 2) / frame.k];
 export const toPixels = (frame, [W, H], [e, n]) => [W / 2 + (e - frame.centre[0]) * frame.k, H / 2 - (n - frame.centre[1]) * frame.k];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -49,7 +49,7 @@ export function createSketch({ host, image, frame, title = "", legend = "", numb
     ctx.lineCap = ctx.lineJoin = "round"; ctx.lineWidth = 3 * z;
     for (const s of cur ? [...strokes, cur] : strokes) { ctx.strokeStyle = s.colour; ctx.beginPath(); s.points.forEach(([x, y], i) => i ? ctx.lineTo(x * scale, y * scale) : ctx.moveTo(x * scale, y * scale)); ctx.stroke(); }
     ctx.font = `bold ${14 * z}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    pins.forEach((p, i) => { ctx.fillStyle = p.colour; ctx.beginPath(); ctx.arc(p.x * scale, p.y * scale, 11 * z, 0, 7); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(String(i + 1), p.x * scale, p.y * scale + 1); });
+    pins.forEach((p, i) => { ctx.fillStyle = p.colour; ctx.beginPath(); ctx.arc(p.x * scale, p.y * scale, 11 * z, 0, 7); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText(String(i + 1), p.x * scale, p.y * scale + 1); }); // redline 30 exception (colour): pin number ink on a pin disc, painted on a canvas
   }
   const redraw = () => { g.clearRect(0, 0, cv.width, cv.height); paint(); };
   const fit = () => { const [W, H] = size(); cv.width = W; cv.height = H; redraw(); };

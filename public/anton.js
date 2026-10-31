@@ -14,6 +14,7 @@
 import { pick } from "./kit/pick.js";
 import { follow } from "./kit/follow.js";
 import { burst } from "./kit/effects.js";
+import { movePill } from "./kit/pill.js";
 import { toolLine } from "./toolline.js";
 import { modal } from "./kit/modal.js";
 import { feedbackOf } from "./sketchsend.js";
@@ -89,7 +90,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     function placePill() {
       const open = chatOpen(), to = open ? $("chat-pill") : $("bstack");   // U3833: open, the panel holds the pill (wide or phone); shut, or another tab, it is over the view
       document.body.classList.toggle("pill-chat", open);
-      if (form.parentElement !== to) { const f = document.activeElement === input; to.append(form); if (f) input.focus(); }
+      movePill(form, to, { chat: open });   // the kit moves the one node and keeps the draft, the caret and the focus
       if (open) { unread = 0; }
       showReply(); if (chatOpen() !== wasOpen) { wasOpen = chatOpen(); if (wasOpen) toEnd(); }   // the tab opening shows the end; later panel events leave a reader where they are
       words();
@@ -141,7 +142,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     let step = "", since = 0, ticking = null, turnOf = null;
     const stepOf = key => STEP[String(key || "").split(/[.:/]/).pop()] || "Arbeider";
     function state() {
-      btn.innerHTML = running ? STOP : SEND; btn.className = "round " + (running ? "stop working" : "send");
+      btn.innerHTML = running ? STOP : SEND; btn.className = "round g-pill__go " + (running ? "is-stop stop working" : "send");
       btn.title = running ? "Stopp (Anton arbeider)" : "Send"; btn.setAttribute("aria-label", running ? "Stopp, Anton arbeider" : "Send");
       if (running && turnOf !== running) { turnOf = running; step = ""; since = Date.now(); }
       if (!running) { turnOf = null; step = ""; }

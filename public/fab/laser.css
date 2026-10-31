@@ -384,17 +384,6 @@ body.m.has-sel .zoom,body.m.has-sel .hud{display:none}
 .bstack .selbar{align-self:center;max-width:100%}
 body:not(.talk-on) .bstack{bottom:64px;width:auto;max-width:calc(100% - 24px)}
 /* U2063: the same pill as ai.gulden.no (gulden-ai composer.css #composer); laser adds history, «New chat», the selection chip and the busy line */
-.pill{display:flex;align-items:flex-end;gap:.4rem;min-height:var(--tap);padding:.375rem;border-radius:14px;border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow-md)}     /* redline 30 exception (radius): the pill is the same box as gulden's composer, a 14 px corner laser has no token for (U2063) */
-.pill .pillmid{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;align-self:center;padding-inline:.375rem}
-.pill textarea{width:100%;border:0;background:transparent;resize:none;font:inherit;font-size:var(--fs-md);line-height:22px;padding:.375rem 2px;min-height:calc(var(--tap) - .5rem);max-height:118px;overflow-y:auto;outline:none}
-.pill .busy{margin:0 2px 2px;font-size:var(--fs-xs);color:var(--muted)}.pill .busy:empty{display:none}
-.pill .hist,.pill .round{flex:none;display:grid;place-items:center;width:calc(var(--tap) - .25rem);height:calc(var(--tap) - .25rem);padding:0;border-radius:var(--radius-lg)}
-.pill .hist{border:0;background:transparent;color:var(--muted)}.pill .hist:hover{background:var(--hover-wash);color:var(--text)}
-.pill .round{border:0;background:var(--accent);color:var(--on-accent)}.pill .round.stop{background:var(--danger);color:var(--on-danger)}
-.pill svg{width:52%;height:52%;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.pill .round.stop svg{fill:currentColor}
-.pill .round.send svg .f{fill:currentColor;stroke:none}
-.pill:has(textarea:focus){border-color:var(--accent)}
 .reply{display:flex;flex-direction:column;gap:var(--sp-1);transition:opacity 1.2s ease}.reply.fading{opacity:0}     /* the 1.2 s reply fade (redline 18 §4) */
 @media (prefers-reduced-motion:reduce){.reply{transition:none}}
 .reply .ask{margin:0;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 var(--sp-1);text-shadow:0 0 6px var(--bg)}
@@ -661,7 +650,6 @@ body.m .prow{min-height:var(--tap)}body.m .prow .pm{width:var(--tap);height:var(
 button.newc{display:inline-flex;align-items:center;gap:var(--sp-1)}
 #chat-new{margin:0}
 .newc svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.pill .newc svg{width:52%;height:52%;stroke-width:2}
 @media (max-width:899px){#chat-new{width:var(--tap);height:var(--tap);min-width:var(--tap);padding:0;justify-content:center}#chat-new .nc-lbl{display:none}#chat-new svg{width:20px;height:20px}}
 .newc[aria-disabled=true]{opacity:.45;cursor:default}
 .newc[aria-disabled=true]:hover{border-color:var(--border)}.pill .newc[aria-disabled=true]:hover{background:transparent;color:var(--muted)}
@@ -769,7 +757,6 @@ body.restarting .retry[aria-disabled=true],body.restarting #reply-retry[aria-dis
 body.restarting #banner[data-kind=offline]{display:none}
 
 /* ===== «Anton Radio» (U1718, redline 27 r2): gulden-ai's .dj-strip in Anton's pill, same classes, on the shared tokens */
-.pill{container:composer/inline-size;flex-wrap:wrap}
 /* the pill's round ends stay the same 23 px when the slot row makes it two rows tall (a 999 px radius would cut the
    cover's corner); the single-row pill looks exactly as before */
 /* a press in the slot is not writing: the accent edge stays for the text box (gulden-ai: #composer:has(#input:focus)) */
@@ -897,14 +884,9 @@ html body .bstack.ac-stack.ac-filled.ac-fade{background:transparent;border-color
 .chatpill{flex:none;position:relative;padding:var(--sp-2) 0 0}
 .chatpill:empty{display:none}
 .chatpill::before{content:"";position:absolute;left:0;right:0;top:-16px;height:16px;background:linear-gradient(to bottom,color-mix(in srgb,var(--panel) 0%,transparent),var(--panel));pointer-events:none}
-.pill.in-chat{background:var(--panel-2);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}
-.pill.in-chat #pill-hist,.pill.in-chat #pill-new{display:none}
-.pill.in-chat:not(:has(>.dj-strip)) .pillmid{padding-left:calc(var(--sp-3) + var(--sp-2))}
+.g-pill--chat #pill-hist,.g-pill--chat #pill-new{display:none}
 .chatpill .pill textarea:placeholder-shown{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* the move (§4): it leaves its old place at once and fades in at the new one, opacity only; none with reduced motion */
-@keyframes pill-in{from{opacity:0}to{opacity:1}}
-.pill.pill-in{animation:pill-in var(--dur-fast) var(--ease)}
-@media (prefers-reduced-motion:reduce){.pill.pill-in{animation:none}}
 /* the editor: the Chat tab's list, then the pill; the canvas keeps only the selection bar, 16 px above its bottom */
 #p-chat #talk{margin:0}
 body.ed.pill-chat:not(.m) .bstack{bottom:16px}
@@ -1193,7 +1175,7 @@ body.m.ed .top .fb-btn,body.m.ed .top button.icon{min-width:max(var(--tap),44px)
 /* U2387 (qa 11:42Z, 0.1.85 at 390): «New chat» 43, «Play Anton Radio» and the pill's history button 39 px; all 44 px under 900 px */
 @media (max-width:899px){
   #chat-new{width:max(var(--tap),44px);height:max(var(--tap),44px);min-width:max(var(--tap),44px)}
-  .pill .hist,.pill .round,.dj-strip__idle.ibtn{width:max(var(--tap),44px);height:max(var(--tap),44px)}
+  .dj-strip__idle.ibtn{width:max(var(--tap),44px);height:max(var(--tap),44px)}
 }
 
 /* U2387 (qa 12:00Z at 390): the Names card's «Use this name», «Keep as is» and «Use all» were 17-28 px tall; 44 px at phone width */

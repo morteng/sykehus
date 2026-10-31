@@ -38,7 +38,7 @@ test("italic, inline code, numbered list, heading, line break, paragraphs", () =
   assert.equal(html("1. en\n2. to"), "<ol><li>en</li><li>to</li></ol>");
   assert.equal(html("## Tittel\ntekst"), '<h2 class="md-h">Tittel</h2><p>tekst</p>');
   assert.equal(html("linje én\nlinje to\n\nny"), "<p>linje én<br>linje to</p><p>ny</p>");
-  assert.equal(html("snake_case_name og 2*3*4"), "<p>snake_case_name og 2<em>3</em>4</p>");
+  assert.equal(html("snake_case_name og 2*3*4"), "<p>snake_case_name og 2*3*4</p>");   // the kit (U3892): a * between two letters or digits opens no emphasis
   assert.equal(html("a\n\n> sitat\n\n```\n<b>1</b>\n```"), "<p>a</p><blockquote><p>sitat</p></blockquote><pre><code>&lt;b&gt;1&lt;/b&gt;</code></pre>");
 });
 test("safe: HTML is text, links are http(s) and mailto only, with noopener, in a new tab", () => {

@@ -86,7 +86,6 @@
 .pill .att[hidden] { display: none; }
 .pill .att span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pill .att-x { flex: none; min-width: 1.75rem; min-height: 1.75rem; border-radius: var(--radius-lg); }
-.pill textarea { font-size: var(--fs-base); }
 .pill.wait .round { opacity: .45; cursor: progress; }   /* early.js: up, not yet listening */
 /* U3564: the stop button breathes while Anton works, a ring going out from it; reduced motion: the ring stands still */
 .pill .round.stop.working { position: relative; overflow: visible; }
@@ -427,7 +426,6 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
 .nz .north { width: var(--tap); height: var(--tap); }
 .nz .north svg { width: 30px; height: 30px; }
 .nz .zoom2 button { width: var(--tap); height: var(--tap); font-size: 22px; }
-.pill { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 #scale, #tip, .views-pop { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 .dr-top button { min-width: 0; max-width: 70%; }
 .dr-top button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -117,7 +117,8 @@ function inline(c, parent, s, inLink = false) {
             parent.appendChild(d);
         }
         else if (m[11] != null || m[12] != null) {
-            if (m[12] != null && /\w/.test(s[at - 1] ?? "")) {
+            const intraword = /[\p{L}\p{N}]/u.test(s[at - 1] ?? "") && /[\p{L}\p{N}]/u.test(s[at + 1] ?? ""); // «2*3*4»: a * between two letters or digits opens nothing
+            if ((m[12] != null && /\w/.test(s[at - 1] ?? "")) || (m[11] != null && intraword)) {
                 text(c, parent, m[0]);
                 continue;
             }

@@ -12,6 +12,7 @@ export const ICONS = {
     plus: "M12 5v14 M5 12h14",
     down: "M12 5v14 M6 13l6 6 6-6",
     empty: "M4 7h16v12H4z M4 7l2-3h12l2 3 M9 12h6",
+    help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7 M12 17h.01",
 };
 /** The glyph as SVG markup, hidden from assistive technology. */
 export function iconSVG(name) {

@@ -1,6 +1,11 @@
 /* The kit's piece styles. Tokens only (src/token-names.ts; tests/token-names.test.mjs), and every @media is one of
    src/surfaces.ts QUERIES written out (tests/surfaces.test.mjs). Class names start with g-. */
 
+/* ---- the page shell: every page of an app draws its content column in this one width, so the column does not jump as a
+   person clicks through (U3956). The scrollbar's room is kept, so a page that scrolls and one that does not line up. */
+html{scrollbar-gutter:stable}
+.g-page{box-sizing:border-box;width:100%;max-width:120rem;margin-inline:auto;padding-inline:clamp(var(--sp-4),3vw,var(--sp-8))}
+
 /* ---- small pieces */
 .g-count{margin-left:var(--sp-1);color:var(--muted);font-variant-numeric:tabular-nums}
 .g-status{display:inline-block;max-width:100%;padding:1px var(--sp-2);border:1px solid var(--status);border-radius:var(--radius-pill);
@@ -30,7 +35,7 @@ g-item{--status:var(--muted)}
 
 /* ---- the ⋯ menu */
 .g-more{position:relative;z-index:1;display:flex;justify-content:flex-end}
-.g-menu{position:absolute;right:0;top:100%;z-index:var(--z-sheet);display:flex;flex-direction:column;min-width:10rem;padding:var(--sp-1);
+.g-menu{position:fixed;inset:auto;margin:0;overflow:auto;z-index:var(--z-sheet);display:flex;flex-direction:column;min-width:10rem;padding:var(--sp-1);
   background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md)}
 .g-menu button{min-height:var(--control-h);padding:0 var(--sp-3);border:0;border-radius:var(--radius-sm);background:none;color:var(--text);text-align:left;font:inherit;cursor:pointer}
 .g-menu button:hover{background:var(--hover-wash)}.g-menu button[data-danger]{color:var(--danger-text)}
@@ -148,7 +153,10 @@ g-collection[data-view="cards"] .g-act__do{max-width:100%;white-space:normal;pad
 g-collection{--g-cols-wide:minmax(0,1fr);--g-cols-desktop:minmax(0,1fr);--g-cols-medium:minmax(0,1fr)}      /* the one-column default; a collection with a shape sets its own on itself (collection.ts), so a copy of this sheet alone still defines what it reads */
 g-collection[data-view="list"] .g-head,g-collection[data-view="list"] g-item{display:grid;grid-template-columns:var(--g-cols-wide);align-items:center;gap:0 var(--sp-3)}
 g-collection[data-view="list"] .g-head{padding:0 0 var(--sp-1);color:var(--muted);font-size:var(--fs-xs);text-transform:var(--label-transform);letter-spacing:var(--label-tracking)}
-g-collection[data-view="list"] .g-head>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+g-collection[data-view="list"] .g-head>span{position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+g-collection[data-view="list"] .g-head{pointer-events:auto}
+.g-grip{position:absolute;top:0;right:0;bottom:0;width:10px;cursor:col-resize;touch-action:none}      /* U3954: the column's edge a person drags; its line shows on hover */
+.g-grip:hover{box-shadow:inset -2px 0 0 var(--border)}
 g-collection[data-view="list"] g-item{min-height:3rem;padding:var(--sp-1) 0;border-top:1px solid var(--border)}
 g-collection[data-view="list"] g-item:hover{background:var(--hover-wash)}
 g-collection[data-view="list"] .g-pic{width:3rem;aspect-ratio:var(--card-ratio);border-radius:var(--radius-xs)}
@@ -312,3 +320,41 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 @keyframes g-fx-dust{from{transform:translate(-50%,-50%) scale(.6);opacity:.9}45%{opacity:.75}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) scale(calc(var(--g-fx-s,1) * 1.7));opacity:0}}
 @keyframes g-fx-pop{from{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}to{transform:none;opacity:1}}
 @keyframes g-fx-rise{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+
+/* ---- the help button (src/help.ts) */
+.g-help{display:inline-flex;vertical-align:middle}
+.g-help__pop{position:fixed;inset:auto;margin:0;width:min(24rem,calc(100vw - 2 * var(--sp-4)));padding:var(--sp-3);background:var(--panel);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);font-size:var(--fs-sm);line-height:1.5}
+.g-help__pop p{margin:0}.g-help__pop p+p{margin-top:var(--sp-2)}
+.g-help__btn:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+
+/* ---- the input pill (src/pill.ts): the one look of an assistant's text box, taken from the main app's composer (its
+   composer.css #composer, #input, #send, .composer-action-btn). A solid --panel box, the text on the row's centre line, a
+   quiet icon button on each side and a round accent send. The app places it (fixed, in a sheet, in a stack) and sets its width;
+   it draws the buttons it has (a history button, a pen, a clip) as .g-pill__btn. Markup: form.g-pill > button.g-pill__btn…
+   + div.g-pill__mid > textarea.g-pill__in + p.g-pill__busy, then button.g-pill__go (+ .is-stop). */
+.g-pill{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;padding:.375rem;border:1px solid var(--border);border-radius:var(--radius-xl);background:var(--panel);color:var(--text);box-shadow:var(--shadow-md)}
+.g-pill:has(.g-pill__in:focus){border-color:var(--accent)}
+.g-pill__mid{flex:1;min-width:0;display:flex;flex-direction:column;align-self:flex-end;margin-bottom:.125rem}
+.g-pill__in{flex:1;width:100%;min-width:0;resize:none;border:0;background:transparent;color:var(--text);font:inherit;outline:none;box-sizing:border-box;
+  padding:max(.375rem,calc((var(--tap) - .5rem - 1lh) / 2)) .5rem;min-height:calc(var(--tap) - .5rem);max-height:min(8rem,35svh);overflow-y:auto}
+.g-pill__busy{margin:0 .5rem .125rem;font-size:var(--fs-xs);color:var(--muted)}.g-pill__busy:empty{display:none}
+.g-pill__btn,.g-pill__go{flex:0 0 auto;align-self:flex-end;display:grid;place-items:center;box-sizing:border-box;width:calc(var(--tap) - .25rem);height:calc(var(--tap) - .25rem);
+  padding:0;border:0;border-radius:var(--radius-lg);cursor:pointer;transition:color var(--dur-fast) var(--ease),background var(--dur-fast) var(--ease)}
+.g-pill__btn{background:transparent;color:var(--muted)}
+.g-pill__btn:hover:not(:disabled){background:var(--hover-wash);color:var(--text)}
+.g-pill__btn:disabled{opacity:.35;cursor:default}
+.g-pill__go{background:var(--accent);color:var(--on-accent)}
+.g-pill__go.is-stop{background:var(--danger);color:var(--on-danger)}
+.g-pill__go:disabled{opacity:.5;cursor:default}
+.g-pill [hidden]{display:none}
+.g-pill__btn:focus-visible,.g-pill__go:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+.g-pill svg{width:52%;height:52%;display:block;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.g-pill__go.is-stop svg{fill:currentColor}.g-pill__go svg .f{fill:currentColor;stroke:none}
+/* in the open conversation (pill.ts movePill): solid, flat, on the sheet's own ground */
+.g-pill--chat{background:var(--panel-2);box-shadow:none}
+@keyframes g-pill-in{from{opacity:0}to{opacity:1}}
+.g-pill--in{animation:g-pill-in var(--dur-fast) var(--ease)}
+@media (prefers-reduced-motion: reduce){.g-pill--in{animation:none}}
+@media (max-width: 47.99rem){.g-pill__btn,.g-pill__go{width:max(var(--tap),44px);height:max(var(--tap),44px)}}
+@media (hover: none), (pointer: coarse){.g-pill__btn,.g-pill__go{width:max(var(--tap),44px);height:max(var(--tap),44px)}}
