@@ -1,5 +1,5 @@
 {
-  "kits": "fbd3404a35dec6be35c9a0bd55f9623b1705182d",
+  "kits": "6f8c9446373f30415c57acb28752c25e09a68ac5",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
@@ -22,6 +22,7 @@
     "typein.js": "c2a067fb12c213d003444ec42ee69343c6c6b33b",
     "html.js": "fddaca736d72d73ab32408e89c42ef4cfb634ebd",
     "effects.js": "4a4282e7d2aa28137bdabccf49d3f0e25ab5216e",
-    "pill.js": "bdf2c6747827172928030ca7b26f5b6a21b0c1fe"
+    "pill.js": "bdf2c6747827172928030ca7b26f5b6a21b0c1fe",
+    "picture.js": "b089feb5b15edb775a982988bbe9428dd04a2e40"
   }
 }

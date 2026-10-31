@@ -13,6 +13,7 @@ import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
 import { burst, burstAt } from "./kit/effects.js";
+import { pictureHTML } from "./kit/picture.js";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
 import { lngLatToUtm } from "./utm.js";
@@ -413,7 +414,7 @@ function drawnList(w, v) {
   const on = v.mode === "section" && sheet && sheet.wing === w.id ? sheet : null;
   return `<h3>Tegnede snitt</h3><div class="oc-info">${ds.map(d =>
     `<button type="button" class="oc-info-r" data-tegnet="${esc(d.id)}" aria-pressed="${d === on}"><span class="oc-info-k">${esc(d.title)}</span><span class="oc-info-v">${d.year}</span></button>`).join("")}</div>` +
-    (on ? `<figure><a href="${esc(on.image)}" target="_blank" rel="noopener" title="Åpne tegningen stor"><img src="${esc(on.image)}" alt="${esc(on.title)}"></a>
+    (on ? `<figure><a href="${esc(on.image)}" target="_blank" rel="noopener" title="Åpne tegningen stor">${pictureHTML("/" + on.image, { w: 480, alt: on.title }, { origin: "local" })}</a>
       <figcaption>${esc(on.levels)}. ${esc(on.note)}. ${on.sure ? "" : "Hvor snittet står i modellen er lest ut fra tegningen og omtrentlig. "}<a href="${esc(on.url)}" target="_blank" rel="noopener">Tegningen (PDF)</a></figcaption></figure>` : "");
 }
 function peel(b, w, name) {
