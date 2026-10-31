@@ -10,7 +10,8 @@ import { readFileSync, readdirSync } from "node:fs";
 const ROOT = new URL("../", import.meta.url), lock = JSON.parse(readFileSync(new URL("renderkit.lock.json", ROOT), "utf8"));
 const THREE = lock.map["./three.js"], SPEC = /(\bfrom\s*|\bimport\s*\(?\s*)(['"])([^'"\n]+)\2/g;          // the same pattern as kits' tools/take.mjs
 const [pre, post] = lock.import.split("{}");
-const back = text => text.replace(SPEC, (m, a, q, s) => s === THREE ? `${a}${q}./three.js${q}`
+const BACK = Object.fromEntries(Object.entries(lock.map).map(([k, v]) => [v, k]));        // U4004: every mapped specifier, three and the ui kit's html.js
+const back = text => text.replace(SPEC, (m, a, q, s) => Object.hasOwn(BACK, s) ? `${a}${q}${BACK[s]}${q}`
   : s.startsWith(pre) && s.endsWith(post) && s.length > pre.length + post.length ? `${a}${q}./${s.slice(pre.length, s.length - post.length)}${q}` : m);
 const blob = buf => createHash("sha1").update(`blob ${buf.length}\0`).update(buf).digest("hex");
 const copy = name => readFileSync(new URL(`${lock.dest}/${lock.file.replace("{}", name)}`, ROOT));
