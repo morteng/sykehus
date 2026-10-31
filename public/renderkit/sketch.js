@@ -15,10 +15,10 @@
    toMetres(frame, size, [x, y]) and toPixels(frame, size, [e, n]) are the mapping, for the app's own tests.
    Classes (the app styles them): sk, sk-large (enlarged: the app makes it fill the screen), sk-stage, sk-legend, sk-nums, sk-tools, sk-sw, sk-dot, sk-pins, sk-feed, sk-act; the icon buttons are `button.icon` with a title.
    No three.js; plain DOM and a canvas. */
+import { esc } from "../kit/html.js"; // the ui kit's one esc(); an app's lock maps this path (map) to its copy of html.js
 export const COLOURS = [["Rød", "#c8102e"], ["Blå", "#1f5fbf"], ["Svart", "#23211e"]]; // redline 30 exception (colour): pen colours are stored in the sketch, the same on every theme
 export const toMetres = (frame, [W, H], [x, y]) => [frame.centre[0] + (x - W / 2) / frame.k, frame.centre[1] - (y - H / 2) / frame.k];
 export const toPixels = (frame, [W, H], [e, n]) => [W / 2 + (e - frame.centre[0]) * frame.k, H / 2 - (n - frame.centre[1]) * frame.k];
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const WORDS = { pen: "Penn", pin: "Nål", undo: "Angre", clear: "Tøm", big: "Større", small: "Mindre", build: "Bygg det", send: "Send tilbakemelding", note: "Merknad", placeholder: "Skriv hva som skal endres", empty: "Tegn, sett en nål eller skriv." };
 const ICON = {   // 24 px line icons; the app's button styles do the rest
   pen: '<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>', pin: '<path d="M12 21s-6-5.6-6-10.5a6 6 0 0112 0C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>',

@@ -1,11 +1,12 @@
 {
-  "kits": "3d49693f59273c6f41656388355893ff05681c43",
+  "kits": "e6f9ce681a497c1d88f7933b1a106e67f7758a13",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
   "import": "./{}",
   "map": {
-    "./three.js": "../vendor/three.module.js"
+    "./three.js": "../vendor/three.module.js",
+    "../../ui/dist/html.js": "../kit/html.js"
   },
   "files": {
     "atmosphere.js": "2a6e286b18027e91a11f675191f238b5bfe5e282",
@@ -66,7 +67,7 @@
     "hatch-solid.svg": "1196ffcb2e0e37a11766f27319421a3e9ed99f21",
     "hatch-steel.svg": "b9ded695a08d1e38dc9a306eb655a55d38dbd570",
     "hatch-wood.svg": "68d5bc8f5d43f963aa11b5e0ddba60acace139a5",
-    "sketch.js": "93e537778d782e2e91a197039f8012aba7e91e67",
+    "sketch.js": "610ca910eeb2719b759e8feb868376441ceefc4d",
     "sunpick.js": "e4efe0f58fab9f20f478a5d8cb45f1b786b27899",
     "photo.js": "c16dbfc07d2795b7d0dc3174a173e836b00f8959",
     "grid2d.js": "7ba402edbec5bb2aaeb5d057588e626c4b06163a",

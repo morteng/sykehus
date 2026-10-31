@@ -58,7 +58,7 @@ function inlineStyles(doc, live, copy) {
         frame.remove();
     }
 }
-/** The page drawn without the dialog, through an SVG foreignObject (no library), as a PNG that fits `pngMax` bytes; null when it cannot.
+/** The page drawn without the dialog (`canvas`: the app's way to read a canvas that toDataURL leaves blank, such as a webgl view), through an SVG foreignObject (no library), as a PNG that fits `pngMax` bytes; null when it cannot.
  *  The whole viewport is drawn at its own aspect (the picture is never cropped to the thumbnail; the thumbnail's CSS fits it). */
 export async function pagePicture(doc, o = {}) {
     const win = doc.defaultView, W = doc.documentElement.clientWidth || win.innerWidth, H = win.innerHeight, pngMax = o.pngMax ?? 1024 * 1024;
@@ -69,7 +69,7 @@ export async function pagePicture(doc, o = {}) {
         try {
             const im = doc.createElement("img");
             im.setAttribute("style", n.getAttribute("style") ?? "");
-            im.setAttribute("src", liveCanvas[i].toDataURL("image/png"));
+            im.setAttribute("src", o.canvas?.(liveCanvas[i]) || liveCanvas[i].toDataURL("image/png"));
             n.replaceWith(im);
         }
         catch { /* tainted */ }
