@@ -25,7 +25,7 @@ export function kindOf(b) {
 }
 const fail = (code, message) => Object.assign(new Error(message), { code, photo: true });
 
-export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings = [], SECURITY = {}, personOf = () => null, readBytes, px = null } = {}) {
+export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings = [], SECURITY = {}, personOf = () => null, readBytes, px = null, media = null } = {}) {
   if (!dir) return null;
   const home = join(dir, "_bilder"); mkdirSync(home, { recursive: true });
   const all = new Map();
@@ -45,6 +45,7 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     const p = { id: "p" + randomBytes(8).toString("base64url").slice(0, 10), person, at: new Date().toISOString(), wing: w.id, side: s, note: String(note ?? "").trim().slice(0, 300), year: y, ext: kind.ext, bytes: bytes.length };
     writeFileSync(join(home, `${p.id}.${p.ext}`), bytes);   // the image first, so a kept record always has its file
     const j = join(home, p.id + ".json"), t = j + ".tmp"; writeFileSync(t, JSON.stringify(p)); renameSync(t, j); all.set(p.id, p);
+    media?.picture(`photo/${p.id}`, person, "person", `local://sykehus/_bilder/${p.id}.${p.ext}`, bytes, p.ext);   // U4007: an index, never a gate
     return out(p);
   }
   const mine = person => person ? [...all.values()].filter(p => p.person === person).sort((a, b) => b.at.localeCompare(a.at)).map(out) : [];

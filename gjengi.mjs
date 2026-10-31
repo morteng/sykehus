@@ -83,7 +83,7 @@ const WISH = " The person also asks for this; it may change only materials, ligh
 
 export function createRenderings({ SECURITY = {}, readJson, login, versions, px = null, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
   key = process.env.SYKEHUS_OPENROUTER_API_KEY || "", model = process.env.SYKEHUS_RENDER_MODEL || "google/gemini-3.1-flash-image", cap = +(process.env.SYKEHUS_RENDER_CAP_USD || 20),
-  size = process.env.SYKEHUS_RENDER_SIZE || DEFAULT_SIZE, fetchImpl = fetch, now = () => new Date() } = {}) {
+  size = process.env.SYKEHUS_RENDER_SIZE || DEFAULT_SIZE, fetchImpl = fetch, now = () => new Date(), media = null } = {}) {
   if (!dir) return null;
   mkdirSync(dir, { recursive: true });
   const idx = join(dir, "index.json");
@@ -165,6 +165,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, px 
       const spot = spotOf(body.spot), prior = body.retake_of && all.find(r => r.id === body.retake_of && r.by === who && r.spot);
       const rec = { id, at: now().toISOString(), by: who, work: body.work, ...(spot ? { spot: { ...spot, aspect: spot.aspect || ar } } : {}), ...(prior ? { retake_of: prior.id } : {}), model, size: sz, ...(cam ? { viewpoint: cam.viewpoint, look: cam.look } : {}), ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: j.provider || null };
       all.push(rec); save();
+      media?.picture(`render/${id}`, who, "person", `local://sykehus/render/${id}.${ext}`, out, ext);   // U4007: an index, never a gate
       console.log(`gjengi ${id} ${body.work} ${who} $${(cost ?? est).toFixed(4)}${cost == null ? " (estimert)" : ""} ${j.provider || ""} ${ar} ${sz} ${cam ? cam.viewpoint + "/" + cam.look : ""} ${out.length} B`);
       return rec;
     } finally { pending.delete(who); }

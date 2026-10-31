@@ -40,6 +40,7 @@ import { createStreets } from "./gater.mjs";
 import { createSnow } from "./snow.mjs";
 import { createWishes } from "./wishes.mjs";
 import { createSitePhotos } from "./sitephotos.mjs";
+import { createMedia } from "./media.mjs";   // pictures listed in gulden-ai's media registry (U4007)
 import { createPx } from "./px.mjs";   // a person's own pictures through the scaler, signed (U3992)
 import { createGuide } from "./guide.mjs";
 import { importFile, MAX_IMPORT } from "./bim.mjs";
@@ -103,12 +104,13 @@ const auth = createAuth({ SECURITY, readJson });
 const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
 const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf, login });
 const pxSources = {}, px = createPx({ SECURITY, personOf: login.personOf, sources: pxSources });   // filled in below, once the stores exist
-const sitePhotos = createSitePhotos({ wings: site.wings || [], SECURITY, personOf: login.personOf, readBytes, px });   // the person's own photos of the real building (needs SYKEHUS_VERSIONS_DIR)
+const media = createMedia({ login });
+const sitePhotos = createSitePhotos({ wings: site.wings || [], SECURITY, personOf: login.personOf, readBytes, px, media });   // the person's own photos of the real building (needs SYKEHUS_VERSIONS_DIR)
 const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   // the guide's «seen», on the person (U3658)
 /* the person's open pages, as Anton's tools need them: the version the pill has open (assistant.mjs sets it with each
    turn) and a way to move those pages to a view (show_building); one object, filled in by both */
 const pages = { open: new Map(), show: () => false };
-const gjengi = createRenderings({ SECURITY, readJson, login, versions, px });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
+const gjengi = createRenderings({ SECURITY, readJson, login, versions, px, media });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
 const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, sitePhotos, pages, photos: gjengi, px, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
 const prospekt = createProspekt({ SECURITY, px, login, versions, photos: gjengi, site, floors, siteFacts: () => mcp.siteFacts(), stills: mcp.stills });   // the read-only page of a shared project
 /* who may open what, and where the scaler fetches it (px.mjs): the access rules are the routes' own, said once more for the signed address */
