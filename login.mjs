@@ -24,7 +24,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const NAME = "sykehus", TTL = 90 * 86400;
 const LOGIN = /^[A-Za-z0-9._@-]{1,64}$/;
 
-export function createLogin({ SECURITY, readJson, proxyUser = () => null, fetchImpl = fetch }) {
+export function createLogin({ SECURITY, readJson, proxyUser = () => null, edgeOf = () => null, fetchImpl = fetch }) {
   const secret = process.env.SYKEHUS_COOKIE_SECRET || "";
   const base = (process.env.SYKEHUS_ASSISTANT_URL || "").replace(/\/+$/, ""), bearer = process.env.SYKEHUS_ASSISTANT_TOKEN || "";
   const codePath = process.env.SYKEHUS_CODE_PATH || "/internal/sykehus/code";
@@ -37,6 +37,14 @@ export function createLogin({ SECURITY, readJson, proxyUser = () => null, fetchI
   /* who this browser is: {person, device} from a good, unexpired cookie, else null */
   function personOf(req) {
     return cookieOf(req) ?? (p => p ? { person: p, device: "gulden.no", via: "gulden.no" } : null)(proxyUser(req));
+  }
+  /* may this request act as an admin? Only the edge says so, by the group "admins" in Authelia's Remote-Groups (or the signed assertion's groups):
+     no list of names here (U3981). A cookie sign-in carries no group, so it is never admin; and the edge's login must be the person this
+     request acts as, so a code typed for someone else does not borrow an admin's group. */
+  function adminOf(req) {
+    let e = null; try { e = edgeOf(req); } catch { return false; }
+    const p = personOf(req)?.person;
+    return !!e && e.admin && !!p && p === e.login;
   }
   function cookieOf(req) {
     if (!secret) return null;
@@ -83,5 +91,5 @@ export function createLogin({ SECURITY, readJson, proxyUser = () => null, fetchI
     if (path === "/api/logg-ut" && req.method === "POST") { forget(req, res); send(res, 200, { person: null }); return true; }
     return false;
   }
-  return { personOf, forget, route, ready, anton, base, bearer };
+  return { personOf, adminOf, forget, route, ready, anton, base, bearer };
 }

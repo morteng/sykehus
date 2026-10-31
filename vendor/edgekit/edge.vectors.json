@@ -1,0 +1,245 @@
+{
+ "_": "Shared by agentkit tests/unit/test_edge.py and kits edge/tests. Change both repos' copy together. A case describes the token; each test builds it (seed_bytes is a test-only key, bytes 1..32, the other key 40..71). make.age: seconds before now it was made; mutate: body (sub changed after signing), alg_none (header alg none, no signature), other_key (signed by the other key).",
+ "secret": "edge-test-secret",
+ "legacy": [
+  "X-Laser-Edge"
+ ],
+ "admin_group": "admins",
+ "hop": [
+  {
+   "name": "new header",
+   "headers": {
+    "X-Edge-Auth": "edge-test-secret",
+    "Remote-User": "okter"
+   },
+   "ok": true,
+   "login": "okter"
+  },
+  {
+   "name": "header name in another case",
+   "headers": {
+    "x-edge-auth": "edge-test-secret",
+    "remote-user": "Okter"
+   },
+   "ok": true,
+   "login": "okter"
+  },
+  {
+   "name": "legacy header",
+   "headers": {
+    "X-Laser-Edge": "edge-test-secret",
+    "Remote-User": "okter"
+   },
+   "ok": true,
+   "login": "okter"
+  },
+  {
+   "name": "wrong secret",
+   "headers": {
+    "X-Edge-Auth": "nope",
+    "Remote-User": "okter"
+   },
+   "ok": false,
+   "login": null
+  },
+  {
+   "name": "no proof",
+   "headers": {
+    "Remote-User": "okter"
+   },
+   "ok": false,
+   "login": null
+  },
+  {
+   "name": "empty proof",
+   "headers": {
+    "X-Edge-Auth": "",
+    "Remote-User": "okter"
+   },
+   "ok": false,
+   "login": null
+  },
+  {
+   "name": "another app's legacy header is not ours",
+   "headers": {
+    "X-Sykehus-Proxy-Auth": "edge-test-secret",
+    "Remote-User": "okter"
+   },
+   "ok": false,
+   "login": null
+  },
+  {
+   "name": "proof but no login",
+   "headers": {
+    "X-Edge-Auth": "edge-test-secret"
+   },
+   "ok": true,
+   "login": null
+  },
+  {
+   "name": "proof but not a login",
+   "headers": {
+    "X-Edge-Auth": "edge-test-secret",
+    "Remote-User": "a b; drop"
+   },
+   "ok": true,
+   "login": null
+  }
+ ],
+ "empty_secret_believes_nothing": {
+  "headers": {
+   "X-Edge-Auth": "",
+   "Remote-User": "okter"
+  }
+ },
+ "groups": [
+  {
+   "name": "admins",
+   "headers": {
+    "X-Edge-Auth": "edge-test-secret",
+    "Remote-User": "okter",
+    "Remote-Groups": "family, Admins"
+   },
+   "groups": [
+    "admins",
+    "family"
+   ],
+   "admin": true
+  },
+  {
+   "name": "not admin",
+   "headers": {
+    "X-Edge-Auth": "edge-test-secret",
+    "Remote-User": "anna",
+    "Remote-Groups": "family"
+   },
+   "groups": [
+    "family"
+   ],
+   "admin": false
+  },
+  {
+   "name": "administrators is not admins",
+   "headers": {
+    "X-Edge-Auth": "edge-test-secret",
+    "Remote-User": "anna",
+    "Remote-Groups": "administrators,superadmins"
+   },
+   "groups": [
+    "administrators",
+    "superadmins"
+   ],
+   "admin": false
+  },
+  {
+   "name": "groups without the proof count for nothing",
+   "headers": {
+    "Remote-User": "okter",
+    "Remote-Groups": "admins"
+   },
+   "groups": [],
+   "admin": false
+  }
+ ],
+ "assertion": {
+  "aud": "sykehus",
+  "now": 1800000000,
+  "cases": [
+   {
+    "name": "good, in the admins group",
+    "make": {
+     "sub": "okter",
+     "aud": "sykehus",
+     "groups": [
+      "admins",
+      "family"
+     ]
+    },
+    "error": null,
+    "sub": "okter",
+    "groups": [
+     "admins",
+     "family"
+    ]
+   },
+   {
+    "name": "good, no groups",
+    "make": {
+     "sub": "anna",
+     "aud": "sykehus"
+    },
+    "error": null,
+    "sub": "anna",
+    "groups": []
+   },
+   {
+    "name": "wrong aud",
+    "make": {
+     "sub": "okter",
+     "aud": "laser"
+    },
+    "error": "wrong aud"
+   },
+   {
+    "name": "old exp",
+    "make": {
+     "sub": "okter",
+     "aud": "sykehus",
+     "age": 100
+    },
+    "error": "expired"
+   },
+   {
+    "name": "from the future",
+    "make": {
+     "sub": "okter",
+     "aud": "sykehus",
+     "age": -100
+    },
+    "error": "from the future"
+   },
+   {
+    "name": "changed body",
+    "make": {
+     "sub": "okter",
+     "aud": "sykehus"
+    },
+    "mutate": "body",
+    "error": "bad signature"
+   },
+   {
+    "name": "alg none",
+    "make": {
+     "sub": "okter",
+     "aud": "sykehus"
+    },
+    "mutate": "alg_none",
+    "error": "wrong alg"
+   },
+   {
+    "name": "signed by another key",
+    "make": {
+     "sub": "okter",
+     "aud": "sykehus"
+    },
+    "mutate": "other_key",
+    "error": "bad signature"
+   },
+   {
+    "name": "not a token",
+    "token": "abc",
+    "error": "not a token"
+   },
+   {
+    "name": "sub is not a login",
+    "make": {
+     "sub": "Okter Admin",
+     "aud": "sykehus"
+    },
+    "error": "no login"
+   }
+  ],
+  "seed_bytes_start": 1,
+  "other_seed_bytes_start": 40
+ }
+}

@@ -71,6 +71,13 @@ test("U3832: a wish about a version carries a picture of it: kept, served to its
   assert.equal(png.status, 200); assert.equal(png.headers.get("content-type"), "image/png"); assert.equal(buf.subarray(0, 8).toString("hex"), "89504e470d0a1a0a"); assert.ok(buf.length > 5000, `a picture, ${buf.length} bytes`);
   assert.equal((await fetch(O + pic, { headers: as("kari") })).status, 404, "another person's wish picture is not served");
   assert.equal((await fetch(O + pic, { headers: { authorization: `Bearer ${admin}` } })).status, 200, "pm reads it with the admin token");
+  /* U3981: an admin is the group "admins" at the edge; no list of names here */
+  const seen = h => fetch(O + pic, { headers: h }).then(r => r.status);
+  assert.equal(await seen({ ...as("okter"), "remote-groups": "family,admins" }), 200, "okter is admin by the group");
+  assert.equal(await seen({ ...as("okter"), "remote-groups": "family" }), 404, "a login not in admins is not admin");
+  assert.equal(await seen(as("morten")), 404, "the name morten is no longer admin by itself");
+  assert.equal(await seen({ "remote-user": "okter", "remote-groups": "admins" }), 404, "groups without the edge's proof count for nothing");
+  assert.equal(await seen({ "x-edge-auth": secret, "remote-user": "okter", "remote-groups": "admins" }), 200, "the one header name works the same");
   const none = (await call("send_wish", { text: "Bare et ønske uten bilde", picture: false }, as("lars"))).structuredContent;
   assert.equal(none.picture, false); assert.equal(none.receipt, "Sendt. Morten ser det.");
 });

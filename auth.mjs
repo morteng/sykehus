@@ -1,8 +1,11 @@
 /* Who is asking, for the few things that need it (keeping a version of the after): looking and trying are open.
 
    Three ways in, each ending in a login name (the person's gulden.no login):
-   - gulden.no in front: the login's Remote-User header, believed only with X-Sykehus-Proxy-Auth equal to
-     SYKEHUS_PROXY_SECRET (the edge strips both from what clients send; Anton sends both on its internal calls);
+   - gulden.no in front: the login's Remote-User header, believed only with the edge proof (X-Edge-Auth, equal to
+     SYKEHUS_PROXY_SECRET; X-Sykehus-Proxy-Auth counts the same until the rollout ends) and read by the kits edge kit
+     (vendor/edgekit: one contract for every app, U3981). The edge strips them from what clients send. Anton sends the proof
+     and a signed X-Edge-Assertion (sub = the person, aud = sykehus, 60 s, key SYKEHUS_ASSERTION_PUBKEY; U3964): a bad one is
+     refused whole (401), a good one names the person and the groups. Admin is the group "admins" (Authelia), nowhere else;
    - a personal token (Authorization: Bearer), its sha256 (hex) mapped to the login in the JSON file SYKEHUS_TOKENS,
      for Claude Code and other MCP clients that take a token;
    - OAuth 2.1 with PKCE, for claude.ai and other chat apps that connect with a sign-in: the consent page is reached
@@ -24,6 +27,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { lookup } from "node:dns/promises";
 import { privateAddress } from "./vendor/netkit/public-address.js";   // the one public-address check (kits net, U3984)
 import { join } from "node:path";
+import { AssertionRefused, edgeIdentity } from "./vendor/edgekit/edge.js";   // who is asking behind the edge (kits edge, U3981, U3964)
 
 export const SCOPE = "versions";
 const ACCESS_TTL = 3600, REFRESH_TTL = 90 * 86400, CODE_TTL = 600e3, FORM_TTL = 900e3;
@@ -38,10 +42,12 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
   const originOf = req => process.env.PUBLIC_ORIGIN || (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "") ? `http://${req.headers.host}` : `https://${req.headers.host}`);
 
   // ---------- the three ways in ----------
-  const proxyUser = req => {
-    const secret = process.env.SYKEHUS_PROXY_SECRET, ru = req.headers["remote-user"];
-    return secret && same(req.headers["x-sykehus-proxy-auth"] || "", secret) && typeof ru === "string" && LOGIN.test(ru) ? ru : null;
-  };
+  /* the edge's word on who this is: { login, groups, admin, via } or null; an assertion that is not good throws AssertionRefused */
+  const LEGACY = ["x-sykehus-proxy-auth"];
+  const edgeOf = req => edgeIdentity(req.headers, process.env.SYKEHUS_PROXY_SECRET, { legacy: LEGACY, assertionKey: process.env.SYKEHUS_ASSERTION_PUBKEY, aud: "sykehus" });
+  /* a request that carries an assertion that is not good: the sentence why, else null (the server answers 401 before any route) */
+  const badAssertion = req => { if (!req.headers["x-edge-assertion"]) return null; try { edgeOf(req); return null; } catch (e) { if (e instanceof AssertionRefused) return e.message; throw e; } };
+  const proxyUser = req => { try { return edgeOf(req)?.login ?? null; } catch { return null; } };
   const tokens = (() => { try { return process.env.SYKEHUS_TOKENS ? JSON.parse(readFileSync(process.env.SYKEHUS_TOKENS, "utf8")) : {}; } catch (e) { console.error("tokens:", e.message); return {}; } })();
   const file = dir ? join(dir, "_oauth.json") : null;
   const store = (() => { try { return file && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { grants: [], clients: [] }; } catch (e) { console.error("oauth store:", e.message); return { grants: [], clients: [] }; } })();
@@ -199,5 +205,5 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
     } catch (e) { if (!res.headersSent) send(res, e.code === 429 ? 429 : e.code === 413 ? 413 : 400, { error: e.message }); return true; }
     return false;
   }
-  return { userOf, proxyUser, challenge, count, route };
+  return { userOf, proxyUser, edgeOf, badAssertion, challenge, count, route };
 }

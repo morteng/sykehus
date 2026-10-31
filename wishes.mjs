@@ -7,7 +7,7 @@
 
      GET  /api/onsker          your own reports, newest first ({wishes, you}); status ny | sett | laget | nei (the store's open, in_progress, done,
                                wontfix) and the developer's answer as note
-     GET  /api/onsker/<ref>.png  the picture kept with a report, its person's or an admin's (SYKEHUS_ADMINS, default "morten", or the admin token)
+     GET  /api/onsker/<ref>.png  the picture kept with a report, its person's or an admin's (the group "admins" at the edge, or the admin token)
      POST /api/onsker          {text, tried?, version?}  a new wish, from the page
      POST /api/feedback        {kind, text, page?, tab?, version?, screenshot?}  the kit's feedback dialog; 10 an hour a person */
 import { UPLOAD_CAPS } from "./public/kit/upload-caps.js";   // the one table of upload caps (U3992)
@@ -24,8 +24,7 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
   if (!dir) return null;
   const home = join(dir, "_wishes"); mkdirSync(home, { recursive: true });
   const door = login ? createDoor({ login, fetchImpl }) : null, sent = new Map(), hour = new Map(), PNG = Buffer.from("89504e470d0a1a0a", "hex");
-  const admins = new Set((process.env.SYKEHUS_ADMINS ?? "morten").split(",").map(s => s.trim()).filter(Boolean));
-  const isAdmin = p => !!p && admins.has(p);
+  const isAdmin = req => !!login?.adminOf?.(req);   // the group "admins" at the edge (login.mjs adminOf), not a list of names (U3981)
   const owner = ref => { try { return JSON.parse(readFileSync(join(home, ref + ".json"), "utf8")).person ?? null; } catch { return null; } };
   const keepPicture = (person, png) => {
     const ref = "w" + randomBytes(8).toString("base64url").slice(0, 10), p = join(home, ref + ".json");
@@ -89,7 +88,7 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
       return true;
     }
     if (path !== "/api/onsker" && !path.startsWith("/api/onsker/")) return false;
-    const me = personOf(req)?.person ?? null, admin = token(req) || isAdmin(me);
+    const me = personOf(req)?.person ?? null, admin = token(req) || isAdmin(req);
     if (req.method === "GET" && path === "/api/onsker") {
       if (!me) send(res, 401, { error: "Logg inn for å se ønskene dine." });
       else try { send(res, 200, { wishes: await mine(me), you: me }); } catch (e) { send(res, 503, { error: e.message }); }

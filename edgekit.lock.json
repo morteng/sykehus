@@ -1,0 +1,11 @@
+{
+  "kits": "5421edf23b23658b1f8114547bc99bff97106e38",
+  "kit": "edge",
+  "dest": "vendor/edgekit",
+  "file": "{}",
+  "import": "./{}",
+  "files": {
+    "edge.js": "7cff4729a722717fa53e8c8b2af5ec382e2f0b86",
+    "edge.vectors.json": "b8e7ed74dd1e00c78407db174e96fb6b7928e045"
+  }
+}

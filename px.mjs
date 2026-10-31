@@ -47,7 +47,7 @@ export function createPx({ SECURITY = {}, personOf = () => null, sources = {}, k
     const m = path.startsWith("/internal/px-src/") ? SRC.exec(path) : null;
     if (!path.startsWith("/internal/px-src/")) return false;
     /* the scaler fetches with no person; anything that came through the edge (forwarding headers, a cookie) is not the scaler */
-    if (!m || req.headers["x-forwarded-for"] || req.headers.cookie || req.headers["x-sykehus-proxy-auth"] || req.headers["remote-user"]) return text(res, 404, "Not found"), true;
+    if (!m || req.headers["x-forwarded-for"] || req.headers.cookie || req.headers["x-sykehus-proxy-auth"] || req.headers["x-edge-auth"] || req.headers["x-edge-assertion"] || req.headers["remote-user"]) return text(res, 404, "Not found"), true;
     let got = null; try { got = await sources[m[1]]?.bytes(m[2], m[3], m[4] ?? null); } catch (e) { console.error("px-src:", m[1], e.message); }
     if (!got) return text(res, 404, "Not found"), true;
     res.writeHead(200, { ...SECURITY, "content-type": got.type, "content-length": got.bytes.length, "cache-control": "no-store" }).end(got.bytes);

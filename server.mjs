@@ -101,7 +101,7 @@ async function handleImport(req, res) {
 }
 const sections = existsSync(join(PUB, "data/sections.json")) ? JSON.parse(readFileSync(join(PUB, "data/sections.json"), "utf8")).sections : [];
 const auth = createAuth({ SECURITY, readJson });
-const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser });
+const versions = createVersions(), login = createLogin({ SECURITY, readJson, proxyUser: auth.proxyUser, edgeOf: auth.edgeOf });
 const wishes = createWishes({ SECURITY, readJson, personOf: login.personOf, login });
 const pxSources = {}, px = createPx({ SECURITY, personOf: login.personOf, sources: pxSources });   // filled in below, once the stores exist
 const media = createMedia({ login });
@@ -134,6 +134,8 @@ const snow = createSnow({ SECURITY });   // the snow on the ground today, NVE se
 createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x"); let path = decodeURIComponent(url.pathname);
+    const refused = auth.badAssertion(req);   // a signed assertion that is not good (wrong aud, old exp, bad signature) is refused whole, never read as Remote-User (U3964)
+    if (refused) { console.log(`assertion refused: ${refused}`); return res.writeHead(401, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ error: "assertion refused", reason: refused })); }
     if (/^\/prospekt\/[^/]+\/?$/.test(path)) path = "/prospekt.html";   // the page reads the id from its address
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (await px.route(req, res, path)) return;   // Caddy's forward_auth (/px-may) and the scaler's source (/internal/px-src/)
