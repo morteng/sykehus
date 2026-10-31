@@ -17,6 +17,7 @@ import { burst } from "./kit/effects.js";
 import { movePill } from "./kit/pill.js";
 import { toolLine } from "./toolline.js";
 import { modal } from "./kit/modal.js";
+import { doorSentence } from "./kit/assistant-door.js";   // one sentence for each code the door answers with (U3976)
 import { feedbackOf } from "./sketchsend.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
@@ -25,12 +26,7 @@ import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=202610
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 4.5 19 11.5 17.6 12.9 13 8.3V20h-2V8.3L6.4 12.9 5 11.5z"/></svg>`, STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`;
-const CODES = {
-  unavailable: "Anton svarer ikke akkurat nå. Prøv igjen om et minutt.", timeout: "Anton sluttet å svare. Prøv igjen.",
-  limit: "Mange meldinger på kort tid. Vent noen minutter.", busy: "Anton er opptatt. Meldingen din venter.",
-  too_long: "Meldingen er for lang.", not_allowed: "Anton kan ikke gjøre det for deg.", approval_expired: "Spørsmålet gikk ut. Spør på nytt.",
-  approval_unknown: "Spørsmålet er allerede besvart.", internal: "Noe gikk galt. Prøv igjen.", restart: "Serveren startet på nytt midt i svaret. Send meldingen igjen.",
-};
+const doorWords = (code, turn = false) => doorSentence(code, { lang: "nb", name: "Anton", turn });   // the kit's one table (U3976)
 const POSE = "sykehus-pose";
 const json = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }).catch(() => null);
 
@@ -166,7 +162,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const rid = `ny-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       let r = await json("api/anton/ny", { request_id: rid });
       if (!r || r.status === 502 || r.status === 503) { await new Promise(ok => setTimeout(ok, 2500)); r = await json("api/anton/ny", { request_id: rid }); }
-      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Anton kan ikke svare akkurat nå. Prøv igjen senere." : j.error || CODES.unavailable); }
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Anton kan ikke svare akkurat nå. Prøv igjen senere." : j.error || doorWords("unavailable")); }
     };
     for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
     input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
@@ -180,7 +176,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       const sel = valg.forMessage(), withIt = drawn ? {} : fieldsOf(att);   // a drawing carries its own picture: nothing is attached to it
       const r = await json("api/anton", { text, version: version(), ...withIt, ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
-      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; const why = j.error || CODES.unavailable; line("err", why); return drawn ? { error: why } : false; }   // a drawing's window shows the reason too
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; const why = j.error || doorWords("unavailable"); line("err", why); return drawn ? { error: why } : false; }   // a drawing's window shows the reason too
       if (!drawn) { input.value = ""; input.oninput(); setAtt(null); }
       /* the stream must show the turn taken (queued or running); else the text comes back with a word (pm 21:31Z: the
          first message after load went away and reached no one) */
@@ -258,7 +254,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       for (const it of h.items || []) {
         if (it.type === "message") line(it.from === "assistant" ? "from-asst" : "from-me", it.text, it.from === "assistant" ? "Anton" : null, it.image);
         else if (it.type === "tool") line("tool", toolLine(it));
-        else if (it.type === "error") line("err", CODES[it.code] || CODES.internal);
+        else if (it.type === "error") line("err", doorWords(it.code, true));
         else if (it.type === "qr_done") line("tool", "Innloggingskode vist");
       }
       empty(); return h;
@@ -327,7 +323,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     on("sketch", async s => { if (await sketchCard(s)) openSketch(s); });   // a live plan opens large; the ones that come back with the thread stay cards
     on("approval", card);
     on("qr", qrCard);
-    on("error", e => line("err", CODES[e.code] || CODES.internal));
+    on("error", e => line("err", doorWords(e.code, true)));
     on("done", () => {
       liveChain.then(() => { tries?.end(); tryRows.reset(); });
       if (redraw) { redraw = false; refresh(); }

@@ -32,7 +32,10 @@
    a person's versions is saved (by Anton or anyone), their pages get "steps" and redraw it. */
 import { randomUUID } from "node:crypto";
 
-const WAITING = 5, LONGEST = 4000, PER_10_MIN = 20, SILENCE = 180e3, PING = 15e3, BUSY_TRIES = 20, JOB_POLL = 3e3;
+/* the relay's numbers and the sentences for a code are the kit's (public/kit/assistant-door.js, U3976): the contract Fab's relay keeps to as well */
+import { DOOR, doorSentence } from "./public/kit/assistant-door.js";
+const WAITING = DOOR.queueMax, LONGEST = DOOR.textMax, PER_10_MIN = DOOR.rateCount, RATE_WINDOW = DOOR.rateSeconds * 1e3, SILENCE = DOOR.silenceSeconds * 1e3, PING = DOOR.pingSeconds * 1e3, BUSY_TRIES = DOOR.busyTries, BUSY_WAIT = DOOR.busyRetrySeconds * 1e3, JOB_POLL = 3e3;
+const words = code => doorSentence(code, { lang: "nb", name: "Anton" });
 
 /* a drawing from the page, checked and tidied: a JPEG of at most 2,5 MB, at most 60 strokes of 60 site points */
 function drawingOf(d) {
@@ -200,7 +203,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       };
       let st, j;
       try {
-        for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, turn.device, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, 3000)); }
+        for (let i = 0; i < BUSY_TRIES; i++) { [st, j] = await chat(body, turn.device, onLine, stop); if (st !== 409 || stop.stopped) break; await new Promise(ok => setTimeout(ok, BUSY_WAIT)); }
       } catch (e) { console.error("anton turn", e); st = 500; j = { error: { code: "internal" } }; }
       finally { if (pages?.turn?.get(person) === ctx) { pages.turn.delete(person); keep.savePins(pages); } }
       console.log("anton: turn", turn.id.slice(0, 8), "→", st);
@@ -220,10 +223,10 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     if (path === "/api/anton") {
       const text = String(b?.text ?? "").trim();
       if (!text) return send(res, 400, { error: "Skriv noe først." });
-      if (text.length > LONGEST) return send(res, 413, { error: `Høyst ${LONGEST} tegn i en melding.` });
-      if (t.queue.length >= WAITING) return send(res, 429, { error: "Det venter allerede mange meldinger. Vent til Anton har svart." });
-      const now = Date.now(); t.sent = t.sent.filter(x => now - x < 600e3);
-      if (t.sent.length >= PER_10_MIN) return send(res, 429, { error: "Mange meldinger på kort tid. Vent noen minutter." });
+      if (text.length > LONGEST) return send(res, 413, { error: words("too_long") });
+      if (t.queue.length >= WAITING) return send(res, 429, { error: words("queue_full") });
+      const now = Date.now(); t.sent = t.sent.filter(x => now - x < RATE_WINDOW);
+      if (t.sent.length >= PER_10_MIN) return send(res, 429, { error: words("limit") });
       t.sent.push(now);
       const v = versions?.get(String(b?.version ?? "")), version = v && v.owner === me.person ? { id: v.id, title: v.title, changes: v.edits.length } : null;
       let drawing = null;

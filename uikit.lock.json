@@ -1,5 +1,5 @@
 {
-  "kits": "1505c9adcf7ef7ec2eaabc38e9385b01ebb6f4a8",
+  "kits": "c23019cbbc3d3c75c681fd383500a6f323307767",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
@@ -25,6 +25,7 @@
     "pill.js": "bdf2c6747827172928030ca7b26f5b6a21b0c1fe",
     "picture.js": "ce68e7c81e7714cbbe0364ad88ccf9cb101d7509",
     "picture-signed.js": "1b58969fdbc55ae279f455f775905f271826cede",
-    "upload-caps.js": "abff4629745152650c084a4a6096f199117ce2c2"
+    "upload-caps.js": "abff4629745152650c084a4a6096f199117ce2c2",
+    "assistant-door.js": "9abd8d688d47de4ff878de046a25dd2c5e6454ab"
   }
 }
