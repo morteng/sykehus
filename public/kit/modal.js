@@ -150,15 +150,17 @@ export function modal(o) {
     x.addEventListener("click", () => api.close());
     el.addEventListener("pointerdown", (e) => { if (e.target === el)
         api.close(); });
+    // what the registry holds for this dialog: the dimmed part is its scrim and the panel its sheet, as for a bare layer
+    const layer = { scrim: el, sheet: panel, close: () => api.close(), get isOpen() { return !el.hidden; } };
     const api = {
         el, body,
         get isOpen() { return !el.hidden; },
         open() {
             if (!el.hidden)
                 return;
-            if (active && active !== api)
+            if (active && active !== layer)
                 active.close(); // one at a time: the one up is shut first
-            active = api;
+            active = layer;
             from = doc.activeElement;
             el.hidden = false;
             const f = focusables().filter(e => e !== x);
@@ -167,7 +169,7 @@ export function modal(o) {
         close() {
             if (el.hidden)
                 return;
-            if (active === api)
+            if (active === layer)
                 active = null;
             el.hidden = true;
             from?.focus?.({ preventScroll: true });

@@ -42,7 +42,7 @@ dialog.nc.pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
 @media (max-width:599px){
 #people .chip.me{display:none}
 }
-.places{margin:0 0 var(--sp-3)}
+.places{margin:0 0 var(--sp-3)}     /* .seg2's own inline-flex: as wide as its segments (U2551); the phone fills the row below */
 .places button{font-variant-numeric:tabular-nums}
 .card .meta .mark{margin-right:var(--sp-1)}
 @media (max-width:599px){
@@ -272,9 +272,9 @@ body.tegner .nz, body.tegner #scale { opacity: .4; pointer-events: none; z-index
 }
 
 /* «Riv» (U3542): the notice after, with «Angre», top centre over the view; and the changes in «Forslag» */
-.g-toast.sk-toast { position: absolute; z-index: calc(var(--z-canvas) + 2); top: 70px; bottom: auto; max-width: calc(100% - 220px); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); }
-.g-toast.sk-toast .g-toast-act { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); border-color: var(--border); }
-.g-toast.sk-toast .g-toast-x { color: var(--muted); }
+.g-toast.sk-toast { position: absolute; z-index: calc(var(--z-canvas) + 2); top: 70px; bottom: auto; gap: var(--sp-2); max-width: calc(100% - 220px); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.g-toast.sk-toast .g-toast-act { background: var(--panel); min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); border-color: var(--border); }
+.g-toast.sk-toast .g-toast-x { color: var(--muted); opacity: 1; }
 
 /* the sign-in QR in the chat (U3539): white with a quiet zone in both themes, big enough to scan from a metre */
 .talk-item.card.qr .qr-box { margin: var(--sp-2) 0; }

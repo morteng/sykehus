@@ -3,17 +3,14 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--text)}
-html{font-family:system-ui,-apple-system,sans-serif}
-/* the main app's base.css, the same line (U1862 step 5) */
-h1,h2,h3{font-family:var(--font-display)}
-/* the display face of the theme, as the main app's heads and section titles (U1862 step 5) */
+html{font-family:system-ui,-apple-system,sans-serif}      /* the main app's base.css, the same line (U1862 step 5) */
+h1,h2,h3{font-family:var(--font-display)}      /* the display face of the theme, as the main app's heads and section titles (U1862 step 5) */
 body{font-size:var(--fs-base);line-height:1.5}
 a{color:var(--accent)}
 button,select,input,textarea{font:inherit;color:inherit}
 button{padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);cursor:pointer;white-space:nowrap}
 button:hover{border-color:var(--muted)}
 button:disabled{opacity:.45;cursor:default}
-/* a tap on the greyed Undo reaches the wrapper, which says why (U2358) */
 button.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 button.icon{padding:var(--sp-1) var(--sp-2)}
 input,select,textarea{padding:var(--sp-2) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel)}
@@ -26,7 +23,6 @@ input,select,textarea{padding:var(--sp-2) var(--sp-2);border-radius:var(--radius
 .appbar .nav{display:flex;flex:none;gap:var(--sp-1)}
 .appbar .nav a{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--radius-pill);color:var(--muted);
   font-size:var(--fs-md);text-decoration:none;white-space:nowrap}
-/* U3988: every link holds its bold width */
 .appbar .nav a:hover{color:var(--text);background:var(--hover-wash)}
 .appbar .nav a[aria-current=page]{color:var(--text);font-weight:600;background:var(--accent-panel)}
 /* the editor's bar (§2.2) wraps on a phone (r37); below 1200 px the person chip is a circle like #people, so Start fits (U3317) */
@@ -66,7 +62,7 @@ body.ed{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:h
 .ed aside h3:first-child{margin-top:0}
 .stage{flex:1;position:relative;min-width:0;background:var(--bg)}
 .stage>svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
-.stage .zoom{position:absolute;right:10px;bottom:10px;z-index:var(--z-canvas);display:flex;gap:var(--sp-1)}
+.stage .zoom{position:absolute;right:10px;bottom:10px;z-index:var(--z-canvas);display:flex;gap:var(--sp-1)}     /* U3185: above the 3D canvas, whose floor is opaque */
 .tools{display:flex;flex-wrap:wrap;gap:var(--sp-1)}
 .tools button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
 textarea.notes{width:100%;min-height:110px;resize:vertical;font-size:var(--fs-sm)}
@@ -82,11 +78,9 @@ textarea.notes{width:100%;min-height:110px;resize:vertical;font-size:var(--fs-sm
 @media (max-width:1199px){
 .ed .top input.name{max-width:180px}
 }
-/* U3118: one row at 1024 (designer 01:33Z) */
 .ed .top select#material{max-width:230px}
 #people .chip span{display:none}
-#people .chip{padding:2px}
-/* U3118: the bar shows circles at every desktop width; the name is the tooltip and aria-label (designer 17:00Z) */
+#people .chip{padding:2px}      /* U3118: the bar shows circles at every desktop width; the name is the tooltip and aria-label (designer 17:00Z) */
 /* U1862 */
 .ed .top #people{min-width:24px}
 .small{font-size:var(--fs-sm)}
@@ -158,8 +152,7 @@ body.auth{min-height:100vh;min-height:100dvh;display:grid;place-items:center;pad
 .foot{max-width:1100px;margin:0 auto;padding:0 var(--sp-4) calc(var(--sp-8) + var(--sp-4))}
 code{font-family:var(--mono);font-size:.9em;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px var(--sp-1);overflow-wrap:anywhere}
 /* release number: end of the page, right; in the corner on full-screen pages (editor, sign-in) */
-.ver{display:none}
-/* the version is not shown on the screen; feedback.js still reads its text for a report */
+.ver{display:none}   /* the version is not shown on the screen; feedback.js still reads its text for a report */
 .ver{margin:0;padding:var(--sp-4) var(--sp-4) var(--sp-3);text-align:right;font-size:var(--fs-xs);line-height:1.2;color:var(--muted);opacity:.75;user-select:none}
 body.ed .ver,body.auth .ver{position:fixed;right:10px;bottom:6px;padding:0;pointer-events:none;z-index:1}
 body.ed .ver{right:auto;left:50%;transform:translateX(-50%);bottom:8px}
@@ -176,7 +169,7 @@ body:not(.ed):not(.auth)>main{flex:1 0 auto;width:100%}
 .asst-row{display:flex;gap:var(--sp-1);flex-wrap:wrap;align-items:center}
 .asst-row a.btn,.asst-row button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
 .asst-row a.btn{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.stage path.glow{animation:glow 3s ease-out}
+.stage path.glow{animation:glow 3s ease-out}     /* the assistant-panel glow: 3 s, with editor.js's 3000 ms (redline 30 §5 keeps it) */
 .asst-row a.btn.quiet{background:none;border-color:var(--border);color:var(--text)}
 #talk{margin:0 0 var(--sp-2)}
 .talk-log{list-style:none;margin:0;padding:.5rem 0 0;border-top:1px solid var(--border);display:grid;gap:var(--sp-1);max-height:min(46vh,420px);overflow-y:auto;overscroll-behavior:contain}
@@ -184,7 +177,7 @@ body:not(.ed):not(.auth)>main{flex:1 0 auto;width:100%}
 .talk-who{display:block;font-size:var(--fs-xs);color:var(--muted);margin-bottom:2px}
 .talk-body{white-space:pre-wrap}
 .talk-body strong,#reply-body strong{font-weight:600}
-.talk-body code,#reply-body code{font-family:var(--mono);font-size:.92em}
+.talk-body code,#reply-body code{font-family:var(--mono);font-size:.92em}     /* the assistant's markdown (U2134) */
 .talk-item.from-me{background:var(--panel)}
 .talk-item.from-asst.typing .talk-body::after{content:"…";color:var(--muted)}
 .talk-item.tool{border-style:dashed;color:var(--muted);padding:var(--sp-1) var(--sp-2)}
@@ -203,16 +196,13 @@ button.quiet{background:none;border-color:var(--border);color:var(--text)}
 .ed aside.side{width:var(--side-w,290px)}
 .ed aside#left{width:210px}
 }
-/* U3118: one band, 900–1199 (designer 17:00Z) */
 body.side-off.ed aside.side{width:0;border-left:0}
 body.side-off.ed aside.side>:not(.sidetoggle){display:none}
 .sidetoggle{position:absolute;z-index:var(--z-sticky);top:12px;left:-26px;width:26px;height:40px;display:grid;place-items:center;border:1px solid var(--border);border-right:0;border-radius:var(--radius) 0 0 var(--radius);background:var(--panel);color:var(--muted);font-size:var(--fs-base);padding:0}
 .sidetoggle .dbadge{top:-6px;left:-6px}
 .dock{display:grid;grid-template-columns:repeat(var(--tabs,4),1fr);gap:2px;padding:var(--sp-1);border-bottom:1px solid var(--border);background:var(--panel);flex:none}
-/* U3359 (designer 14:1xZ): in 290 px each tab is its icon, its label the tooltip and the accessible name, so all fit and none sits under a fade */
 .dock[data-tabs="4"]{--tabs:4}
-.dock[data-tabs="5"]{--tabs:5}
-/* the server renders how many tabs show, so the first paint has the final columns (U1862 c); «Selected» is one (U3115) */
+.dock[data-tabs="5"]{--tabs:5}      /* the server renders how many tabs show, so the first paint has the final columns (U1862 c); «Selected» is one (U3115) */
 .dock button{border:0;background:transparent;display:grid;justify-items:center;gap:2px;padding:var(--sp-1);font-size:var(--fs-xs);font-weight:600;color:var(--muted);position:relative;border-radius:var(--radius);min-height:var(--tap)}
 @media (hover:hover){
 .dock button:hover{background:var(--panel-2)}
@@ -237,8 +227,7 @@ body.side-off.ed aside.side>:not(.sidetoggle){display:none}
 /* phone: the panel is a bottom sheet over a fixed dock (hagekart body.m) */
 body.m{--dockh:calc(62px + env(safe-area-inset-bottom))}
 body.m.ed{--peekh:96px}
-body.m.ed:has(#right[data-snap=peek] .peekhead:empty){--peekh:58px}
-/* the grab bar is 44 px; a peek with no line is just the bar */
+body.m.ed:has(#right[data-snap=peek] .peekhead:empty){--peekh:58px}      /* the grab bar is 44 px; a peek with no line is just the bar */
 body.m.ed main{padding-bottom:calc(var(--dockh) + var(--peekh))}
 body.m.ed aside.side{display:flex;position:fixed;z-index:var(--z-dock);left:0;right:0;bottom:var(--dockh);width:auto;height:var(--peekh);border:1px solid var(--border);border-bottom:0;border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;background:var(--panel);box-shadow:var(--shadow-up);transition:height var(--dur-slow) var(--ease)}
 body.m.ed aside.side[data-snap=half]{height:52dvh}
@@ -249,7 +238,6 @@ body.m .grab i{display:block;width:40px;height:5px;border-radius:3px;background:
 body.m .peekhead{display:flex;align-items:center;gap:var(--sp-2);flex:none;min-height:44px;padding:0 var(--sp-3) var(--sp-2);font-size:var(--fs-md)}
 body.m .peekhead .pk{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body.m .peekhead button.sm{flex:none;padding:var(--sp-1) var(--sp-3)}
-/* the toast has the Undo while it is up: one control for one act (designer) */
 body.m .peekhead:empty{display:none}
 body.m aside.side[data-snap=peek] .side-body{display:none}
 body.m aside.side:not([data-snap=peek]) .peekhead{display:none}
@@ -269,7 +257,6 @@ body.m.ed aside.side[data-snap=full]{height:calc(100dvh - var(--hdr,110px) - var
 .bstack>[hidden]{display:none}
 body:not(.talk-on) .bstack{bottom:64px;width:auto;max-width:calc(100% - 24px)}
 .reply{display:flex;flex-direction:column;gap:var(--sp-1);transition:opacity 1.2s ease}
-/* the 1.2 s reply fade (redline 18 §4) */
 @media (prefers-reduced-motion:reduce){
 .reply{transition:none}
 }
@@ -282,8 +269,7 @@ body:not(.talk-on) .bstack{bottom:64px;width:auto;max-width:calc(100% - 24px)}
 /* ---- the Chat tab: full history (§4.7) */
 #p-chat .talk-log{gap:var(--sp-2);display:flex;flex-direction:column}
 #p-chat .talk-item{border:0;background:none;padding:0;max-width:92%}
-#p-chat .talk-item.from-me{align-self:flex-end;background:var(--accent-panel);border:1px solid var(--accent-panel-edge);border-radius:14px 14px 4px 14px;padding:var(--sp-2) var(--sp-3)}
-/* redline 30 exception (radius): the chat bubble, which goes with U1857 slice 4 */
+#p-chat .talk-item.from-me{align-self:flex-end;background:var(--accent-panel);border:1px solid var(--accent-panel-edge);border-radius:14px 14px 4px 14px;padding:var(--sp-2) var(--sp-3)}     /* redline 30 exception (radius): the chat bubble, which goes with U1857 slice 4 */
 #p-chat .talk-item.from-asst{align-self:flex-start;max-width:100%}
 #p-chat .talk-item.tool{border:1px dashed var(--border);border-radius:var(--radius);padding:var(--sp-1) var(--sp-2);max-width:100%}
 #p-chat .talk-item.card{border:1px solid var(--accent);border-radius:var(--radius);padding:var(--sp-2) var(--sp-2);max-width:100%;background:var(--panel)}
@@ -294,8 +280,7 @@ body.m.ed .bstack{position:fixed;left:16px;right:16px;width:auto;transform:none;
 body.m.ed.sheet-open .bstack{bottom:var(--dockh);left:0;right:0;padding:var(--sp-1) var(--sp-2);background:var(--panel);border-top:1px solid var(--border);z-index:var(--z-composer)}
 body.m.sheet-open .bstack .reply,body.m.sheet-open .bstack .waitlines,body.m.sheet-open .bstack .selbar{display:none}
 body.m.sheet-open.talk-on .side-body{padding-bottom:64px}
-body.m.sheet-open.talk-on .oc-acts{bottom:64px}
-/* Apply stays above the pill (U3115) */
+body.m.sheet-open.talk-on .oc-acts{bottom:64px}      /* Apply stays above the pill (U3115) */
 body.m .rcard{max-height:40dvh}
 body.kb.m.talk-on:not(.pill-chat) aside.side{display:none!important}
 body.kb.m.ed .bstack{bottom:calc(var(--kb,0px) + 8px);left:8px;right:8px;background:none;border:0;padding:0}
@@ -328,7 +313,6 @@ body.m.ed .g-toast{bottom:calc(var(--dockh) + 12px)}
 .talk-body .about{display:block;margin-top:3px;font-size:var(--fs-xs);color:var(--muted);cursor:default}
 .talk-body .about[tabindex]{cursor:pointer}
 .talk-body .about[tabindex]:hover{color:var(--accent)}
-/* U3881: the 2D hover pre-highlight */
 svg,.v3d{--dim:.45}
 #shapes>g{transition:opacity var(--dur-slow)}
 @media (prefers-color-scheme:light){
@@ -370,7 +354,7 @@ button.newc{display:inline-flex;align-items:center;gap:var(--sp-1)}
 .pill .newc[aria-disabled=true]:hover{background:transparent;color:var(--muted)}
 #chat-top[hidden]+.talk-log{border-top:0}
 #talk-empty .cleared{margin:0 0 var(--sp-3);text-align:center;color:var(--muted);font-size:var(--fs-xs)}
-#talk-empty.refused > :not(#talk-cleared){display:none}
+#talk-empty.refused > :not(#talk-cleared){display:none}   /* history refused: only who started a new chat (U1997) */
 dialog.nc{background:var(--panel);box-shadow:var(--shadow-md)}
 @media (min-width:600px){
 dialog.nc{width:22rem;max-width:calc(100vw - 32px);padding:var(--sp-4) var(--sp-4);border-radius:var(--radius-lg)}
@@ -461,11 +445,10 @@ dialog.share{width:100%}
 /* ---- the card of an object (U3036 O3), a joint (J2) or a box's joints: the panel's tab «Selected» (U3115), no frame of its own */
 .ed aside.side[data-tab=selected] .side-body{padding:0}
 #p-selected #keep{order:1}
-.objcard{display:flex;flex-direction:column;gap:var(--sp-3);padding:0 var(--sp-4);background:var(--panel);scroll-padding-top:3.5rem;scroll-padding-bottom:calc(var(--tap) + 2rem)}
-/* a focused field scrolls to above the footer */
+.objcard{display:flex;flex-direction:column;gap:var(--sp-3);padding:0 var(--sp-4);background:var(--panel);scroll-padding-top:3.5rem;scroll-padding-bottom:calc(var(--tap) + 2rem)}   /* a focused field scrolls to above the footer */
 .objcard[hidden]{display:none}
 .oc-h{position:sticky;top:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-3) var(--sp-4) var(--sp-2);background:var(--panel);border-bottom:1px solid var(--border);font-size:var(--fs-sm);font-weight:600}
-.oc-acts{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:var(--sp-2);position:sticky;bottom:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-2) var(--sp-4) var(--sp-3);background:var(--panel);border-top:1px solid var(--border)}
+.oc-acts{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:var(--sp-2);position:sticky;bottom:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-2) var(--sp-4) var(--sp-3);background:var(--panel);border-top:1px solid var(--border)}   /* Apply, then Close, on the left; both stay in reach while the form scrolls */
 body.m .objcard input,body.m .objcard select,body.m .objcard button{min-height:var(--tap)}
 .objcard :is(input,select,button,textarea){scroll-margin:3.5rem 0 calc(var(--tap) + 2rem)}
 @keyframes glow{0%{stroke:var(--glow);stroke-width:4px;filter:drop-shadow(0 0 3px var(--glow))}100%{filter:none}}
