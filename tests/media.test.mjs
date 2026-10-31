@@ -51,3 +51,13 @@ test("a kept Gjengi render is registered under render/<its id> by the person who
   assert.equal(ref, `render/${j.picture.id}`); assert.equal(owner, "lars"); assert.equal(access, "person");
   assert.equal(source, `local://sykehus/render/${j.picture.id}.png`); assert.equal(bytes.length, 5000); assert.equal(ext, "png");
 });
+
+test("forget posts {app, ref} to /internal/media/delete with the bearer; no door, nothing posted", async () => {
+  const seen = [];
+  createMedia({ login: { base: "http://anton:8000", bearer: "tok" }, fetchImpl: async (u, o) => { seen.push([u, o]); return { status: 200 }; } }).forget("photo/p1");
+  await wait(() => seen.length);
+  assert.equal(seen[0][0], "http://anton:8000/internal/media/delete"); assert.equal(seen[0][1].headers.authorization, "Bearer tok");
+  assert.deepEqual(JSON.parse(seen[0][1].body), { app: "sykehus", ref: "photo/p1" });
+  let n = 0; createMedia({ login: { base: "", bearer: "" }, fetchImpl: async () => { n++; return { status: 200 }; } }).forget("photo/p2");
+  await new Promise(r => setTimeout(r, 60)); assert.equal(n, 0);
+});

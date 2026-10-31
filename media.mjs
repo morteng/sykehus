@@ -18,5 +18,13 @@ export function createMedia({ login, fetchImpl = fetch } = {}) {
       if (r.status !== 200) console.warn(`media register ${ref}: the door answered ${r.status}`);
     }).catch(e => console.error("media register", ref, e.message));
   }
-  return { picture };
+  /* the picture is gone: drop its registry rows (POST /internal/media/delete {app, ref}); same fire and forget as `picture` */
+  function forget(ref) {
+    if (!base || !bearer || !ref) return;
+    Promise.resolve().then(async () => {
+      const r = await fetchImpl(`${base}/internal/media/delete`, { method: "POST", signal: AbortSignal.timeout(5000), headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" }, body: JSON.stringify({ app: "sykehus", ref }) });
+      if (r.status !== 200) console.warn(`media forget ${ref}: the door answered ${r.status}`);
+    }).catch(e => console.error("media forget", ref, e.message));
+  }
+  return { picture, forget };
 }

@@ -59,6 +59,7 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
   function remove(person, id) {
     const p = person && ID.test(String(id)) ? all.get(String(id)) : null; if (!p || p.person !== person) return false;
     all.delete(p.id); for (const f of [`${p.id}.${p.ext}`, `${p.id}.json`]) try { unlinkSync(join(home, f)); } catch { }
+    media?.forget(`photo/${p.id}`);   // U4010: an index, never a gate
     return true;
   }
 

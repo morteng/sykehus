@@ -106,3 +106,9 @@ test("the upload carries wing, side, note and year in the address, never the fil
   globalThis.confirm = () => false; await nodes["#phList"].onclick({ target: { closest: () => ({ dataset: { del: "pAAAAAAAAAA" } }) } }); assert.ok(!calls.some(c => c[1] === "DELETE"), "no delete without a yes");
   globalThis.confirm = () => true; await nodes["#phList"].onclick({ target: { closest: () => ({ dataset: { del: "pAAAAAAAAAA" } }) } }); assert.ok(calls.some(c => c[1] === "DELETE" && c[0] === "api/bilder/pAAAAAAAAAA"));
 });
+
+test("U4010: removing a photo tells the media registry to forget photo/<id>, only for the owner who removes it", () => {
+  const gone = [], s = createSitePhotos({ dir: mkdtempSync(join(tmpdir(), "sykehus-sp-")), wings, media: { picture() {}, forget: ref => gone.push(ref) } }), a = s.add("lars", JPG, { wing: "midtfloy" });
+  assert.equal(s.remove("mia", a.id), false); assert.deepEqual(gone, []);
+  assert.equal(s.remove("lars", a.id), true); assert.deepEqual(gone, [`photo/${a.id}`]);
+});
