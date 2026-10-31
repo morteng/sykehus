@@ -12,6 +12,7 @@
 import https from "node:https";
 import dns from "node:dns";
 import net from "node:net";
+import { privateAddress } from "./vendor/netkit/public-address.js";   /* the one public-address check (kits net, U3984) */
 
 const toolErr = message => Object.assign(new Error(message), { tool: true });
 export const FETCH_HOSTS = ["raw.githubusercontent.com", "objects.githubusercontent.com", "github.com", "dl.polyhaven.org", "api.polyhaven.com", "upload.wikimedia.org", "commons.wikimedia.org"];
@@ -29,31 +30,6 @@ export const LINK_ONLY = [
   { name: "GrabCAD", host: "grabcad.com", search: q => `https://grabcad.com/library?query=${encodeURIComponent(q)}`, why: "krever konto" },
 ];
 
-/* the eight 16-bit groups of an IPv6 text (:: and a dotted tail expanded), or null */
-function groups6(ip) {
-  let s = ip.toLowerCase().split("%")[0]; const m = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
-  if (m) { if (!net.isIPv4(m[1])) return null; const [a, b, c, d] = m[1].split(".").map(Number); s = s.slice(0, m.index) + ((a << 8) | b).toString(16) + ":" + ((c << 8) | d).toString(16); }
-  const [h, t, extra] = s.split("::"); if (extra !== undefined) return null;
-  const hs = h ? h.split(":") : [], ts = t === undefined ? [] : t ? t.split(":") : [];
-  const fill = t === undefined ? 0 : 8 - hs.length - ts.length; if (fill < 0 || (t === undefined && hs.length !== 8)) return null;
-  const all = [...hs, ...Array(fill).fill("0"), ...ts].map(x => parseInt(x, 16)); return all.length === 8 && all.every(Number.isInteger) ? all : null;
-}
-/* an address a fetch must never reach: this box, its networks, the cloud's metadata, multicast */
-export function privateIp(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split(".").map(Number);
-    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
-  }
-  if (net.isIPv6(ip)) {
-    const g = groups6(ip); if (!g) return true;
-    const v4 = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`, head5 = g.slice(0, 5).every(x => x === 0);
-    if (head5 && (g[5] === 0xffff || g[5] === 0)) return privateIp(v4(g[6], g[7]));       /* ::ffff:a.b.c.d or ::ac11:1 (hex), ::a.b.c.d */
-    if (g.slice(0, 4).every(x => x === 0) && g[4] === 0xffff && g[5] === 0) return privateIp(v4(g[6], g[7])); /* ::ffff:0:a.b.c.d */
-    if (g[0] === 0x2002) return true;                        /* 6to4: its own inside is not ours to fetch */
-    return g.every(x => x === 0) || (g.slice(0, 7).every(x => x === 0) && g[7] === 1) || (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xff00) === 0xff00 || g[0] === 0x64 && g[1] === 0xff9b || (g[0] === 0x2001 && (g[1] === 0 || g[1] === 0xdb8));
-  }
-  return true;
-}
 /* the URL on the list, or the reason it is not */
 export function allowed(u) {
   let url; try { url = new URL(u); } catch { return { ok: false, why: "ikke en adresse" }; }
@@ -71,7 +47,7 @@ export function fetcherOf(resolve = dns.lookup) {
   const lookup = (host, opts, cb) => resolve(host, { all: true }, (err, addrs) => {
     if (err) return cb(err);
     const list = Array.isArray(addrs) ? addrs : [{ address: addrs, family: net.isIPv6(addrs) ? 6 : 4 }];
-    if (!list.length || list.some(a => privateIp(a.address))) return cb(Object.assign(new Error(`${host} peker til en intern adresse`), { code: "EPRIVATE" }));
+    if (!list.length || list.some(a => privateAddress(a.address))) return cb(Object.assign(new Error(`${host} peker til en intern adresse`), { code: "EPRIVATE" }));
     return opts?.all ? cb(null, list) : cb(null, list[0].address, list[0].family);
   });
   function once(url, deadline) {
@@ -79,7 +55,7 @@ export function fetcherOf(resolve = dns.lookup) {
       const left = deadline - Date.now(); if (left <= 0) return no(toolErr("Hentingen tok mer enn 60 sekunder."));
       const req = https.get(url, { lookup, headers: { "user-agent": "sykehus.gulden.no model import (U3571)", accept: "*/*" }, timeout: left }, res => {
         const s = res.socket.remoteAddress;
-        if (!s || privateIp(s)) { req.destroy(); return no(toolErr("Adressen ble en intern adresse etter oppslaget: hentes ikke.")); }
+        if (!s || privateAddress(s)) { req.destroy(); return no(toolErr("Adressen ble en intern adresse etter oppslaget: hentes ikke.")); }
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) { res.resume(); return ok({ redirect: new URL(res.headers.location, url).href }); }
         if (res.statusCode !== 200) { res.resume(); return no(toolErr(`Kilden svarte ${res.statusCode}.`)); }
         let n = 0; const parts = [];
@@ -88,7 +64,7 @@ export function fetcherOf(resolve = dns.lookup) {
         res.on("error", no);
       });
       /* checked again once connected: the address the socket reached, not the one looked up */
-      req.on("socket", sock => sock.once("connect", () => { if (privateIp(sock.remoteAddress || "")) req.destroy(toolErr("Adressen ble en intern adresse etter oppslaget: hentes ikke.")); }));
+      req.on("socket", sock => sock.once("connect", () => { if (privateAddress(sock.remoteAddress || "")) req.destroy(toolErr("Adressen ble en intern adresse etter oppslaget: hentes ikke.")); }));
       req.on("timeout", () => req.destroy(toolErr("Hentingen tok mer enn 60 sekunder.")));
       req.on("error", e => no(e.tool ? e : toolErr(e.code === "EPRIVATE" ? `${e.message}: hentes ikke.` : `Fikk ikke hentet: ${e.code || e.message}`)));
     });

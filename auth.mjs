@@ -22,6 +22,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { lookup } from "node:dns/promises";
+import { privateAddress } from "./vendor/netkit/public-address.js";   // the one public-address check (kits net, U3984)
 import { join } from "node:path";
 
 export const SCOPE = "versions";
@@ -93,7 +94,7 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
       const u = new URL(id);
       if (/^(localhost|\[)/.test(u.hostname) || /^\d+\.\d+\.\d+\.\d+$/.test(u.hostname)) throw err(400, "Client id host not allowed");
       const addrs = await lookup(u.hostname, { all: true }).catch(() => []);   // the name must not lead into a private network
-      if (!addrs.length || addrs.some(({ address: a }) => /^(127\.|10\.|0\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|::$|f[cd]|fe[89ab]|::ffff:(127|10|192\.168|169\.254)\.)/i.test(a))) throw err(400, "Client id host not allowed");
+      if (!addrs.length || addrs.some(({ address: a }) => privateAddress(a))) throw err(400, "Client id host not allowed");
       const hit = clientCache.get(id); if (hit && Date.now() - hit.at < 864e5) return hit.c;
       const r = await fetch(id, { headers: { accept: "application/json", "user-agent": UA }, signal: AbortSignal.timeout(5000), redirect: "error" });
       const text = await r.text(); if (!r.ok || text.length > 65536) throw err(400, "Could not read the client's metadata");

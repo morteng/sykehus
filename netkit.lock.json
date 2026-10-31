@@ -1,0 +1,11 @@
+{
+  "kits": "1cfeb72de2325bb8113ac7c8e6e7f10a2b9a728b",
+  "kit": "net",
+  "dest": "vendor/netkit",
+  "file": "{}",
+  "import": "./{}",
+  "files": {
+    "public-address.js": "0afce76d7d2cefd4e4d0f5fcb734b70c7cb04cd9",
+    "public-address.vectors.json": "f6e003d8a28850cc8fea16daca9ac5f83531562f"
+  }
+}
