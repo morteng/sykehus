@@ -9,7 +9,7 @@ const read = (p) => readFileSync(new URL(`../public/${p}`, import.meta.url), "ut
 test("the pill is the kit's: the markup wears the kit classes, no copy of the box is left, the move is the kit's", () => {
   const html = read("index.html"), form = html.slice(html.indexOf('<form class="pill g-pill" id="talk-form"'), html.indexOf("</form>", html.indexOf('id="talk-form"')));
   for (const c of ["g-pill__mid", "g-pill__in", "g-pill__busy", "g-pill__go"]) assert.ok(form.includes(c), c);
-  const css = read("sykehus.css") + read("fab/laser.css");
+  const css = read("sykehus.css") + read("kit/shell.css");
   assert.ok(!/(^|\n)\.pill\s*\{/.test(css), "a .pill box rule is left");
   assert.ok(!/\.pill textarea\s*\{/.test(css) && !/\.pill \.hist,\.pill \.round\{/.test(css), "a copy of the text box or the buttons is left");
   const kit = read("kit/kit.css");

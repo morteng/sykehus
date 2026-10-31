@@ -13,6 +13,7 @@ import { nearWays } from "./paint-edit.js";
 import { tearAtOnce } from "./optimistic.js";
 import { createKeys } from "./keys.js?v=20261026za";
 import { burst, burstAt } from "./kit/effects.js";
+import { toast as kitToast } from "./kit/toast.js";
 import { pictureHTML, ownPictureHTML } from "./kit/picture.js";
 import { SUN_DEFAULT, sunIn, sunDay, sunFromDay, sunDate } from "./renderkit/sunpick.js";
 import { sunLabel } from "./gjengi-no.js";
@@ -330,10 +331,10 @@ pkSync(); pkShow(firstView({ shared: pkShared(), owner: mine(), asked: qs.get("v
   peg.addEventListener("pointerup", end); peg.addEventListener("pointercancel", end);
   peg.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); arm(); } });
   function arm() {
-    if (placing) { placing = null; peg.setAttribute("aria-pressed", "false"); $("toast")?.remove(); return; }
+    if (placing) { placing = null; peg.setAttribute("aria-pressed", "false"); hideToast(); return; }
     peg.setAttribute("aria-pressed", "true");
-    placing = (at, how) => { placing = null; peg.setAttribute("aria-pressed", "false"); $("toast")?.remove(); go(viewer.standable(how.x, how.y)); };
-    toast("Trykk der du vil stå i gateplan.", { label: "Avbryt", run: () => { placing = null; peg.setAttribute("aria-pressed", "false"); $("toast")?.remove(); } });
+    placing = (at, how) => { placing = null; peg.setAttribute("aria-pressed", "false"); hideToast(); go(viewer.standable(how.x, how.y)); };
+    toast("Trykk der du vil stå i gateplan.", { label: "Avbryt", run: () => { placing = null; peg.setAttribute("aria-pressed", "false"); hideToast(); } });
   }
 }
 $("zin").onclick = () => viewer.zoom(1 / 1.5); $("zout").onclick = () => viewer.zoom(1.5); $("zhome").onclick = () => viewer.reset();
@@ -816,13 +817,13 @@ const newId = () => "n" + Array.from(crypto.getRandomValues(new Uint8Array(8)), 
 const along = () => { const a = viewer.view().north || 0; return [Math.cos(a), Math.sin(a)]; };   // screen right, east and north
 function aim(on, hint, text) {
   placing = on; $("mnew").setAttribute("aria-pressed", String(!!on && hint === "ny")); document.body.classList.toggle("placing", !!on);
-  if (on) toast(text || (hint === "ny" ? "Trykk på bakken der det nye bygget skal stå." : "Trykk der bygget skal stå."), { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
+  if (on) toast(text || (hint === "ny" ? "Trykk på bakken der det nye bygget skal stå." : "Trykk der bygget skal stå."), { label: "Avbryt", run: () => { aim(null); hideToast(); } });
 }
 /* U3671: Anton asks for a place (ask_point, mcp.mjs): the plan, framed near its hint, one tap sets a pin, and the point goes back as the
    person's next message: plain words for the person, and the point (metres east and north on the site) to Anton out of view */
 async function askPoint(q) {
   const { dropPin, clearPin, pinDialog } = await import("./pin.js?v=3"); clearPin(viewer);
-  viewer.select(null); valg.clear(); shut(); if (placing) { aim(null); $("toast")?.remove(); }   // no building card stays open under the dialog
+  viewer.select(null); valg.clear(); shut(); if (placing) { aim(null); hideToast(); }   // no building card stays open under the dialog
   setMode("plan"); if (storeyOn) pickStorey(null);
   const question = String(q.question || "Hvor?").trim();
   const dlg = pinDialog({ question, view: $("view"), stage: $("stage"), viewer, zoom: f => viewer.zoom(f),
@@ -840,7 +841,7 @@ async function askPoint(q) {
   dlg.open();
   if (Number.isFinite(q.x) && Number.isFinite(q.y)) viewer.look({ x: q.x, y: q.y, dist: q.dist || 90, yaw: 0 }, 0);
 }
-$("mnew").onclick = () => placing ? (aim(null), $("toast")?.remove()) : aim(async ([x, y]) => {
+$("mnew").onclick = () => placing ? (aim(null), hideToast()) : aim(async ([x, y]) => {
   aim(null); const [dx, dy] = along(), L = 15, id = newId();
   const r = await edit([{ kind: "volume", id, name: "Nytt bygg", shape: "box", from: [x - dx * L, y - dy * L], to: [x + dx * L, y + dy * L], width: 12, storeys: 3, material: "concrete", why: "satt opp på siden" }], "Fikk ikke satt opp bygget");
   if (!r) return;
@@ -944,13 +945,13 @@ impPop.onsubmit = async ev => {
   impOpen(false);
   const [lx, ly, lz] = j.size_m || [10, 10, 5], m1 = v => String(Math.round(v * 10) / 10).replace(".", ",");
   aim(async ([x, y]) => {
-    aim(null); $("toast")?.remove(); const [dx, dy] = along(), h = Math.max(0.5, lx / 2), id = newId(), name = f.name.replace(/\.[a-z0-9]{2,5}$/i, "").slice(0, 80);
+    aim(null); hideToast(); const [dx, dy] = along(), h = Math.max(0.5, lx / 2), id = newId(), name = f.name.replace(/\.[a-z0-9]{2,5}$/i, "").slice(0, 80);
     const r = await edit([{ kind: "import", id, name, file: j.file, licence, ...(source ? { source } : {}), from: [x - dx * h, y - dy * h], to: [x + dx * h, y + dy * h], why: "hentet inn på siden" }], "Fikk ikke satt den på tomta");
     if (!r) return;
     valg.clear(); valg.add({ kind: "new", id, label: name }); const a = site.added.find(q => q.id === id); if (a) showNew(a);
     toast(`${name} er satt på tomta.`, { label: "Angre", run: () => undoLast(r.n, r.k) });
   });
-  toast(`${f.name}: ${m1(lx)} × ${m1(ly)} m, ${m1(lz)} m høy${j.unit?.length && j.unit.length !== "metre" && j.unit.from !== "person" ? ` (fila er i ${{ millimetre: "millimeter", centimetre: "centimeter", decimetre: "desimeter", foot: "fot", inch: "tommer" }[j.unit.length] || j.unit.length}, gjort om)` : ""}. Trykk der den skal stå.`, { label: "Avbryt", run: () => { aim(null); $("toast")?.remove(); } });
+  toast(`${f.name}: ${m1(lx)} × ${m1(ly)} m, ${m1(lz)} m høy${j.unit?.length && j.unit.length !== "metre" && j.unit.from !== "person" ? ` (fila er i ${{ millimetre: "millimeter", centimetre: "centimeter", decimetre: "desimeter", foot: "fot", inch: "tommer" }[j.unit.length] || j.unit.length}, gjort om)` : ""}. Trykk der den skal stå.`, { label: "Avbryt", run: () => { aim(null); hideToast(); } });
 };
 /* by: how the build tools made it (renderkit build.js), in its why, so a change no one meant says where it came from */
 const BY = { drag: "dratt", click: "med «Flytt»", keys: "med tastene", wheel: "med Shift og hjulet", typed: "med tall" };
@@ -959,7 +960,7 @@ async function reshape(id, set, what = "Endret", by = null) {
   toast(`${what}.`, { label: "Angre", run: () => undoLast(r.n, r.k) }); return true;
 }
 function moveNew(a) {
-  aim(([x, y]) => { aim(null); $("toast")?.remove(); const cx = (a.from[0] + a.to[0]) / 2, cy = (a.from[1] + a.to[1]) / 2, d = [x - cx, y - cy];
+  aim(([x, y]) => { aim(null); hideToast(); const cx = (a.from[0] + a.to[0]) / 2, cy = (a.from[1] + a.to[1]) / 2, d = [x - cx, y - cy];
     reshape(a.id, { from: [a.from[0] + d[0], a.from[1] + d[1]], to: [a.to[0] + d[0], a.to[1] + d[1]] }, `${a.name} er flyttet`); });
 }
 function turnNew(a) {
@@ -1053,16 +1054,13 @@ function showNew(a) {
    again as it is */
 async function undo(n, expect = draft?.edits?.[n - 1]) {
   if (busy) return false; busy = true;
-  try { const j = await change({ ...where(), undo: n, expect }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return false; } $("toast")?.remove(); await show(j); return true; }
+  try { const j = await change({ ...where(), undo: n, expect }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return false; } hideToast(); await show(j); return true; }
   finally { busy = false; }
 }
-function toast(text, act) {
-  $("toast")?.remove();
-  const t = Object.assign(document.createElement("div"), { id: "toast", role: "status" }); t.innerHTML = `<span></span>`; t.firstChild.textContent = text;
-  if (act) { const b = Object.assign(document.createElement("button"), { type: "button", textContent: act.label }); b.onclick = act.run; t.append(b); }
-  const x = Object.assign(document.createElement("button"), { type: "button", className: "x", textContent: "×", title: "Lukk" }); x.setAttribute("aria-label", "Lukk"); x.onclick = () => t.remove(); t.append(x);
-  $("stage").append(t); setTimeout(() => t.isConnected && t.classList.add("gone"), 15000); setTimeout(() => t.remove(), 15800);
-}
+/* the kit's one toast (kit/toast.js): the same time on screen as every app's, hover holds it, the × and the act are the kit's */
+let toastUp = null;
+function hideToast() { toastUp?.hide(); toastUp = null; }
+function toast(text, act) { toastUp = kitToast({ text, closeLabel: "Lukk", action: act, host: $("stage"), className: "sk-toast" }); }
 /* «Angre» on the toast takes back every edit the one «Riv» made, the last first */
 async function undoLast(n, k) { const was = draft.edits.slice(); for (let i = 0; i < k - 1; i++) { const j = await change({ ...where(), undo: n - i, expect: was[n - i - 1] }); if (j.error) { toast(`Fikk ikke angret: ${j.error}`); if (j.stale) await refresh(); return; } keys.taken(was[n - i - 1]); } if (await undo(n - k + 1, was[n - k])) keys.taken(was[n - k]); }
 /* the IFC with the after's demolitions taken out (the server's ifcfilter.mjs) */
@@ -1267,7 +1265,7 @@ const measure = createMeasure({ el: K.el, host: $("stage"), locale: "nb-NO",
   snap: ([x, y, k]) => { const s = inferPoint([x, y], { rings: site.buildings.filter(b => b.ring?.length > 2).map(b => b.ring), reach: 0.8, kinds: ["endpoint", "midpoint", "edge"] }); return [s.p[0], s.p[1], k]; },
   words: { distance: "Avstand", horizontal: "Vannrett", area: "Areal", perimeter: "Omkrets", hint: "Trykk punkt A, så punkt B. Hold Shift og trykk flere punkter for areal. Esc avslutter." },
   onChange: (m, on = measure.active) => $("mal").setAttribute("aria-pressed", String(on)) });
-const setMal = on => { if (on) { if (placing) { aim(null); $("toast")?.remove(); } measure.on(); } else measure.off(); $("mal").setAttribute("aria-pressed", String(measure.active)); };
+const setMal = on => { if (on) { if (placing) { aim(null); hideToast(); } measure.on(); } else measure.off(); $("mal").setAttribute("aria-pressed", String(measure.active)); };
 $("mal").onclick = () => setMal(!measure.active);
 addEventListener("keydown", e => { if ((e.key === "m" || e.key === "M") && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) { e.preventDefault(); setMal(!measure.active); } });
 /* The pointer's place in the Plan (renderkit readout.js, U3883): «Ø», «N» in UTM 33 (the site's origin + its metres) and «h», the

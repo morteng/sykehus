@@ -1,0 +1,477 @@
+/* The shell: the assistant-first page layout two apps share (U3977): the app bar, the side panel with its tabs and dock, the bottom stack and the pill's place, the talk log and its cards, the object card shell.
+   Taken from one app's stylesheet, where the other kept a frozen copy of it. Token values (accent, pane width) stay with each app; the kit has the names. */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+html{font-family:system-ui,-apple-system,sans-serif}
+/* the main app's base.css, the same line (U1862 step 5) */
+h1,h2,h3{font-family:var(--font-display)}
+/* the display face of the theme, as the main app's heads and section titles (U1862 step 5) */
+body{font-size:var(--fs-base);line-height:1.5}
+a{color:var(--accent)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{padding:var(--sp-2) var(--sp-3);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.45;cursor:default}
+/* a tap on the greyed Undo reaches the wrapper, which says why (U2358) */
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button.icon{padding:var(--sp-1) var(--sp-2)}
+input,select,textarea{padding:var(--sp-2) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel)}
+.mut{color:var(--muted)}
+.err{color:var(--danger-text)}
+/* ===== the app bar (U1862 step 2, redline 31 §2): one recipe, `.appbar`, on the tokens only, for every page with a bar */
+.appbar{position:sticky;top:0;z-index:var(--z-sticky);display:flex;align-items:center;flex-wrap:nowrap;gap:var(--sp-2);
+  min-height:calc(var(--tap) + 2 * var(--sp-2));padding:var(--sp-2) var(--edge-x);background:var(--bg);border-bottom:1px solid var(--border);box-shadow:none}
+.appbar .brand{flex:none;font-size:var(--fs-base);font-weight:600;color:var(--text);text-decoration:none;white-space:nowrap}
+.appbar .nav{display:flex;flex:none;gap:var(--sp-1)}
+.appbar .nav a{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--radius-pill);color:var(--muted);
+  font-size:var(--fs-md);text-decoration:none;white-space:nowrap}
+/* U3988: every link holds its bold width */
+.appbar .nav a:hover{color:var(--text);background:var(--hover-wash)}
+.appbar .nav a[aria-current=page]{color:var(--text);font-weight:600;background:var(--accent-panel)}
+/* the editor's bar (§2.2) wraps on a phone (r37); below 1200 px the person chip is a circle like #people, so Start fits (U3317) */
+.ed .appbar{flex-wrap:wrap}
+@media (max-width:899px){
+.appbar .nav,.appbar .hd-me>.fb-btn,.appbar .hd-me>.cx-link{display:none}
+body:not(.ed) .appbar .brand{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.appbar .me-menu>summary.chip{justify-content:center;width:max(var(--tap),44px);height:max(var(--tap),44px);padding:0;border:0;background:transparent}
+.appbar .me-menu #me{display:none}
+}
+.chip{display:inline-flex;align-items:center;gap:var(--sp-1);padding:2px var(--sp-2) 2px var(--sp-1);border-radius:var(--radius-pill);border:1px solid var(--border);font-size:var(--fs-xs);background:var(--panel)}
+.chip i{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;color:var(--on-person);font-style:normal;font-size:var(--fs-xs);font-weight:700}
+dialog{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--panel);color:var(--text);padding:var(--sp-4);max-width:min(440px,calc(100vw - 32px));box-shadow:var(--shadow-sm)}
+dialog::backdrop{background:var(--scrim)}
+dialog h2{margin:0 0 var(--sp-2);font-size:var(--fs-lg)}
+dialog label{display:block;font-weight:600;margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}
+dialog input,dialog select{width:100%}
+dialog .acts{display:flex;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-4)}
+.search{position:relative;display:flex;flex:1;min-width:16rem}
+.search input{width:100%;padding-right:2rem}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.search .clear{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;padding:2px var(--sp-1);font-size:1rem;line-height:1;color:var(--muted)}
+.search .clear:hover{color:var(--text)}
+/* the headers wrap, the numbers keep their width; a wide list gives every group's table the same columns */
+#groups{container-type:inline-size}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
+.empty{padding:calc(var(--sp-8) + var(--sp-2)) var(--sp-4);text-align:center;border:1px dashed var(--border);border-radius:var(--radius-lg)}
+.drop{outline:2px dashed var(--accent);outline-offset:-8px}
+/* editor */
+body.ed{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.ed .top input.name{font-weight:600;min-width:120px;max-width:280px;border-color:transparent;background:transparent;text-overflow:ellipsis}
+.ed .top input.name:hover,.ed .top input.name:focus{border-color:var(--border)}
+.ed main{flex:1;display:flex;min-height:0}
+.ed aside{width:260px;flex:none;border-right:1px solid var(--border);background:var(--panel);overflow:auto;padding:var(--sp-3)}
+.ed aside.right{border-right:0;border-left:1px solid var(--border)}
+.ed aside h3{font-size:var(--fs-xs);text-transform:var(--label-case);letter-spacing:var(--label-tracking);color:var(--muted);margin:var(--sp-3) 0 var(--sp-1)}
+.ed aside h3:first-child{margin-top:0}
+.stage{flex:1;position:relative;min-width:0;background:var(--bg)}
+.stage>svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.stage .zoom{position:absolute;right:10px;bottom:10px;z-index:var(--z-canvas);display:flex;gap:var(--sp-1)}
+.tools{display:flex;flex-wrap:wrap;gap:var(--sp-1)}
+.tools button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
+textarea.notes{width:100%;min-height:110px;resize:vertical;font-size:var(--fs-sm)}
+.warn{font-size:var(--fs-sm);margin:var(--sp-1) 0;padding:var(--sp-1) var(--sp-2);border-radius:var(--radius);background:var(--bg);border:1px solid var(--border)}
+.status{font-size:var(--fs-xs)}
+.status.off{color:var(--danger-text)}
+@media (max-width:620px){
+.ed aside{display:none}
+.ed aside.open{display:block;position:absolute;z-index:var(--z-sheet);top:0;bottom:0;left:0;width:min(300px,85vw);box-shadow:var(--shadow-sm)}
+.ed main{position:relative}
+}
+#people{display:inline-flex;gap:var(--sp-1);flex-wrap:wrap}
+@media (max-width:1199px){
+.ed .top input.name{max-width:180px}
+}
+/* U3118: one row at 1024 (designer 01:33Z) */
+.ed .top select#material{max-width:230px}
+#people .chip span{display:none}
+#people .chip{padding:2px}
+/* U3118: the bar shows circles at every desktop width; the name is the tooltip and aria-label (designer 17:00Z) */
+/* U1862 */
+.ed .top #people{min-width:24px}
+.small{font-size:var(--fs-sm)}
+.ok{color:var(--ok-text)}
+.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+a.btn{display:inline-block;padding:var(--sp-1) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);color:var(--text);text-decoration:none;font-size:var(--fs-sm);white-space:nowrap}
+a.btn:hover{border-color:var(--muted)}
+.never{border:1px solid var(--border);border-left:4px solid var(--warn-text);border-radius:var(--radius);background:var(--panel);padding:var(--sp-2) var(--sp-3);margin:0 0 var(--sp-4)}
+.never h2{font-size:var(--fs-md);margin:0 0 var(--sp-1)}
+.never ul{margin:0;padding-left:var(--sp-4);font-size:var(--fs-md)}
+.group{margin:0 0 var(--sp-4)}
+.group h2,.group summary{font-size:var(--fs-base);margin:0 0 var(--sp-2);font-weight:600;cursor:default}
+.group summary{cursor:pointer}
+table.mats,table.settings{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;font-size:var(--fs-md)}
+table.mats th,table.mats td,table.settings th,table.settings td{padding:var(--sp-2) var(--sp-2);border-top:1px solid var(--border);text-align:left}
+table.mats thead th,table.settings thead th{border-top:0;font-size:var(--fs-sm);color:var(--muted);font-weight:600}
+table.settings th{font-weight:600}
+th.num,td.num{text-align:right}
+th.num{font-family:inherit}
+.state{display:inline-block;font-size:var(--fs-xs);padding:1px var(--sp-2);border-radius:var(--radius-pill);border:1px solid var(--border);white-space:nowrap}
+.res{display:inline-block;font-size:var(--fs-xs);padding:1px var(--sp-2);border-radius:var(--radius-pill);border:1px solid var(--border)}
+.mat section{margin:0 0 var(--sp-6)}
+.mat h2{font-size:var(--fs-lg);margin:0 0 var(--sp-2)}
+.card.step{padding:var(--sp-3) var(--sp-3);display:flex;flex-direction:column;gap:var(--sp-2)}
+.test{display:flex;gap:var(--sp-3);align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2) var(--sp-3)}
+.test p{margin:2px 0 0}
+.runs{list-style:none;margin:0;padding:0;display:grid;gap:var(--sp-2)}
+.run{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-2) var(--sp-3)}
+.run p{margin:var(--sp-1) 0}
+.photos{display:flex;gap:var(--sp-1);flex-wrap:wrap;margin:var(--sp-1) 0}
+.photos img{width:96px;height:72px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border)}
+dialog textarea{width:100%}
+.seg{border:0;padding:0;margin:var(--sp-3) 0 0;display:flex;gap:var(--sp-3)}
+.seg legend{font-weight:600;font-size:var(--fs-md);margin-bottom:var(--sp-1);padding:0}
+.seg label{display:inline-flex;gap:var(--sp-1);align-items:center;font-weight:400;margin:0}
+dialog .acts.spread{justify-content:space-between;align-items:center}
+@media (max-width:620px){
+.test{flex-direction:column;align-items:stretch}
+.test button{width:100%;min-height:var(--tap)}
+/* --tap grows with the root size and is 41-43 px on a phone: qa wants 44 px on the materials pages (U1800) */
+body[data-page^=material] button:not(.clear):not(.g-toast-act),body[data-page^=material] a.btn{min-height:max(var(--tap),44px)}
+dialog .acts.spread{flex-wrap:wrap}
+dialog .acts.spread button{flex:1 1 30%;min-height:var(--tap)}
+}
+@media (max-width:620px){
+table.settings{display:none}
+}
+button.sm{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2);margin-right:var(--sp-1)}
+/* sign-in, join and connect pages: one centred card */
+body.auth{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:var(--sp-4)}
+.auth main{width:100%;max-width:420px}
+.auth .brand{margin:0 0 var(--sp-3);display:flex;align-items:center;justify-content:center;gap:var(--sp-2);font-weight:600;color:var(--muted)}
+.auth .card{padding:var(--sp-6);gap:0;overflow:visible}
+.auth h1{font-size:var(--fs-xl);margin:0 0 var(--sp-2)}
+.auth p{margin:var(--sp-2) 0}
+.auth label{display:block;font-weight:600;font-size:var(--fs-md);margin:var(--sp-4) 0 var(--sp-2)}
+.auth input[type=password],.auth input[type=text],.auth input:not([type]){width:100%;min-height:var(--tap);padding:var(--sp-2) var(--sp-3);border-radius:var(--radius)}
+.auth input:focus-visible{border-color:var(--accent)}
+.auth .acts{display:flex;gap:var(--sp-2);margin-top:var(--sp-4)}
+.auth button,.auth a.btn{min-height:var(--tap);padding:var(--sp-2) var(--sp-4);font-size:var(--fs-base);border-radius:var(--radius)}
+.auth a.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.auth .acts button.pri{flex:1}
+.auth .acts.grant{justify-content:flex-end;gap:var(--sp-2)}
+.auth .acts.grant button{flex:0 0 auto}
+.auth .other{margin-top:var(--sp-4);text-align:right}
+/* home page */
+.home h2{font-size:var(--fs-lg);margin:var(--sp-8) 0 var(--sp-2)}
+.foot{max-width:1100px;margin:0 auto;padding:0 var(--sp-4) calc(var(--sp-8) + var(--sp-4))}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1px var(--sp-1);overflow-wrap:anywhere}
+/* release number: end of the page, right; in the corner on full-screen pages (editor, sign-in) */
+.ver{display:none}
+/* the version is not shown on the screen; feedback.js still reads its text for a report */
+.ver{margin:0;padding:var(--sp-4) var(--sp-4) var(--sp-3);text-align:right;font-size:var(--fs-xs);line-height:1.2;color:var(--muted);opacity:.75;user-select:none}
+body.ed .ver,body.auth .ver{position:fixed;right:10px;bottom:6px;padding:0;pointer-events:none;z-index:1}
+body.ed .ver{right:auto;left:50%;transform:translateX(-50%);bottom:8px}
+.home .tg{margin:0 0 var(--sp-6)}
+.home .tg h3{font-size:var(--fs-md);color:var(--muted);margin:0 0 var(--sp-2);font-weight:600}
+.home .test b{display:block}
+.home details.group{margin-top:var(--sp-3)}
+.home details.group summary{font-weight:600;cursor:pointer;margin:0 0 var(--sp-2)}
+.auth a.btn.pri{display:block;text-align:center}
+.auth .or{display:flex;align-items:center;gap:var(--sp-3);color:var(--muted);font-size:var(--fs-sm);margin:var(--sp-4) 0 0}
+.auth .or::before,.auth .or::after{content:"";flex:1;border-top:1px solid var(--border)}
+body:not(.ed):not(.auth){min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+body:not(.ed):not(.auth)>main{flex:1 0 auto;width:100%}
+.asst-row{display:flex;gap:var(--sp-1);flex-wrap:wrap;align-items:center}
+.asst-row a.btn,.asst-row button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
+.asst-row a.btn{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.stage path.glow{animation:glow 3s ease-out}
+.asst-row a.btn.quiet{background:none;border-color:var(--border);color:var(--text)}
+#talk{margin:0 0 var(--sp-2)}
+.talk-log{list-style:none;margin:0;padding:.5rem 0 0;border-top:1px solid var(--border);display:grid;gap:var(--sp-1);max-height:min(46vh,420px);overflow-y:auto;overscroll-behavior:contain}
+.talk-item{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2);border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);overflow-wrap:anywhere}
+.talk-who{display:block;font-size:var(--fs-xs);color:var(--muted);margin-bottom:2px}
+.talk-body{white-space:pre-wrap}
+.talk-body strong,#reply-body strong{font-weight:600}
+.talk-body code,#reply-body code{font-family:var(--mono);font-size:.92em}
+.talk-item.from-me{background:var(--panel)}
+.talk-item.from-asst.typing .talk-body::after{content:"…";color:var(--muted)}
+.talk-item.tool{border-style:dashed;color:var(--muted);padding:var(--sp-1) var(--sp-2)}
+.talk-item.tool.write{color:var(--text)}
+.talk-item.card{border-color:var(--accent)}
+.talk-item.card .asst-row{margin-top:var(--sp-1)}
+.talk-item.err{border-color:var(--danger-text);color:var(--danger-text)}
+.talk-item.waiting{border-style:dashed;background:none}
+button.quiet{background:none;border-color:var(--border);color:var(--text)}
+.talk-form{margin-top:var(--sp-2);display:grid;gap:var(--sp-1)}
+.talk-form textarea{width:100%;resize:vertical;min-height:2.6em;font:inherit}
+/* ---- editor panel with tabs (redline 18): a column beside the bed, never over it */
+.ed aside.side{position:relative;width:var(--side-w,360px);padding:0;display:flex;flex-direction:column;overflow:visible;border-right:0;border-left:1px solid var(--border)}
+.ed aside#left{width:240px}
+@media (max-width:1199px){
+.ed aside.side{width:var(--side-w,290px)}
+.ed aside#left{width:210px}
+}
+/* U3118: one band, 900–1199 (designer 17:00Z) */
+body.side-off.ed aside.side{width:0;border-left:0}
+body.side-off.ed aside.side>:not(.sidetoggle){display:none}
+.sidetoggle{position:absolute;z-index:var(--z-sticky);top:12px;left:-26px;width:26px;height:40px;display:grid;place-items:center;border:1px solid var(--border);border-right:0;border-radius:var(--radius) 0 0 var(--radius);background:var(--panel);color:var(--muted);font-size:var(--fs-base);padding:0}
+.sidetoggle .dbadge{top:-6px;left:-6px}
+.dock{display:grid;grid-template-columns:repeat(var(--tabs,4),1fr);gap:2px;padding:var(--sp-1);border-bottom:1px solid var(--border);background:var(--panel);flex:none}
+/* U3359 (designer 14:1xZ): in 290 px each tab is its icon, its label the tooltip and the accessible name, so all fit and none sits under a fade */
+.dock[data-tabs="4"]{--tabs:4}
+.dock[data-tabs="5"]{--tabs:5}
+/* the server renders how many tabs show, so the first paint has the final columns (U1862 c); «Selected» is one (U3115) */
+.dock button{border:0;background:transparent;display:grid;justify-items:center;gap:2px;padding:var(--sp-1);font-size:var(--fs-xs);font-weight:600;color:var(--muted);position:relative;border-radius:var(--radius);min-height:var(--tap)}
+@media (hover:hover){
+.dock button:hover{background:var(--panel-2)}
+}
+.dock button[aria-selected=true]{background:var(--accent-panel);color:var(--accent)}
+.dock svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.dbadge{position:absolute;top:2px;left:calc(50% + 6px);min-width:18px;height:18px;border-radius:var(--radius-pill);background:var(--accent);color:var(--on-accent);font-size:var(--fs-xs);line-height:18px;padding:0 var(--sp-1);font-variant-numeric:tabular-nums;font-style:normal;box-shadow:0 0 0 2px var(--panel)}
+.side-body{flex:1;min-height:0;overflow:auto;padding:var(--sp-3)}
+.ed aside.side[data-tab=chat] .side-body{overflow:hidden;display:flex;flex-direction:column}
+#p-chat:not([hidden]),#p-chat #talk{display:flex;flex-direction:column;flex:1;min-height:0}
+#p-chat .talk-log{flex:1;max-height:none}
+.tabp h3{font-size:var(--fs-xs);text-transform:var(--label-case);letter-spacing:var(--label-tracking);color:var(--muted);margin:var(--sp-4) 0 var(--sp-1)}
+.tabp .lbl{display:block;font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin-bottom:var(--sp-1)}
+.tabp select#material{width:100%}
+.csugg{list-style:none;margin:var(--sp-1) 0 0;padding:0}
+/* the rows wrap at any pane width (redline 40 p2: 320 px): the words in a 0-min column, the chevron in its own */
+.csugg button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--sp-2);width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;padding:var(--sp-2) 2px;font-size:var(--fs-md);min-height:var(--tap);border-radius:0}
+.csugg button::after{content:"›";margin-left:auto;color:var(--muted)}
+/* the selection as a floating bar at the bottom of the canvas */
+.ed .stage{position:relative}
+.grab,.peekhead{display:none}
+/* phone: the panel is a bottom sheet over a fixed dock (hagekart body.m) */
+body.m{--dockh:calc(62px + env(safe-area-inset-bottom))}
+body.m.ed{--peekh:96px}
+body.m.ed:has(#right[data-snap=peek] .peekhead:empty){--peekh:58px}
+/* the grab bar is 44 px; a peek with no line is just the bar */
+body.m.ed main{padding-bottom:calc(var(--dockh) + var(--peekh))}
+body.m.ed aside.side{display:flex;position:fixed;z-index:var(--z-dock);left:0;right:0;bottom:var(--dockh);width:auto;height:var(--peekh);border:1px solid var(--border);border-bottom:0;border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;background:var(--panel);box-shadow:var(--shadow-up);transition:height var(--dur-slow) var(--ease)}
+body.m.ed aside.side[data-snap=half]{height:52dvh}
+body.m.ed aside.side[data-snap=full]{height:88dvh}
+body.m .sidetoggle{display:none}
+body.m .grab{display:grid;place-items:center;flex:none;width:100%;height:max(var(--tap),44px);border:0;background:none;padding:0;cursor:grab;touch-action:none}
+body.m .grab i{display:block;width:40px;height:5px;border-radius:3px;background:var(--border)}
+body.m .peekhead{display:flex;align-items:center;gap:var(--sp-2);flex:none;min-height:44px;padding:0 var(--sp-3) var(--sp-2);font-size:var(--fs-md)}
+body.m .peekhead .pk{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.m .peekhead button.sm{flex:none;padding:var(--sp-1) var(--sp-3)}
+/* the toast has the Undo while it is up: one control for one act (designer) */
+body.m .peekhead:empty{display:none}
+body.m aside.side[data-snap=peek] .side-body{display:none}
+body.m aside.side:not([data-snap=peek]) .peekhead{display:none}
+body.m .dock{position:fixed;z-index:var(--z-dock);left:0;right:0;bottom:0;height:var(--dockh);padding:2px var(--sp-1) env(safe-area-inset-bottom);border-top:1px solid var(--border);border-bottom:0}
+body.m .dock button{min-height:44px}
+body.kb.m .dock{display:none}
+body.kb.m.ed aside.side{bottom:var(--kb,0px);height:calc(var(--vvh,70dvh) - 8px)}
+body.m.ed .ver{display:none}
+@media (max-width:899px){
+.ed aside#left{display:none}
+.ed aside#left.open{display:block;position:fixed;z-index:var(--z-sheet);top:0;bottom:0;left:0;width:min(300px,85vw);box-shadow:var(--shadow-sm)}
+}
+body.m.ed aside.side[data-snap=full]{height:calc(100dvh - var(--hdr,110px) - var(--dockh))}
+/* ---- the bottom stack on the canvas (redline 18 §4): replies, waiting lines, selection bar, pill */
+.bstack{position:absolute;z-index:var(--z-composer);left:50%;bottom:16px;transform:translateX(-50%);width:min(560px,calc(100% - 48px));display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-2);pointer-events:none}
+.bstack>*{pointer-events:auto}
+.bstack>[hidden]{display:none}
+body:not(.talk-on) .bstack{bottom:64px;width:auto;max-width:calc(100% - 24px)}
+.reply{display:flex;flex-direction:column;gap:var(--sp-1);transition:opacity 1.2s ease}
+/* the 1.2 s reply fade (redline 18 §4) */
+@media (prefers-reduced-motion:reduce){
+.reply{transition:none}
+}
+.reply .ask{margin:0;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 var(--sp-1);text-shadow:0 0 6px var(--bg)}
+.rcard,.reply .talk-item.card{border-radius:var(--radius-lg);border:1px solid var(--border);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow-sm);padding:var(--sp-3) var(--sp-4)}
+.rcard{max-height:12rem;overflow-y:auto}
+.rcard:focus-visible{border-color:var(--accent)}
+.rcard .rbody{white-space:pre-wrap;font-size:var(--fs-md);line-height:1.5}
+.reply .talk-item.card{border-color:var(--accent)}
+/* ---- the Chat tab: full history (§4.7) */
+#p-chat .talk-log{gap:var(--sp-2);display:flex;flex-direction:column}
+#p-chat .talk-item{border:0;background:none;padding:0;max-width:92%}
+#p-chat .talk-item.from-me{align-self:flex-end;background:var(--accent-panel);border:1px solid var(--accent-panel-edge);border-radius:14px 14px 4px 14px;padding:var(--sp-2) var(--sp-3)}
+/* redline 30 exception (radius): the chat bubble, which goes with U1857 slice 4 */
+#p-chat .talk-item.from-asst{align-self:flex-start;max-width:100%}
+#p-chat .talk-item.tool{border:1px dashed var(--border);border-radius:var(--radius);padding:var(--sp-1) var(--sp-2);max-width:100%}
+#p-chat .talk-item.card{border:1px solid var(--accent);border-radius:var(--radius);padding:var(--sp-2) var(--sp-2);max-width:100%;background:var(--panel)}
+#p-chat .talk-item.waiting{border:1px dashed var(--border);border-radius:var(--radius);padding:var(--sp-1) var(--sp-2)}
+#p-chat .talk-item.err{color:var(--danger-text)}
+/* ---- phone (§4.5) */
+body.m.ed .bstack{position:fixed;left:16px;right:16px;width:auto;transform:none;bottom:calc(var(--dockh) + var(--peekh) + 8px)}
+body.m.ed.sheet-open .bstack{bottom:var(--dockh);left:0;right:0;padding:var(--sp-1) var(--sp-2);background:var(--panel);border-top:1px solid var(--border);z-index:var(--z-composer)}
+body.m.sheet-open .bstack .reply,body.m.sheet-open .bstack .waitlines,body.m.sheet-open .bstack .selbar{display:none}
+body.m.sheet-open.talk-on .side-body{padding-bottom:64px}
+body.m.sheet-open.talk-on .oc-acts{bottom:64px}
+/* Apply stays above the pill (U3115) */
+body.m .rcard{max-height:40dvh}
+body.kb.m.talk-on:not(.pill-chat) aside.side{display:none!important}
+body.kb.m.ed .bstack{bottom:calc(var(--kb,0px) + 8px);left:8px;right:8px;background:none;border:0;padding:0}
+body.kb.m .bstack .reply{display:flex}
+/* the version stamp keys on the server's data-talk (= editor.js's TALK), not on talk-on, so it does not move after load (U1862 c) */
+body.ed.talk-on:not(.m) .bstack{bottom:22px}
+body.ed[data-talk="1"] .ver{bottom:3px}
+body.m.talk-on .zoom,body.m.talk-on .hud{display:none}
+/* 0.1.13 redlines */
+.stage.narrow .zoom{top:10px;bottom:auto;right:38px}
+body:not(.side-off) #b-fold{display:none!important}
+.reply .ask{align-self:center;max-width:100%;padding:2px var(--sp-2);border-radius:var(--radius-pill);background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);text-shadow:none}
+.rcard{padding-top:0}
+.rcard>.talk-who{position:sticky;top:0;z-index:1;display:block;padding:var(--sp-3) 0 var(--sp-1);background:var(--panel);box-shadow:0 6px 6px -2px var(--panel)}
+#p-chat .talk-log{padding-bottom:var(--sp-2)}
+#p-chat .talk-log>li{flex:none}
+.talk-item.tool.failed{color:var(--danger-text);border-color:var(--danger)}
+.nowrap{white-space:nowrap}
+.status.warn{color:var(--warn-text)}
+body.gone .stage>svg{pointer-events:none}
+body.gone #left :is(button,select,input,label),body.gone #material,body.gone #asst-pause,body.gone #p-export .tools button{pointer-events:none;opacity:.5}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@media (prefers-reduced-motion:reduce){
+.spin{animation-duration:2.4s}
+}
+body.m.ed .g-toast{bottom:calc(var(--dockh) + 12px)}
+@media (prefers-reduced-motion:reduce){
+#shapes>g>*,.pt-lock path,.pt-ping,.pt-bob,.pt-lock.fresh{animation:none}
+}
+.talk-body .about{display:block;margin-top:3px;font-size:var(--fs-xs);color:var(--muted);cursor:default}
+.talk-body .about[tabindex]{cursor:pointer}
+.talk-body .about[tabindex]:hover{color:var(--accent)}
+/* U3881: the 2D hover pre-highlight */
+svg,.v3d{--dim:.45}
+#shapes>g{transition:opacity var(--dur-slow)}
+@media (prefers-color-scheme:light){
+:root:not([data-theme]) :is(svg,.v3d){--dim:.35}
+}
+:root:is([data-theme=light],[data-theme=solarpunk]) :is(svg,.v3d){--dim:.35}
+/* ---- named pointers (redline 24 §2): arrow with an edge, a name pill, idle fade, the long-press ping, follow once */
+svg{--cur-edge:var(--bed)}
+.cur .cur-arrow,.cur .cur-lbl,.cur{transition:none}
+.cur.gone{opacity:0;transition:opacity var(--dur-slow)}
+#people button.chip{font-size:var(--fs-xs);color:inherit;cursor:pointer;line-height:inherit}
+#people button.chip:hover{border-color:var(--muted)}
+#people button.chip:focus:not(:focus-visible){outline:none;box-shadow:none}
+@media (prefers-reduced-motion:reduce){
+.cur.idle .cur-arrow,.cur.idle .cur-lbl,.cur.gone{transition:none}
+}
+.ix{all:unset;cursor:pointer;color:var(--muted);font-size:var(--fs-lg);line-height:1;padding:2px var(--sp-1);border-radius:var(--radius-sm)}
+.ix:hover{color:var(--text)}
+.keep[aria-pressed=true] .off,.keep[aria-pressed=false] .on{display:none}
+.keep[aria-pressed=true]{background:var(--accent-panel);color:var(--accent);border-color:var(--accent-panel-edge)}
+.keep[aria-pressed=false]{color:var(--muted)}
+.seg2{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex:none}
+.seg2 button{border:0;border-radius:0;min-height:2rem;padding:0 var(--sp-2);font-size:var(--fs-sm);background:var(--panel);color:var(--muted)}
+.seg2 button+button{border-left:1px solid var(--border)}
+.seg2 button[aria-pressed=true]{background:var(--accent-panel);color:var(--accent);font-weight:600}
+.seg2 button:focus-visible{outline-offset:-3px}
+#anchor .dots circle{fill:var(--muted);stroke:none}
+#anchor .dots circle.on{fill:var(--accent)}
+#anchor[aria-expanded=true]{border-color:var(--accent)}
+/* ---- Parts | Layers in the left column (redline 19 §3) */
+#left{position:relative}
+.px{color:var(--muted);font-size:var(--fs-xs);font-weight:400;font-variant-numeric:tabular-nums;flex:none}
+/* ---- New chat (redline 22): the control in the Chat tab and in the pill, the confirm, the line after */
+.chat-top{display:flex;justify-content:flex-end;flex:none;margin:0 0 var(--sp-2)}
+button.newc{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.newc svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.newc[aria-disabled=true]{opacity:.45;cursor:default}
+.newc[aria-disabled=true]:hover{border-color:var(--border)}
+.pill .newc[aria-disabled=true]:hover{background:transparent;color:var(--muted)}
+#chat-top[hidden]+.talk-log{border-top:0}
+#talk-empty .cleared{margin:0 0 var(--sp-3);text-align:center;color:var(--muted);font-size:var(--fs-xs)}
+#talk-empty.refused > :not(#talk-cleared){display:none}
+dialog.nc{background:var(--panel);box-shadow:var(--shadow-md)}
+@media (min-width:600px){
+dialog.nc{width:22rem;max-width:calc(100vw - 32px);padding:var(--sp-4) var(--sp-4);border-radius:var(--radius-lg)}
+}
+.nc h2{margin:0 0 var(--sp-1);font-size:var(--fs-base)}
+.nc .acts{margin-top:var(--sp-3)}
+.me-menu{position:relative}
+.me-menu>summary{list-style:none;cursor:pointer}
+.me-menu>summary::-webkit-details-marker{display:none}
+.works{margin:var(--sp-2) 0 0;font-size:var(--fs-sm);color:var(--muted)}
+.cx h2{font-size:var(--fs-base);margin:var(--sp-6) 0 var(--sp-2)}
+/* the open pill must never cover the last row of a page: room for it and a gap (designer, at 390) */
+body:not(.ed){--pillh:8.75rem}
+/* ===== the assistant's pill in the open chat (U1861, redline 29): pillplace.js moves it into #chat-pill; solid, no blur or shadow */
+.chatpill{flex:none;position:relative;padding:var(--sp-2) 0 0}
+.chatpill:empty{display:none}
+.chatpill::before{content:"";position:absolute;left:0;right:0;top:-16px;height:16px;background:linear-gradient(to bottom,color-mix(in srgb,var(--panel) 0%,transparent),var(--panel));pointer-events:none}
+.chatpill .pill textarea:placeholder-shown{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the editor: the Chat tab's list, then the pill; the canvas keeps only the selection bar, 16 px above its bottom */
+#p-chat #talk{margin:0}
+body.ed.pill-chat:not(.m) .bstack{bottom:16px}
+body.m .chatpill{padding-left:var(--sp-1);padding-right:var(--sp-1)}
+body.m.ed.pill-chat .bstack{display:none}
+body.m.sheet-open.talk-on.pill-chat .side-body{padding-bottom:var(--sp-3)}
+body.kb.m.ed.pill-chat aside.side,body.kb.m.ed.pill-chat aside.side[data-snap]{bottom:var(--kb,0px);height:calc(var(--vvh,70dvh) - 8px)}
+/* «New chat» below 900 px (U1861 review): not a row of its own under the title */
+@media (max-width:899px){
+body.m.ed aside.side[data-tab=chat] #chat-top{position:absolute;z-index:1;top:2px;right:12px;margin:0}
+body.m.ed aside.side[data-tab=chat]:has(#chat-top:not([hidden])) .side-body{padding-top:calc(var(--sp-6) + var(--sp-1))}
+}
+.wide{width:100%}
+/* redline 41 (U1938): a receipt is one line in the assistant's column (icon, sentence, «Undo»); a card is a --panel-2 box */
+.talk-item.receipt,#p-chat .talk-item.receipt{border:0;background:none;padding:var(--sp-1) 0;max-width:100%;color:var(--text);font-size:var(--fs-md)}
+.talk-item.receipt .talk-body{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2)}
+.talk-item.receipt.undone{color:var(--muted)}
+.talk-item.card,#p-chat .talk-item.card,.reply .talk-item.card{background:var(--panel-2);border:0;border-radius:var(--radius);box-shadow:none;padding:var(--sp-2) var(--sp-3)}
+.talk-item.card>.talk-body{font-weight:600;color:var(--text)}
+.talk-item.card .cnote{font-size:var(--fs-sm);color:var(--text);margin-top:var(--sp-1)}
+.talk-item.card .asst-row{justify-content:flex-end;margin-top:var(--sp-2)}
+.talk-item.card.closed{background:none;padding:var(--sp-1) 0}
+.talk-item.card.closed>.talk-body{font-weight:400}
+.talk-item.card.stale>.talk-body{font-weight:400;color:var(--muted)}
+:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+/* U2192: the first stop of the keyboard on every page; hidden above the page until it has focus */
+.skip{position:absolute;left:var(--sp-2);top:-5rem;z-index:var(--z-alert);padding:var(--sp-2) var(--sp-3);background:var(--panel);color:var(--text);border:2px solid var(--accent);border-radius:var(--radius);text-decoration:none}
+.skip:focus{top:var(--sp-2)}
+main[tabindex="-1"]:focus,#main:focus,#lib:focus{outline:none}
+/* U2181 */
+#parts{container:parts / inline-size}
+/* the release line on the list pages (U1879 C): fixed bottom-right at every width */
+body:not(.ed):not(.auth){padding-block-end:calc(1.75rem + env(safe-area-inset-bottom))}
+body:not(.ed):not(.auth) .ver{position:fixed;inset-block-end:calc(.5rem + env(safe-area-inset-bottom));inset-inline-end:.75rem;z-index:1;padding:.125rem .375rem;
+  border-radius:var(--radius-sm);background:color-mix(in srgb,var(--bg) 85%,transparent);opacity:1;pointer-events:none}
+/* U2387, editor at phone width: the panel-height bar, the Parts/Layers tabs and the header's Undo and .atom are 44 px tall */
+body.m.ed .lview button,body.m.ed .top button:not(.fb-btn):not(.icon),body.m.ed .top a.brand{min-height:max(var(--tap),44px)}
+body.m.ed .top a.brand{display:inline-flex;align-items:center;min-width:max(var(--tap),44px);justify-content:center}
+body.m.ed .top .fb-btn,body.m.ed .top button.icon{min-width:max(var(--tap),44px);min-height:max(var(--tap),44px)}
+/* U2552 */
+@media (max-width:599px){
+.ed .top>*{order:2}
+.ed .top>#menu,.ed .top>.brand,.ed .top>#name,.ed .top>#ppill,.ed .top>.ab-mark,.ed .top>#status{order:0}
+.ed .top>.me-menu{order:1}
+.ed .top input.name{flex:1 1 72px;min-width:0}
+.ed .top #status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+/* U1800 (qa 10:51Z, phone): the whole material row is the link, and the brand is a 44 px tap */
+@media (max-width:620px){
+.appbar .brand{display:inline-flex;align-items:center;min-height:max(var(--tap),44px)}
+}
+body.m #left .sm,body.m .iname .sm,body.m .inames>.sm{min-height:max(var(--tap),44px)}
+/* U2393 (qa 12:16Z): the walnut page at 390 was 3886 px; a test card is the title, two lines of what it is for, and one 44 px row */
+@media (max-width:620px){
+.test{gap:var(--sp-1);padding:var(--sp-1) var(--sp-2)}
+.test p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;margin:0}
+.test b{display:block;line-height:1.3}
+}
+body.talk-on .stage:not(.narrow) .bstack{max-width:calc(100% - 2 * (var(--zoomw,9rem) + 10px + var(--sp-3)))}
+body.m.talk-on .stage .bstack{max-width:none}
+/* who may open a design (U2989, redline 97): the one mark, the places switch, the owner's Share dialog */
+.state.mark{display:inline-flex;align-items:center;gap:var(--sp-1);color:var(--muted)}
+.state.mark .ico,.share-btn .ico{width:.875rem;height:.875rem;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+dialog.share{width:28rem}
+dialog.share fieldset{border:0;margin:var(--sp-3) 0 0;padding:0}
+dialog.share h3{margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}
+@media (max-width:599px){
+dialog.share{width:100%}
+}
+/* ---- the card of an object (U3036 O3), a joint (J2) or a box's joints: the panel's tab «Selected» (U3115), no frame of its own */
+.ed aside.side[data-tab=selected] .side-body{padding:0}
+#p-selected #keep{order:1}
+.objcard{display:flex;flex-direction:column;gap:var(--sp-3);padding:0 var(--sp-4);background:var(--panel);scroll-padding-top:3.5rem;scroll-padding-bottom:calc(var(--tap) + 2rem)}
+/* a focused field scrolls to above the footer */
+.objcard[hidden]{display:none}
+.oc-h{position:sticky;top:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-3) var(--sp-4) var(--sp-2);background:var(--panel);border-bottom:1px solid var(--border);font-size:var(--fs-sm);font-weight:600}
+.oc-acts{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:var(--sp-2);position:sticky;bottom:0;z-index:1;margin:0 calc(-1 * var(--sp-4));padding:var(--sp-2) var(--sp-4) var(--sp-3);background:var(--panel);border-top:1px solid var(--border)}
+body.m .objcard input,body.m .objcard select,body.m .objcard button{min-height:var(--tap)}
+.objcard :is(input,select,button,textarea){scroll-margin:3.5rem 0 calc(var(--tap) + 2rem)}
+@keyframes glow{0%{stroke:var(--glow);stroke-width:4px;filter:drop-shadow(0 0 3px var(--glow))}100%{filter:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* U3036 J2: the joint card shares the object card's shell; only the info block, the line and the trash are its own */
+.objcard .oc-info{display:grid;gap:var(--sp-1);margin:var(--sp-2) 0 0;padding-top:var(--sp-2);border-top:1px solid var(--border)}
+.objcard .oc-info-r{display:grid;grid-template-columns:7rem 1fr;gap:var(--sp-2);align-items:baseline}
+.objcard .oc-info-k{color:var(--muted);font-size:var(--fs-sm)}
+.objcard .oc-info-v{min-width:0;overflow-wrap:anywhere}
