@@ -12,7 +12,7 @@ export function toast(o) {
     let s = slots.get(doc);
     if (!s) {
         const el = doc.createElement("div");
-        s = { el, timer: undefined, held: false, onHide: undefined, ms: TOAST_MS };
+        s = { el, keep: false, timer: undefined, held: false, onHide: undefined, ms: TOAST_MS };
         slots.set(doc, s);
         const hold = () => { s.held = true; clearTimer(s); };
         const release = () => { s.held = false; arm(s, hide); };
@@ -28,7 +28,8 @@ export function toast(o) {
         if (el.hidden && !el.isConnected)
             return;
         el.hidden = true;
-        el.remove();
+        if (!slot.keep)
+            el.remove();
         const f = slot.onHide;
         slot.onHide = undefined;
         f?.(el);
@@ -66,15 +67,16 @@ export function toast(o) {
         clearTimer(slot);
         if (!was) {
             el.hidden = true;
-            el.remove();
+            if (!o.keep)
+                el.remove();
         }
         return null;
     }
     slot.onHide = o.onHide;
     el.hidden = false;
-    const host = o.host ?? doc.body;
-    if (el.parentElement !== host)
-        host.append(el);
+    slot.keep = o.keep ?? false;
+    if (!el.isConnected)
+        (o.host ?? doc.body).append(el);
     slot.held = false;
     arm(slot, hide);
     if (!was)

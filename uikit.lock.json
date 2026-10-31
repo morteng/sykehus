@@ -1,5 +1,5 @@
 {
-  "kits": "ed5493c2e9752b64349cbb9b5d7a593c2d3a8069",
+  "kits": "b005060a824515b70861515a6d34e266280b5c67",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
@@ -13,7 +13,7 @@
     "keys.js": "9c09c304c87f3ffffb3b5c6b28195df800b35923",
     "chat.js": "01797fe2d00642ee69dd462f8a4213a620dd109c",
     "tour.js": "eb4e97a8a092d1f85515d04d4d0fad6c0abfe713",
-    "modal.js": "696f75d232e5ced6d8669ce36009d7dd91da593f",
+    "modal.js": "c06207f35f09fd1bdd24233fa804011a775de28e",
     "feedback.js": "7b78ded9f2e7e88599bc93fcca4090304d24709a",
     "markdown.js": "a46483dab0a696e36c0aeab8a47dbe5b38de7e24",
     "follow.js": "e366b039579ec52682462033d8ced16335d30d67",
@@ -27,7 +27,7 @@
     "picture-signed.js": "1b58969fdbc55ae279f455f775905f271826cede",
     "upload-caps.js": "abff4629745152650c084a4a6096f199117ce2c2",
     "assistant-door.js": "9abd8d688d47de4ff878de046a25dd2c5e6454ab",
-    "shell.css": "aed03f23efc810a86f79882dcb738b3a4a7ff7fd",
-    "toast.js": "543e5dbb23f6bc1679ef371c6d79bfa7bcac541d"
+    "shell.css": "fa605f472cc83178945069a80ba542dd87a40634",
+    "toast.js": "a963966aeaf4d2de1cd8c6a5cc55ac4e24153294"
   }
 }
