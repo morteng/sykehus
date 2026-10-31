@@ -162,18 +162,18 @@ export function createTour(o) {
     function place() {
         if (at < 0)
             return;
-        const el = elOf(list[at]), W = win.innerWidth, H = win.innerHeight, cw = Math.min(340, W - 24), pad = 6;
+        const el = elOf(list[at]), W = Math.min(win.innerWidth, doc.documentElement.clientWidth || win.innerWidth), H = win.innerHeight, EDGE = 16, cw = Math.min(340, W - 2 * EDGE), pad = 6; // EDGE: the card keeps 16 px from the visible edge (U4003), a scrollbar excluded
         card.style.width = cw + "px";
         const ch = card.offsetHeight;
         if (!el) {
             hole.style.cssText = `left:${W / 2}px;top:${H / 2}px;width:0;height:0`;
             card.style.left = (W - cw) / 2 + "px";
-            card.style.top = Math.max(12, (H - ch) / 2) + "px";
+            card.style.top = Math.max(EDGE, (H - ch) / 2) + "px";
             return;
         }
         const r = el.getBoundingClientRect(), x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(W - 8, r.right + pad) - x, hh = Math.min(H - 8, r.bottom + pad) - y;
         hole.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${hh}px`;
-        const clampX = (v) => Math.max(12, Math.min(W - cw - 12, v)), clampY = (v) => Math.max(12, Math.min(H - ch - 12, v));
+        const clampX = (v) => Math.max(EDGE, Math.min(W - cw - EDGE, v)), clampY = (v) => Math.max(EDGE, Math.min(H - ch - EDGE, v));
         const big = w * hh > W * H * 0.4; // the whole model: the card over it, low in the middle
         let left, top;
         if (big) {

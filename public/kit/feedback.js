@@ -4,10 +4,76 @@
 // words, the kinds, the endpoint (POST JSON { kind, text, ...context, screenshot? } → 2xx, or { code, retry_at? }), the
 // context, and may put its own list («what you sent before») under the form. Written for Fab's feedback (one copy).
 import { modal } from "./modal.js";
-/** The page drawn without the dialog, through an SVG foreignObject (no library), as a PNG that fits `pngMax` bytes; null when it cannot. */
+/** Layout-derived properties: the copy lays itself out, so only replaced elements and the svg root keep a size (U4002). */
+const LAYOUT = new Set(["width", "height", "inline-size", "block-size", "perspective-origin", "transform-origin"]);
+const SIZED = new Set(["img", "canvas", "video", "svg", "iframe", "input", "textarea", "select"]);
+/** The page's computed styles written into the copy, one inline style per element, as the difference from that tag's default
+ *  (U4002): a foreignObject copy has no stylesheet links, so every rule the app's own list missed (an `@import`, a kit file, a
+ *  media query) and every svg's size would be lost. `live` and `copy` are the same tree, walked together before anything is removed. */
+function inlineStyles(doc, live, copy) {
+    const win = doc.defaultView, frame = doc.createElement("iframe"), seen = new Map();
+    frame.style.cssText = "position:fixed;left:-9999px;top:0;width:0;height:0;border:0;visibility:hidden";
+    doc.body.append(frame);
+    try {
+        const fd = frame.contentDocument, base = (e) => {
+            const key = (e.namespaceURI ?? "") + "|" + e.localName;
+            let d = seen.get(key);
+            if (!d) {
+                const x = fd.createElementNS(e.namespaceURI, e.localName);
+                fd.body.append(x);
+                d = fd.defaultView.getComputedStyle(x);
+                seen.set(key, d);
+            }
+            return d;
+        };
+        const walk = (a, b) => {
+            const cs = win.getComputedStyle(a);
+            let out = "";
+            if (cs.display === "none") {
+                b.replaceChildren();
+                b.setAttribute("style", "display:none");
+                return;
+            }
+            const d = base(a), keepSize = a.localName === "svg" ? !(a.parentNode instanceof win.SVGElement) : SIZED.has(a.localName) && a.namespaceURI === "http://www.w3.org/1999/xhtml";
+            for (let i = 0; i < cs.length; i++) {
+                const p = cs[i];
+                if (LAYOUT.has(p) && !keepSize)
+                    continue;
+                const v = cs.getPropertyValue(p);
+                if (v !== d.getPropertyValue(p) || (keepSize && LAYOUT.has(p)))
+                    out += p + ":" + v + ";";
+            }
+            if (keepSize && a.localName === "svg") {
+                const r = a.getBoundingClientRect();
+                b.setAttribute("width", String(Math.round(r.width * 100) / 100));
+                b.setAttribute("height", String(Math.round(r.height * 100) / 100));
+            }
+            b.setAttribute("style", out);
+            for (let i = 0; i < a.children.length && i < b.children.length; i++)
+                walk(a.children[i], b.children[i]);
+        };
+        walk(live, copy);
+    }
+    finally {
+        frame.remove();
+    }
+}
+/** The page drawn without the dialog, through an SVG foreignObject (no library), as a PNG that fits `pngMax` bytes; null when it cannot.
+ *  The whole viewport is drawn at its own aspect (the picture is never cropped to the thumbnail; the thumbnail's CSS fits it). */
 export async function pagePicture(doc, o = {}) {
-    const win = doc.defaultView, W = win.innerWidth, H = win.innerHeight, pngMax = o.pngMax ?? 1024 * 1024;
+    const win = doc.defaultView, W = doc.documentElement.clientWidth || win.innerWidth, H = win.innerHeight, pngMax = o.pngMax ?? 1024 * 1024;
     const live = [...doc.querySelectorAll("input,textarea,select")], copy = doc.documentElement.cloneNode(true);
+    inlineStyles(doc, doc.documentElement, copy);
+    const liveCanvas = [...doc.querySelectorAll("canvas")];
+    [...copy.querySelectorAll("canvas")].forEach((n, i) => {
+        try {
+            const im = doc.createElement("img");
+            im.setAttribute("style", n.getAttribute("style") ?? "");
+            im.setAttribute("src", liveCanvas[i].toDataURL("image/png"));
+            n.replaceWith(im);
+        }
+        catch { /* tainted */ }
+    });
     [...copy.querySelectorAll("input,textarea,select")].forEach((n, i) => {
         const s = live[i];
         if (!s)
@@ -24,14 +90,21 @@ export async function pagePicture(doc, o = {}) {
         else
             n.setAttribute("value", s.value);
     });
-    copy.querySelectorAll(`script,link,noscript,.g-modal,.g-tour${o.drop ? "," + o.drop : ""}`).forEach(n => n.remove());
+    copy.querySelectorAll(`script,link,noscript,source,.g-modal,.g-tour${o.drop ? "," + o.drop : ""}`).forEach(n => n.remove());
     const data = async (u) => { const b = await (await win.fetch(u)).blob(); return new Promise(res => { const f = new win.FileReader(); f.onload = () => res(String(f.result)); f.readAsDataURL(b); }); };
-    await Promise.all([...copy.querySelectorAll("img[src]")].map(async (i) => { try {
-        i.src = await data(i.src);
-    }
-    catch {
-        i.removeAttribute("src");
-    } }));
+    await Promise.all([...copy.querySelectorAll("img[src]")].map(async (i) => {
+        i.removeAttribute("srcset");
+        i.removeAttribute("sizes");
+        i.removeAttribute("loading");
+        if (i.getAttribute("src").startsWith("data:"))
+            return;
+        try {
+            i.src = await data(i.src);
+        }
+        catch {
+            i.removeAttribute("src");
+        }
+    }));
     const style = doc.createElement("style");
     style.textContent = (await Promise.all((o.styles ?? []).map(async (u) => (await win.fetch(u)).text()))).join("\n");
     copy.querySelector("head").append(style);
