@@ -87,7 +87,7 @@ export function createLogin({ SECURITY, readJson, proxyUser = () => null, edgeOf
   /* true when the request was ours */
   async function route(req, res, path) {
     if (path === "/api/logg-inn" && req.method === "POST") { await signIn(req, res); return true; }
-    if (path === "/api/meg" && req.method === "GET") { const p = personOf(req); send(res, 200, { person: p?.person ?? null, via: p?.via ?? (p ? "kode" : null), login: ready, anton }); return true; }
+    if (path === "/api/meg" && req.method === "GET") { const p = personOf(req); send(res, 200, { person: p?.person ?? null, via: p?.via ?? (p ? "kode" : null), admin: adminOf(req), login: ready, anton }); return true; }
     if (path === "/api/logg-ut" && req.method === "POST") { forget(req, res); send(res, 200, { person: null }); return true; }
     return false;
   }

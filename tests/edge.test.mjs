@@ -19,6 +19,7 @@ const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).p
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => srv.kill());
 const O = `http://localhost:${PORT}`, meg = async h => { const r = await fetch(O + "/api/meg", { headers: h }); return [r.status, (await r.json()).person ?? null]; };
+const admin = async h => (await (await fetch(O + "/api/meg", { headers: h })).json()).admin;
 const token = (o = {}) => signAssertion(priv, { sub: "okter", aud: "sykehus", ...o });
 
 test("the proof makes Remote-User a login; without it, or with the wrong one, it is no one", async () => {
@@ -46,4 +47,13 @@ test("vendor/edgekit is the kits edge kit at the locked sha, byte for byte (take
   const blob = buf => createHash("sha1").update(`blob ${buf.length}\0`).update(buf).digest("hex");
   assert.equal(lock.kit, "edge"); assert.match(lock.kits, /^[0-9a-f]{40}$/);
   for (const [name, want] of Object.entries(lock.files)) assert.equal(blob(readFileSync(new URL(`${lock.dest}/${name}`, ROOT))), want, name);
+});
+
+test("admin follows the Authelia group admins, from the edge only (/api/meg says admin)", async () => {
+  const h = (g, p = "okter") => ({ "x-edge-auth": secret, "remote-user": p, ...(g ? { "remote-groups": g } : {}) });
+  assert.equal(await admin(h("family,admins")), true, "okter, in the group");
+  assert.equal(await admin(h("family")), false, "a login not in the group");
+  assert.equal(await admin(h(null, "morten")), false, "the name morten is no longer admin by itself");
+  assert.equal(await admin({ "remote-user": "okter", "remote-groups": "admins" }), false, "groups without the proof");
+  assert.equal(await admin({ "x-edge-auth": secret, "x-edge-assertion": token({ groups: ["admins"] }) }), true, "the signed assertion carries the groups");
 });
