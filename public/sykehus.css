@@ -1,6 +1,56 @@
-/* Sykehus's own rules, after the kit's tokens.css and kit.css (uikit.lock.json) and Fab's laser.css and cardshell.css
-   (fab/ORIGIN.txt). Everything else is theirs, as-is. The Anton-first layout: the designer's redlines (2026-10-25,
+/* Sykehus's own rules, after the kit's tokens.css, kit.css and shell.css (uikit.lock.json: the page shell, the app bar, the side
+   panel and its tabs, the talk log, the toast, are the kit's). The Anton-first layout: the designer's redlines (2026-10-25,
    rulings.md «the Anton-first redesign»), rules S1–S12 of the mock, here with the live page's ids. */
+/* U3977: the theme values the app had from Fab's stylesheet (accent, panel tint, pane width); Fab keeps its own orange in its stylesheet */
+:root,:root[data-theme=dark]{--accent:#f08a5d;--accent-rgb:240, 138, 93;--on-accent:#1a0c05;--accent-panel:#2e1d14;--accent-panel-edge:#6b3a22;--bed:#1c1a17;--grid:#2a2622;--sel:#74c0fc;--engrave:#7aa2ff}
+@media (prefers-color-scheme:light){:root:not([data-theme]){--accent:#b4441c;--accent-rgb:180, 68, 28;--on-accent:#fff;--accent-panel:#fbe9e0;--accent-panel-edge:#eab79e;--bed:#fbfaf7;--grid:#ebe6dc;--sel:#1971c2;--engrave:#0040ff}}
+:root[data-theme=light]{--accent:#b4441c;--accent-rgb:180, 68, 28;--on-accent:#fff;--accent-panel:#fbe9e0;--accent-panel-edge:#eab79e}
+:root[data-theme=light],:root[data-theme=solarpunk]{--bed:#fbfaf7;--grid:#ebe6dc;--sel:#1971c2;--engrave:#0040ff}
+:root{--pane-w:clamp(340px, 28vw, 440px)}
+/* U3977: the rules the frozen copy of Fab's stylesheet had that Fab no longer has (it moved to the kit's collection, feedback and
+   pill); sykehus's project list, import button, people chip, dock strip and new-chat popover still use them. Next: take the kit's pieces. */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--sp-3)}
+.grid>.group{grid-column:1/-1;margin:0}
+.grid>.group+.group{margin-top:var(--sp-1)}
+.card a.th{display:block;aspect-ratio:5/3;background:var(--bed);border-bottom:1px solid var(--border)}
+.card a.th img{width:100%;height:100%;object-fit:contain;display:block}
+.card .meta{padding:var(--sp-2) var(--sp-3) var(--sp-3);font-size:var(--fs-sm)}
+.card .meta b{display:block;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .row{display:flex;gap:var(--sp-1);padding:0 var(--sp-2) var(--sp-2)}
+.card .row button{font-size:var(--fs-sm);padding:var(--sp-1) var(--sp-2)}
+#import svg{display:none;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:1199px){
+#import{min-width:var(--tap);min-height:var(--tap);padding:0 var(--sp-2)}
+#import svg{display:block;margin:auto}
+}
+#people .chip.me i{outline:2px solid var(--accent);outline-offset:1px}
+@media (max-width:1199px) and (min-width:900px){
+.ed .dock{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 1.5 * var(--sp-4)),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 1.5 * var(--sp-4)),transparent)}
+.ed .dock::-webkit-scrollbar{display:none}
+}
+@media (max-width:599px){
+dialog.fb,dialog.nc{width:100%;max-width:100%;max-height:calc(100dvh - 24px);margin:auto 0 var(--fbkb,0px);border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;border-bottom:0;padding:0 var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+.fb .acts button,.nc .acts button{min-height:var(--tap)}
+}
+dialog.nc.pop{position:fixed;inset:auto;margin:0;z-index:calc(var(--z-sheet) + 1);overflow:visible}
+dialog.nc.pop::before{content:"";position:absolute;left:calc(var(--ax,50%) - 7px);top:-7px;width:12px;height:12px;background:var(--panel);border-left:1px solid var(--border);border-top:1px solid var(--border);transform:rotate(45deg)}
+dialog.nc.pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
+.cx{max-width:720px}
+@media (max-width:620px){
+.card .row button{min-height:max(var(--tap),44px)}
+}
+@media (max-width:599px){
+#people .chip.me{display:none}
+}
+.places{margin:0 0 var(--sp-3)}
+.places button{font-variant-numeric:tabular-nums}
+.card .meta .mark{margin-right:var(--sp-1)}
+@media (max-width:599px){
+.places{display:flex;width:100%;flex-wrap:wrap}
+.places button{flex:1 1 auto;min-height:var(--tap)}
+}
+.sel-empty{margin:0;padding:var(--sp-4);color:var(--muted);font-size:var(--fs-sm)}
+.sel-empty:has(~ :is(.objcard,.icard,.tlist,.selbar):not([hidden])){display:none}
 
 /* the pick mark: the 3D highlight's yellow (viewer.js C.pick), as the kit's default */
 .g-pick { --g-pick-mark: #ffcf33; --g-pick-mark-edge: #6b5200; }
@@ -222,10 +272,9 @@ body.tegner .nz, body.tegner #scale { opacity: .4; pointer-events: none; z-index
 }
 
 /* «Riv» (U3542): the notice after, with «Angre», top centre over the view; and the changes in «Forslag» */
-#toast { position: absolute; z-index: calc(var(--z-canvas) + 2); top: 70px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); max-width: calc(100% - 220px); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); font-size: var(--fs-md); transition: opacity .8s; }
-#toast.gone { opacity: 0; }
-#toast button { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); }
-#toast button.x { width: var(--tap); padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 22px; }
+.g-toast.sk-toast { position: absolute; z-index: calc(var(--z-canvas) + 2); top: 70px; bottom: auto; max-width: calc(100% - 220px); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.g-toast.sk-toast .g-toast-act { min-height: var(--tap); padding: 0 var(--sp-3); font-size: var(--fs-md); border-color: var(--border); }
+.g-toast.sk-toast .g-toast-x { color: var(--muted); }
 
 /* the sign-in QR in the chat (U3539): white with a quiet zone in both themes, big enough to scan from a metre */
 .talk-item.card.qr .qr-box { margin: var(--sp-2) 0; }
