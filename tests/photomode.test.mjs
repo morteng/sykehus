@@ -60,15 +60,17 @@ test("the server keeps only numbers and known words of a spot", () => {
 const dir = mkdtempSync(join(tmpdir(), "sykehus-photo-"));
 const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, 900 >> 8, 900 & 255, 1440 >> 8, 1440 & 255, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.alloc(2048, 7)]);
 const shot = "data:image/jpeg;base64," + jpeg.toString("base64"), calls = [];
+const asOld = b => ({ messages: [{ content: [{ text: b.prompt }, { image_url: { url: b.image } }] }], image_config: { image_size: b.size, aspect_ratio: b.aspect } });   // the door's body, read as the prompt, the view and the shape that were sent (U3982)
+const doorAnswer = cost => ({ image: "data:image/png;base64," + Buffer.alloc(5000, 9).toString("base64"), media_type: "image/png", model: "google/gemini-3.1-flash-image", cost_usd: cost });
 async function fetchImpl(url, opt = {}) {
   if (String(url).includes("/models")) return { ok: true, json: async () => ({ data: [] }) };
-  calls.push(JSON.parse(opt.body)); return { ok: true, status: 200, json: async () => ({ choices: [{ message: { images: [{ image_url: { url: "data:image/png;base64," + Buffer.alloc(5000, 9).toString("base64") } }] } }], usage: { cost: 0.05 }, provider: "Google" }) };
+  calls.push(asOld(JSON.parse(opt.body))); return { ok: true, status: 200, json: async () => doorAnswer(0.05) };
 }
 let updated = "2026-10-26T10:00:00.000Z";
 const versions = { get: id => id === "vAbcdefgh" ? { id, owner: "lars", sharing: "privat", own: "egen", updated } : null, visible: (v, who) => v.owner === who };
 const login = { personOf: req => req.headers["x-who"] ? { person: req.headers["x-who"] } : null };
 const readJson = req => new Promise((ok, no) => { const p = []; req.on("data", c => p.push(c)); req.on("end", () => { try { ok(JSON.parse(Buffer.concat(p))); } catch (e) { no(e); } }); });
-const g = createRenderings({ dir, key: "k", cap: 5, size: "1K", readJson, login, versions, fetchImpl, now: () => new Date("2026-10-26T12:00:00Z") });
+const g = createRenderings({ dir, base: "http://x", token: "t", size: "1K", readJson, login, versions, fetchImpl, now: () => new Date("2026-10-26T12:00:00Z") });
 const srv = createServer(async (req, res) => { const url = new URL(req.url, "http://x"); if (!(await g.route(req, res, url.pathname, url))) res.writeHead(404).end(); }).listen(0);
 after(() => srv.close());
 const O = `http://localhost:${srv.address().port}`;
@@ -106,7 +108,7 @@ mkdirSync(join(vdir, "gjengi"), { recursive: true });
 writeFileSync(join(vdir, "gjengi", "index.json"), JSON.stringify([{ id: "aaaaaaaaaaaaaaaa", at: "2026-10-25T10:00:00.000Z", by: "lars", work: "versjon:vAbcdefgh", model: "m", size: "1K", ext: "png", cost_usd: 0.07, est_usd: 0.07, spot: spotOf(view), fav: false },
   { id: "bbbbbbbbbbbbbbbb", at: "2026-10-25T11:00:00.000Z", by: "mia", work: "utkast:xyzxyzxy", model: "m", size: "1K", ext: "png", cost_usd: 0.07, est_usd: 0.07, spot: spotOf(view), fav: false }]));
 const secret = "proxy-secret-for-tests-0123456789", PORT = 9900 + Math.floor(Math.random() * 90), M = `http://localhost:${PORT}`;
-const sv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: vdir, SYKEHUS_PROXY_SECRET: secret, SYKEHUS_OPENROUTER_API_KEY: "test-key", DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
+const sv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: vdir, SYKEHUS_PROXY_SECRET: secret, SYKEHUS_ASSISTANT_URL: "http://127.0.0.1:9", SYKEHUS_ASSISTANT_TOKEN: "test-token", DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => sv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => sv.kill());
 const rpc = async (method, params, who = "lars") => (await (await fetch(M + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": who, "x-edge-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;

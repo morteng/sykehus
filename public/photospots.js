@@ -32,5 +32,5 @@ export const NEEDS_WORK = "Åpne et prosjekt for å ta bilder";
 export const hasWork = w => !!(w && (w.versjon || w.utkast));
 export function whyNot({ st, work, busy, price }) {
   if (busy) return "Lager bildet …"; if (!st) return "Henter prisen …"; if (!st.on) return "Gjengi er ikke slått på her"; if (!st.signed_in) return "Logg inn for å ta bilder";
-  if (!hasWork(work)) return NEEDS_WORK; if (st.left_usd < price) return "Månedens grense er nådd"; return null;
+  if (!hasWork(work)) return NEEDS_WORK; if (st.left_usd != null && st.left_usd < price) return "Månedens grense er nådd"; return null;
 }

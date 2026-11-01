@@ -49,15 +49,17 @@ test("the lens sets the field of view; the look's shape and the line to the mode
 const dir = mkdtempSync(join(tmpdir(), "sykehus-cam-"));
 const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, 853 >> 8, 853 & 255, 1280 >> 8, 1280 & 255, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.alloc(2048, 7)]);
 const shot = "data:image/jpeg;base64," + jpeg.toString("base64"), calls = [];
+const asOld = b => ({ messages: [{ content: [{ text: b.prompt }, { image_url: { url: b.image } }] }], image_config: { image_size: b.size, aspect_ratio: b.aspect } });   // the door's body, read as the prompt, the view and the shape that were sent (U3982)
+const doorAnswer = cost => ({ image: "data:image/png;base64," + Buffer.alloc(5000, 9).toString("base64"), media_type: "image/png", model: "google/gemini-3.1-flash-image", cost_usd: cost });
 async function fetchImpl(url, opt = {}) {
   if (String(url).includes("/models")) return { ok: true, json: async () => ({ data: [{ id: "google/gemini-3.1-flash-image", pricing: { prompt: "0.0000005", completion: "0.000003", image_output: "0.00006" } }] }) };
-  calls.push(JSON.parse(opt.body));
-  return { ok: true, status: 200, json: async () => ({ choices: [{ message: { images: [{ image_url: { url: "data:image/png;base64," + Buffer.alloc(5000, 9).toString("base64") } }] } }], usage: { cost: 0.11 } }) };
+  calls.push(asOld(JSON.parse(opt.body)));
+  return { ok: true, status: 200, json: async () => doorAnswer(0.11) };
 }
 const versions = { get: id => id === "vAbcdefgh" ? { id, owner: "lars", sharing: "privat" } : null, visible: (v, who) => v.owner === who };
 const login = { personOf: req => req.headers["x-who"] ? { person: req.headers["x-who"] } : null };
 const readJson = req => new Promise((ok, no) => { const p = []; req.on("data", c => p.push(c)); req.on("end", () => { try { ok(JSON.parse(Buffer.concat(p))); } catch (e) { no(e); } }); });
-const g = createRenderings({ dir, key: "k", cap: 5, readJson, login, versions, fetchImpl });
+const g = createRenderings({ dir, base: "http://x", token: "t", readJson, login, versions, fetchImpl });
 const srv = createServer(async (req, res) => { const url = new URL(req.url, "http://x"); if (!(await g.route(req, res, url.pathname, url))) res.writeHead(404).end(); }).listen(0);
 after(() => srv.close());
 const O = `http://localhost:${srv.address().port}`;

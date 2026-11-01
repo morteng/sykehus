@@ -53,14 +53,15 @@ const calls = [];
 const png = "data:image/png;base64," + Buffer.alloc(5000, 9).toString("base64");
 const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 17, 8, 900 >> 8, 900 & 255, 1440 >> 8, 1440 & 255, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.alloc(2048, 7)]);
 const shot = "data:image/jpeg;base64," + jpeg.toString("base64");
-const g = createRenderings({ dir: mkdtempSync(join(tmpdir(), "sykehus-gjlight-")), key: "k", cap: 100, size: "1K", readJson: async () => ({}), login: { personOf: () => ({ person: "lars" }) }, versions: null,
-  fetchImpl: async (url, opt = {}) => { if (String(url).includes("/models")) return { ok: true, json: async () => ({ data: [] }) }; const b = JSON.parse(opt.body); calls.push(b); return { ok: true, status: 200, json: async () => ({ choices: [{ message: { images: [{ image_url: { url: png } }] } }], usage: { cost: 0.05 } }) }; } });
+const asOld = b => ({ messages: [{ content: [{ text: b.prompt }, { image_url: { url: b.image } }] }], image_config: { image_size: b.size, aspect_ratio: b.aspect } });   // the door's body, read as the prompt, the view and the shape that were sent (U3982)
+const doorAnswer = cost => ({ image: "data:image/png;base64," + Buffer.alloc(5000, 9).toString("base64"), media_type: "image/png", model: "google/gemini-3.1-flash-image", cost_usd: cost });
+const g = createRenderings({ dir: mkdtempSync(join(tmpdir(), "sykehus-gjlight-")), base: "http://x", token: "t", size: "1K", readJson: async () => ({}), login: { personOf: () => ({ person: "lars" }) }, versions: null,
+  fetchImpl: async (url, opt = {}) => { if (String(url).includes("/models")) return { ok: true, json: async () => ({ data: [] }) }; calls.push(asOld(JSON.parse(opt.body))); return { ok: true, status: 200, json: async () => doorAnswer(0.05) }; } });
 const sent = async body => { const n = calls.length; await g.make({ image: shot, work: "utkast:abcdef", ...body }, "lars"); assert.equal(calls.length, n + 1); return calls[n]; };
 const textOf = b => b.messages[0].content[0].text;
 
 test("sunset 21 June 21:30, arkitektfoto, camera looking south: low sun behind the camera on the right, shadows away and to the left, warm; no 'crisp daylight'", async () => {
   const b = await sent(at(6, 21, 21.5)), t = textOf(b);
-  assert.deepEqual(b.provider, { zdr: true, data_collection: "deny", allow_fallbacks: false });
   assert.ok(t.startsWith(GEO), "the geometry lock is first");
   assert.match(t, /5\.6 degrees above the horizon \(low\), in the north-west: behind the camera on the right/);
   assert.match(t, /Very long shadows fall away from the viewer and to the left/);

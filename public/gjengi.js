@@ -80,12 +80,12 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   const why = () => whyNot({ st, work: work(), busy, price: priceOf(sizeNow()) }), can = () => !why();
   function draw() {
     if (!st) return;
-    const w = work(), m = MONTH[new Date().getUTCMonth()], est = priceOf(sizeNow()), room = st.left_usd >= est; drawCam();
+    const w = work(), m = MONTH[new Date().getUTCMonth()], est = priceOf(sizeNow()), room = st.left_usd == null || st.left_usd >= est; drawCam();
     say.textContent = !st.on ? "Gjengi er ikke slått på her ennå."
       : !st.signed_in ? `Logg inn for å gjengi: hvert bilde koster penger (omtrent ${usd(est)}).`
       : !w.versjon && !w.utkast ? "Gjør en endring eller åpne et prosjekt først: bildene lagres i prosjektet."
       : "Rammen er bildet: det du ser i den blir sendt.";
-    $("gjCost").textContent = st.on && st.signed_in ? `Brukt i ${m}: ${usd(st.month_usd)} av ${usd(st.cap_usd)}.${room ? "" : " Grensen er nådd denne måneden."}` : "";
+    $("gjCost").textContent = st.on && st.signed_in ? `Brukt i ${m}: ${usd(st.month_usd)}${st.cap_usd == null ? "" : ` av ${usd(st.cap_usd)}`}.${room ? "" : " Grensen er nådd denne måneden."}` : "";
     const reason = why(), label = reason || `Ta bildet · ca. ${usd(est)}`;   // a grey shutter says why on itself, in the view and in the drawer
     for (const b of [go, shotBtn]) { b.disabled = !!reason; b.setAttribute("aria-label", reason ? `Ta bildet: ${reason}` : label); }
     go.textContent = reason ? `Ta bildet: ${reason}` : label; $("pfPrice").textContent = reason || `ca. ${usd(est)}`; shotBtn.title = label;
@@ -118,7 +118,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
   /* Anton's proposal and the person's press: the card says the count and the total price; the pictures are made only when «Lag bildene» is pressed */
   function drawRetake() {
     const box = $("gjRetake"), ids = (st?.retake?.ids || []).filter(id => spots().some(p => p.id === id)); box.hidden = !ids.length; if (!ids.length) { box.innerHTML = ""; return; }
-    const sum = total(ids.length, priceOf(sizeNow())), room = st.left_usd >= sum;
+    const sum = total(ids.length, priceOf(sizeNow())), room = st.left_usd == null || st.left_usd >= sum;
     box.innerHTML = `<p><b>${ids.length} ${ids.length === 1 ? "bilde" : "bilder"} · ca. ${usd(sum)}</b><br><small>Nye bilder fra ${ids.length === 1 ? "stedet" : "stedene"} Anton foreslår, med dagens modell.${room ? "" : " Grensen for måneden rekker ikke."}</small></p>
       <div class="gj-row"><button type="button" id="gjRetakeGo" ${room && can() ? "" : "disabled"}>Lag ${ids.length === 1 ? "bildet" : "bildene"}</button><button type="button" id="gjRetakeNo">Ikke nå</button></div>`;
     $("gjRetakeGo").onclick = () => retakeMany(ids, true);   // the press that confirms the price on the card $("gjRetakeNo").onclick = async () => { await fetch("api/gjengi/proposal", { method: "POST" }).catch(() => null); st.retake = null; draw(); };

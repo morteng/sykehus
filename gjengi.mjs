@@ -3,12 +3,14 @@
    realistic picture by an image model on OpenRouter (chat/completions with modalities, the picture back as a data URL,
    as gulden-ai's image.py calls it). Signed in only: it costs money.
 
-   The household's spend cap (Morten 2026-10-26 09:47Z «yes to all questions»; pm's default $20 a month) is kept HERE,
-   before the call: what this calendar month (UTC) has cost, plus what is being made now, plus this picture's estimate,
-   must stay within SYKEHUS_RENDER_CAP_USD. What a picture cost is OpenRouter's own usage.cost, recorded as it came.
+   U3982: the picture is made by gulden-ai's one picture path, not here. This file holds no key, no model and no cap:
+   it sends the view and the prompt to gulden-ai (POST {SYKEHUS_ASSISTANT_URL}/internal/sykehus/picture, the door's bearer,
+   the person who is signed in) and keeps what comes back. The picture is a `model_calls` row of door `sykehus`, counted in
+   the person's cap and the door's week; a person or door over its cap is a 402 with the sentence to show. What a picture
+   cost is OpenRouter's own usage.cost, as gulden-ai returns it.
 
-   Pictures only go to providers that promise not to keep them (zdr, data_collection deny, no fallbacks), as gulden-ai
-   sends for every picture.
+   Pictures only go to providers that promise not to keep them (zdr, data_collection deny, no fallbacks): gulden-ai sends
+   that for every picture.
 
    GET  /api/gjengi?versjon=&nokkel= | ?utkast=   the work's pictures (favourites first), the estimate, the month so far
    POST /api/gjengi                               { image: data URL (JPEG/PNG), wish?, versjon?, nokkel?, utkast?, shown_usd }
@@ -23,8 +25,6 @@ import { randomBytes } from "node:crypto";
 import { lightLine, bearingOf, phaseOf } from "./public/sunlight.js";
 import { SIZES, DEFAULT_SIZE, VIEWPOINTS, LOOKS, shotOf, promptLine } from "./public/photo-set.js";
 
-const URL_ = "https://openrouter.ai/api/v1/chat/completions";
-const ROUTING = { zdr: true, data_collection: "deny", allow_fallbacks: false };
 const ASPECTS = [["1:1", 1], ["4:5", 4 / 5], ["4:3", 4 / 3], ["3:2", 3 / 2], ["16:9", 16 / 9], ["21:9", 21 / 9], ["3:4", 3 / 4], ["2:3", 2 / 3], ["9:16", 9 / 16]];
 const MAX_PROSPEKT = 24;   // the renders a Prospekt shows, newest first
 const ID = /^[a-z0-9]{16}$/, MAX_IN = UPLOAD_CAPS.render;
@@ -82,7 +82,8 @@ export function spotOf(b) {
 const WISH = " The person also asks for this; it may change only materials, light, people and planting, never the geometry: ";
 
 export function createRenderings({ SECURITY = {}, readJson, login, versions, px = null, drafts = () => null, dir = process.env.SYKEHUS_RENDER_DIR || (process.env.SYKEHUS_VERSIONS_DIR && join(process.env.SYKEHUS_VERSIONS_DIR, "gjengi")),
-  key = process.env.SYKEHUS_OPENROUTER_API_KEY || "", model = process.env.SYKEHUS_RENDER_MODEL || "google/gemini-3.1-flash-image", cap = +(process.env.SYKEHUS_RENDER_CAP_USD || 20),
+  base = (process.env.SYKEHUS_ASSISTANT_URL || "").replace(/\/+$/, ""), token = process.env.SYKEHUS_ASSISTANT_TOKEN || "",
+  prefix = (process.env.SYKEHUS_ASSISTANT_PREFIX || "/internal/sykehus").replace(/\/+$/, ""),
   size = process.env.SYKEHUS_RENDER_SIZE || DEFAULT_SIZE, fetchImpl = fetch, now = () => new Date(), media = null } = {}) {
   if (!dir) return null;
   mkdirSync(dir, { recursive: true });
@@ -90,22 +91,23 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, px 
   let all = existsSync(idx) ? JSON.parse(readFileSync(idx, "utf8")) : [];
   const save = () => { writeFileSync(idx + ".tmp", JSON.stringify(all)); renameSync(idx + ".tmp", idx); };
   const pending = new Map();   // who → the estimate being made now (one at a time each)
+  const key = base && token;   // the door to gulden-ai is configured; no key lives here
+  let model = [...all].reverse().find(r => r.model)?.model || null;   // the model gulden-ai drew with last: it names the price to estimate with
 
-  /* this month (UTC) so far, and what is on its way */
+  /* this month (UTC) so far (informational: the caps are gulden-ai's) */
   const month = () => now().toISOString().slice(0, 7);
   const spent = () => all.filter(r => r.at.startsWith(month())).reduce((a, r) => a + (r.cost_usd || 0), 0);
-  const onWay = () => [...pending.values()].reduce((a, v) => a + v, 0);
   /* what the next picture costs, before it is made: the dearest of the last five this model made (OpenRouter's own
      figures), else its listed price for a picture of about 1 300 tokens out and in; rounded up to the cent */
   let listed = null, listedAt = 0;
   async function listPrice(sz) {   // the model's listed price for a picture of this size; the pricing read once a day
-    if (listed == null || Date.now() - listedAt >= 864e5) {
+    if (model && (listed == null || Date.now() - listedAt >= 864e5)) {
       try {
         const j = await (await fetchImpl("https://openrouter.ai/api/v1/models?output_modalities=image", { signal: AbortSignal.timeout(10000) })).json();
-        listed = (j.data || []).find(m => m.id === model)?.pricing || {}; listedAt = Date.now();
+        listed = (j.data || []).find(m => m.id === model)?.pricing || null; listedAt = Date.now();
       } catch { listed ??= null; }
     }
-    if (!listed) return 0.1 * SIZES[sz].tokens / SIZES["1K"].tokens;
+    if (!listed || !model) return 0.1 * SIZES[sz].tokens / SIZES["1K"].tokens;
     const p = listed; return SIZES[sz].tokens * (+p.image_output || +p.completion || 0) + 1300 * (+p.image || +p.prompt || 0) + 300 * (+p.prompt || 0);
   }
   async function estimate(sz = size) {
@@ -127,7 +129,7 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, px 
   const staleOf = r => { const [kind, wid] = String(r.work).split(":"), v = kind === "versjon" ? versions?.get(wid) : null; return v ? String(v.updated) > r.at : null; };
   const proposals = new Map();   // who → {ids, at}: Anton's «lag nye bilder fra disse stedene», waiting for the person to confirm on the page
   const spotsOf = who => all.filter(r => r.by === who && r.spot && !r.failed && !r.retake_of).sort((a, b) => b.at.localeCompare(a.at));
-  const state = async who => ({ signed_in: !!who, on: !!key, model, estimate_usd: await estimate(), default_size: size, sizes: await Promise.all(Object.entries(SIZES).map(async ([id, z]) => ({ id, name: z.no, estimate_usd: await estimate(id) }))), retake: who && proposals.get(who) && Date.now() - proposals.get(who).t < 1800e3 ? { ids: proposals.get(who).ids } : null, month_usd: money(spent()), cap_usd: cap, left_usd: money(Math.max(0, cap - spent() - onWay())) });
+  const state = async who => ({ signed_in: !!who, on: !!key, model, estimate_usd: await estimate(), default_size: size, sizes: await Promise.all(Object.entries(SIZES).map(async ([id, z]) => ({ id, name: z.no, estimate_usd: await estimate(id) }))), retake: who && proposals.get(who) && Date.now() - proposals.get(who).t < 1800e3 ? { ids: proposals.get(who).ids } : null, month_usd: money(spent()), cap_usd: null, left_usd: null });   // null: no cap here; gulden-ai refuses at the call
 
   async function make(body, who) {
     const shot = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.image || ""));
@@ -135,8 +137,6 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, px 
     const bytes = Buffer.from(shot[2], "base64"); if (bytes.length < 1024 || bytes.length > MAX_IN) throw Object.assign(new Error("Bildet av visningen er for lite eller for stort."), { status: 400 });
     const wish = body.wish == null ? "" : String(body.wish).trim().slice(0, 300);
     const sz = SIZES[body.size] ? body.size : size, est = await estimate(sz);
-    /* the cap, before anything is sent: the month, what is on its way, and this one */
-    if (spent() + onWay() + est > cap + 1e-9) throw Object.assign(new Error(`Månedens grense for bilder er nådd: $${money(spent()).toFixed(2)} av $${cap.toFixed(2)} er brukt${onWay() ? `, og $${money(onWay()).toFixed(2)} er under arbeid` : ""}. Et nytt bilde koster omtrent $${est.toFixed(2)}. Grensen går tilbake den 1. neste måned.`), { status: 402 });
     if (body.shown_usd != null && est > +body.shown_usd + 0.005) throw Object.assign(new Error(`Prisen er endret: et bilde koster nå omtrent $${est.toFixed(2)}. Se over og prøv igjen.`), { status: 409, estimate_usd: est });
     /* the aspect nearest the view's (a JPEG's or PNG's size from its header) */
     const dim = shot[1] === "png" ? [bytes.readUInt32BE(16), bytes.readUInt32BE(20)] : jpegSize(bytes);
@@ -144,29 +144,27 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, px 
     /* the camera (renderkit photo.js): the viewpoint and look the page took the picture with, said to the model in one line; the shape asked for is the picture's */
     const cam = VIEWPOINTS[body.viewpoint] ? shotOf({ viewpoint: body.viewpoint, look: body.look, lens: body.lens, eyeh: body.eyeh }) : null;
     const ar = ASPECTS.some(([k]) => k === body.aspect) ? body.aspect : cam && ASPECTS.some(([k]) => k === cam.aspect) ? cam.aspect : near;
-    const google = model.startsWith("google/");
     pending.set(who, est);
     try {
-      const r = await fetchImpl(URL_, { method: "POST", signal: AbortSignal.timeout(120000), headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "http-referer": "https://sykehus.gulden.no", "x-title": "Sykehustomta" },
-        body: JSON.stringify({ model, modalities: google ? ["image", "text"] : ["image"], provider: ROUTING, usage: { include: true }, image_config: { aspect_ratio: ar, image_size: sz },
-          messages: [{ role: "user", content: [{ type: "text", text: promptPreview(body) }, { type: "image_url", image_url: { url: body.image } }] }] }) });
+      const r = await fetchImpl(`${base}${prefix}/picture`, { method: "POST", signal: AbortSignal.timeout(130000), headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ person: who, prompt: promptPreview(body), image: body.image, aspect: ar, size: sz }) });
       const j = await r.json().catch(() => ({}));
-      const cost = Number.isFinite(+j.usage?.cost) ? +j.usage.cost : null;
-      const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url || "";
-      const pic = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(url);
+      /* a refusal by gulden-ai (the person's cap, the door's week) carries the sentence to show */
+      if (r.status === 402) throw Object.assign(new Error(String(j.message || "Grensen for bilder er nådd.")), { status: 402 });
+      const cost = Number.isFinite(+j.cost_usd) && j.cost_usd !== null ? +j.cost_usd : null;
+      const pic = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(j.image || "");
       if (!r.ok || !pic) {
-        /* a refused or empty answer may still have cost something: it counts against the cap as charged */
-        if (cost) { all.push({ id: newId(), at: now().toISOString(), by: who, work: null, model, cost_usd: cost, est_usd: est, failed: true }); save(); }
-        console.warn(`gjengi: ${r.status} ${j.error?.message ? String(j.error.message).slice(0, 200) : pic ? "" : "no picture"}`);
+        console.warn(`gjengi: ${r.status} ${j.error || (pic ? "" : "no picture")}`);
         throw Object.assign(new Error("Bildemodellen svarte ikke med et bilde. Prøv igjen om litt."), { status: 502 });
       }
+      if (j.model) model = String(j.model);
       const ext = pic[1] === "jpeg" ? "jpg" : pic[1], id = newId(), out = Buffer.from(pic[2], "base64");
       writeFileSync(join(dir, `${id}.${ext}`), out);
       const spot = spotOf(body.spot), prior = body.retake_of && all.find(r => r.id === body.retake_of && r.by === who && r.spot);
-      const rec = { id, at: now().toISOString(), by: who, work: body.work, ...(spot ? { spot: { ...spot, aspect: spot.aspect || ar } } : {}), ...(prior ? { retake_of: prior.id } : {}), model, size: sz, ...(cam ? { viewpoint: cam.viewpoint, look: cam.look } : {}), ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: j.provider || null };
+      const rec = { id, at: now().toISOString(), by: who, work: body.work, ...(spot ? { spot: { ...spot, aspect: spot.aspect || ar } } : {}), ...(prior ? { retake_of: prior.id } : {}), model, size: sz, ...(cam ? { viewpoint: cam.viewpoint, look: cam.look } : {}), ext, bytes: out.length, cost_usd: cost ?? est, est_usd: est, cost_said: cost != null, wish: wish || null, fav: false, provider: null };
       all.push(rec); save();
       media?.picture(`render/${id}`, who, "person", `local://sykehus/render/${id}.${ext}`, out, ext);   // U4007: an index, never a gate
-      console.log(`gjengi ${id} ${body.work} ${who} $${(cost ?? est).toFixed(4)}${cost == null ? " (estimert)" : ""} ${j.provider || ""} ${ar} ${sz} ${cam ? cam.viewpoint + "/" + cam.look : ""} ${out.length} B`);
+      console.log(`gjengi ${id} ${body.work} ${who} $${(cost ?? est).toFixed(4)}${cost == null ? " (estimert)" : ""} ${ar} ${sz} ${cam ? cam.viewpoint + "/" + cam.look : ""} ${out.length} B`);
       return rec;
     } finally { pending.delete(who); }
   }
