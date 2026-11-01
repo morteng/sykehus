@@ -110,6 +110,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   function publish(person, event, data) { const t = threads.get(person); if (!t) return; for (const r of t.subs) r.write(sse(event, data)); }
   const queueView = t => ({ type: "queue", running: t.running ? { id: t.running.id, text: t.running.text } : null, waiting: t.queue.map(q => ({ id: q.id, text: q.text })) });
   /* show_building through the pill moves the person's open pages (mcp.mjs); false when none is open */
+  if (pages) pages.still = (person, still) => { const t = threads.get(person); if (!t?.subs.size) return false; publish(person, "still", { type: "still", ...still }); return true; };   // U3996: a phone gets the picture with «Vis i 3D»; the page moves when it asks
   if (pages) pages.show = (person, view) => { const t = threads.get(person); if (!t?.subs.size) return false; publish(person, "show", { type: "show", ...view }); return true; };
   versions?.watch?.(v => publish(v.owner, "steps", { type: "steps", version: v.id, title: v.title, changes: v.edits.length, updated: v.updated }));
 

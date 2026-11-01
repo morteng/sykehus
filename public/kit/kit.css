@@ -368,3 +368,7 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-toast-act{flex:none;padding:3px var(--sp-2);font:inherit;font-size:var(--fs-sm);background:transparent;color:inherit;border:1px solid currentColor;border-radius:var(--radius);cursor:pointer}
 .g-toast-x{flex:none;width:var(--tap);height:var(--tap);margin:calc(var(--sp-2) * -1) 0;padding:0;border:0;border-radius:var(--radius);background:none;color:inherit;opacity:.7;font:inherit;font-size:22px;line-height:1;cursor:pointer}
 .g-toast-x:hover,.g-toast-x:focus-visible{opacity:1}
+.g-still{margin:0;display:flex;flex-direction:column;gap:var(--sp-1);align-items:flex-start}
+.g-still__img{display:block;width:100%;height:auto;border-radius:var(--radius-sm)}
+.g-still__more{border:1px solid var(--border);border-radius:var(--radius-sm);background:none;color:var(--accent);font:inherit;min-height:var(--control-h);padding:0 var(--sp-3);cursor:pointer}
+.g-still__more:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}

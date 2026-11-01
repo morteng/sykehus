@@ -23,6 +23,7 @@ import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are mar
 import { announces, matcher, isTry } from "./livetries.js";
 import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=20261028a";   // what the chat box attaches
 import { esc as kitEsc } from "./kit/html.js";
+import { createStill } from "./kit/still.js";   // a picture of a live view first, one button for the live view (kits ui, U3996)
 
 const $ = id => document.getElementById(id);
 const esc = s => kitEsc(s ?? ""); // null-safe; the escaping is the kit's (kit/html.js)
@@ -339,8 +340,13 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     /* Anton saved a version: the one open is shown again (in place when it can be), another gets a link */
     on("steps", s => { dispatchEvent(new CustomEvent("sykehus:versjoner")); if (s.version === version()) { if (running) { if (tries) liveTry(); else redraw = true; } else refresh(); } else if (announces(s) && !told.has(s.version)) { told.add(s.version); goTo(s.version, s.title); } });
     /* «vis meg»: show_building through the pill moves this page (mcp.mjs, assistant.mjs pages.show) */
-    on("show", v => { if (/^v.{8}$/.test(v.draft || "")) { v = { ...v, version: v.draft }; delete v.draft; }   // a version's id is a version (21:05Z)
-      if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}${v.key ? `&nokkel=${encodeURIComponent(v.key)}` : ""}`); } else showView(v); });
+    const goShow = v => { if (/^v.{8}$/.test(v.draft || "")) { v = { ...v, version: v.draft }; delete v.draft; }   // a version's id is a version (21:05Z)
+      if (v.version && v.version !== version() || v.draft) { try { sessionStorage.setItem(POSE, JSON.stringify(viewer.pose())); } catch { } location.assign(v.draft ? `./?utkast=${encodeURIComponent(v.draft)}` : `./?versjon=${encodeURIComponent(v.version)}${v.key ? `&nokkel=${encodeURIComponent(v.key)}` : ""}`); } else showView(v); };
+    on("show", goShow);
+    /* U3996: a phone gets the picture of the view in the chat (the kit's still, cut by the scaler: ?w=640); «Vis i 3D», or a picture that is gone, moves the page */
+    on("still", s => { if (!/^api\/skisse\/[A-Za-z0-9_-]{8}\.png$/.test(s.still || "")) return goShow(s.view || {});
+      const li = document.createElement("li"); li.className = "talk-item card still"; log.append(li); empty();
+      li.append(createStill({ src: `${s.still}?w=640`, alt: "Bilde av visningen", more: "Vis i 3D", live: () => { li.remove(); empty(); goShow(s.view || {}); } })); });
     on("signed_out", signedOut);
     on("cleared", () => { log.textContent = ""; replies.clear(); answer = ""; showReply(); empty(); });
     placePill(); state(); empty();

@@ -1,12 +1,12 @@
 {
-  "kits": "b005060a824515b70861515a6d34e266280b5c67",
+  "kits": "0e087c72deb7a5bf2c2aabe792aa24fb75faf564",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "d4c7dd4d5f66441a80cb5bdf87e78730dd6834ad",
+    "kit.css": "c4833d486024b889d2f4d07100dab276f73f9d4b",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
@@ -28,6 +28,7 @@
     "upload-caps.js": "abff4629745152650c084a4a6096f199117ce2c2",
     "assistant-door.js": "9abd8d688d47de4ff878de046a25dd2c5e6454ab",
     "shell.css": "fa605f472cc83178945069a80ba542dd87a40634",
-    "toast.js": "a963966aeaf4d2de1cd8c6a5cc55ac4e24153294"
+    "toast.js": "a963966aeaf4d2de1cd8c6a5cc55ac4e24153294",
+    "still.js": "cf26f1f009c064267120ec2fa4b2e8b96b66dad7"
   }
 }
