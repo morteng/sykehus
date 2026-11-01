@@ -41,7 +41,7 @@ test("list, view and delete are the person's own only", () => {
 
 /* the real server: the routes and Anton's two tools */
 const dir = mkdtempSync(join(tmpdir(), "sykehus-sp-srv-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9500 + Math.floor(Math.random() * 90), O = `http://localhost:${PORT}`;
-const as = p => ({ "remote-user": p, "x-sykehus-proxy-auth": secret });
+const as = p => ({ "remote-user": p, "x-edge-auth": secret });
 const sv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => sv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => sv.kill());

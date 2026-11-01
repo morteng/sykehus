@@ -11,7 +11,7 @@ import { KINDS, READBACK, FAMILY } from "../toolguide.mjs";
 import { stubDoor, BEARER } from "./stub-door.mjs";
 
 const door = await stubDoor(), dir = mkdtempSync(join(tmpdir(), "sykehus-t3-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9300 + Math.floor(Math.random() * 90);
-const O = `http://localhost:${PORT}`, as = n => ({ "remote-user": n, "x-sykehus-proxy-auth": secret });
+const O = `http://localhost:${PORT}`, as = n => ({ "remote-user": n, "x-edge-auth": secret });
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, SYKEHUS_ASSISTANT_URL: door.url, SYKEHUS_ASSISTANT_TOKEN: BEARER, SYKEHUS_COOKIE_SECRET: "cookie-secret-for-tests-0123456789012345" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => { srv.kill(); door.close(); });

@@ -88,10 +88,10 @@ test("the one-time link from the QR signs in like a code, once (U3539)", async (
 });
 
 test("signed in on gulden.no (Remote-User with the proxy secret) needs no code; without the secret it is no one", async () => {
-  const me = await (await fetch(O + "/api/meg", { headers: { "remote-user": "morten", "x-sykehus-proxy-auth": secret } })).json();
+  const me = await (await fetch(O + "/api/meg", { headers: { "remote-user": "morten", "x-edge-auth": secret } })).json();
   assert.equal(me.person, "morten"); assert.equal(me.via, "gulden.no"); assert.equal(me.anton, true);
   assert.equal((await (await fetch(O + "/api/meg", { headers: { "remote-user": "morten" } })).json()).person, null);
-  const r = await post("/api/anton", { text: "Hei" }, { "remote-user": "morten", "x-sykehus-proxy-auth": secret });
+  const r = await post("/api/anton", { text: "Hei" }, { "remote-user": "morten", "x-edge-auth": secret });
   assert.equal(r.status, 202);
   await new Promise(ok => setTimeout(ok, 300));
   const body = seen.filter(s => s.path === "/internal/sykehus/chat").at(-1).body;
@@ -105,7 +105,7 @@ test("the cookie is not a login on /mcp", async () => {
 
 test("a message is relayed as the person's turn and streamed back to their pages", async () => {
   assert.equal((await fetch(O + "/api/anton/strom")).status, 401);
-  const v = (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "new_version", arguments: { title: "Lars sin" } } }) })).json()).result.structuredContent;
+  const v = (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-edge-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "new_version", arguments: { title: "Lars sin" } } }) })).json()).result.structuredContent;
   const got = events(cookie, o => o.some(e => e.event === "done"));
   await new Promise(ok => setTimeout(ok, 200));
   const r = await post("/api/anton", { text: "Riv vestfløya", version: v.version }, { cookie });
@@ -124,7 +124,7 @@ test("a message is relayed as the person's turn and streamed back to their pages
   // Anton changes the version (through the MCP tools, as Lars): the page is told to redraw it
   const steps = events(cookie, o => o.some(e => e.event === "steps"));
   await new Promise(ok => setTimeout(ok, 200));
-  await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "try_change", arguments: { version: v.version, edits: [{ kind: "demolish", building: "Vestfløy" }] } } }) });
+  await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-edge-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "try_change", arguments: { version: v.version, edits: [{ kind: "demolish", building: "Vestfløy" }] } } }) });
   const s = (await steps).find(e => e.event === "steps"); assert.equal(s.version, v.version); assert.equal(s.changes, 1);
   const h = await (await fetch(O + "/api/anton/historikk", { headers: { cookie } })).json();
   assert.equal(h.items[0].text, "hei");

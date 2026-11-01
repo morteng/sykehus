@@ -109,7 +109,7 @@ const secret = "proxy-secret-for-tests-0123456789", PORT = 9900 + Math.floor(Mat
 const sv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: vdir, SYKEHUS_PROXY_SECRET: secret, SYKEHUS_OPENROUTER_API_KEY: "test-key", DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => sv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => sv.kill());
-const rpc = async (method, params, who = "lars") => (await (await fetch(M + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": who, "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
+const rpc = async (method, params, who = "lars") => (await (await fetch(M + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": who, "x-edge-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
 const text = r => r.content.filter(c => c.type === "text").map(c => c.text).join(" ");
 test("Anton lists the person's own spots, and retake_photos only proposes: the card's count and total price, not a picture", async () => {
   const tools = (await rpc("tools/list")).tools; assert.ok(tools.some(t => t.name === "photo_spots") && tools.some(t => t.name === "retake_photos"));
@@ -119,7 +119,7 @@ test("Anton lists the person's own spots, and retake_photos only proposes: the c
   const r = await rpc("tools/call", { name: "retake_photos", arguments: { spots: ["aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb"] } }); assert.ok(!r.isError, text(r));
   assert.equal(r.structuredContent.proposed, 1, "another person's spot is not taken"); assert.equal(r.structuredContent.total_usd, r.structuredContent.each_usd);
   assert.match(r.structuredContent.said, /1 bilde · ca\. \$/);
-  const s = await (await fetch(`${M}/api/gjengi?utkast=zzzzzzzz`, { headers: { "remote-user": "lars", "x-sykehus-proxy-auth": secret } })).json();
+  const s = await (await fetch(`${M}/api/gjengi?utkast=zzzzzzzz`, { headers: { "remote-user": "lars", "x-edge-auth": secret } })).json();
   assert.deepEqual(s.retake, { ids: ["aaaaaaaaaaaaaaaa"] }); assert.equal(s.month_usd, 0.14, "nothing spent by the proposal (the two seeded pictures, October)");
   assert.equal((await rpc("tools/call", { name: "retake_photos", arguments: { spots: ["bbbbbbbbbbbbbbbb"] } })).isError, true);
 });

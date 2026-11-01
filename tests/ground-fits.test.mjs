@@ -60,7 +60,7 @@ const dir = mkdtempSync(join(tmpdir(), "gf-")), secret = "proxy-secret-for-tests
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, SYKEHUS_COOKIE_SECRET: "cookie-secret-for-tests-0123456789abcdef" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => srv.kill());
-const rpc = async (method, params) => (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
+const rpc = async (method, params) => (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-edge-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
 
 test("about_ground on the real site: fall line always; want_drop_m adds the answer and candidates; INSTRUCTIONS tell Anton to compare", async () => {
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } });

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { cardOpts, drawCard } from "../thumbs.mjs";
 
-const secret = "proxy-secret-for-tests-0123456789", as = who => ({ "remote-user": who, "x-sykehus-proxy-auth": secret });
+const secret = "proxy-secret-for-tests-0123456789", as = who => ({ "remote-user": who, "x-edge-auth": secret });
 const dir = mkdtempSync(join(tmpdir(), "sykehus-thumbfav-")), vdir = join(dir, "v");
 async function boot() {
   const PORT = 9800 + Math.floor(Math.random() * 90), srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: vdir, SYKEHUS_PROXY_SECRET: secret, DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });

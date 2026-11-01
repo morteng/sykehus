@@ -87,7 +87,7 @@ const secret = "proxy-secret-for-tests-0123456789", PORT = 9100 + Math.floor(Mat
 const sv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => sv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => sv.kill());
-const rpc = async (method, params) => (await (await fetch(M + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-sykehus-proxy-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
+const rpc = async (method, params) => (await (await fetch(M + "/mcp", { method: "POST", headers: { "content-type": "application/json", "remote-user": "lars", "x-edge-auth": secret }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
 const text = r => r.content.filter(c => c.type === "text").map(c => c.text).join(" ");
 
 test("show_building: camera, look, lens and size in the event; the description names all five cameras and six looks", async () => {

@@ -9,7 +9,7 @@ import { sunOf, sunIn, sunDate, sunFromDay, sunDay, SUN_DEFAULT } from "../publi
 import { sunLabel, sunError } from "../public/gjengi-no.js";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-sun-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9100 + Math.floor(Math.random() * 800);
-const O = `http://localhost:${PORT}`, lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
+const O = `http://localhost:${PORT}`, lars = { "remote-user": "lars", "x-edge-auth": secret };
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => srv.kill());

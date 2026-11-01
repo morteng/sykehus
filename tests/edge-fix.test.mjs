@@ -84,7 +84,7 @@ const dir = mkdtempSync(join(tmpdir(), "sykehus-edgefix-")), secret = "proxy-sec
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, DOCS: "", SYKEHUS_WORKER: `http://127.0.0.1:${fake.address().port}` }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => { srv.kill(); fake.close(); });
-const H = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
+const H = { "remote-user": "lars", "x-edge-auth": secret };
 const call = async (name, args) => (await (await fetch(`http://localhost:${PORT}/mcp`, { method: "POST", headers: { "content-type": "application/json", ...H }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) })).json()).result;
 const text = r => r.content.filter(c => c.type === "text").map(c => c.text).join(" ");
 const png = r => r.content.filter(c => c.type === "image").map(c => c.data);

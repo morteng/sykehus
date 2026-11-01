@@ -2,7 +2,7 @@
 
    Three ways in, each ending in a login name (the person's gulden.no login):
    - gulden.no in front: the login's Remote-User header, believed only with the edge proof (X-Edge-Auth, equal to
-     SYKEHUS_PROXY_SECRET; X-Sykehus-Proxy-Auth counts the same until the rollout ends) and read by the kits edge kit
+     SYKEHUS_PROXY_SECRET) and read by the kits edge kit
      (vendor/edgekit: one contract for every app, U3981). The edge strips them from what clients send. Anton sends the proof
      and a signed X-Edge-Assertion (sub = the person, aud = sykehus, 60 s, key SYKEHUS_ASSERTION_PUBKEY; U3964): a bad one is
      refused whole (401), a good one names the person and the groups. Admin is the group "admins" (Authelia), nowhere else;
@@ -43,8 +43,7 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
 
   // ---------- the three ways in ----------
   /* the edge's word on who this is: { login, groups, admin, via } or null; an assertion that is not good throws AssertionRefused */
-  const LEGACY = ["x-sykehus-proxy-auth"];
-  const edgeOf = req => edgeIdentity(req.headers, process.env.SYKEHUS_PROXY_SECRET, { legacy: LEGACY, assertionKey: process.env.SYKEHUS_ASSERTION_PUBKEY, aud: "sykehus" });
+  const edgeOf = req => edgeIdentity(req.headers, process.env.SYKEHUS_PROXY_SECRET, { assertionKey: process.env.SYKEHUS_ASSERTION_PUBKEY, aud: "sykehus" });
   /* a request that carries an assertion that is not good: the sentence why, else null (the server answers 401 before any route) */
   const badAssertion = req => { if (!req.headers["x-edge-assertion"]) return null; try { edgeOf(req); return null; } catch (e) { if (e instanceof AssertionRefused) return e.message; throw e; } };
   const proxyUser = req => { try { return edgeOf(req)?.login ?? null; } catch { return null; } };

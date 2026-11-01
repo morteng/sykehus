@@ -31,7 +31,7 @@ const dir = mkdtempSync(join(tmpdir(), "np-srv-")), secret = "proxy-secret-for-t
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, SYKEHUS_TOKENS: join(dir, "t.json") }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => srv.kill());
-const lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
+const lars = { "remote-user": "lars", "x-edge-auth": secret };
 const post = body => fetch(`http://localhost:${PORT}/api/endring`, { method: "POST", headers: { "content-type": "application/json", ...lars }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, j: await r.json() }));
 
 test("«Start»: the typed name becomes the version's title; empty keeps «Nytt prosjekt»; a copy takes the typed name too", async () => {

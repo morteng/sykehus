@@ -10,7 +10,7 @@ import { spawn } from "node:child_process";
 import { listHtml, EMPTY_LIST } from "../public/sharing.js";
 
 const dir = mkdtempSync(join(tmpdir(), "sykehus-pl-")), secret = "proxy-secret-for-tests-0123456789", PORT = 9100 + Math.floor(Math.random() * 800);
-const O = `http://localhost:${PORT}`, as = who => ({ "remote-user": who, "x-sykehus-proxy-auth": secret });
+const O = `http://localhost:${PORT}`, as = who => ({ "remote-user": who, "x-edge-auth": secret });
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: join(dir, "v"), SYKEHUS_PROXY_SECRET: secret, DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => srv.kill());

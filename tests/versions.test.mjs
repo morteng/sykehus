@@ -22,12 +22,12 @@ async function call(name, args, headers = {}) {
   const j = await r.json(); if (r.status !== 200) return { status: r.status, auth: r.headers.get("www-authenticate"), j };
   const c = j.result; return { status: 200, error: c.isError ? c.content[0].text : null, out: c.structuredContent };
 }
-const morten = { authorization: `Bearer ${tok}` }, lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
+const morten = { authorization: `Bearer ${tok}` }, lars = { "remote-user": "lars", "x-edge-auth": secret };
 
 test("trying needs no login; keeping answers 401 with the sign-in challenge", async () => {
   const d = await call("try_change", { edits: [{ kind: "demolish", building: "Vestfløy" }] });
   assert.equal(d.out.saved, false);
-  for (const h of [{}, { authorization: "Bearer not-the-right-token-xx" }, { "remote-user": "lars" }, { "remote-user": "lars", "x-sykehus-proxy-auth": "wrong" }]) {
+  for (const h of [{}, { authorization: "Bearer not-the-right-token-xx" }, { "remote-user": "lars" }, { "remote-user": "lars", "x-edge-auth": "wrong" }]) {
     const r = await call("new_version", { title: "Ikke lov" }, h);
     assert.equal(r.status, 401); assert.match(r.auth, /resource_metadata=".*\/\.well-known\/oauth-protected-resource\/mcp"/);
   }
@@ -78,7 +78,7 @@ test("claude.ai's way in: register, consent behind gulden.no, code with PKCE, to
   assert.equal(rd, `${O}/oauth/authorize?${q}`, "a way to sign in, and back to this page");
   const html = await (await fetch(`${O}/oauth/authorize?${q}`, { headers: lars })).text();
   const form = /name="form" value="([^"]+)"/.exec(html)[1];
-  const forged = await fetch(O + "/oauth/approve", { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", "remote-user": "lars", "x-sykehus-proxy-auth": "wrong" }, body: `form=${form}&answer=yes` });
+  const forged = await fetch(O + "/oauth/approve", { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", "remote-user": "lars", "x-edge-auth": "wrong" }, body: `form=${form}&answer=yes` });
   assert.equal(forged.status, 400, "the answer must come from the same login");
   const html2 = await (await fetch(`${O}/oauth/authorize?${q}`, { headers: lars })).text(), form2 = /name="form" value="([^"]+)"/.exec(html2)[1];
   const ok = await fetch(O + "/oauth/approve", { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", ...lars }, body: `form=${form2}&answer=yes` });

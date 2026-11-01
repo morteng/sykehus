@@ -14,7 +14,7 @@ const PORT = 9000 + Math.floor(Math.random() * 900);
 const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: dir, SYKEHUS_PROXY_SECRET: secret, SYKEHUS_ADMIN_TOKEN: admin, SYKEHUS_ASSISTANT_URL: door.url, SYKEHUS_ASSISTANT_TOKEN: BEARER, SYKEHUS_COOKIE_SECRET: "cookie-secret-for-tests-0123456789012345", DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => { srv.kill(); door.close(); });
-const O = `http://localhost:${PORT}`, as = p => ({ "remote-user": p, "x-sykehus-proxy-auth": secret });
+const O = `http://localhost:${PORT}`, as = p => ({ "remote-user": p, "x-edge-auth": secret });
 const wish = (args, h = {}) => fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...h }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "send_wish", arguments: args } }) });
 const list = async h => (await fetch(O + "/api/onsker", { headers: h })).json();
 
@@ -22,7 +22,7 @@ test("a wish needs a login", async () => {
   assert.equal((await wish({ text: "Snitt gjennom drivhuset" })).status, 401);
   assert.equal((await fetch(O + "/api/onsker", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Hei" }) })).status, 401);
   assert.equal((await fetch(O + "/api/onsker")).status, 401);
-  assert.equal((await fetch(O + "/api/onsker", { headers: { "x-sykehus-proxy-auth": secret } })).status, 401, "the proxy secret alone is no one");
+  assert.equal((await fetch(O + "/api/onsker", { headers: { "x-edge-auth": secret } })).status, 401, "the proxy secret alone is no one");
   assert.equal(filed.length, 0, "nothing reached the store");
 });
 
@@ -55,7 +55,7 @@ test("the kit's feedback dialog files with its kind, page and tab; 10 an hour; a
 });
 
 test("the usage counts: not for the proxy secret, which the edge adds to every page request", async () => {
-  assert.equal((await fetch(O + "/api/bruk", { headers: { "x-sykehus-proxy-auth": secret, "x-forwarded-for": "203.0.113.9" } })).status, 403);
+  assert.equal((await fetch(O + "/api/bruk", { headers: { "x-edge-auth": secret, "x-forwarded-for": "203.0.113.9" } })).status, 403);
   assert.equal((await fetch(O + "/api/bruk", { headers: { authorization: `Bearer ${admin}`, "x-forwarded-for": "203.0.113.9" } })).status, 200);
 });
 

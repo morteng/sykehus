@@ -15,7 +15,7 @@ import { PROSPEKT_KEYS, numbersOf, limitsOf } from "../prospekt.mjs";
 import { prospektHtml, GONE } from "../public/prospekt-view.js";
 import { firstView, sharedOpen, prospektOpen, PREVIEW_NOTE, renderProspekt } from "../public/prospekt-pane.js";
 
-const secret = "proxy-secret-for-tests-0123456789", as = who => ({ "remote-user": who, "x-sykehus-proxy-auth": secret });
+const secret = "proxy-secret-for-tests-0123456789", as = who => ({ "remote-user": who, "x-edge-auth": secret });
 const dir = mkdtempSync(join(tmpdir(), "sykehus-prospekt-")), vdir = join(dir, "v");
 const REPORT = { place: "Dronninggata 28", hazards: [{ level: "moderate", text: "I aktsomhetsområde for kvikkleireskred.", source: "NVE" }],
   heritage_within_50m: [{ name: "Sykehus, Dronninggata 28.", protection: "Kommunalt listeført", distance_m: 5 }], invasive_plants_within_500m: [] };

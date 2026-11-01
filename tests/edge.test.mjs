@@ -1,5 +1,5 @@
-/* U3981, U3964: who the server believes, from the edge. One header name for the proof (X-Edge-Auth; X-Sykehus-Proxy-Auth counts the
-   same until the rollout ends), and a signed assertion from a calling service: a wrong aud or an old exp is refused (401), a good one names
+/* U3981, U3964: who the server believes, from the edge. One header name for the proof (X-Edge-Auth; the old X-Sykehus-Proxy-Auth is read
+   nowhere), and a signed assertion from a calling service: a wrong aud or an old exp is refused (401), a good one names
    the person. node --test tests/edge.test.mjs */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -24,7 +24,7 @@ const token = (o = {}) => signAssertion(priv, { sub: "okter", aud: "sykehus", ..
 
 test("the proof makes Remote-User a login; without it, or with the wrong one, it is no one", async () => {
   assert.deepEqual(await meg({ "x-edge-auth": secret, "remote-user": "okter" }), [200, "okter"]);
-  assert.deepEqual(await meg({ "x-sykehus-proxy-auth": secret, "remote-user": "okter" }), [200, "okter"], "the old header still counts during the rollout");
+  assert.deepEqual(await meg({ "x-sykehus-proxy-auth": secret, "remote-user": "okter" }), [200, null], "the old header is read nowhere");
   assert.deepEqual(await meg({ "remote-user": "okter" }), [200, null]);
   assert.deepEqual(await meg({ "x-edge-auth": "not-the-secret", "remote-user": "okter" }), [200, null]);
   assert.deepEqual(await meg({ "x-edge-auth": secret }), [200, null], "the proof alone is no one");

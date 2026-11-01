@@ -29,7 +29,7 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
 - `SYKEHUS_VERSIONS_DIR`: where versions are kept, one JSON file each (on its own volume; back it up). Without it,
   new_version says versions are not kept here, and the rest works.
 - `SYKEHUS_PROXY_SECRET`: the `Remote-User` and `Remote-Groups` headers count only when `X-Edge-Auth` carries this
-  secret (compared in constant time; `X-Sykehus-Proxy-Auth` counts the same until the rollout ends). Read by the kits
+  secret (compared in constant time; the old `X-Sykehus-Proxy-Auth` is read nowhere). Read by the kits
   `edge` kit (`vendor/edgekit`), the same contract in every app (U3981). Anton sends the proof and a signed
   `X-Edge-Assertion` (sub = the person, aud = `sykehus`, 60 s; U3964); Caddy adds the proof after forward_auth. The
   edge strips these headers from everything clients send. An admin is a login in the Authelia group `admins`.
@@ -38,7 +38,7 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
 - `SYKEHUS_TOKENS`: a JSON file `{ "<sha256 hex of the token>": "<login>" }` for MCP clients such as Claude Code
   (`Authorization: Bearer <token>`). Only the hashes are stored; re-read at start.
 - OAuth for claude.ai (auth.mjs, hagekart's server): `/.well-known/oauth-*`, `/oauth/register`, `/oauth/token` open;
-  `/oauth/authorize` and `/oauth/approve` behind the gulden.no login (forward_auth, then `header_up X-Sykehus-Proxy-Auth`).
+  `/oauth/authorize` and `/oauth/approve` behind the gulden.no login (forward_auth, then `header_up X-Edge-Auth`).
   Grants (token hashes only) in `SYKEHUS_VERSIONS_DIR/_oauth.json`.
 - A tool that keeps a version answers HTTP 401 with the sign-in challenge without a login; looking, trying (drafts)
   and reading versions stay open. Tool calls are counted per login and per hashed address; anonymous calls are held
@@ -50,7 +50,7 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
   `/internal/sykehus/code`) and `SYKEHUS_ASSISTANT_PREFIX` (default `/internal/sykehus`, + `/chat`, `/approve`,
   `/cancel`, `/history`). The cookie counts on the page's `/api/*` only, never on `/mcp`. `/api/anton/strom` is
   server-sent events: no response buffering at the edge (`flush_interval -1`). Someone signed in on gulden.no needs no
-  code: `/api/*` behind laser_authz (anonymous passes) with `header_up X-Sykehus-Proxy-Auth`, and Remote-User counts.
+  code: `/api/*` behind laser_authz (anonymous passes) with `header_up X-Edge-Auth`, and Remote-User counts.
 - Wishes (wishes.mjs): kept in `SYKEHUS_VERSIONS_DIR/_wishes/`. An admin (the group `admins` in Authelia, read at the edge; U3981) sees all on the
   page and answer; `SYKEHUS_ADMIN_TOKEN` (24+ characters, Bearer) reads `GET /api/onsker` and `GET /api/bruk` from
   outside the box; `SYKEHUS_WISH_WEBHOOK`, when set, gets each new wish as JSON. The proxy secret is no admin: the
@@ -67,7 +67,7 @@ handle /.well-known/oauth-* { reverse_proxy 127.0.0.1:8090 }
 handle /oauth/* { reverse_proxy 127.0.0.1:8090 }   # authorize and approve: forward_auth first, then header_up the secret
 ```
 
-On every route: `request_header -Remote-User` and `request_header -X-Sykehus-Proxy-Auth` before anything else.
+On every route: `request_header -Remote-User` and `request_header -X-Edge-Auth` before anything else.
 
 **A new public path needs the edge's matcher.** On gulden-prod `public/` is not proxied whole: caddy-public sends to
 sykehus-mcp only the paths in its `@sykehusoauth` list, so a path this server starts to answer (as `/mcp/server-card`,

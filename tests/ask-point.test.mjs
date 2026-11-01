@@ -17,7 +17,7 @@ const srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).p
 await new Promise(ok => srv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 const ac = new AbortController();
 after(() => { ac.abort(); srv.kill(); door.close(); });
-const H = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
+const H = { "remote-user": "lars", "x-edge-auth": secret };
 const rpc = async (method, params) => (await (await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json", ...H }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;
 const text = r => r.content.filter(c => c.type === "text").map(c => c.text).join(" ");
 

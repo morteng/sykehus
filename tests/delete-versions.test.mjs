@@ -28,7 +28,7 @@ async function call(name, args, headers) {
   const c = (await r.json()).result; return { error: c.isError ? c.content[0].text : null, out: c.structuredContent };
 }
 const page = (body, h) => fetch(O + "/api/endring", { method: "POST", headers: { "content-type": "application/json", ...h }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, j: await r.json() }));
-const morten = { authorization: `Bearer ${tok}` }, lars = { "remote-user": "lars", "x-sykehus-proxy-auth": secret };
+const morten = { authorization: `Bearer ${tok}` }, lars = { "remote-user": "lars", "x-edge-auth": secret };
 const mine = async h => (await call("list_versions", { owner: "me" }, h)).out.versions.map(v => v.title);
 const apiGet = (id, h = lars) => fetch(`${O}/api/versjon/${id}`, { headers: h });
 
@@ -51,7 +51,7 @@ test("only the owner: another person's delete is refused and changes nothing; si
   assert.match(r.error, /Fant ingen versjon/); assert.ok(r.error);
   const byName = await call("delete_version", { versions: ["Larsens"] }, morten); assert.match(byName.error, /Fant ingen versjon/);
   assert.ok((await mine(lars)).includes("Larsens"), "still there");
-  const pageTry = await page({ delete: [v.version] }, { "remote-user": "morten", "x-sykehus-proxy-auth": secret }); assert.equal(pageTry.status, 400);
+  const pageTry = await page({ delete: [v.version] }, { "remote-user": "morten", "x-edge-auth": secret }); assert.equal(pageTry.status, 400);
   assert.ok((await mine(lars)).includes("Larsens"));
   const anon = await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/call", params: { name: "delete_version", arguments: { versions: [v.version] } } }) });
   assert.equal(anon.status, 401);

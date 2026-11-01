@@ -37,7 +37,7 @@ test("/px-may: logged out is 401 text, another person 404 text, the owner 200 an
 test("/internal/px-src: the bytes for the scaler; a request through the edge (forwarding header, cookie, proxy secret) is not found", async () => {
   let r = res(); assert.equal(await px.route(req(), r, "/internal/px-src/foto/p1/123"), true);
   assert.equal(r.code, 200); assert.equal(r.headers["content-type"], "image/jpeg"); assert.equal(String(r.body), "JPEGBYTES");
-  for (const h of [{ "x-forwarded-for": "1.2.3.4" }, { cookie: "a=b" }, { "x-sykehus-proxy-auth": "s" }, { "remote-user": "ola" }]) { r = res(); await px.route(req(h), r, "/internal/px-src/foto/p1/123"); assert.equal(r.code, 404, JSON.stringify(h)); }
+  for (const h of [{ "x-forwarded-for": "1.2.3.4" }, { cookie: "a=b" }, { "x-edge-auth": "s" }, { "remote-user": "ola" }]) { r = res(); await px.route(req(h), r, "/internal/px-src/foto/p1/123"); assert.equal(r.code, 404, JSON.stringify(h)); }
   r = res(); await px.route(req(), r, "/internal/px-src/foto/nope/1"); assert.equal(r.code, 404);
   assert.equal(await px.route(req(), res(), "/api/other"), false);
 });
