@@ -89,7 +89,7 @@ export function startGjengi({ panel, viewer, work, toast, sun = () => null, setS
     const reason = why(), label = reason || `Ta bildet · ca. ${usd(est)}`;   // a grey shutter says why on itself, in the view and in the drawer
     for (const b of [go, shotBtn]) { b.disabled = !!reason; b.setAttribute("aria-label", reason ? `Ta bildet: ${reason}` : label); }
     go.textContent = reason ? `Ta bildet: ${reason}` : label; $("pfPrice").textContent = reason || `ca. ${usd(est)}`; shotBtn.title = label;
-    list.innerHTML = (st.pictures || []).map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener" title="Åpne i full størrelse">${pic(p.url, 160, `Gjengitt bilde ${new Date(p.at).toLocaleString("nb-NO")}`)}</a>
+    list.innerHTML = (st.pictures || []).map(p => `<li><a href="${esc(p.url)}" target="_blank" rel="noopener" title="Åpne i full størrelse">${pic(p.url, 160, p.alt || `Gjengitt bilde ${new Date(p.at).toLocaleString("nb-NO")}`)}</a>
       <span class="gj-r"><button type="button" class="gj-fav" data-fav="${esc(p.id)}" aria-pressed="${p.fav}" title="${p.fav ? "Ta bort som favoritt" : "Behold som favoritt"}" aria-label="${p.fav ? "Ta bort som favoritt" : "Behold som favoritt"}">${p.fav ? "★" : "☆"}</button>
       <a href="${esc(p.download)}" download>Last ned</a><small>${esc(new Date(p.at).toLocaleDateString("nb-NO"))} · ${usd(p.cost_usd)}${p.wish ? ` · ${esc(p.wish)}` : ""}</small></span></li>`).join("");
     for (const b of list.querySelectorAll("[data-fav]")) b.onclick = () => fav(b.dataset.fav, b.getAttribute("aria-pressed") !== "true");

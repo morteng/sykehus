@@ -74,3 +74,16 @@ test("favourites: by its maker or the version's owner only, first in the list; a
   assert.equal((await get("/api/gjengi?versjon=vAbcdefgh", "lars")).j.pictures[0].id, older.id);
   assert.deepEqual((await get("/api/gjengi?versjon=vAbcdefgh", "mia")).j.pictures, [], "another's private version shows none");
 });
+
+test("U4117: the picture list carries the registry's alt for a render that has one, the others keep none", async () => {
+  const asked = [], made = [];
+  const g2 = createRenderings({ dir: mkdtempSync(join(tmpdir(), "sykehus-gjengi-alt-")), base: "http://gulden-ai:8000", token: "door-token", size: "1K", readJson, login, versions, fetchImpl,
+    media: { picture: (ref) => made.push(ref), forget() {}, alts: async refs => { asked.push(refs); return { [refs[0]]: "En rød mursteinsbygning mot blå himmel" }; } } });
+  const s2 = createServer(async (req, res) => { const url = new URL(req.url, "http://x"); if (!(await g2.route(req, res, url.pathname, url))) res.writeHead(404).end(); }).listen(0);
+  after(() => s2.close());
+  const P = `http://localhost:${s2.address().port}`, hdr = { "content-type": "application/json", "x-who": "lars" };
+  for (let i = 0; i < 2; i++) { const r = await fetch(P + "/api/gjengi", { method: "POST", headers: hdr, body: JSON.stringify({ image: shot, versjon: "vAbcdefgh", shown_usd: 0.1 }) }); assert.equal(r.status, 200, JSON.stringify(await r.json())); }
+  const list = (await (await fetch(P + "/api/gjengi?versjon=vAbcdefgh", { headers: hdr })).json()).pictures;
+  assert.equal(list.length, 2); assert.deepEqual(asked, [list.map(p => `render/${p.id}`)]);
+  assert.equal(list[0].alt, "En rød mursteinsbygning mot blå himmel"); assert.ok(!("alt" in list[1]));
+});

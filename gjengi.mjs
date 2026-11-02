@@ -197,7 +197,8 @@ export function createRenderings({ SECURITY = {}, readJson, login, versions, px 
       try {
         if (path === "/api/gjengi" && req.method === "GET") {
           const w = workOf(q, who), list = w ? all.filter(r => r.work === w.key).sort((a, b) => (b.fav - a.fav) || b.at.localeCompare(a.at)).map(r => pub(r, who)) : [];
-          return json(res, 200, { ...(await state(who)), pictures: list });
+          const said = media?.alts && list.length ? await media.alts(list.map(r => `render/${r.id}`)).catch(() => ({})) : {};   // U4117: the registry's words for each picture
+          return json(res, 200, { ...(await state(who)), pictures: list.map(r => said[`render/${r.id}`] ? { ...r, alt: said[`render/${r.id}`] } : r) });
         }
         if (path === "/api/gjengi" && req.method === "POST") {
           if (!who) return json(res, 401, { error: "Logg inn for å gjengi: hvert bilde koster penger." });
