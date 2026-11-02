@@ -37,7 +37,7 @@ import { baseOf, groundText, lotText, buildingWords } from "./design.js";
 import { PLANTS } from "./plants.js";
 import { createPanel } from "./panel.js";
 import { levels } from "./kit/levels.js";
-import { sharedOpen, firstView, prospektOpen, renderProspekt, bindLightbox, } from "./prospekt-pane.js?v=1";
+import { sharedOpen, firstView, prospektOpen, renderProspekt, bindLightbox, } from "./prospekt-pane.js?v=20261102lb";
 import { figures } from "./prospekt-view.js";
 import { esc } from "./kit/html.js";
 

@@ -14,20 +14,15 @@ export function bucket(w) {
 const SAFE = /^\/[A-Za-z0-9._~/-]+$/;
 // SVG and GIF are not cut (a drawing scales by itself, a GIF may move); data: and blob: are not on the scaler's host at all.
 const RAW = /\.(svg|gif)$|^(data|blob):/i;
-/** The scaler's address for a path of the app (`/static/a.jpg`) at width `w`; null when the path cannot go through it. */
-export function scaled(path, w, from) {
-    if (!SAFE.test(path) || path.includes("..") || RAW.test(path))
-        return null;
-    const src = from.origin === "local" ? `local://${path}` : `${from.origin.replace(/\/+$/, "")}${path}`;
-    return `${from.base ?? "/px"}/_/rs:fit:${bucket(w)}:0/plain/${src}`;
+/** Whether a path of the app can go through the scaler (picture-signed.ts takes the same rule). */
+export function scalable(path) {
+    return SAFE.test(path) && !path.includes("..") && !RAW.test(path);
 }
-/** The <img> markup: src at the shown width, srcset 1x/2x, width/height, lazy and async. A path the scaler cannot take is written as it is. */
-export function pictureHTML(path, o, from) {
-    const one = scaled(path, o.w, from);
-    const two = scaled(path, o.w * 2, from);
+// the one <img> every picture is written with; only src and srcset differ
+function img(src, srcset, o) {
     const a = {
-        src: one ?? path,
-        srcset: one && two && one !== two ? `${one} 1x, ${two} 2x` : undefined,
+        src,
+        srcset,
         width: Math.round(o.w),
         height: o.h === undefined ? undefined : Math.round(o.h),
         alt: o.alt,
@@ -38,11 +33,27 @@ export function pictureHTML(path, o, from) {
     };
     return `<img${attrs(a)}>`;
 }
+function element(html, doc) {
+    const t = doc.createElement("template");
+    t.innerHTML = html;
+    return t.content.firstElementChild;
+}
+/** The scaler's address for a path of the app (`/static/a.jpg`) at width `w`; null when the path cannot go through it. */
+export function scaled(path, w, from) {
+    if (!scalable(path))
+        return null;
+    const src = from.origin === "local" ? `local://${path}` : `${from.origin.replace(/\/+$/, "")}${path}`;
+    return `${from.base ?? "/px"}/_/rs:fit:${bucket(w)}:0/plain/${src}`;
+}
+/** The <img> markup: src at the shown width, srcset 1x/2x, width/height, lazy and async. A path the scaler cannot take is written as it is. */
+export function pictureHTML(path, o, from) {
+    const one = scaled(path, o.w, from);
+    const two = scaled(path, o.w * 2, from);
+    return img(one ?? path, one && two && one !== two ? `${one} 1x, ${two} 2x` : undefined, o);
+}
 /** The same <img> as an element. */
 export function picture(path, o, from, doc = document) {
-    const t = doc.createElement("template");
-    t.innerHTML = pictureHTML(path, o, from);
-    return t.content.firstElementChild;
+    return element(pictureHTML(path, o, from), doc);
 }
 /** The cases the twin must equal: dist/picture.sample.json (tools/build.mjs). */
 export const PICTURE_CASES = [
@@ -65,22 +76,5 @@ export function ownScaled(path, w) {
 export function ownPictureHTML(path, o) {
     const one = ownScaled(path, o.w);
     const two = ownScaled(path, o.w * 2);
-    const a = {
-        src: one,
-        srcset: one !== two ? `${one} 1x, ${two} 2x` : undefined,
-        width: Math.round(o.w),
-        height: o.h === undefined ? undefined : Math.round(o.h),
-        alt: o.alt,
-        class: o.class,
-        loading: o.eager ? undefined : "lazy",
-        fetchpriority: o.eager ? "high" : undefined,
-        decoding: "async",
-    };
-    return `<img${attrs(a)}>`;
-}
-/** The same <img> as an element. */
-export function ownPicture(path, o, doc = document) {
-    const t = doc.createElement("template");
-    t.innerHTML = ownPictureHTML(path, o);
-    return t.content.firstElementChild;
+    return img(one, one !== two ? `${one} 1x, ${two} 2x` : undefined, o);
 }

@@ -214,3 +214,12 @@ test("one copy: only the pane module builds the brochure; the main page and the 
 });
 import { readFileSync } from "node:fs";
 function readJson(f) { return readFileSync(new URL(`../${f}`, import.meta.url), "utf8"); }
+
+test("U4011: the picture viewer is the kit's lightbox, not a layer of the Prospekt's own", () => {
+  const read = f => readFileSync(new URL(`../public/${f}`, import.meta.url), "utf8");
+  const pane = read("prospekt-pane.js");
+  assert.match(pane, /from "\.\/kit\/lightbox\.js"/);
+  assert.match(pane, /lb\.open\(all\.map\(item\), \+b\.dataset\.lb\)/);      // the figure pressed is where it opens, all the figures step
+  for (const f of ["prospekt-pane.js", "prospekt-view.js", "prospekt.css"]) assert.doesNotMatch(read(f), /pk-lb|data-pklb|LIGHTBOX_HTML/, `${f}: no viewer layer of its own`);
+  assert.match(read("kit/lightbox.js"), /className: "g-lightbox"/);   // the control: the copy that is called is the kit's
+});

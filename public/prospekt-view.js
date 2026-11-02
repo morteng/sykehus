@@ -7,7 +7,6 @@ const day = t => new Date(t).toLocaleDateString("nb-NO", { day: "numeric", month
 /* the picture viewer's markup, once: the viewing area mounts it beside the page (prospekt-pane.js) */
 import { ownPictureHTML } from "./kit/picture.js";
 import { esc as kitEsc } from "./kit/html.js";
-export const LIGHTBOX_HTML = `<div class="pk-lb" data-pklb hidden role="dialog" aria-modal="true" aria-label="Bilde"><button type="button" class="pk-lb-x" data-x aria-label="Lukk">×</button><button type="button" class="pk-lb-n pk-lb-p" data-p aria-label="Forrige bilde">‹</button><img data-img alt=""><button type="button" class="pk-lb-n pk-lb-f" data-n aria-label="Neste bilde">›</button><div class="pk-lb-b"><span data-cap></span><a data-dl download>Last ned</a></div></div>`;
 export const GONE = `<div class="pk-gone"><h1>Fant ikke prospektet</h1><p>Prosjektet finnes ikke, eller det er ikke delt. Be eieren om en lenke, eller se <a href="./">de delte prosjektene</a>.</p></div>`;
 
 /* every picture in the order the lightbox steps through: the renders (hero first), then the stills of the model */

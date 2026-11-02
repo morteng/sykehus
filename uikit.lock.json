@@ -1,12 +1,12 @@
 {
-  "kits": "0e087c72deb7a5bf2c2aabe792aa24fb75faf564",
+  "kits": "d7ee7981307b404b63f839c96fb5ff204c645cb9",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "c4833d486024b889d2f4d07100dab276f73f9d4b",
+    "kit.css": "6742cc56033823366ffd0a81c9c988e3cd85d8ff",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
@@ -23,12 +23,13 @@
     "html.js": "fddaca736d72d73ab32408e89c42ef4cfb634ebd",
     "effects.js": "4a4282e7d2aa28137bdabccf49d3f0e25ab5216e",
     "pill.js": "bdf2c6747827172928030ca7b26f5b6a21b0c1fe",
-    "picture.js": "ce68e7c81e7714cbbe0364ad88ccf9cb101d7509",
-    "picture-signed.js": "1b58969fdbc55ae279f455f775905f271826cede",
+    "picture.js": "6546318c97d0033bd1565e6398c89a7bebb603af",
+    "picture-signed.js": "3fff1886248edbcb62bdd75298b01e8475355a5e",
     "upload-caps.js": "abff4629745152650c084a4a6096f199117ce2c2",
     "assistant-door.js": "9abd8d688d47de4ff878de046a25dd2c5e6454ab",
     "shell.css": "fa605f472cc83178945069a80ba542dd87a40634",
     "toast.js": "a963966aeaf4d2de1cd8c6a5cc55ac4e24153294",
-    "still.js": "cf26f1f009c064267120ec2fa4b2e8b96b66dad7"
+    "still.js": "cf26f1f009c064267120ec2fa4b2e8b96b66dad7",
+    "lightbox.js": "266143b2df21cea79978619bc262bd59f9060aba"
   }
 }

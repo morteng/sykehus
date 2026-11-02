@@ -46,9 +46,4 @@
 .pk-lim { list-style: none; margin: 0; padding: 0; } .pk-lim li { padding: 14px 0; border-top: 1px solid var(--border); } .pk-lim li:last-child { border-bottom: 1px solid var(--border); }
 .pk-lim small { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; } .pk-note { color: var(--muted); }
 .pk-foot { margin: clamp(56px, 9cqw, 110px) 0 0; padding: 28px 20px 40px; text-align: center; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted); } .pk-foot a { text-decoration: none; letter-spacing: .06em; } .pk-foot a:hover { text-decoration: underline; }
-.pk-lb { position: fixed; inset: 0; z-index: 50; background: rgba(6, 8, 11, .94); display: flex; align-items: center; justify-content: center; } .pk-lb[hidden] { display: none; }
-.pk-lb img { max-width: 100vw; max-height: calc(100vh - 64px); object-fit: contain; }
-.pk-lb button { position: absolute; background: rgba(255, 255, 255, .14); color: #fff; border: 0; border-radius: 999px; font-size: 26px; width: 44px; height: 44px; line-height: 44px; cursor: pointer; text-align: center; }
-.pk-lb-x { top: 12px; right: 12px; } .pk-lb-p { left: 10px; top: 50%; margin-top: -22px; } .pk-lb-f { right: 10px; top: 50%; margin-top: -22px; }
-.pk-lb-b { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; gap: 16px; padding: 12px 18px; color: #d6dae0; font-size: 13px; } .pk-lb-b a { color: #fff; }
 .pk-preview { margin: 0; padding: 8px 20px 8px 20px; background: var(--panel-3); color: var(--muted); font-size: 13px; text-align: center; }

@@ -273,6 +273,30 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
   .g-modal{padding:0;place-items:stretch}
   .g-modal-panel{width:100%;max-height:none;height:100%;border-radius:0}
 }
+/* .g-dlg: a page's own form and buttons inside the modal (the shell's `dialog` rules, for content that is not in a <dialog>) */
+.g-dlg label{display:block;font-weight:600;margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}
+.g-dlg input,.g-dlg select,.g-dlg textarea{width:100%}
+.g-dlg .acts{display:flex;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-4)}
+.g-dlg .acts.spread{justify-content:space-between;align-items:center;flex-wrap:wrap}
+.g-dlg .acts.spread button{flex:1 1 30%;min-height:var(--tap)}
+/* .g-lightbox: a picture shown large in the modal (lightbox.ts) */
+.g-lightbox{width:min(960px,100%);max-height:min(92vh,900px)}
+.g-lightbox .g-modal-body{display:flex;flex-direction:column;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3) var(--sp-3)}
+.g-lb-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.g-lb-img{display:block;max-width:100%;max-height:72vh;object-fit:contain;margin:0 auto;border-radius:var(--radius-sm)}
+.g-lb-step{position:absolute;top:50%;transform:translateY(-50%);width:var(--tap);height:var(--tap);padding:0;border:0;border-radius:50%;background:var(--panel);color:var(--text);box-shadow:var(--shadow-md);font:inherit;font-size:24px;line-height:1;cursor:pointer}
+.g-lb-step:hover{background:var(--hover-wash)}
+.g-lb-step[hidden]{display:none}
+.g-lb-prev{left:var(--sp-1)}
+.g-lb-next{right:var(--sp-1)}
+.g-lb-cap{margin:0;font-size:var(--fs-sm);color:var(--muted);text-align:center}
+.g-lb-cap[hidden]{display:none}
+.g-lb-cap a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+@media (max-width: 47.99rem) {
+  .g-lightbox{width:100%;max-height:none}
+  .g-lightbox .g-modal-body{justify-content:center}
+  .g-lb-img{max-height:70vh}
+}
 /* .g-feedback: the feedback dialog's form (feedback.ts), inside the modal */
 .g-fb-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
 .g-fb-dot[hidden]{display:none}

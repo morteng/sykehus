@@ -19,7 +19,6 @@ const EXEMPT = {
   "public/fasade-view.js": [1, LOCAL],
   "public/gjengi.js": [1, LOCAL + " (the compare view's data: address, in pic())"],
   "public/mcp-app.js": [1, LOCAL],
-  "public/prospekt-view.js": [1, "the lightbox's own element: prospekt-pane.js sets its src with ownScaled() at 1600 px"],
   "public/sitephotos.js": [1, LOCAL],
   "public/tegn.js": [1, LOCAL],
   "public/viewer.js": [1, LOCAL],
