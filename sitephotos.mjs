@@ -69,7 +69,10 @@ export function createSitePhotos({ dir = process.env.SYKEHUS_VERSIONS_DIR, wings
     if (path !== "/api/bilder" && !path.startsWith("/api/bilder/")) return false;
     const me = personOf(req)?.person ?? null;
     if (!me) { json(res, 401, { error: "Logg inn for å se bildene dine." }); return true; }
-    if (path === "/api/bilder" && req.method === "GET") { json(res, 200, { photos: mine(me), sides: SIDES, wings: wings.map(w => ({ id: w.id, name: w.name })), max_bytes: MAX_BYTES }); return true; }
+    if (path === "/api/bilder" && req.method === "GET") {
+      const photos = mine(me), said = media?.alts ? await media.alts(photos.map(p => `photo/${p.id}`)).catch(() => ({})) : {};   // U4117: the registry's words for each picture
+      json(res, 200, { photos: photos.map(p => said[`photo/${p.id}`] ? { ...p, alt: said[`photo/${p.id}`] } : p), sides: SIDES, wings: wings.map(w => ({ id: w.id, name: w.name })), max_bytes: MAX_BYTES }); return true;
+    }
     if (path === "/api/bilder" && req.method === "POST") {
       if (!sameOrigin(req)) { json(res, 403, { error: "Feil opphav" }); return true; }
       try {

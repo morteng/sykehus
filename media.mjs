@@ -26,5 +26,25 @@ export function createMedia({ login, fetchImpl = fetch } = {}) {
       if (r.status !== 200) console.warn(`media forget ${ref}: the door answered ${r.status}`);
     }).catch(e => console.error("media forget", ref, e.message));
   }
-  return { picture, forget };
+  /* U4117: the registry's alt for each of sykehus' `refs` that has one (GET /internal/media/alt?ids=sykehus:<ref>,…); a ref with none is
+     left out. The page's own sentence stays when this answers nothing: a down door costs the words for a minute, never the picture.
+     Answers and misses are kept 5 minutes. */
+  const seen = new Map();
+  async function alts(refs) {
+    const now = Date.now(), out = {}, ask = [];
+    for (const r of refs) { const hit = seen.get(r); if (hit && now < hit.until) { if (hit.alt) out[r] = hit.alt; } else ask.push(r); }
+    if (!ask.length || !base || !bearer) return out;
+    let j = null;
+    try {
+      const r = await fetchImpl(`${base}/internal/media/alt?ids=${ask.slice(0, 50).map(x => encodeURIComponent("sykehus:" + x)).join(",")}`, { signal: AbortSignal.timeout(1500), headers: { authorization: `Bearer ${bearer}` } });
+      if (r.status === 200) j = await r.json();
+    } catch (e) { console.error("media alt", e.message); }
+    for (const r of ask.slice(0, 50)) {
+      const v = j && j.alts && typeof j.alts["sykehus:" + r] === "string" ? j.alts["sykehus:" + r].trim() : "";
+      seen.set(r, { alt: v, until: now + (j ? 300000 : 60000) });
+      if (v) out[r] = v;
+    }
+    return out;
+  }
+  return { picture, forget, alts };
 }

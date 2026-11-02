@@ -112,3 +112,14 @@ test("U4010: removing a photo tells the media registry to forget photo/<id>, onl
   assert.equal(s.remove("mia", a.id), false); assert.deepEqual(gone, []);
   assert.equal(s.remove("lars", a.id), true); assert.deepEqual(gone, [`photo/${a.id}`]);
 });
+
+test("U4117: the list carries the registry's alt for a photo that has one, and leaves the rest as they were", async () => {
+  const asked = [], s = createSitePhotos({ dir: mkdtempSync(join(tmpdir(), "sykehus-sp-")), wings, personOf: () => ({ person: "lars" }),
+    media: { picture() {}, forget() {}, alts: async refs => { asked.push(refs); return { [refs[0]]: "Sørfasaden sett fra parkeringen" }; } } });
+  const a = s.add("lars", JPG, { wing: "midtfloy" }), b = s.add("lars", PNG, { wing: "midtfloy" });
+  let body; const res = { writeHead() {}, end: t => { body = JSON.parse(t); } };
+  assert.equal(await s.route({ method: "GET", headers: {} }, res, "/api/bilder", new URL("http://x/api/bilder")), true);
+  assert.deepEqual(asked, [s.mine("lars").map(p => `photo/${p.id}`)]);
+  const first = s.mine("lars")[0].id, other = [a.id, b.id].find(id => id !== first);
+  assert.equal(body.photos.find(p => p.id === first).alt, "Sørfasaden sett fra parkeringen"); assert.ok(!("alt" in body.photos.find(p => p.id === other)));
+});

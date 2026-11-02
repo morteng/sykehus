@@ -42,7 +42,7 @@ export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => 
     const r = await fetchImpl("api/bilder").catch(() => null);
     if (!r || !r.ok) { list.innerHTML = ""; if (r?.status === 401) speak(WORDS.signedOut); return; }
     const j = await r.json(); if (!wing.options.length) wing.innerHTML = j.wings.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("");
-    list.innerHTML = j.photos.length ? j.photos.map(p => `<li data-id="${esc(p.id)}"><a href="api/bilder/${esc(p.id)}" target="_blank" rel="noopener">${ownPictureHTML(`api/bilder/${p.id}`, { w: 240, alt: `${p.wing_name}, fasade ${p.side}` })}</a>
+    list.innerHTML = j.photos.length ? j.photos.map(p => `<li data-id="${esc(p.id)}"><a href="api/bilder/${esc(p.id)}" target="_blank" rel="noopener">${ownPictureHTML(`api/bilder/${p.id}`, { w: 240, alt: p.alt || `${p.wing_name}, fasade ${p.side}` })}</a>
       <div><b>${esc(p.wing_name)}</b> · ${esc(p.side)}${p.year ? ` · ${p.year}` : ""}${p.note ? `<br><small>${esc(p.note)}</small>` : ""}</div><button type="button" class="ph-del" data-del="${esc(p.id)}" title="${WORDS.del}" aria-label="${WORDS.del}">×</button></li>`).join("") : `<li class="ph-empty">${WORDS.empty}<small>Legg til bilder over: Anton kan se på dem.</small></li>`;
   }
   list.onclick = async e => {

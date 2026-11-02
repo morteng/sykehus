@@ -61,3 +61,13 @@ test("forget posts {app, ref} to /internal/media/delete with the bearer; no door
   let n = 0; createMedia({ login: { base: "", bearer: "" }, fetchImpl: async () => { n++; return { status: 200 }; } }).forget("photo/p2");
   await new Promise(r => setTimeout(r, 60)); assert.equal(n, 0);
 });
+
+test("U4117: alts asks GET /internal/media/alt with the bearer, keeps what it is told, leaves a miss out and asks again only after the cache", async () => {
+  const seen = [];
+  const media = createMedia({ login: { base: "http://anton:8000", bearer: "tok" }, fetchImpl: async (u, o) => { seen.push([u, o]); return { status: 200, json: async () => ({ alts: { "sykehus:photo/p1": " Sørfasaden ", "sykehus:photo/p2": null } }) }; } });
+  assert.deepEqual(await media.alts(["photo/p1", "photo/p2"]), { "photo/p1": "Sørfasaden" });
+  assert.equal(seen[0][0], "http://anton:8000/internal/media/alt?ids=sykehus%3Aphoto%2Fp1,sykehus%3Aphoto%2Fp2"); assert.equal(seen[0][1].headers.authorization, "Bearer tok");
+  assert.deepEqual(await media.alts(["photo/p1", "photo/p2"]), { "photo/p1": "Sørfasaden" }); assert.equal(seen.length, 1, "answers and misses are kept");
+  const down = createMedia({ login: { base: "http://anton:8000", bearer: "tok" }, fetchImpl: async () => { throw new Error("down"); } });
+  assert.deepEqual(await down.alts(["photo/p1"]), {}); assert.deepEqual(await createMedia({}).alts(["photo/p1"]), {});
+});
