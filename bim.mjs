@@ -239,6 +239,23 @@ export async function checkIfc(files, cfg) {
   if (j.state !== "done" || !j.ifccheck) throw toolErr(`Modellkontrollen feilet i arbeideren: ${j.errors?.[0]?.message || j.state || "ukjent"}`.slice(0, 400));
   return j.ifccheck;
 }
+/* U3531: does FreeCAD open it? The IFC goes to the FreeCAD worker (SYKEHUS_WORKER_FREECAD) and its import step reads it as a
+   person's FreeCAD would; the answer is what FreeCAD found (import.json: its parts, its unit) or why it could not. Never throws:
+   { opened: true, parts, unit } | { opened: false, why } | { opened: null, why } when no FreeCAD worker is set up here. */
+export async function openInFreecad(bytes) {
+  const W = process.env.SYKEHUS_WORKER_FREECAD || process.env.GULDEN_WORKER_FREECAD;
+  if (!W) return { opened: null, why: "FreeCAD-arbeideren er ikke satt opp her (SYKEHUS_WORKER_FREECAD): filen er ikke prøvd i FreeCAD." };
+  const base = W.replace(/\/+$/, "");
+  try {
+    const b = await (await fetch(`${base}/blobs`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: bytes, signal: AbortSignal.timeout(120000) })).json();
+    if (!/^[0-9a-f]{64}$/.test(b.sha256 || "")) throw new Error(b.errors?.[0]?.message || "fila kom ikke fram");
+    const { j } = await workerJob(base, JSON.stringify({ inputs: { "model.ifc": b.sha256 }, then: ["import"] }));
+    if (j.state !== "done") return { opened: false, why: String(j.errors?.[0]?.message || j.state || "ukjent").slice(0, 300) };
+    let info = null;
+    if (j.files?.["import.json"]) info = JSON.parse(Buffer.from(await (await fetch(`${base}${j.files["import.json"]}`, { signal: AbortSignal.timeout(60000) })).arrayBuffer()).toString("utf8"));
+    return { opened: true, parts: info?.parts ?? null, unit: info?.unit ?? null };
+  } catch (e) { return { opened: false, why: `FreeCAD-arbeideren svarte ikke: ${String(e.message).slice(0, 150)}` }; }
+}
 const r2 = v => Math.round(v * 100) / 100;
 /* the unit the file was in: an IFC's own (mesh.json), a STEP's read by FreeCAD (the file's, not said back), glTF's
    metres, an OBJ's or STL's as the person said */

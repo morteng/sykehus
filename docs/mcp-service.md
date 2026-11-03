@@ -168,3 +168,7 @@ For people: after a change Anton's picture is aimed at what was changed (a lawn 
 ## For people: move around while Anton works (turn pin)
 
 For people: while Anton works you can open another version, another view or draw yourself. Anton keeps working on the version, wing and pin that were open when you sent the message. If you change the same version while he works, your change stays. His next change goes on top of it, and he tells you («Personen endret prosjektet mens du jobbet …») so he looks again before he builds more. A message you send while he works waits its turn, and then uses the version that is open when it starts. If a change from the page is refused, the page now says why (for example that the server is restarting). Operator: assistant.mjs `pin()` makes one context per turn in `pages.turn` (person to context) and drops it when the turn ends or fails; mcp.mjs reads it through `pin`/`openId`/`pickedOf`; calls outside a turn read `pages.open` as before. A restart of the server drops the context (the next call then follows the page again).
+
+## Export to FreeCAD (export_ifc, U3531)
+
+`export_ifc` (read-only; target is a version or draft, as the other read tools) makes the model's IFC the way `GET /api/ifc?for=freecad` does and sends it to the FreeCAD worker (`SYKEHUS_WORKER_FREECAD`), whose import step opens it. The answer has the file's link, its size and `freecad`: `opened` true with the parts FreeCAD found, false with why, or null when no FreeCAD worker is set up. Anton must not say the file opens in FreeCAD unless `opened` is true.
