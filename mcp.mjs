@@ -795,7 +795,10 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (!at) { const r = site.lot.ring; at = [r.reduce((t, p) => t + p[0], 0) / r.length, r.reduce((t, p) => t + p[1], 0) / r.length]; dist = 160; }
         const ask = { question: String(a.question).trim().slice(0, 200), x: Math.round(at[0] * 10) / 10, y: Math.round(at[1] * 10) / 10, dist };
         const moved = pages?.show(who, { ask_point: ask });
-        return { asked: !!moved, ...ask, said: moved ? "Planen står åpen hos personen med en nål å sette. Svaret kommer som neste melding; vent på det." : "Siden er ikke åpen hos personen. Spør i vanlig tekst i stedet." };
+        /* U3937: a question that needs a person never dead-ends: with no page open it is filed as a «question» report (the one inbox, and the person's own Ønsker list) */
+        let kept = null;
+        if (!moved && wishes) try { kept = (await wishes.add(who, { kind: "question", text: `Spørsmål som ventet på deg (Anton fikk ikke vist planen): ${ask.question}`, tried: `Nål ønsket nær x=${ask.x}, y=${ask.y}` })).id; } catch (e) { console.warn("ask_point question:", e.message); }
+        return { asked: !!moved, ...ask, ...(kept ? { kept_as: kept } : {}), said: moved ? "Planen står åpen hos personen med en nål å sette. Svaret kommer som neste melding; vent på det." : `Siden er ikke åpen hos personen. Spør i vanlig tekst i stedet.${kept ? " Spørsmålet ligger også under «Ønsker» hos personen, så det ikke går tapt." : ""}` };
       } },
     { name: "retake_photos", title: "Lag nye bilder fra bildestedene", write: true, schema: S({ spots: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 10, description: "Ids from photo_spots: the places to take a new picture from, each with the same lens, shape, look and light" } }, ["spots"]),
       description: "Proposes new pictures from the person's saved photo spots with today's model. It makes NOTHING and costs nothing: a card with the count and the total price opens on the person's Gjengi tab (for example «3 bilder · ca. $0,36»), and only the person's press on «Lag bildene» makes them. Say the count and the total price from the answer, and that the person confirms on the card. Never claim a picture is made.",
@@ -826,6 +829,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       run: async (a, req) => {
         const who = userOf(req); if (!who) throw toolErr("Å sende et ønske krever innlogging.");
         if (!wishes) throw toolErr("Ønsker tas ikke imot på denne serveren.");
+        /* U3937: a report respects the auth of the data it describes: a version the person may not see is refused, and said no differently from one that does not exist */
+        if (a.version_id) { const w = versions?.get(a.version_id); if (!w || !versions.visible(w, who)) throw toolErr("Fant ikke versjonen «" + String(a.version_id).slice(0, 40) + "» blant dine eller de offentlige."); }
         const v = a.version_id ? versions?.get(a.version_id) : null, link = v && versions.visible(v, who) ? versionOut(v, originOf(req), req).link : "";
         /* U3832: the picture of the model the wish is about (the page's own snapshot path, look), kept with the wish */
         let png = null, why = null;
