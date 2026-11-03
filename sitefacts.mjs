@@ -28,3 +28,16 @@ export function createSiteFacts({ fetchImpl = fetch, url = process.env.SYKEHUS_H
       fetched: new Date(at).toISOString(), limits: LIMITS };
   };
 }
+
+/* U3823 «Om stedet»: the plot's facts as plain sections for the page (hazards incl. radon, heritage, invasive plants), each row with how it is known */
+export function reportOf(f) {
+  const str = x => String(x ?? "").replace(/\s+/g, " ").trim().slice(0, 300), m = n => Number.isFinite(+n) ? Math.round(+n) + " m" : "i nærheten";
+  const haz = (f.hazards || []).map(h => ({ line: str(h.text), how: str(h.source) || "Et offentlig kart", level: str(h.level) })).filter(r => r.line);
+  const heritage = (f.heritage_within_50m || []).map(h => ({ line: `${str(h.name)}${h.protection ? ` (${str(h.protection)})` : ""}, ${m(h.distance_m)} unna`, how: "Riksantikvaren (Kulturminnesøk)" })).filter(r => r.line);
+  const invasive = (f.invasive_plants_within_500m || []).map(p => ({ line: `${str(p.no || p.latin)}${p.latin && p.no ? ` (${str(p.latin)})` : ""}${p.nearest_m != null ? `, nærmeste funn ${m(p.nearest_m)} unna` : ""}${p.risk ? `, risiko ${str(p.risk)}` : ""}`, how: "Artsdatabanken/GBIF" })).filter(r => r.line);
+  return { place: str(f.place), sections: [
+    { id: "hazards", title: "Fare og grunn", empty: "Ingen aktsomhetsområder funnet for tomta.", rows: haz },
+    { id: "heritage", title: "Kulturminner innen 50 m", empty: "Ingen kulturminner funnet innen 50 m.", rows: heritage },
+    { id: "invasive", title: "Fremmede arter i nærheten", empty: "Ingen fremmede arter funnet innen 500 m.", rows: invasive }],
+    zoning: str(f.zoning), sources: f.sources, fetched: f.fetched, limits: f.limits };
+}

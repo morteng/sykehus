@@ -1373,3 +1373,4 @@ addEventListener("sykehus:valg", syncBuild); addEventListener("sykehus:painted",
 viewer.follow(() => build.frame());
 /* ?debug: the parts, for a test that watches the model frame by frame */
 if (new URLSearchParams(location.search).has("debug")) window.sykehusDebug = { viewer, build, shapeEd, picker, valg, K, site };
+import("./om-stedet.js").then(({ startOmStedet }) => startOmStedet($("omStedet"))).catch(e => console.error("om-stedet:", e));   // U3823

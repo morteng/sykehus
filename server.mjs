@@ -13,6 +13,7 @@
 
   POST /api/logg-inn, GET /api/meg, POST /api/logg-ut   signing in here with a 4-digit code (login.mjs)
   /api/anton/*            Anton, the assistant, for a person signed in here (assistant.mjs)
+  GET  /api/om-stedet     «Om stedet»: hazards, radon, heritage and invasive plants for the plot (sitefacts.mjs)
   /api/onsker             what a person sent, from gulden-ai's one report store (wishes.mjs)
   /api/feedback           the «Tilbakemelding» dialog's reports, filed in that store (wishes.mjs)
   /api/bilder             the person's own photos of the building: list, add, view, delete (sitephotos.mjs)
@@ -39,6 +40,7 @@ import { createAssistant } from "./assistant.mjs";
 import { createStreets } from "./gater.mjs";
 import { createSnow } from "./snow.mjs";
 import { createWishes } from "./wishes.mjs";
+import { reportOf } from "./sitefacts.mjs";
 import { createSitePhotos } from "./sitephotos.mjs";
 import { createMedia } from "./media.mjs";   // pictures listed in gulden-ai's media registry (U4007)
 import { createPx } from "./px.mjs";   // a person's own pictures through the scaler, signed (U3992)
@@ -144,6 +146,10 @@ createServer(async (req, res) => {
     if (await login.route(req, res, path) || await anton.route(req, res, path) || await wishes?.route(req, res, path) || await sitePhotos?.route(req, res, path, url) || await guide?.route(req, res, path)) return;
     // the cookie lets its owner see their own private versions
     if (path.startsWith("/api/versjon") || path === "/api/endring" || path === "/api/ifc" || path === "/api/ifc-inn") req.webUser = login.personOf(req)?.person ?? null;
+    if (path === "/api/om-stedet" && req.method === "GET") {   // U3823: the plot's hazards, heritage and invasive plants, as the Prosjekter tab shows them
+      try { const j = JSON.stringify(reportOf(await mcp.siteFacts())); res.writeHead(200, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); return res.end(j); }
+      catch { res.writeHead(503, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); return res.end(JSON.stringify({ code: "unavailable", error: "Fikk ikke hentet opplysningene om tomta nå." })); }
+    }
     if (path === "/api/endring") return mcp.handleChange(req, res);
     if (path === "/api/ifc") return await mcp.handleIfc(req, res);
     if (path === "/api/ifc-inn") return await mcp.handleIfcIn(req, res);
