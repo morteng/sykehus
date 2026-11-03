@@ -192,3 +192,14 @@ test("S2: a try_change answer lists only the buildings it touched, plus counts, 
   const one = JSON.stringify(r.data).length; assert.ok(one < 6000, `the answer is ${one} characters`);
   assert.equal((await call("show_draft", { draft: first.draft })).data.after.built.length, 13, "show_draft still lists all");
 });
+
+test("U3966: every tool carries its nb/en card words in _meta (a new tool needs no gulden-ai table)", async () => {
+  const tools = (await rpc("tools/list")).tools;
+  for (const t of tools) { const w = t._meta?.["no.gulden/words"]; assert.ok(w?.nb?.title && w?.en?.title, `${t.name}: words`); }
+  const w = tools.find(t => t.name === "storeys")._meta["no.gulden/words"];
+  assert.equal(w.nb.group, "Les"); assert.equal(w.nb.title, "Etasjene"); assert.equal(w.en.title, "The storeys");
+  assert.equal(tools.find(t => t.name === "show_building")._meta.ui.resourceUri, "ui://sykehus/bygget");
+  const { toolWords } = await import("../toolwords.mjs");   // a tool with no English title still shows its nb words
+  assert.deepEqual(toolWords({ name: "ny_ting", title: "Ny ting" }), { nb: { title: "Ny ting" }, en: { title: "Ny ting" } });
+  assert.equal(toolWords({ name: "ny_ting", title: "Ny ting", en: "New thing" }).en.title, "New thing");
+});

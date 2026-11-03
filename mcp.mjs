@@ -43,6 +43,7 @@ import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open l
 import { sunOf } from "./public/renderkit/sunpick.js";
 import { sunError } from "./public/gjengi-no.js";
 import { VIEWPOINTS, LOOKS, SIZES } from "./public/photo-set.js";
+import { toolWords, WORDS_KEY } from "./toolwords.mjs";   // U3966: the card words, served here
 import { familyTitle, plainPoints, slimSchema, shortTool, createFinder, KINDS, KIND_LINE, READBACK, TOPICS } from "./toolguide.mjs";   // T3: the short list, the full text on request
 import { VIEW_SPEC, addView, renameView, removeView, findView, checkViews } from "./public/saved.js";
 
@@ -1125,7 +1126,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   const toolList = (o = "") => TOOLS.map(t => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.schema, ...(OUTPUT[t.name] ? { outputSchema: OUTPUT[t.name] } : {}), ...(o ? { icons: ICONS(o) } : {}),
     annotations: { title: t.title, readOnlyHint: !!t.ro, destructiveHint: !t.ro && DESTRUCTIVE.has(t.name), idempotentHint: !!t.ro || IDEMPOTENT.has(t.name), openWorldHint: false },
     ...(t.write ? { securitySchemes: [{ type: "oauth2", scopes: [SCOPE] }] } : t.writeIf ? { securitySchemes: [{ type: "noauth" }, { type: "oauth2", scopes: [SCOPE] }] } : {}),
-    ...(t.ui ? { _meta: { ui: { resourceUri: APP_URI, visibility: ["model", "app"] } } } : {}) }));
+    _meta: { ...(t.ui ? { ui: { resourceUri: APP_URI, visibility: ["model", "app"] } } : {}), [WORDS_KEY]: toolWords(t) } }));
 
   // ---------- JSON-RPC ----------
   /* 2026-07-28 CacheableResult: lists and the app change only with a deploy, but deploys come often, so a minute (pm
