@@ -105,7 +105,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
   /* the drawing a person sent is kept (the last 20) and served from here: the page's policy lets pictures come from its own origin only, so a data: URL in the chat line would show nothing */
   for (const person of keep.people()) thread(person).pics = keep.picsOf(person);
   const picUrl = id => `api/anton/tegning/${id}`;
-  const session = p => `sykehus:${p}`;
+  const session = p => { const n = keep.epochOf(p); return n ? `sykehus:${p}:${n}` : `sykehus:${p}`; };   // «Ny samtale» (U3623) moves the person to the next one
   const sse = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   function publish(person, event, data) { const t = threads.get(person); if (!t) return; for (const r of t.subs) r.write(sse(event, data)); }
   const queueView = t => ({ type: "queue", running: t.running ? { id: t.running.id, text: t.running.text } : null, waiting: t.queue.map(q => ({ id: q.id, text: q.text })) });
@@ -261,6 +261,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       const [st, j] = await call("/new-chat", { person: me.person, session: session(me.person), request_id: rid }, null, me.device);
       if (refusedDevice(st, j)) return send(res, 401, { error: "signed_out" });
       if (st !== 200) { console.error("anton /new-chat", st, codeOf(j, "")); return send(res, 502, { error: codeOf(j, "unavailable") }); }
+      keep.newChat(me.person); t.pics.length = 0;   // the next turn, history and jobs are a new session: nothing of the old thread can come back
       publish(me.person, "cleared", { type: "cleared" }); return send(res, 200, { ok: true });
     }
     return send(res, 404, { error: "Ikke funnet" });

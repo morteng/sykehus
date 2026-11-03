@@ -76,6 +76,11 @@ export function createPersist(dir = process.env.SYKEHUS_VERSIONS_DIR, clock = ()
   const turnTaken = (person, turn) => { if (!home) return; run.running[person] = { id: turn.id, text: String(turn.text ?? "").slice(0, 300), at: new Date(clock()).toISOString() }; saveRun(); };
   const turnEnded = person => { if (!home || !run.running[person]) return; delete run.running[person]; saveRun(); };
   const notesOf = person => run.notes[person] ?? [];
+  /* «Ny samtale» (U3623): a new thread is a new session id, so gulden-ai's /history and Anton's memory start empty whatever /new-chat did;
+     the count survives a restart, and the person's cut-turn notes belong to the old thread */
+  if (!run.epoch || typeof run.epoch !== "object") run.epoch = {};
+  const epochOf = person => Number.isInteger(run.epoch[person]) ? run.epoch[person] : 0;
+  const newChat = person => { run.epoch[person] = epochOf(person) + 1; delete run.notes[person]; if (home) saveRun(); };
 
-  return { restorePins, savePins, flush: () => { if (timer) { clearTimeout(timer); writePins(); } }, keepPic, picsOf, picBytes, people, turnTaken, turnEnded, notesOf };
+  return { restorePins, savePins, flush: () => { if (timer) { clearTimeout(timer); writePins(); } }, keepPic, picsOf, picBytes, people, turnTaken, turnEnded, notesOf, epochOf, newChat };
 }
