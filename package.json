@@ -1,0 +1,7 @@
+{
+  "name": "sykehus",
+  "private": true,
+  "scripts": {
+    "test": "tools/test-all.sh"
+  }
+}
