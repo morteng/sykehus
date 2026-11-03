@@ -93,6 +93,14 @@ function pointOf(p) { return p && Number.isFinite(p.x) && Number.isFinite(p.y) &
 const HIDDEN = /\\n\(Nål: [^)]*\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
 import { createPersist } from "./persist.mjs";
 import { createDoor, whyOf, codeOf } from "./door.mjs";   // one way to call gulden-ai's door (U3978)
+/* U3785: a message that names one of the person's versions other than the open one. The note goes with the message to the door: Anton reads the named version (show_draft target=<id>) or says which one he works in; never the open one silently. */
+export function otherVersionNote(text, open, owned) {
+  const low = String(text).toLowerCase(), named = (owned || []).filter(v => v.id !== open?.id && v.title && !v.deleted && low.includes(`«${String(v.title).toLowerCase()}»`));
+  if (!named.length) return "";
+  const here = open ? `«${open.title}» (${open.id})` : "ingen åpen versjon";
+  return `\n(Versjon: personen har ${here} åpen. Meldingen nevner ${named.map(v => `«${v.title}» (${v.id})`).join(", ")}. Les ${named.length > 1 ? "dem" : "den"} med show_draft target=<id> og si at du leste ${named.length > 1 ? "dem" : "den"}, eller si «Jeg jobber i «${open?.title ?? "ingen"}», ikke «${named[0].title}»». Les aldri den åpne uten å si det.)`;
+}
+
 export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch, dataDir = process.env.SYKEHUS_VERSIONS_DIR }) {
   /* what survives a restart (persist.mjs): the pins, the drawings, the turns a restart cut */
   const keep = createPersist(dataDir);
@@ -179,7 +187,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing || turn.picture ? { image: picUrl(turn.id) } : {}), ...(turn.attachment ? { attachment: turn.attachment.name } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
-        : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.picture ? { picture: turn.picture } : {}), ...(turn.attachment ? { attachment: turn.attachment } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+        : { person, session: session(person), message: (turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text) + otherVersionNote(turn.text, turn.version, versions?.list({ owner: person, viewer: person })), request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.picture ? { picture: turn.picture } : {}), ...(turn.attachment ? { attachment: turn.attachment } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       /* the turn's own copy of what the person's page said when the message was sent (Morten: «while Anton works, the user
          should be free to move around without that affecting what Anton sees or does»): mcp.mjs reads it, never pages.open, until the turn ends */
       const ctx = pin(person, turn);
