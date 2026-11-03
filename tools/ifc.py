@@ -358,7 +358,13 @@ def stable_ids(m):
     for e in m.by_type("IfcRelDefinesByProperties"):   # again, now that the sets have theirs
         key = "pset:" + e.RelatingPropertyDefinition.GlobalId; e.GlobalId = gid(key)
 
-if __name__ == "__main__":
+if __name__ == "__main__" and len(sys.argv) < 4 and os.path.exists("params.json"):
+    # as a worker job (U3650, mcp.mjs model_wing): params.json {site, floors, envelope: [wing ids]}; the whole file, those wings as models
+    P = json.load(open("params.json"))
+    m, counts = build(P["site"], P["floors"], None, envelope=tuple(ENVELOPE) + tuple(P.get("envelope", [])))
+    m.write("model.ifc")
+    print(json.dumps(counts))
+elif __name__ == "__main__":
     site_f, floors_f, out = sys.argv[1:4]
     m, counts = build(json.load(open(site_f)), json.load(open(floors_f)), sys.argv[4:] or None)
     m.write(out)
