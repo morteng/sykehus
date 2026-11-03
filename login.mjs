@@ -13,8 +13,10 @@
    SYKEHUS_COOKIE_SECRET; HttpOnly, Secure (but on localhost), SameSite=Lax. It counts on the page's own /api routes
    only, never on /mcp, so another site cannot make a browser change versions through it.
 
-   Someone signed in on gulden.no needs no code: the edge's forward_auth passes their login on as Remote-User with the
-   proxy secret (auth.mjs proxyUser), and that counts here too, as the device "gulden.no" (the cookie wins when both).
+   Where the edge runs forward_auth it passes a gulden.no login on as Remote-User with the proxy secret (auth.mjs proxyUser),
+   and that counts here too, as the device "gulden.no" (the cookie wins when both). The public sykehus.gulden.no block has
+   no forward_auth (FORWARD_AUTH_EXEMPT, U3583), so a browser there that is only signed in on gulden.no is no one: it needs
+   a code or a link (U3613).
 
    Env: SYKEHUS_COOKIE_SECRET (32+ characters), SYKEHUS_ASSISTANT_URL (gulden-ai's internal base URL),
    SYKEHUS_ASSISTANT_TOKEN (the bearer for it), SYKEHUS_CODE_PATH (default /internal/sykehus/code; the exact route comes
