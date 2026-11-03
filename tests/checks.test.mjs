@@ -75,6 +75,43 @@ test("only what was asked: ids narrows to the tried change, and a site with noth
   assert.deepEqual(check(site({ kind: "volume", id: "z", name: "Hus", shape: "box" })), []);
 });
 
+/* U3627: the zoning plan (height, distance to the border) and the fixes */
+const LOT = [[-30, -20], [30, -20], [30, 20], [-30, 20], [-30, -20]];
+const house = (id, o = {}) => ({ kind: "volume", id, name: "Hus " + id, from: [-15, 0], to: [-5, 0], width: 10, base_kote: 10, top_kote: 16, ...o });
+const psite = (...added) => ({ terrain: T, lot: { ring: LOT }, added });
+test("the zoning plan: a house higher than the plan's height breaks, with a fix; none given means not measured; no plan, no plan rows", () => {
+  assert.deepEqual(check(psite(house("a"))), [], "without a plan the zoning rows are not run");
+  const rows = check(psite(house("a")), { plan: { max_height_m: 8 } });
+  const h = row(rows, "plan_hoyde");
+  assert.equal(h.status, "ok"); assert.equal(h.value, 6); assert.equal(h.verify, true);
+  const hi = row(check(psite(house("b", { top_kote: 21 })), { plan: { max_height_m: 8 } }), "plan_hoyde");
+  assert.equal(hi.status, "brudd"); assert.equal(hi.value, 11); assert.match(hi.said, /11 m høyt.*8 m/); assert.match(hi.fix.said, /3 m lavere/); assert.equal(hi.fix.set.height, 8);
+  const none = row(check(psite(house("c")), { plan: {} }), "plan_hoyde");
+  assert.equal(none.ok, null); assert.equal(none.status, "ikke målt"); assert.match(none.said, /^Ikke målt/);
+});
+test("the distance to the border: 4 m by law, the plan's number when given; over the line is a break; a stair is not held to it", () => {
+  const far = row(check(psite(house("d")), { plan: {} }), "plan_avstand_nabogrense");   // x -15..-5, y -5..5: 15 m to the west line, 15 to the south
+  assert.equal(far.ok, true); assert.equal(far.value, 15);
+  const near = row(check(psite(house("e", { from: [-27, 0], to: [-17, 0] })), { plan: {} }), "plan_avstand_nabogrense");
+  assert.equal(near.ok, false); assert.equal(near.value, 3); assert.match(near.said, /3 m fra tomtegrensen; minst 4 m/); assert.match(near.fix.said, /1 m til/);
+  assert.equal(row(check(psite(house("e", { from: [-27, 0], to: [-17, 0] })), { plan: { min_border_m: 2.5 } }), "plan_avstand_nabogrense").ok, true);
+  const over = row(check(psite(house("f", { from: [-35, 0], to: [-25, 0] })), { plan: {} }), "plan_avstand_nabogrense");
+  assert.equal(over.ok, false); assert.equal(over.value, 0); assert.match(over.said, /går ut over/);
+  assert.equal(row(check({ added: [house("g")] }, { plan: {} }), "plan_avstand_nabogrense").ok, null, "no lot, not measured");
+  assert.equal(check(psite(stair("s", {})), { plan: { max_height_m: 8 } }).some(r => r.rule.startsWith("plan_")), false);
+});
+test("done-when: a stair with too-high risers and a 0.9 m railing over a drop break two rules, and each brudd carries the fix that makes it hold", () => {
+  const bad = psite(stair("t", { max_riser: 0.26, height: 1.3 }), railing("u", { height: 0.9 }, [4.5, 0]));
+  const rows = check(bad), brudd = rows.filter(r => r.status === "brudd");
+  assert.deepEqual(brudd.map(r => r.rule).sort(), ["rekkverk_hoyde", "trapp_stigningsforhold"]);
+  const sf = row(rows, "trapp_stigningsforhold"), rf = row(rows, "rekkverk_hoyde");
+  assert.equal(rf.fix.set.height, 1); assert.match(rf.fix.said, /1 m høyt/);
+  assert.ok(sf.fix.set.max_riser <= 0.2 && /Sett største opptrinn/.test(sf.fix.said), JSON.stringify(sf.fix));
+  const fixed = psite(stair("t", { height: 1.3, ...sf.fix.set }), railing("u", { height: 1, }, [4.5, 0]));
+  assert.ok(check(fixed).every(r => r.status === "ok"), JSON.stringify(check(fixed).filter(r => r.status !== "ok").map(r => r.said)));
+  assert.equal(row(check(site(stair("v", {}))), "trapp_stigningsforhold").fix, undefined, "an ok row carries no fix");
+});
+
 /* the connector */
 const PORT = 19000 + Math.floor(Math.random() * 900), BASE = `http://localhost:${PORT}`;
 let srv, rid = 0;
@@ -89,7 +126,7 @@ const call = async (name, args = {}) => { const r = await rpc("tools/call", { na
 test("check_design is a read-only tool with target and draft, an output schema, and says what it is not", async () => {
   const t = (await rpc("tools/list")).tools.find(x => x.name === "check_design");
   assert.ok(t, "check_design is listed"); assert.equal(t.annotations?.readOnlyHint, true);
-  assert.deepEqual(Object.keys(t.inputSchema.properties).sort(), ["draft", "target"]);
+  assert.deepEqual(Object.keys(t.inputSchema.properties).sort(), ["draft", "plan", "target"]);
   assert.ok(t.outputSchema.properties.checks && t.outputSchema.properties.ikke_målt);
   assert.match(t.description, /ikke målt.*never ok/); assert.match(t.description, /verify: true/); assert.match(t.description, /not a building permit/);
 });

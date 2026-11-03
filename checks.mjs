@@ -4,10 +4,11 @@
    status: "ok", "brudd", or "ikke målt": a number the model does not hold is never ok (ok is null then).
    The numbers live in the JSON, the arithmetic here; a rule's `verify` is passed on so Anton does not call it law. */
 import { readFileSync } from "node:fs";
-import { groundAt } from "./public/renderkit/fit.js";
+import { groundAt, inRing } from "./public/renderkit/fit.js";
 
 export const RULES = JSON.parse(readFileSync(new URL("./rules/tek17.json", import.meta.url), "utf8")).rules;
-const byId = Object.fromEntries(RULES.map(r => [r.id, r]));
+export const PLAN_RULES = JSON.parse(readFileSync(new URL("./rules/plan.json", import.meta.url), "utf8")).rules;   // U3627: the zoning-plan rules
+const byId = Object.fromEntries([...RULES, ...PLAN_RULES].map(r => [r.id, r]));
 const m = x => String(Math.round(x * 100) / 100).replace(".", ","), mm = x => `${Math.round(x * 1000)} mm`;
 const num = x => typeof x === "number" && Number.isFinite(x);
 
@@ -27,24 +28,40 @@ function stairOf(p, printed) {
   return { riser, tread: Math.min(0.32, Math.max(0.25, 0.63 - 2 * riser)), from: "regnet fra innstillingene med delens trapperegel" };
 }
 
-export function check(site, { ids = null, printed = {} } = {}) {
+/* U3627: a footprint (from -> to, width) as four corners, and its shortest distance to the sides of a ring */
+const rectRing = a => { const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L * a.width / 2, d[0] / L * a.width / 2];
+  return [[a.from[0] + n[0], a.from[1] + n[1]], [a.to[0] + n[0], a.to[1] + n[1]], [a.to[0] - n[0], a.to[1] - n[1]], [a.from[0] - n[0], a.from[1] - n[1]]]; };
+const segDist = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2)) : 0; return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy); };
+const segCross = (a, b, c, d) => { const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])); return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0; };
+function borderGap(rect, ring) {
+  const R = ring.length > 1 && ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring.slice(0, -1) : ring; let best = Infinity, inside = 0, cross = false;
+  rect.forEach((p, i) => { const q = rect[(i + 1) % 4]; if (inRing(p, R)) inside++; R.forEach((r, j) => { const s = R[(j + 1) % R.length]; best = Math.min(best, segDist(p, r, s), segDist(r, p, q)); if (segCross(p, q, r, s)) cross = true; }); });
+  return { gap: best, inside, cross };
+}
+/* the fixes: what to set so the rule holds, said plainly (only for a «brudd»); Anton offers it, the person decides */
+function stairFix(p) {
+  for (const mr of [0.18, 0.17, 0.19, 0.16, 0.2]) { const s = stairOf({ ...p, max_riser: mr }), k = (2 * s.riser + s.tread) * 1000; if (k >= 600 && k <= 640 && s.tread >= 0.25) return { set: { max_riser: mr }, said: `Sett største opptrinn til ${m(mr)} m: opptrinn ${mm(s.riser)}, inntrinn ${mm(s.tread)}, 2 × opptrinn + inntrinn = ${Math.round(k)} mm.` }; }
+  return null;
+}
+
+export function check(site, { ids = null, printed = {}, plan = null } = {}) {
   const out = [];
   for (const a of site?.added || []) {
     if (ids && !ids.has(a.id)) continue;
     const thing = { id: a.id, name: a.name, ...(a.bim?.part ? { part: a.bim.part } : {}) };
-    const row = (id, ok, value, limit, said, alt) => { const r = byId[id]; out.push({ rule: id, section: r.section, thing, status: ok == null ? "ikke målt" : ok ? "ok" : "brudd", ok, value, limit, said: ok == null ? `Ikke målt: ${said}` : said, ...(alt ? { alt } : {}), source: r.source.url, ...(r.verify ? { verify: true } : {}) }); };
+    const row = (id, ok, value, limit, said, alt, fix) => { const r = byId[id]; out.push({ rule: id, section: r.section, thing, status: ok == null ? "ikke målt" : ok ? "ok" : "brudd", ok, value, limit, said: ok == null ? `Ikke målt: ${said}` : said, ...(alt ? { alt } : {}), ...(ok === false && fix ? { fix } : {}), source: r.source.url, ...(r.verify ? { verify: true } : {}) }); };
     const p = a.bim?.params || {}, part = a.bim?.part;
     if (part === "stair") {
       const s = stairOf(p, printed[a.id]);
       if (!s) { for (const id of ["trapp_stigningsforhold", "trapp_inntrinn"]) row(id, null, null, null, "trappens høyde og trinn står ikke i modellen."); }
       else {
         const k = 2 * s.riser + s.tread, lim = byId.trapp_stigningsforhold.limit, ok = k * 1000 >= lim.min_mm - 0.5 && k * 1000 <= lim.max_mm + 0.5;
-        row("trapp_stigningsforhold", ok, Math.round(k * 1000), `${lim.min_mm}–${lim.max_mm} mm`, `2 × ${mm(s.riser)} + ${mm(s.tread)} = ${Math.round(k * 1000)} mm (${s.from}); trappeformelen er 620 mm ± 20 (${lim.min_mm}–${lim.max_mm} mm).`);
-        const mn = byId.trapp_inntrinn.limit.min_mm; row("trapp_inntrinn", s.tread * 1000 >= mn - 0.5, Math.round(s.tread * 1000), `minst ${mn} mm`, `Inntrinnet er ${mm(s.tread)}; minst ${mn} mm.`);
+        row("trapp_stigningsforhold", ok, Math.round(k * 1000), `${lim.min_mm}–${lim.max_mm} mm`, `2 × ${mm(s.riser)} + ${mm(s.tread)} = ${Math.round(k * 1000)} mm (${s.from}); trappeformelen er 620 mm ± 20 (${lim.min_mm}–${lim.max_mm} mm).`, undefined, stairFix(p));
+        const mn = byId.trapp_inntrinn.limit.min_mm; row("trapp_inntrinn", s.tread * 1000 >= mn - 0.5, Math.round(s.tread * 1000), `minst ${mn} mm`, `Inntrinnet er ${mm(s.tread)}; minst ${mn} mm.`, undefined, stairFix(p));
       }
       const wl = byId.trapp_bredde.limit, mw = wl.min_m, w = p.width;
-      row("trapp_bredde", num(w) ? w >= mw - 1e-9 : null, w ?? null, `minst ${m(mw)} m`, num(w) ? `Trappen er ${m(w)} m bred; minst ${m(mw)} m. ${wl.alt.slice(0, 2).map(x => `${x.when}: ${m(x.min_m)} m ${w >= x.min_m - 1e-9 ? "holder" : "holder ikke"}`).join("; ")}.` : "bredden står ikke i modellen.", num(w) ? wl.alt.map(x => ({ when: x.when, limit: `minst ${m(x.min_m)} m`, ok: w >= x.min_m - 1e-9 })) : undefined);
-      row("trapp_handlist", typeof p.railing === "boolean" ? p.railing : null, p.railing ?? null, "håndløper på begge sider", typeof p.railing === "boolean" ? (p.railing ? "Trappen har håndløper på begge sider." : "Trappen har ingen håndløper; den skal ha det på begge sider.") : "håndløperen står ikke i modellen.");
+      row("trapp_bredde", num(w) ? w >= mw - 1e-9 : null, w ?? null, `minst ${m(mw)} m`, num(w) ? `Trappen er ${m(w)} m bred; minst ${m(mw)} m. ${wl.alt.slice(0, 2).map(x => `${x.when}: ${m(x.min_m)} m ${w >= x.min_m - 1e-9 ? "holder" : "holder ikke"}`).join("; ")}.` : "bredden står ikke i modellen.", num(w) ? wl.alt.map(x => ({ when: x.when, limit: `minst ${m(x.min_m)} m`, ok: w >= x.min_m - 1e-9 })) : undefined, { set: { width: mw }, said: `Gjør trappen ${m(mw)} m bred.` });
+      row("trapp_handlist", typeof p.railing === "boolean" ? p.railing : null, p.railing ?? null, "håndløper på begge sider", typeof p.railing === "boolean" ? (p.railing ? "Trappen har håndløper på begge sider." : "Trappen har ingen håndløper; den skal ha det på begge sider.") : "håndløperen står ikke i modellen.", undefined, { set: { railing: true }, said: "Sett håndløper på begge sider." });
     }
     if (part === "railing" || part === "balcony") {
       const id = part === "railing" ? "rekkverk_hoyde" : "balkong_rekkverk_hoyde", L = byId[id].limit, h = part === "railing" ? p.height : p.railing_height;
@@ -54,7 +71,7 @@ export function check(site, { ids = null, printed = {} } = {}) {
       else {
         const need = fall > L.high_fall_over_m ? L.min_m_high : L.min_m;
         if (fall < L.other_means_under_m) row(id, true, h, `minst ${m(need)} m; fall under ${m(L.other_means_under_m)} m kan sikres på annen måte`, `Fallet er ${m(fall)} m, under ${m(L.other_means_under_m)} m: det kan sikres på annen forsvarlig måte enn med rekkverk (fjerde ledd). Rekkverket er ${m(h)} m høyt${h < need ? `; er det et rekkverk for balkong eller terrasse, er ${m(need)} m kravet` : ""}.`);
-        else row(id, h >= need - 1e-9, h, `minst ${m(need)} m`, `Fallet er ${m(fall)} m; rekkverket er ${m(h)} m høyt, minst ${m(need)} m kreves.`);
+        else row(id, h >= need - 1e-9, h, `minst ${m(need)} m`, `Fallet er ${m(fall)} m; rekkverket er ${m(h)} m høyt, minst ${m(need)} m kreves.`, undefined, { set: { [part === "railing" ? "height" : "railing_height"]: need }, said: `Gjør rekkverket ${m(need)} m høyt.` });
       }
     }
     if (part === "balcony" && p.door !== false) {
@@ -64,6 +81,19 @@ export function check(site, { ids = null, printed = {} } = {}) {
       }
     }
     if (a.kind === "balconies") row("balkong_rekkverk_balkonger", null, a.railing ?? null, `minst ${m(byId.balkong_rekkverk_balkonger.limit.min_m)} m`, `balkongene har rekkverk av ${a.railing ?? "ukjent"}, men høyden er ikke tegnet.`);
+    if (plan && a.kind === "volume" && Array.isArray(a.from) && Array.isArray(a.to) && num(a.width) && !part) {
+      /* U3627: the zoning plan: height and the distance to the border (the plan's numbers are given; none given, height is not measured) */
+      const hL = plan.max_height_m, base = a.base_kote, top = a.top_kote, rect = rectRing(a);
+      const g = site.terrain?.z ? [...rect, [(a.from[0] + a.to[0]) / 2, (a.from[1] + a.to[1]) / 2]].map(q => groundAt(site, q)) : [], ground = g.length && g.every(num) ? g.reduce((t, z) => t + z, 0) / g.length : null;
+      const h = num(top) && ground != null ? Math.round((top - ground) * 100) / 100 : num(top) && num(base) ? top - base : null;
+      if (!num(hL)) row("plan_hoyde", null, h, null, "planens høyde er ikke oppgitt (reguleringsplan for tomta er ikke hentet; les planbestemmelsene og oppgi plan.max_height_m).");
+      else if (h == null) row("plan_hoyde", null, null, `høyst ${m(hL)} m`, "byggets høyde eller terrenget står ikke i modellen.");
+      else row("plan_hoyde", h <= hL + 1e-9, h, `høyst ${m(hL)} m`, `Bygget er ${m(h)} m høyt over planlagt terreng; planen tillater ${m(hL)} m.`, undefined, { set: { height: Math.round((hL - (h - (num(base) && num(top) ? top - base : h))) * 100) / 100 }, said: `Gjør bygget ${m(h - hL)} m lavere (til ${m(hL)} m over terreng).` });
+      const bL = num(plan.min_border_m) ? plan.min_border_m : byId.plan_avstand_nabogrense.limit.min_m, src = num(plan.min_border_m) ? "planen" : "plan- og bygningsloven (4 m der planen ikke sier noe)";
+      if (!site.lot?.ring) row("plan_avstand_nabogrense", null, null, `minst ${m(bL)} m`, "tomtegrensen står ikke i modellen.");
+      else { const { gap, inside, cross } = borderGap(rect, site.lot.ring), d = inside < 4 || cross ? 0 : gap;
+        row("plan_avstand_nabogrense", d >= bL - 1e-9, Math.round(d * 10) / 10, `minst ${m(bL)} m`, inside < 4 || cross ? `Bygget går ut over tomtegrensen; minst ${m(bL)} m fra grensen kreves (${src}).` : `Bygget står ${m(gap)} m fra tomtegrensen; minst ${m(bL)} m (${src}). Alle sider av tomta regnes som nabogrense.`, undefined, { said: `Flytt bygget inn slik at det står minst ${m(bL)} m fra grensen${inside < 4 || cross ? "" : ` (${m(bL - gap)} m til)`}.` }); }
+    }
     const en = a.ground?.entrance;
     if (en) {
       const L = byId.rampe_stigning.limit;

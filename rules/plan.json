@@ -1,0 +1,25 @@
+{
+ "about": "U3627: the zoning-plan rules (reguleringsplan) and the plan-law default for distance, as data. The numbers of a plan are the plan's own and differ per plot: they are given to the check (plan.max_height_m, plan.min_border_m); the app does not fetch a plan for Drammen (Hagekart reads Oslo's only). A height with no plan number is «ikke målt», never ok. Not a legal answer: the plan provisions and the municipality decide.",
+ "rules": [
+  {
+   "id": "plan_hoyde",
+   "section": "reguleringsbestemmelsene (høyde)",
+   "topic": "Høyde",
+   "reads": { "kind": "volume", "params": ["base_kote", "top_kote"], "also": "the planned ground: the mean of the terrain under the footprint's corners and middle; the top is the highest point of the volume (mønehøyde)" },
+   "limit": { "from": "plan.max_height_m", "default": null },
+   "verify": true,
+   "source": { "url": "https://www.regjeringen.no/no/dokumenter/veileder-om-grad-av-utnytting/id2354618/", "quote": "bestemmelser om byggehøyde, gesimshøyde og mønehøyde", "ref": "plan- og bygningsloven § 12-7 nr. 1; the number is the plan's own" },
+   "no": "Bygget skal ikke være høyere enn reguleringsplanen tillater (gesims- eller mønehøyde, målt fra planlagt terreng)."
+  },
+  {
+   "id": "plan_avstand_nabogrense",
+   "section": "pbl § 29-4",
+   "topic": "Avstand til nabogrense",
+   "reads": { "kind": "volume", "params": ["from", "to", "width"], "also": "the lot's outline (site.lot.ring): the shortest distance from the footprint to any side of it" },
+   "limit": { "min_m": 4, "from": "plan.min_border_m", "note": "4 m is the law's default where the plan says nothing; a plan may give another number; small outbuildings may stand closer (1 m, SAK10 § 6-3), not worked out here" },
+   "verify": true,
+   "source": { "url": "https://lovdata.no/lov/2008-06-27-71/§29-4", "quote": "minst 4 meter fra nabogrense", "ref": "pbl § 29-4 andre ledd, unless the plan says otherwise" },
+   "no": "Bygget skal stå minst 4 meter fra nabogrensen (eller så langt planen sier). Alle sider av tomta regnes som nabogrense her; en side mot vei er det ikke alltid."
+  }
+ ]
+}
