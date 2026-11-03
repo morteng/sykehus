@@ -9,7 +9,7 @@
 export const FAMILY = {
   about_site: "Les", about_wing: "Les", storeys: "Les", floor_plan: "Les", openings: "Les", site_facts: "Les", heritage_records: "Les", about_ground: "Les",
   try_change: "Endre", propose_sketch: "Endre", undo_change: "Endre", redo_change: "Endre",
-  list_parts: "Deler", list_materials: "Deler", find_models: "Deler", fetch_model: "Deler", upload_url: "Deler",
+  list_parts: "Deler", list_materials: "Deler", find_models: "Deler", fetch_model: "Deler", upload_url: "Deler", app_run: "Deler", app_state: "Deler", app_docs: "Deler",
   check_design: "Mål", check_model: "Mål", export_ifc: "Deler", model_wing: "Deler", measure: "Mål", check_fit: "Mål", summary: "Mål",
   look: "Vis", draw_plan: "Vis", draw_section: "Vis", show_building: "Vis", make_shots: "Vis", photo_spots: "Vis", retake_photos: "Vis", list_site_photos: "Vis", add_site_photo: "Vis", look_at_site_photo: "Vis",
   search_documents: "Dokument", read_document: "Dokument", list_documents: "Dokument",
@@ -21,7 +21,7 @@ export const familyTitle = (name, title) => FAMILY[name] ? `${FAMILY[name]} · $
 const balanced = t => (t.match(/[(«{\[]/g) || []).length === (t.match(/[)»}\]]/g) || []).length;
 /* what each write is read back with, named in the last line of its description (plan section 2, item 5) */
 export const READBACK = {
-  try_change: "show_draft, measure, check_fit", undo_change: "show_draft", redo_change: "show_draft", make_shots: "show_draft (saved_views)",
+  try_change: "show_draft, measure, check_fit", app_run: "app_state, list_versions", undo_change: "show_draft", redo_change: "show_draft", make_shots: "show_draft (saved_views)",
   new_version: "list_versions", rename_version: "list_versions", delete_version: "list_versions", undelete_version: "list_versions", set_sharing: "list_versions",
   model_wing: "check_model",
   send_wish: "list_wishes", retake_photos: "photo_spots", ask_point: "the pin comes back as the person's next message", fetch_model: "check_model after try_change import", add_site_photo: "list_site_photos",
@@ -108,6 +108,7 @@ export const TOOL_WORDS = {
   about_site: "tomta site fløyene wings oversikt overview gater streets", about_wing: "fløy wing kort tak roof fasade facade etasjer levels", storeys: "etasjer storeys kote", floor_plan: "plan rom rooms areal", openings: "vinduer windows åpninger fasade",
   heritage_records: "kulturminne heritage fredet freda sefrak kulturmiljø riksantikvaren vern listeført", site_facts: "flom flood kvikkleire radon kulturminne heritage regulering zoning", about_ground: "terreng ground sti path vei veg høyde kote fall drop", try_change: "endre change bygge build tegne draw",
   propose_sketch: "skisse sketch forslag plan", undo_change: "angre undo", redo_change: "gjør om redo igjen", list_materials: "materialer material betong tegl tre grus gress plen stein asfalt overflate surface tekstur concrete brick wood gravel paving", list_parts: "deler parts basseng takbasseng pool_basin vann water glass glassbunn fyll fill trapp drivhus", find_models: "modeller models bibliotek library", fetch_model: "hent model fetch", upload_url: "last opp upload fil file dokument document handle", add_site_photo: "legg til bilde foto photo add",
+  app_run: "freecad skript script python app kjør run bjelke beam fagverk truss konstruksjon struktur", app_state: "freecad arbeid objekter objects tilstand state", app_docs: "freecad håndbok manual docs skript",
   check_design: "tek17 regler rules trapp rekkverk", check_model: "ifc ids kollisjon clash endringer changes", export_ifc: "ifc eksport export freecad bim fil åpne open", model_wing: "ekte modell real model fløy wing vegger walls dekker slabs vinduer windows tak roof materialer materials gjør om", measure: "mål measure avstand distance vinkel angle parallell overheng", check_fit: "passer fit kollisjon overlapp tak taket stikker ut",
   look: "se look bilde picture", show_building: "vis show 3d plan snitt section fasade sol sun kamera camera lagre visning", make_shots: "bildeserie shots", photo_spots: "bildesteder photos", retake_photos: "ta på nytt retake bilder", list_site_photos: "mine bilder foto photos site bygget som det står", look_at_site_photo: "se på bilde foto photo leser fra bilde fasade etasjer tak vinduer",
   search_documents: "søk search dokument tegning", read_document: "les read dokument side page", list_documents: "dokumenter documents liste", show_draft: "utkast draft endringer changes ifc lenke link",
