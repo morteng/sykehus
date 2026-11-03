@@ -67,9 +67,23 @@ test("changes: the draft against the shared before, both files sent", async () =
   assert.equal((await call("check_model", { what: "nonsense" })).isError, true);
 });
 
+test("U3632: check_design carries the IDS result of an after that builds; the before and a lost worker are «ikke målt», never a pass", async () => {
+  const d = await draft(), n = jobs.length, r = await call("check_design", { draft: d });
+  assert.ok(!r.isError, JSON.stringify(r.content));
+  assert.deepEqual(jobs[n].ifccheck, { what: "ids", file: "model.ifc" });
+  assert.equal(r.data.ids.ran, true); assert.equal(r.data.ids.ok, false); assert.equal(r.data.ids.new_failed, 1);
+  assert.match(r.data.ids.say, /^IDS: 1 krav har brudd.*Vegg 7/); assert.equal(r.data.ids.specs[0].new_failures[0].global_id, "0abc");
+  assert.equal((await call("check_design")).data.ids, undefined, "the before builds nothing: no IDS read");
+});
+
 test("the worker down: the answer says so in plain words and gives no result", async () => {
   worker.close(); worker.closeAllConnections?.();
   const r = await call("check_model", { what: "standard" });
   assert.equal(r.isError, true); assert.match(r.content[0].text, /Modellkontrollen kan ikke kjøre nå: arbeideren svarer ikke/);
   assert.equal(r.data, undefined);
+});
+
+test("U3632: with the worker gone check_design says ikke målt for IDS, never a pass", async () => {
+  const lost = (await call("check_design", { draft: await draft() })).data.ids;
+  assert.equal(lost.ran, false); assert.match(lost.say, /^ikke målt/);
 });
