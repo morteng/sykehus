@@ -398,7 +398,7 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
   const lv = (w.levels || []).slice().sort((a, b) => a.kote - b.kote), ground = Math.min(...bs.map(b => b.base));
   const i0 = e.from_storey ? lv.findIndex(l => l.name === e.from_storey) : lv.findIndex(l => l.kote > ground + 2);
   const i1 = e.to_storey ? lv.findIndex(l => l.name === e.to_storey) : lv.length - 1;
-  const kotes = lv.slice(Math.max(0, i0), i1 + 1).map(l => l.kote), parts = [];
+  const kotes = lv.slice(Math.max(0, i0), i1 + 1).map(l => l.kote), storeyOf = new Map(lv.map(l => [l.kote, l.name])), parts = [];
   const fw = [...facingWalls(site, e.wing, e.side, e.face)].filter(f => !e.part || partWall(f.b, e.part, f.wall));   // part: a named part of a facade (site.json parts)
   /* along: metres from the facade's left end seen from outside, across all its walls (the steps in it included) */
   const U = f => { const r = [(f.bb[0] - f.a[0]) / f.L, (f.bb[1] - f.a[1]) / f.L]; return [r[0] * f.a[0] + r[1] * f.a[1], r]; };
@@ -421,7 +421,7 @@ function balconyParts(site, e, gone = new Set(), skipped = new Map(), faces = ne
         for (const [t0, t1] of runs) {
           const p = t => [a[0] + dd[0] * t, a[1] + dd[1] * t], ax = [p(t0), p(t1)];
           const body = [...ax, ...ax.slice().reverse().map(q => [q[0] + n[0] * e.depth, q[1] + n[1] * e.depth])], hit = others.find(o => overlapArea(o.p, body, o.z, [z - 0.2, z + 1.1]) > 0.05);
-          if (hit) { skipped.set(hit.name, (skipped.get(hit.name) || 0) + 1); continue; }
+          if (hit) { const k = skipped.get(hit.name) || { count: 0, storeys: new Set() }; k.count++; k.storeys.add(storeyOf.get(z) || `kote ${z}`); skipped.set(hit.name, k); continue; }
           parts.push({ axis: ax, profile: [[0, z - 0.2], [e.depth, z - 0.2], [e.depth, z], [0, z]], mat: "concrete", role: "slab", face: face.bearing });
           if (e.support === true) for (const [b0, b1] of [[t0 + 0.15, t0 + 0.85], [t1 - 0.85, t1 - 0.15]])   // understøttelse: en stålbalk under hver ende av dekket, fra veggen og ut
             parts.push({ axis: [p(b0), p(b1)], profile: [[0, z - 0.8], [e.depth, z - 0.8], [e.depth, z - 0.7], [0, z - 0.7]], mat: "steel", role: "support" });
@@ -851,7 +851,7 @@ export function applyDesign(site, floors, edits) {
       const facadeSay = used.map(f => `fasaden mot ${f.bearing}° (${String(f.length_m).replace(".", ",")} m): ${f.per_storey} per etasje på ${f.storeys} etasjer, ${f.count} i alt`).join("; ");
       const axes = axesOf(slabs);   // the window bays used: one axis a bay, on every storey
       added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${used.length ? used.map(f => `${f.bearing}°`).join(" og ") : e.face != null ? `${e.face}°` : SIDE_WORD[e.side]}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
-        ...(e.support ? { support: true } : {}), count: slabs.length, facades: used, facade_say: `Balkonger på ${facadeSay}.`, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) på fasaden mot ${used.map(f => `${f.bearing}°`).join(" og ")}, ${slabs.length} balkonger i alt.` } : {}), ...(parts.length < all.length ? { capped: true, cap_say: capSay(all.length, parts.length) } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
+        ...(e.support ? { support: true } : {}), count: slabs.length, facades: used, facade_say: `Balkonger på ${facadeSay}.`, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) på fasaden mot ${used.map(f => `${f.bearing}°`).join(" og ")}, ${slabs.length} balkonger i alt.` } : {}), ...(parts.length < all.length ? { capped: true, cap_say: capSay(all.length, parts.length) } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, k]) => ({ by, count: k.count, storeys: [...k.storeys] })), say: `Kollisjon: ${[...skipped].map(([by, k]) => `${k.count} balkonger i ${[...k.storeys].join(", ")} ville stått inne i ${by}`).join("; ")}. De er ikke satt opp; bygget står foran fasaden under taket sitt. Si fra til personen hvilke etasjer og hvilken fløy det gjelder.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
     } else if (e.kind === "openings" && e.remove !== true) {   // remove: only the person's own doors of the set go; nothing was there in the before
       const parts = doorParts(site, e), n = parts.length;
       added.push({ id: `dører-${added.length + 1}`, kind: "openings", name: `Dører mot ${e.face}°, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, face: e.face, parts, count: n,

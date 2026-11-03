@@ -179,8 +179,8 @@ test("U3628: a balcony that would stand inside the low wing in front is not made
   const e = { kind: "balconies", wing: "sentralblokka", side: "Ø", depth: 1.5, railing: "glass", from_storey: "2. etasje", bay: 4, gap: 0.6 };   // as vHKH-fbTh has it (made before U3615)
   const b = applyEdits(site, floors, [e]).site.added[0], at = k => b.parts.filter(p => p.role === "slab" && p.profile[3][1] === k).length;
   assert.deepEqual([at(20.28), at(24.24), at(28.01)], [10, 10, 21], "storeys 2 and 3 lose the bays over the side wing; storey 4 is over its roof");
-  assert.deepEqual(b.skipped, [{ by: "Sentralblokka, sidebygg", count: 22 }]);
-  assert.match(b.say, /^22 balkonger er ikke satt opp fordi de ville stått inne i Sentralblokka, sidebygg/);
+  assert.deepEqual(b.skipped, [{ by: "Sentralblokka, sidebygg", count: 22, storeys: ["2. etasje", "3. etasje"] }]);
+  assert.match(b.say, /^Kollisjon: 22 balkonger i 2\. etasje, 3\. etasje ville stått inne i Sentralblokka, sidebygg/);
   const torn = applyEdits(site, floors, [{ kind: "demolish", building: "sentralblokka-sidebygg" }, e]).site.added[0];
   assert.equal(torn.skipped, undefined, "with the side wing torn down, every bay is made");
 });
