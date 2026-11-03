@@ -398,3 +398,21 @@ export function handleBim(req, res, rest, SECURITY = {}) {
     ...(m[2] !== "mesh.json" ? { "content-disposition": `attachment; filename="${name.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(name)}` } : {}) });
   res.end(readFileSync(f));
 }
+
+/* U3650: the whole base IFC (tools/ifc.py) with the named wings drawn as models (walls, slabs, windows, roof, materials: the
+   envelope builder), made in the worker (IfcOpenShell is only there) from the site and floors the server holds. Kept by the sha of
+   the script and the wings. Answers the file's text. */
+export async function envelopeIfc(site, floors, wings) {
+  const ids = [...new Set(wings)].sort(), script = readFileSync(new URL("./tools/ifc.py", import.meta.url), "utf8"), sha = shaOf("envelope:" + script, { wings: ids }), file = join(DIR, sha, "model.ifc");
+  if (existsSync(file)) return readFileSync(file, "utf8");
+  const W = workerUrl(); if (!W) throw toolErr("Vingene bygges til modell av arbeideren, som ikke er satt opp her (SYKEHUS_WORKER).");
+  const base = W.replace(/\/+$/, ""); let j;
+  try { ({ j } = await workerJob(base, JSON.stringify({ script, params: { site, floors, envelope: ids }, then: [] }))); }
+  catch (e) { throw toolErr(`Fikk ikke kontakt med arbeideren: ${e.message}`); }
+  if (j.state !== "done") throw toolErr(errorOf(j));
+  if (!j.files?.["model.ifc"]) throw toolErr("Arbeideren skrev ingen IFC-fil for vingen.");
+  const bytes = Buffer.from(await (await fetch(`${base}${j.files["model.ifc"]}`, { signal: AbortSignal.timeout(120000) })).arrayBuffer());
+  const tmp = join(DIR, `.${sha}.${process.pid}`); mkdirSync(tmp, { recursive: true }); writeFileSync(join(tmp, "model.ifc"), bytes);
+  if (!existsSync(join(DIR, sha))) renameSync(tmp, join(DIR, sha));
+  return bytes.toString("utf8");
+}

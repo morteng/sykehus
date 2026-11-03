@@ -14,7 +14,7 @@ import { createThumbs, drawCard, cardOpts } from "./thumbs.mjs";   // the Prosje
 import { readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseIfc, withoutBuildings } from "./ifcfilter.mjs";
+import { parseIfc, withoutBuildings, stepText } from "./ifcfilter.mjs";
 import { withAdded, balconySizes } from "./ifcadd.mjs";   // U3556: what the after builds, written into its IFC
 import { picture, aimAt, VIEWS } from "./public/renderkit/look.js";   // renderkit (U3559)
 import { withGarden, frame as lookFrame, say as lookSay, annotate } from "./lookglue.mjs";   // the picture's garden, roof levels, framing, caption and scale bar (kit gaps)
@@ -30,7 +30,7 @@ import { needsExpand, expandChange, briefOf, CASTLE } from "./editkit.mjs";   //
 import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, facadeNames, replacesBuiltIn, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, overhangOf, roofOf, roofSay, roofCollisions, measureParts, checkFit, stampVolumeIds, nextVolumeId, deadEdits } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
-import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts, partIfc, checkIfc, openInFreecad } from "./bim.mjs";
+import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts, partIfc, checkIfc, openInFreecad, envelopeIfc } from "./bim.mjs";
 import { loadCosts, summarize as areaSummary } from "./area.mjs";
 import { loadAmounts, amountsOf, compareAmounts } from "./amounts.mjs";   // U3630: amounts and a rough price, against Før or another version   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
@@ -197,6 +197,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       link: `${o}/?versjon=${v.id}${k ? `&nokkel=${k}` : ""}`, ...(v.wish?.text ? { wish: v.wish } : {}), ...(mine ? { note: SHARE_NOTE[v.sharing] } : {}) }; };   // wish: what the person asked for when «Nytt prosjekt» made it (U3786)
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all) */
   /* a draft's or a version's changes (version ids are v and 8 more, a draft's 8 in all); a version only for who may see it */
+  const modelledOf = (id, req) => [.../* U3650: wings made into models */ new Set((/^v.{8}$/.test(String(id)) ? versionOf(id, req) : draftOf(id)).modelled || [])].sort();
   const editsOf = (id, req) => /^v.{8}$/.test(String(id)) ? versionOf(id, req).edits : draftOf(id).edits;
   /* the saved camera views (U3562) of a version or a draft: read by who may see it, changed by its owner (a draft by
      anyone with its id, as its changes are); renderkit's views.js checks them, its errors are the tool's */
@@ -709,7 +710,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (!versions) throw toolErr("Versions are not kept on this server.");
         const title = String(a.title || "").trim(); if (!title || title.length > 120) throw toolErr("Gi versjonen et navn (høyst 120 tegn).");
         bump(`new:${who}`, 20, 3600e3);
-        try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from, req)) : []); return { ...versionOut(v, originOf(req), req), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
+        try { const v = versions.create(who, title, a.from ? structuredClone(editsOf(a.from, req)) : []); if (a.from && modelledOf(a.from, req).length) { v.modelled = modelledOf(a.from, req); versions.save(v); } return { ...versionOut(v, originOf(req), req), saved: true }; } catch (e) { if (e.tool) throw e; throw toolErr(e.message); } } },
     /* U3665: the places a picture was taken from, kept so a picture can be taken again when the model changes. Anton lists and proposes; the person presses on the page */
     { name: "photo_spots", title: "Mine bildesteder", ro: true, schema: S({}),
       description: "The person's saved photo spots (Gjengi pictures keep where they were taken from: camera place, lens, picture shape, look, the light). Each: id, when, look, lens_mm, aspect, the version it was taken of, stale (true when the model has changed since: a new picture would differ) and price_usd for one new picture. Use before retake_photos.",
@@ -873,8 +874,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       description: "Checks the after's IFC with the open IFC tools (IDS, clash detection, diff) in the worker, and answers in counts and the first findings by name. Use it when the person asks if the model is right, standard-compliant, has parts through each other, or what a version changed. It reads the whole IFC (the old wings too, as the before has them), so it takes up to a minute. Read-only; it fixes nothing: say what to do from `todo`. If the worker is down the answer says so; do not guess a result.",
       run: async (a, req) => {
         const what = a.what; if (!["standard", "clashes", "changes"].includes(what)) throw toolErr("what er standard, clashes eller changes.");
-        const idOf = id => id ? { tag: /^v.{8}$/.test(id) ? (v => `${v.id}@${v.updated}`)(versionOf(id, req)) : (d => `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`)(draftOf(id)), edits: editsOf(id, req) } : { tag: "før", edits: [] };
-        const mine = idOf(a.draft), file = await ifcBody(mine.tag, mine.edits).catch(e => { throw toolErr(e.tool ? e.message : `IFC-fila kunne ikke lages: balkongene bygges av arbeideren, og den svarte ikke (${String(e.message).slice(0, 150)})`); });
+        const idOf = id => id ? { tag: /^v.{8}$/.test(id) ? (v => `${v.id}@${v.updated}`)(versionOf(id, req)) : (d => `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`)(draftOf(id)), edits: editsOf(id, req), wings: modelledOf(id, req) } : { tag: "før", edits: [], wings: [] };
+        const mine = idOf(a.draft), file = await ifcBody(mine.tag, mine.edits, false, mine.wings).catch(e => { throw toolErr(e.tool ? e.message : `IFC-fila kunne ikke lages: balkongene bygges av arbeideren, og den svarte ikke (${String(e.message).slice(0, 150)})`); });
         const of = a.draft ? "etter-modellen" : "før-modellen (dagens, delt)";
         if (what === "standard") {
           const r = await checkIfc({ "model.ifc": file }, { what: "ids" }), bad = r.specifications.filter(s => s.failed);
@@ -890,19 +891,36 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
             todo: r.count ? "Flytt eller kutt den ene delen. Vegg mot dekke der de hører sammen er ofte meningen: se på dybden, og spør hvis du er i tvil." : null };
         }
         const other = a.against && !/^(før|before)$/i.test(String(a.against).trim()) ? resolveTarget({ tgt: "read" }, { target: a.against }, req).draft : null, theirs = idOf(other);
-        const old = await ifcBody(theirs.tag, theirs.edits).catch(e => { throw toolErr(e.tool ? e.message : "Den andre IFC-fila kunne ikke lages: arbeideren svarte ikke."); });
+        const old = await ifcBody(theirs.tag, theirs.edits, false, theirs.wings).catch(e => { throw toolErr(e.tool ? e.message : "Den andre IFC-fila kunne ikke lages: arbeideren svarte ikke."); });
         const r = await checkIfc({ "model.ifc": file, "other.ifc": old }, { what: "diff" }), names = rows => rows.map(x => `${x.name || x.global_id} (${x.class})`).join(", ");
         const that = other ? `versjonen ${other}` : "før-modellen";
         return { what, of, against: that, added: r.added, removed: r.removed, changed: r.changed, added_first: r.added_first, removed_first: r.removed_first, changed_first: r.changed_first,
           say: !(r.added + r.removed + r.changed) ? `${of} er lik ${that}: ingen elementer er lagt til, tatt bort eller endret.` : `${of} mot ${that}: ${r.added} lagt til, ${r.removed} tatt bort, ${r.changed} endret.${r.added ? ` Nye: ${names(r.added_first.slice(0, 5))}.` : ""}${r.removed ? ` Bort: ${names(r.removed_first.slice(0, 5))}.` : ""}${r.changed ? ` Endret: ${names(r.changed_first.slice(0, 5))}.` : ""}`,
           todo: "Si til personen hva som er nytt og hva som er tatt bort. Det er en lesing av filene, ikke en vurdering av om endringene er riktige." };
       } },
+    { name: "model_wing", tgt: "draft", title: "Gjør en fløy om til en ekte modell", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, wing: { type: "string", description: "The wing's name or id (about_site lists them), e.g. Østfløyen" } }, ["wing"]),
+      description: "Turns one kept wing into a real model in this draft's or version's IFC (U3650): storeys, outer walls, slabs, roof and windows with materials, built by the envelope builder (tools/ifc.py) in the worker, instead of the one plain block the drawings give. The wing stays what it is on the page. Answers what the wing now has in the IFC, from the file: quote it. Read back: check_model.",
+      run: async (a, req) => {
+        const w = [String(a.wing), String(a.wing).replace(/en$/i, ""), String(a.wing).replace(/n$/i, "")].map(x => wingOf(site, x)).find(Boolean);   // «Østfløyen» is the wing Østfløy
+        if (!w) throw toolErr(`Ukjent fløy «${a.wing}». Fløyer: ${site.wings.map(x => x.name).join(", ")}`);
+        const id = String(a.draft), isV = /^v.{8}$/.test(id), t = isV ? ownVersion(id, req) : draftOf(id), have = new Set(t.modelled || []);
+        if (!have.has(w.id)) {
+          const wings = [...have, w.id].sort(), file = await ifcBody(isV ? `${t.id}@${t.updated}` : `${t.id}#${t.edits.length}:${JSON.stringify(t.edits).length}`, t.edits, false, wings).catch(e => { throw toolErr(e.tool ? e.message : `${w.name} kunne ikke gjøres om til modell: ${String(e.message).slice(0, 150)}`); });
+          t.modelled = wings; if (isV) versions.save(t); else { t.t = Date.now(); keepDraft(t); }
+          void file;
+        }
+        const file = await ifcBody(isV ? `${t.id}@${t.updated}` : `${t.id}#${t.edits.length}:${JSON.stringify(t.edits).length}`, t.edits, false, [...new Set(t.modelled)].sort()), got = wingContents(parseIfc(file.toString("utf8")), w.name);
+        if (!got.total) throw toolErr(`${w.name} ble ikke med i IFC-fila (er den revet i dette utkastet?).`);
+        const o = originOf(req), link = isV ? versionOut(t, o, req).link.replace("/?versjon=", "/api/ifc?versjon=") : `${o}/api/ifc?utkast=${t.id}`;
+        return { wing: w.id, ifc: link, contents: got.counts, materials: got.materials, modelled: t.modelled,
+          say: `${w.name} er nå en ekte modell i IFC-fila: ${Object.entries(got.counts).map(([k, n]) => `${n} ${k}`).join(", ")}${got.materials.length ? `; materialer: ${got.materials.join(", ")}` : ""}.` };
+      } },
     { name: "export_ifc", tgt: "read", title: "Eksporter til IFC for FreeCAD", ro: true, schema: S({ target: TARGET, draft: OLD }),
        description: "The model (a draft, a version, or the shared before) as an IFC for FreeCAD, tried in the FreeCAD worker. Answers the file link and whether FreeCAD opened it (parts) or why not: say it as it is.",
       run: async (a, req) => {
         const isV = /^v.{8}$/.test(String(a.draft)), o = originOf(req);
         const tag = a.draft ? (isV ? (v => `${v.id}@${v.updated}`)(versionOf(a.draft, req)) : (d => `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`)(draftOf(a.draft))) : "før";
-        const file = await ifcBody(tag, a.draft ? editsOf(a.draft, req) : [], true).catch(e => { throw toolErr(e.tool ? e.message : `IFC-fila kunne ikke lages: ${String(e.message).slice(0, 150)}`); });
+        const file = await ifcBody(tag, a.draft ? editsOf(a.draft, req) : [], true, a.draft ? modelledOf(a.draft, req) : []).catch(e => { throw toolErr(e.tool ? e.message : `IFC-fila kunne ikke lages: ${String(e.message).slice(0, 150)}`); });
         const link = !a.draft ? `${o}/api/ifc?for=freecad` : isV ? versionOut(versionOf(a.draft, req), o, req).link.replace("/?versjon=", "/api/ifc?versjon=") + "&for=freecad" : `${o}/api/ifc?utkast=${a.draft}&for=freecad`;
         const fc = await openInFreecad(file);
         return { ifc: link, bytes: file.length, freecad: fc,
@@ -1104,6 +1122,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     check_fit: O({ collisions: "array", overhangs: "array", off_lot: "array", overlaps: "array", ok: "boolean", say: "string" }),
     check_design: O({ checks: { type: "array", description: "{rule, section, thing, status: ok | brudd | ikke målt, ok, value, limit, said, verify?}" }, ok: "number", brudd: "number", "ikke_målt": "number", counted: "number", note: "string" }, "The building rules held against the after"),
     export_ifc: O({ ifc: "string", bytes: "number", freecad: "object", say: "string" }),
+    model_wing: O({ wing: "string", ifc: "string", contents: "object", materials: "array", modelled: "array", say: "string" }),
     check_model: O({ what: "string", of: "string", ok: "boolean", specifications: { type: "array", description: "standard: {name, applicable, failed, failures: [{global_id, name, class, reason}]} (first 10 a requirement)" }, count: "number", clashes: { type: "array", description: "clashes: {a, b: {name, class, global_id}, depth_m} (first 20)" },
       added: "number", removed: "number", changed: "number", added_first: "array", removed_first: "array", changed_first: "array", say: "string", todo: { type: ["string", "null"] } }, "A model check by the worker's IFC tools: counts, then the first findings by name"),
     show_building: O({ app: "string", view: "object", saved_view: "object" }),
@@ -1318,7 +1337,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           const own = typeof a.title === "string" ? a.title.replace(/\s+/g, " ").trim().slice(0, 100) : "",   // «Nytt prosjekt» (U3667): the name typed in the dialog; empty keeps the plain one
             stem = own || (from ? `${from.title.replace(/ \(kopi( \d+)?\)$/, "")} (kopi` : "Nytt prosjekt"), name = k => from && !own ? `${stem}${k > 1 ? ` ${k}` : ""})` : `${stem}${k > 1 ? ` ${k}` : ""}`;
           let k = 1; while (taken.has(name(k))) k++;
-          const v = versions.create(me, name(k).slice(0, 120), from ? structuredClone(from.edits) : []);
+          const v = versions.create(me, name(k).slice(0, 120), from ? structuredClone(from.edits) : []); if (from?.modelled?.length) v.modelled = [...from.modelled];
           for (const x of versions.list({ owner: me, viewer: me })) if (x.work && x.id !== v.id) { delete x.work; versions.save(x); }
           const wish = typeof a.wish === "string" ? a.wish.trim().slice(0, 2000) : ""; if (wish) v.wish = { text: wish, at: new Date().toISOString() };   // the person's own words from «Nytt prosjekt» (U3786)
           v.work = true; versions.save(v);
@@ -1355,18 +1374,34 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
      (ifcfilter.mjs), with what it builds and the wings it renames (ifcadd.mjs); the before's file is read once, each answer kept until the draft or version changes */
   let base = null; const ifcs = new Map();
   /* the IFC of an after (the edits), kept by tag; shared by GET /api/ifc and check_model */
-  async function ifcBody(tag, edits, freecad = false) {
+  /* U3650: what a wing's building holds in an IFC: walls, slabs, windows, doors and roofs by class (plain words), and its materials */
+  const NO = { IFCWALL: "vegger", IFCWALLSTANDARDCASE: "vegger", IFCSLAB: "dekker", IFCWINDOW: "vinduer", IFCDOOR: "dører", IFCROOF: "tak", IFCCOVERING: "tak", IFCCOLUMN: "søyler", IFCRAILING: "rekkverk" };
+  function wingContents({ ents }, name) {
+    const list = x => (x.replace(/'(?:[^']|'')*'/g, "''").match(/#\d+/g) || []).map(r => +r.slice(1)), top = x => x.replace(/'(?:[^']|'')*'/g, "''").split(/,(?![^(]*\))/);
+    const root = [...ents].find(([, e]) => e.type === "IFCBUILDING" && stepText((/^'(?:[^']|'')*',[^,]*,'((?:[^']|'')*)'/.exec(e.args) || [])[1] || "") === name)?.[0];
+    if (root == null) return { total: 0, counts: {}, materials: [] };
+    const down = new Map(); for (const [, e] of ents) {
+      const p = e.type === "IFCRELAGGREGATES" ? [4, 5, false] : e.type === "IFCRELCONTAINEDINSPATIALSTRUCTURE" ? [4, 5, true] : null; if (!p) continue;
+      const a = top(e.args), from = list(a[p[2] ? 5 : 4])[0], to = list(a[p[2] ? 4 : 5]); down.set(from, [...(down.get(from) || []), ...to]); }
+    const inside = new Set(), st = [root]; while (st.length) { const i = st.pop(); if (inside.has(i)) continue; inside.add(i); st.push(...(down.get(i) || [])); }
+    const counts = {}; for (const i of inside) { const e = ents.get(i), w = e && (e.type === "IFCSLAB" && /\.ROOF\.\s*$/.test(e.args) ? "tak" : NO[e.type]); if (w) counts[w] = (counts[w] || 0) + 1; }
+    const mats = new Set(); for (const [, e] of ents) if (e.type === "IFCRELASSOCIATESMATERIAL") { const a = top(e.args); if (list(a[4]).some(i => inside.has(i))) { const m = ents.get(list(a[5])[0]); const n = m && /^'((?:[^']|'')*)'/.exec(m.args)?.[1]; if (n) mats.add(stepText(n)); } }
+    return { total: Object.values(counts).reduce((x, y) => x + y, 0), counts, materials: [...mats] };
+  }
+  async function ifcBody(tag, edits, freecad = false, wings = []) {
     if (freecad) tag += "|freecad";
+    if (wings.length) tag += "|hus:" + wings.join(",");
     let body = ifcs.get(tag);
     if (!body) {
       const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
       const gone = (site.wings || []).filter(w => !left.has(w.id) && site.buildings.some(b => b.wing === w.id)).map(w => w.name);
       base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
+      const from = wings.length ? parseIfc(await envelopeIfc(site, floors, wings)) : base;   // U3650: wings made into models come from the worker's file
       /* the balconies are the worker's part (U3690): one run a size, each written in where it stands */
       const parts = new Map(); for (const [size, { width, depth }] of balconySizes(m.site)) parts.set(size, readPart(await partIfc("balcony", { width, depth, door: false })));
       /* U3631, for FreeCAD: each part of the worker's as its own assembly (its settings run once for the file) */
       if (freecad) for (const a of partsOf(m.site.added).values()) parts.set("part:" + a.id, readPart(await partIfc(a.bim.part, a.bim.params)));
-      body = Buffer.from(withAdded(withoutBuildings(base, gone, replacesBuiltIn(m.site) ? [["IFCSLAB", "Balkongdekke"], ["IFCRAILING", "Rekkverk"]] : []).text, base, m.site, site, parts, { freecad }).text, "utf8");
+      body = Buffer.from(withAdded(withoutBuildings(from, gone, replacesBuiltIn(m.site) ? [["IFCSLAB", "Balkongdekke"], ["IFCRAILING", "Rekkverk"]] : []).text, from, m.site, site, parts, { freecad }).text, "utf8");
       if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
     }
     return body;
@@ -1374,13 +1409,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   async function handleIfc(req, res) {
     if (req.method !== "GET") return send(res, 405, { error: "GET only" }, { allow: "GET" });
     const q = new URL(req.url, "http://x").searchParams, vid = q.get("versjon"), did = q.get("utkast");
-    let edits, tag, name;
+    let edits, tag, name, wings = [];
     try {
-      if (vid) { const v = versions?.get(vid); if (!v || !versions.visible(v, userOf(req), q.get("nokkel"))) throw toolErr("Versjonen finnes ikke."); edits = v.edits; tag = `${v.id}@${v.updated}`; name = v.title; }
-      else if (did) { const d = draftOf(did); edits = d.edits; tag = `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`; name = "utkast"; }
+      if (vid) { const v = versions?.get(vid); if (!v || !versions.visible(v, userOf(req), q.get("nokkel"))) throw toolErr("Versjonen finnes ikke."); edits = v.edits; wings = v.modelled || []; tag = `${v.id}@${v.updated}`; name = v.title; }
+      else if (did) { const d = draftOf(did); edits = d.edits; wings = d.modelled || []; tag = `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`; name = "utkast"; }
       else throw toolErr("Hvilket utkast eller hvilken versjon?");
     } catch (e) { return send(res, 404, { error: e.tool ? e.message : "Finnes ikke." }); }
-    let body; try { body = await ifcBody(tag, edits, q.get("for") === "freecad"); } catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
+    let body; try { body = await ifcBody(tag, edits, q.get("for") === "freecad", [...new Set(wings)].sort()); } catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
     const file = `gamle-drammen-sykehus-${q.get("for") === "freecad" ? "freecad-" : ""}${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
@@ -1397,7 +1432,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       if (!/^\s*ISO-10303-21/.test(text) || !/FILE_SCHEMA\s*\(\s*\(\s*'IFC/i.test(text)) throw toolErr("Det er ikke en IFC-fil. Lagre fra FreeCAD som IFC (Fil › Eksporter › Industry Foundation Classes).");
       const m = applyEdits(site, floors, v.edits);
       if (!partsOf(m.site.added).size) throw toolErr("Prosjektet har ingen ferdige deler (trapp, rekkverk …) å ta tilbake. Last ned til FreeCAD fra et prosjekt som har dem.");
-      const out = await ifcBody(`${v.id}@${v.updated}`, v.edits, true), got = reshapesFrom(out.toString("utf8"), text, m.site.added);
+      const out = await ifcBody(`${v.id}@${v.updated}`, v.edits, true, [...new Set(v.modelled || [])].sort()), got = reshapesFrom(out.toString("utf8"), text, m.site.added);
       if (!got.edits.length) return send(res, 200, { changed: [], same: got.same, missing: got.missing, say: got.missing.length ? `Fant ikke ${got.missing.join(", ")} i fila.` : got.same ? "Ingen del er endret i fila." : "Fant ingen av delene i fila: lagre fra FreeCAD uten å bytte navn på delene, og ta med deler fra ifc-fila som ble lastet ned." });
       const tool = TOOLS.find(t => t.name === "try_change"), done = await tool.run({ edits: got.edits, version: v.id, include_screenshot: false, fromPage: true }, req);
       if (done.rejected?.length) return send(res, 422, { error: done.rejected.map(r => r.error).filter(Boolean).join(" ") || "Endringen kunne ikke settes inn.", changed: [], same: got.same, missing: got.missing });
