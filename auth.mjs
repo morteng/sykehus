@@ -39,7 +39,8 @@ const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(Strin
 
 export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSIONS_DIR, UA = "sykehus.gulden.no" }) {
   const send = (res, code, body, headers = {}) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store", ...headers }); res.end(typeof body === "string" ? body : JSON.stringify(body)); };
-  const originOf = req => process.env.PUBLIC_ORIGIN || (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "") ? `http://${req.headers.host}` : `https://${req.headers.host}`);
+  const hostOf = req => process.env.PUBLIC_ORIGIN || (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "") ? `http://${req.headers.host}` : `https://${req.headers.host}`);
+  const originOf = req => hostOf(req) + (req.mount || "");   // behind the bygg mount (/sykehus) every address we write carries it (U3920)
 
   // ---------- the three ways in ----------
   /* the edge's word on who this is: { login, groups, admin, via } or null; an assertion that is not good throws AssertionRefused */
@@ -146,7 +147,7 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
       <div class="acts"><button type="submit" class="pri" name="answer" value="yes">Gi tilgang</button><button type="submit" name="answer" value="no">Avbryt</button></div></form>`);
   }
   async function approve(req, res) {
-    if (req.headers.origin && req.headers.origin !== originOf(req)) return send(res, 403, { error: "Wrong origin" });
+    if (req.headers.origin && req.headers.origin !== hostOf(req)) return send(res, 403, { error: "Wrong origin" });
     const raw = await new Promise((ok, no) => { let s = ""; req.on("data", c => { s += c; if (s.length > 4000) no(err(413, "Too large")); }); req.on("end", () => ok(s)); req.on("error", no); });
     const b = Object.fromEntries(new URLSearchParams(raw)), f = forms.get(String(b.form || "")); forms.delete(String(b.form || ""));
     if (!f || f.exp < Date.now() || f.who !== proxyUser(req)) return page(res, 400, "Utløpt", `<h1>Siden er utløpt</h1><p class="mut">Start tilkoblingen på nytt fra appen.</p>`);

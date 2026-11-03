@@ -85,7 +85,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     if (!h || now - h.t > windowMs) { counts.set(key, { t: now, n: 1 }); return; }
     if (++h.n > max) throw toolErr("For mange forespørsler akkurat nå. Prøv igjen om litt.");
   };
-  const originOf = req => process.env.PUBLIC_ORIGIN || (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "") ? `http://${req.headers.host}` : `https://${req.headers.host}`);
+  const hostOf = req => process.env.PUBLIC_ORIGIN || (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || "") ? `http://${req.headers.host}` : `https://${req.headers.host}`);
+  const originOf = req => hostOf(req) + (req.mount || "");   // behind the bygg mount (/sykehus) every address we write carries it (U3920)
   const send = (res, code, body, headers = {}) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store", ...headers }); res.end(typeof body === "string" ? body : JSON.stringify(body)); };
 
   // ---------- the site, its wings and storeys ----------

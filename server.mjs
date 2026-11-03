@@ -49,6 +49,8 @@ import { importFile, MAX_IMPORT } from "./bim.mjs";
 import { createRenderings } from "./gjengi.mjs";
 import { createProspekt } from "./prospekt.mjs";
 
+/* where the bygg shell mounts this module (U3920); "" turns it off */
+const MOUNT = (process.env.BYGG_MOUNT ?? "/sykehus").replace(/\/+$/, "");
 const PUB = new URL("./public/", import.meta.url).pathname, PORT = +process.env.PORT || 8090;
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".webmanifest": "application/manifest+json", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8", ".ifc": "application/p21", ".glb": "model/gltf-binary" };
 const SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" };
@@ -135,6 +137,10 @@ const snow = createSnow({ SECURITY });   // the snow on the ground today, NVE se
 
 createServer(async (req, res) => {
   try {
+    /* bygg.gulden.no/sykehus: the module's mount on the bygg shell (U3920). The prefix is taken off before any route sees the request, and
+       req.mount tells the places that write absolute addresses (OAuth metadata, links) to put it back. The bare /sykehus goes to /sykehus/. */
+    const rest = MOUNT && (req.url === MOUNT || req.url.startsWith(MOUNT + "/") || req.url.startsWith(MOUNT + "?")) ? req.url.slice(MOUNT.length) : null;
+    if (rest !== null) { if (rest === "" || rest[0] === "?") return res.writeHead(308, { ...SECURITY, location: MOUNT + "/" + rest }).end(); req.mount = MOUNT; req.url = rest; }
     const url = new URL(req.url, "http://x"); let path = decodeURIComponent(url.pathname);
     const refused = auth.badAssertion(req);   // a signed assertion that is not good (wrong aud, old exp, bad signature) is refused whole, never read as Remote-User (U3964)
     if (refused) { console.log(`assertion refused: ${refused}`); return res.writeHead(401, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ error: "assertion refused", reason: refused })); }
@@ -169,7 +175,8 @@ createServer(async (req, res) => {
     const ICON = { "/favicon.ico": "/icons/icon-192.png", "/apple-touch-icon.png": "/icons/apple-touch-icon-180.png", "/apple-touch-icon-precomposed.png": "/icons/apple-touch-icon-180.png" }[path];
     const file = normalize(join(PUB, ICON || (path.endsWith("/") ? path + "index.html" : path)));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
-    let body = await readFile(file); const zip = /\bgzip\b/.test(req.headers["accept-encoding"] || "") && [".glb", ".js", ".json", ".css", ".html"].includes(extname(file)) && body.length > 1024;
+    let body = await readFile(file); if (req.mount && file.endsWith("/prospekt.html")) body = Buffer.from(String(body).replace('<base href="/">', `<base href="${req.mount}/">`));   // its relative links climb to the mount
+    const zip = /\bgzip\b/.test(req.headers["accept-encoding"] || "") && [".glb", ".js", ".json", ".css", ".html"].includes(extname(file)) && body.length > 1024;
     if (zip) body = await gzipped(body, file);   // the model (U3656), the data and the scripts, whoever sits in front of this
     res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache", ...(zip ? { "content-encoding": "gzip", vary: "Accept-Encoding" } : {}) }).end(req.method === "HEAD" ? undefined : body);
   } catch { if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Ikke funnet"); }
