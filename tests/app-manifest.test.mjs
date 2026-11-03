@@ -1,5 +1,6 @@
 /* U3813: the page installs from the iPad home screen: a manifest the server serves as such, linked from the page, with the
-   tags iOS reads, and the CSS that keeps the bars out from under the notch and the home indicator. */
+   tags iOS reads, and the CSS that keeps the bars out from under the notch and the home indicator.
+   One file on the box: box-test-mac.sh --repo sykehus --local tests/app-manifest.test.mjs */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";

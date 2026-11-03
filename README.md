@@ -96,4 +96,4 @@ in this repository; build the document store locally with the tools.
 
 `node server.mjs` serves the site, the MCP connector at `/mcp` (MCP 2026-07-28, MCP Apps 2026-01-26: wings, storeys,
 rooms, openings, documents, the building in 3D in the chat) and drafts of tried changes (`?utkast=<id>`, not saved).
-Runbook: `docs/mcp-service.md`; decisions: `docs/rulings.md`. Tests: `node --test tests/*.mjs`.
+Runbook: `docs/mcp-service.md`; decisions: `docs/rulings.md`. Tests: `node --test tests/*.mjs`. In the day, one changed file runs on the box (no Mac suite): `~/gulden-no/stack/scripts/box-test-mac.sh --repo sykehus --local tests/<name>.test.mjs`; the branch lands with `~/gulden-no/stack/scripts/land.sh sykehus <branch>`.
