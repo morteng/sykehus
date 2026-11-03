@@ -26,6 +26,7 @@ import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
 import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
 import { createSkyBodies } from "./skybodies.js";   // the sun's disc and the moon in the sky, visual only
 import { pickQuality, markStart, markDone, lowerNow } from "./quality.js";
+import { merges, byMaterial } from "./load-budget.js";
 
 const C = { ground: "#c9cdb8", lot: "#c8102e", wall: "#ece6da", roof: "#8b8f94", own: "#f4efe4", nb: "#d9d6cf", nbRoof: "#a7a6a2", pick: "#ffcf33", sky: "#dfe8ee", cutWall: "#55524d", plate: "#e8e2d4", flatRoof: "#9a9890", steel: "#8e9297" };
 
@@ -388,10 +389,30 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       dirty = true;
     });
   }
+  /* the group's parts as one mesh a material, in flat colour: each part's geometry made as below, then joined (no outline lines on glass) */
+  function partGeometry(p) {
+    if (p.tris) { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(p.tris.flat().flatMap(q => { const v = P(q, q[2]); return [v.x, v.y, v.z]; }), 3)); g.computeVertexNormals(); return g; }
+    const [[x0, y0], [x1, y1]] = p.axis, L = Math.hypot(x1 - x0, y1 - y0); if (L < 0.01) return null;
+    const g = new THREE.ExtrudeGeometry(new THREE.Shape(p.profile.map(([s, z]) => new THREE.Vector2(s, z - base))), { depth: L, bevelEnabled: false });
+    const d = new THREE.Vector3((x1 - x0) / L, 0, -(y1 - y0) / L), n = new THREE.Vector3(-(y1 - y0) / L, 0, -(x1 - x0) / L);
+    return g.applyMatrix4(new THREE.Matrix4().makeBasis(n, new THREE.Vector3(0, 1, 0), d).setPosition(x0, 0, -y0));
+  }
+  function drawMerged(parts, grp) {
+    for (const [k, ps] of byMaterial(parts)) {
+      const gs = ps.map(partGeometry).filter(Boolean).map(g => g.index ? g.toNonIndexed() : g); if (!gs.length) continue;
+      const pos = new Float32Array(gs.reduce((n, g) => n + g.attributes.position.array.length, 0)), nor = new Float32Array(pos.length); let at = 0;
+      for (const g of gs) { pos.set(g.attributes.position.array, at); nor.set(g.attributes.normal.array, at); at += g.attributes.position.array.length; g.dispose(); }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+      const m = (ADDED[k] || ADDED.concrete).clone(); m.side = THREE.DoubleSide;
+      const mesh = new THREE.Mesh(geo, m); mesh.castShadow = k !== "glass" && k !== "water"; mesh.receiveShadow = true; grp.add(mesh);
+    }
+  }
   function drawAdded(a) {
     const grp = new THREE.Group();
     if (a.shape === "bim" && a.bim) drawBim(a, grp);
-    for (const p of a.shape === "bim" ? [] : a.parts) {
+    const list = a.shape === "bim" ? [] : a.parts, flat = merges(Q, list.length);   // U3644: a lot of parts are one mesh a material
+    if (flat) drawMerged(list, grp);
+    else for (const p of list) {
       if (p.tris) {   // a pyramid: its faces as they are (design.js)
         const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(p.tris.flat().flatMap(q => { const v = P(q, q[2]); return [v.x, v.y, v.z]; }), 3)); g.computeVertexNormals();
         const m = (ADDED[p.mat] || ADDED.concrete).clone(); m.side = THREE.DoubleSide;

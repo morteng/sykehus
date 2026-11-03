@@ -46,6 +46,7 @@ const MATERIALS = [...BUILDING, "water"];   // a volume of water fills a basin (
 import { segDist, ringArea } from "./renderkit/paths2d.js";   // one copy (DRY 2)
 import { roofHold, roofSay, overSay, overhangOf, roofOf, placeOnRoof, roofCollisions, collisionSay, measureParts, footRing, bimXY, levelRingsOf, roofKotes } from "./roof.js";   // the roof as numbers; the one rule for a foot on it
 export { roofHold, roofSay, overSay, overhangOf, roofOf, placeOnRoof, roofCollisions, measureParts, footRing, bimXY, levelRingsOf, roofKotes };
+import { PART_CAP, room, capSay, partsOf } from "./load-budget.js";
 export const SHAPES = ["box", "gable", "triangle", "lean_to", "pyramid", "terraces", "bim"];
 export const STOREY_M = 3.2;   // a new building's storey, floor to floor
 const NID = /^n[A-Za-z0-9]{4,12}$/;
@@ -267,7 +268,9 @@ export function checkDesign(site, e, str) {
       if (!e.windows && e.bay == null && !out.exact) { if (balconyParts(site, { ...out, windows: true }).length) e = { ...e, windows: true }; else { e = { ...e, bay: 1.9, gap: 0.6 }; } }
       if (e.windows) { out.windows = true; if (e.bay != null) out.bay = num(e.bay, 1, 2.4, "Bredden på hver balkong (bay; høyst 2,4 m med én per vindu, 2,5 m mellom vinduene)"); }
       else if (e.bay != null) { out.bay = num(e.bay, 1.5, 20, "Bredden på hver balkong (bay)"); out.gap = num(e.gap, 0, 10, "Mellomrommet (gap)", 0.6); }
-      if (!balconyParts(site, out).length) throw new Error(`${w.name} har ingen fasade mot ${side} der balkongene kan stå (eller ingen etasjer i det valgte spennet)`);
+      const made = balconyParts(site, out).length;
+      if (!made) throw new Error(`${w.name} har ingen fasade mot ${side} der balkongene kan stå (eller ingen etasjer i det valgte spennet)`);
+      if (made > PART_CAP) throw new Error(`Det blir ${made} deler: mer enn taket på ${PART_CAP} deler per forslag (siden blir for tung for en telefon). Velg færre etasjer eller en kortere strekning (along), eller bredere balkonger.`);
       return out;
     }
     case "openings": {   // dørene lagt på én fasade (Fasade-visningen): én nøyaktig dør per edit, på settets nyeste rev; remove: true tar settets dører bort (personens «Tilbakestill»)
@@ -823,13 +826,13 @@ export function applyDesign(site, floors, edits) {
     else if (e.kind === "balconies" && e.remove === true) {
       added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger fjernet mot ${e.face}°, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts: [], count: 0, remove: true, face: e.face, facades: [], facade_say: `Byggets egne balkonger mot ${e.face}° er tatt bort.` });
     } else if (e.kind === "balconies") {
-      const skipped = new Map(), faces = new Map(), parts = balconyParts(site, e, gone, skipped, faces), slabs = parts.filter(p => p.role === "slab");
+      const skipped = new Map(), faces = new Map(), all = balconyParts(site, e, gone, skipped, faces), parts = all.slice(0, room(partsOf(added), all.length)), slabs = parts.filter(p => p.role === "slab");
       /* U3614: each facade used: which way it faces, how long, how many on each storey */
       const used = [...faces.values()].filter(f => Object.keys(f.per_storey).length).map(f => { const ks = Object.values(f.per_storey); return { bearing: f.bearing, length_m: round1(f.length_m), storeys: ks.length, per_storey: Math.min(...ks) === Math.max(...ks) ? ks[0] : `${Math.min(...ks)}–${Math.max(...ks)}`, count: ks.reduce((a, b) => a + b, 0) }; });
       const facadeSay = used.map(f => `fasaden mot ${f.bearing}° (${String(f.length_m).replace(".", ",")} m): ${f.per_storey} per etasje på ${f.storeys} etasjer, ${f.count} i alt`).join("; ");
       const axes = axesOf(slabs);   // the window bays used: one axis a bay, on every storey
       added.push({ id: `balkonger-${added.length + 1}`, kind: "balconies", name: `Balkonger mot ${used.length ? used.map(f => `${f.bearing}°`).join(" og ") : e.face != null ? `${e.face}°` : SIDE_WORD[e.side]}, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, parts,
-        ...(e.support ? { support: true } : {}), count: slabs.length, facades: used, facade_say: `Balkonger på ${facadeSay}.`, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) på fasaden mot ${used.map(f => `${f.bearing}°`).join(" og ")}, ${slabs.length} balkonger i alt.` } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
+        ...(e.support ? { support: true } : {}), count: slabs.length, facades: used, facade_say: `Balkonger på ${facadeSay}.`, ...(e.windows ? { per_window: true, window_bays: axes, window_say: `Én balkong per vindu: ${axes} vindusakser (hver ${String(BAY).replace(".", ",")} m) på fasaden mot ${used.map(f => `${f.bearing}°`).join(" og ")}, ${slabs.length} balkonger i alt.` } : {}), ...(parts.length < all.length ? { capped: true, cap_say: capSay(all.length, parts.length) } : {}), ...(skipped.size ? { skipped: [...skipped].map(([by, count]) => ({ by, count })), say: `${[...skipped.values()].reduce((a, b) => a + b, 0)} balkonger er ikke satt opp fordi de ville stått inne i ${[...skipped.keys()].join(" og ")}, som står foran fasaden under taket sitt.` } : {}), footprint_m2: round1(slabs.reduce((a, p) => a + e.depth * Math.hypot(p.axis[1][0] - p.axis[0][0], p.axis[1][1] - p.axis[0][1]), 0)), volume_m3: null, why: e.why });
     } else if (e.kind === "openings" && e.remove !== true) {   // remove: only the person's own doors of the set go; nothing was there in the before
       const parts = doorParts(site, e), n = parts.length;
       added.push({ id: `dører-${added.length + 1}`, kind: "openings", name: `Dører mot ${e.face}°, ${site.wings.find(w => w.id === e.wing).name}`, wing: e.wing, face: e.face, parts, count: n,
