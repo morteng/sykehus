@@ -178,6 +178,6 @@ createServer(async (req, res) => {
     let body = await readFile(file); if (req.mount && file.endsWith("/prospekt.html")) body = Buffer.from(String(body).replace('<base href="/">', `<base href="${req.mount}/">`));   // its relative links climb to the mount
     const zip = /\bgzip\b/.test(req.headers["accept-encoding"] || "") && [".glb", ".js", ".json", ".css", ".html"].includes(extname(file)) && body.length > 1024;
     if (zip) body = await gzipped(body, file);   // the model (U3656), the data and the scripts, whoever sits in front of this
-    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-cache", ...(zip ? { "content-encoding": "gzip", vary: "Accept-Encoding" } : {}) }).end(req.method === "HEAD" ? undefined : body);
+    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": url.searchParams.get("v") ? "public, max-age=31536000, immutable" : "no-cache", ...(zip ? { "content-encoding": "gzip", vary: "Accept-Encoding" } : {}) }).end(req.method === "HEAD" ? undefined : body);
   } catch { if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Ikke funnet"); }
 }).listen(PORT, () => console.log(`Sykehustomta on http://localhost:${PORT}${docs ? "" : " (no document store: set DOCS)"}`));
