@@ -102,3 +102,19 @@ test("the page's refusal always has a reason", () => {
 });
 
 after(() => { door.closeAllConnections(); door.close(); mcpSrv.close(); });
+
+test("U3914: the last «Mål» sent with a message is what measure reads with no a and no b; none, or a bad one, says so", async () => {
+  const mal = { kind: "distance", points: [[10, 20, 3], [13, 24, 3]], distance_m: 5, dh_m: 0, horizontal_m: 5, area_m2: null };
+  const n = held.length, r = await post({ text: "hvor langt er det jeg målte?", version: A.id, measure: mal }); assert.ok(r.id);
+  await until(() => held.length > n && pages.turn.get("lars")?.id === r.id);
+  const m = await mcpCall("measure", {});
+  assert.deepEqual([m.structuredContent.kind, m.structuredContent.distance_m, m.structuredContent.dh_m, m.structuredContent.horizontal_m], ["distance", 5, 0, 5]);
+  assert.match(m.structuredContent.say, /5 m i luftlinje/);
+  assert.equal((await mcpCall("measure", { a: "Østfløy" })).isError, undefined, "a named read is as before");
+  await endTurn();
+  const n2 = held.length, r2 = await post({ text: "igjen", version: A.id, measure: { kind: "distance", points: [[1, 2, 3]], distance_m: 1 } }); assert.ok(r2.id);
+  await until(() => held.length > n2 && pages.turn.get("lars")?.id === r2.id);
+  assert.equal(pages.turn.get("lars").measure, null, "one point is no measure");
+  const none = await mcpCall("measure", {}); assert.ok(none.isError || none.error || /ikke tatt/.test(JSON.stringify(none)), JSON.stringify(none));
+  await endTurn();
+});

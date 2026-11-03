@@ -175,8 +175,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     async function sendIt(drawn) {
       const text = drawn ? drawn.text : input.value.trim() || (att ? "Se på det jeg la ved." : ""); if (!text) return false;
       if (!drawn && reading) { line("err", "Vent til vedlegget er lest."); return false; }
-      const sel = valg.forMessage(), withIt = drawn ? {} : fieldsOf(att);   // a drawing carries its own picture: nothing is attached to it
-      const r = await json("api/anton", { text, version: version(), ...withIt, ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
+      const mal = window.sykehusMeasure?.() ?? null, sel = valg.forMessage(), withIt = drawn ? {} : fieldsOf(att);   // a drawing carries its own picture: nothing is attached to it
+      const r = await json("api/anton", { text, version: version(), ...withIt, ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}), ...(mal ? { measure: mal } : {}) });
       if (r?.status === 401) { signedOut(); return false; }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; const why = j.error || doorWords("unavailable"); line("err", why); return drawn ? { error: why } : false; }   // a drawing's window shows the reason too
       if (!drawn) { input.value = ""; input.oninput(); setAtt(null); }

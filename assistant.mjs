@@ -6,7 +6,7 @@
 
      GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
      GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
-     POST /api/anton             {text, version?, drawing?, picture?, attachment?, selection?, point?{x,y}}  a message; it waits its turn (5 waiting at most). drawing
+     POST /api/anton             {text, version?, drawing?, picture?, attachment?, selection?, point?{x,y}, measure?{kind,points,…}}  a message; it waits its turn (5 waiting at most). drawing
                                  (tegn.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
                                  camera, mode, size}, passed on as it is.
                                  picture: {image: a JPEG, PNG or WebP data URL of at most 2,5 MB (the page shrinks a bigger one), name?}, a
@@ -88,6 +88,14 @@ function selectionOf(s) {
   return items.length ? { items, ids: items.map(i => i.id), summary: String(s.summary ?? items.map(i => i.label).join(" · ")).slice(0, 300) } : null;
 }
 
+/* the last «Mål» the person took on the page (U3914): the kit's lastMeasure, 2 to 60 points of site metres, as numbers; Anton reads it with measure (no a) */
+function measureSent(m) {
+  if (!m || (m.kind !== "distance" && m.kind !== "area") || !Array.isArray(m.points)) return null;
+  const f = Number.isFinite, pts = m.points.slice(0, 60).filter(p => Array.isArray(p) && p.length === 3 && p.every(f) && Math.abs(p[0]) < 5000 && Math.abs(p[1]) < 5000);
+  if (pts.length < (m.kind === "area" ? 3 : 2)) return null;
+  const n = v => f(v) ? Math.round(v * 100) / 100 : null;
+  return { kind: m.kind, points: pts.map(p => p.map(n)), distance_m: n(m.distance_m), dh_m: n(m.dh_m), horizontal_m: n(m.horizontal_m), area_m2: n(m.area_m2) };
+}
 /* a point the page sends with a message (U3671: the pin Anton asked for): metres east and north on the site, shown to Anton only */
 function pointOf(p) { return p && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.abs(p.x) < 5000 && Math.abs(p.y) < 5000 ? { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : null; }
 const HIDDEN = /\\n\(Nål: [^)]*\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
@@ -166,7 +174,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
     if (!pages) return null;
     const open = turn.job ? versions?.get(pages.open.get(person)) : turn.version && versions?.get(turn.version.id), own = open?.owner === person ? open : null;
     const version = own?.id ?? versions?.list({ owner: person, viewer: person }).find(x => x.work)?.id ?? null;
-    const ctx = { id: turn.id, person, version, draft: null, picked: turn.job ? pages.picked?.get(person) ?? null : turn.picked ?? null, selection: turn.selection ?? null, point: turn.point ?? null, drawing: !!turn.drawing,
+    const ctx = { id: turn.id, person, version, draft: null, picked: turn.job ? pages.picked?.get(person) ?? null : turn.picked ?? null, selection: turn.selection ?? null, point: turn.point ?? null, measure: turn.measure ?? null, drawing: !!turn.drawing,
       seen: version ? { id: version, edits: versions.get(version).edits.map(e => JSON.stringify(e)) } : null };
     (pages.turn ??= new Map()).set(person, ctx); keep.savePins(pages); return ctx;
   }
@@ -229,7 +237,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       if (picture && drawing) return send(res, 400, { error: "Send én tegning eller ett bilde om gangen." });
       const selection = selectionOf(b?.selection);
       const picked = selection?.items.find(i => i.kind === "wing" || i.kind === "building")?.id ?? null;
-      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, picture, attachment, selection, point: pointOf(b?.point), picked };
+      const turn = { id: randomUUID(), text, at: new Date().toISOString(), device: me.device, version, drawing, picture, attachment, selection, point: pointOf(b?.point), measure: measureSent(b?.measure), picked };
       const shown = drawing?.image || picture?.image;
       if (shown) { keep.keepPic(me.person, turn.id, text, shown); t.pics.push({ id: turn.id, text, image: shown }); if (t.pics.length > 20) t.pics.shift(); }
       if (pages) { if (version) pages.open.set(me.person, version.id); else pages.open.delete(me.person); }   // where Anton's changes go (mcp.mjs try_change)

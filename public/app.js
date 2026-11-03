@@ -1265,6 +1265,7 @@ const measure = createMeasure({ el: K.el, host: $("stage"), locale: "nb-NO",
   snap: ([x, y, k]) => { const s = inferPoint([x, y], { rings: site.buildings.filter(b => b.ring?.length > 2).map(b => b.ring), reach: 0.8, kinds: ["endpoint", "midpoint", "edge"] }); return [s.p[0], s.p[1], k]; },
   words: { distance: "Avstand", horizontal: "Vannrett", area: "Areal", perimeter: "Omkrets", hint: "Trykk punkt A, så punkt B. Hold Shift og trykk flere punkter for areal. Esc avslutter." },
   onChange: (m, on = measure.active) => $("mal").setAttribute("aria-pressed", String(on)) });
+window.sykehusMeasure = () => { const m = measure.lastMeasure(); return m.kind ? m : null; };   // U3914: sent with a message to Anton (anton.js), who reads it with measure (no a)
 const setMal = on => { if (on) { if (placing) { aim(null); hideToast(); } measure.on(); } else measure.off(); $("mal").setAttribute("aria-pressed", String(measure.active)); };
 $("mal").onclick = () => setMal(!measure.active);
 addEventListener("keydown", e => { if ((e.key === "m" || e.key === "M") && !e.defaultPrevented && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable) { e.preventDefault(); setMal(!measure.active); } });
