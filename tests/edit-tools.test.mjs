@@ -123,3 +123,17 @@ test("preview: everything runs and is checked, nothing is saved", async () => {
   const fresh = (await call("try_change", { edits: [house("nhus9", -60)], preview: true, include_screenshot: false })).data;
   assert.equal(fresh.applied, 1); assert.equal(fresh.draft, undefined, "a preview with no draft makes none");
 });
+
+test("U3639: the household parts (terrace, fence, shed, retaining wall, pergola, carport) are listed and each builds one group", async () => {
+  const lp = (await call("list_parts")).data.parts.map(p => p.part);
+  for (const n of ["terrace", "fence", "shed", "retaining_wall", "pergola", "carport"]) assert.ok(lp.includes(n), n);
+  const one = async (part, to, params, n) => { const r = await mk([{ kind: "part", part, from: [-60, -70], to, ...(params ? { params } : {}) }]); assert.equal(r.applied, n, `${part}: ${r.reason || JSON.stringify(r.rejected)}`); return built(r.draft); };
+  const t = await one("terrace", [-54, -70], { width: 3 }, 1); assert.equal(t[0].material, "wood"); assert.equal(t[0].width, 3); assert.equal(t[0].height, 0.4);
+  const f = await one("fence", [-48, -70], { post_spacing: 3 }, 6); assert.equal(f.length, 6, "a board and five posts: 12 m at 3 m"); assert.equal(new Set(f.map(x => x.group)).size, 1);
+  const s = await one("shed", [-56, -70], { width: 3 }, 1); assert.equal(s[0].shape, "gable"); assert.equal(s[0].wall_height, 2.2); assert.equal(s[0].height, 3);
+  const w = await one("retaining_wall", [-50, -70], { height: 2 }, 1); assert.equal(w[0].material, "concrete"); assert.equal(w[0].height, 2);
+  const p = await one("pergola", [-56, -70], { width: 3, beams: 5 }, 9); assert.equal(p.filter(x => /stolpe/.test(x.name)).length, 4); assert.ok(p.slice(4).every(x => near(x.base_kote, p[0].base_kote + 2.5, 0.11)), "the beams lie on the posts");
+  const c = await one("carport", [-54, -70], null, 5); assert.equal(c[4].height, 0.25); assert.ok(near(c[4].base_kote, c[0].base_kote + 2.5, 0.11));
+  const bad = await mk([{ kind: "part", part: "shed", from: [-60, -70], to: [-56, -70], params: { height: 2, wall_height: 3 } }]); assert.match(bad.reason || JSON.stringify(bad.rejected), /wall_height|2 til|3 til|fra/);
+  assert.equal(needsExpand({ kind: "part", part: "carport" }), true);
+});

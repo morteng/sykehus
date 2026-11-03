@@ -32,7 +32,7 @@ const pair = (v, what) => { if (!Array.isArray(v) || v.length !== 2 || !v.every(
 
 /* does this edit stand for several: a copy, a group, a castle part, or a move, turn or resize (not a plain reshape the server takes as it is) */
 export function needsExpand(e, edits = []) {
-  if (e?.kind === "clone" || e?.kind === "group" || e?.kind === "part" && e.part in CASTLE) return true;
+  if (e?.kind === "clone" || e?.kind === "group" || e?.kind === "part" && e.part in OWN) return true;
   if (e?.kind !== "reshape") return false;
   if (SELECTORS.some(k => e[k] != null)) return true;
   const vols = volumesOf(edits); return !vols.has(e.id) && [...vols.values()].some(v => v.group != null && v.group === e.id);   // a group's name where an id goes
@@ -44,7 +44,7 @@ export function expandChange(e, edits, site) {
     const name = String(e.name ?? "").trim(); if (!name || !Array.isArray(e.ids) || !e.ids.length) throw new Error("group trenger name og ids (id-ene til byggene i gruppen)");
     return e.ids.map(id => { if (!vols.has(id)) throw new Error(`Fant ikke det nye bygget «${id}» (group tar bare nye bygg)`); return { kind: "reshape", id, group: name, ...(e.why ? { why: e.why } : {}) }; });
   }
-  if (e.kind === "part") return CASTLE[e.part].make(e, site);
+  if (e.kind === "part") return OWN[e.part].make(e, site);
   const key = String(e.id ?? ""), src = membersOf(vols, key);
   if (e.kind === "clone") {
     if (e.offset == null) throw new Error("clone trenger offset: [øst, nord] i meter fra originalen");
@@ -86,7 +86,7 @@ const params = (e, spec) => {
   return { ...out, material: mat };
 };
 const axis = (e, min) => {
-  if (e.at != null) throw new Error("Slottsdelene settes med from og to (fra og til: delens lengde), ikke med at");
+  if (e.at != null) throw new Error("Delene settes med from og to (fra og til: delens lengde), ikke med at");
   const f = pair(e.from, "from"), t = pair(e.to, "to"), L = Math.hypot(t[0] - f[0], t[1] - f[1]);
   if (L < min) throw new Error(`from til to må være minst ${min} m`);
   return { f, t, L, u: [(t[0] - f[0]) / L, (t[1] - f[1]) / L] };
@@ -127,6 +127,51 @@ export const CASTLE = {
       return [left, right, base(site, e, { name: `${name} (bue)`, from: at(f, u, (L - pw) / 2), to: at(f, u, (L + pw) / 2), width: p.depth, height: r2(p.height - p.passage_height), material: p.material, group: g, base_kote: r2(left.base_kote + p.passage_height) })];
     } },
 };
+
+/* ---- household parts (U3639): what a house gets built round it, from the same boxes and slopes; from to to is the length, a group each ---- */
+const TERRACE = { width: P(4, 1, 30, "m deep, across from to to"), thickness: P(0.4, 0.1, 3, "m, the deck's own height over the ground") };
+const FENCE = { height: P(1.2, 0.5, 3, "m"), post_spacing: P(2.4, 1, 6, "m between posts"), thickness: P(0.1, 0.03, 0.4, "m, the boards and the posts") };
+const SHED = { width: P(3, 1.5, 12, "m across"), wall_height: P(2.2, 1.8, 4, "m to the eaves"), height: P(3, 2, 6, "m to the ridge") };
+const RETAIN = { thickness: P(0.4, 0.2, 2, "m"), height: P(1.5, 0.3, 6, "m above the lower ground") };
+const PERGOLA = { width: P(3, 1.5, 10, "m across"), height: P(2.5, 2, 4, "m to the beams"), post_size: P(0.15, 0.08, 0.4, "m, each post's side"), beams: P(0, 0, 40, "how many cross beams; 0 = about one every 0.6 m") };
+const CARPORT = { width: P(3, 2.5, 8, "m across (one car 3 m)"), height: P(2.5, 2.1, 4, "m to the eaves"), roof_thickness: P(0.25, 0.1, 1, "m, the roof's own") };
+/* the card's material when the person gave none: wood for a house's own timber parts */
+const withMat = (e, def) => ({ ...e, params: { material: def, ...(e.params || {}) } });
+/* four posts at the corners of a length × width footprint, standing on one foot */
+const posts = (site, e, f, t, u, L, w, s, h, name, g, material) => {
+  const v = [-u[1], u[0]], mk = (a, side, k) => { const c = [f[0] + u[0] * a + v[0] * side, f[1] + u[1] * a + v[1] * side]; return base(site, e, { name: `${name} (stolpe ${k})`, from: at(c, u, -s / 2), to: at(c, u, s / 2), width: s, height: h, material, group: g }); };
+  const ps = [mk(s / 2, (w - s) / 2, 1), mk(L - s / 2, (w - s) / 2, 2), mk(s / 2, -(w - s) / 2, 3), mk(L - s / 2, -(w - s) / 2, 4)];
+  const kote = foot(site, { kind: "volume", shape: "box", from: f, to: t, width: w, height: h }); ps.forEach(x => { x.base_kote = kote; });
+  return { ps, kote };
+};
+export const HOUSEHOLD = {
+  terrace: { no: "Terrasse", say: "A deck over the ground (one box, wood; from to to is its length, params.width how deep)", params: TERRACE, classes: ["volumes"],
+    make(e, site) { const { f, t } = axis(e, 1), p = params(withMat(e, "wood"), TERRACE), name = e.name ?? "Terrasse";
+      return [base(site, e, { name, from: f, to: t, width: p.width, height: p.thickness, material: p.material, group: e.group ?? name })]; } },
+  fence: { no: "Gjerde", say: "A fence: boards along from to to and a post every post_spacing (boxes in one group)", params: FENCE, classes: ["volumes"],
+    make(e, site) { const { f, t, L, u } = axis(e, 1), p = params(withMat(e, "wood"), FENCE), name = e.name ?? "Gjerde", g = e.group ?? name, n = Math.max(1, Math.round(L / p.post_spacing)), pitch = L / n, h = p.thickness;
+      const board = base(site, e, { name, from: f, to: t, width: h / 2, height: r2(p.height * 0.8), material: p.material, group: g }), k0 = foot(site, board); board.base_kote = r2(k0 + p.height * 0.1);
+      const out = [board]; for (let k = 0; k <= n; k++) { const c = at(f, u, pitch * k); out.push(base(site, e, { name: `${name} (stolpe ${k + 1})`, from: at(c, u, -h / 2), to: at(c, u, h / 2), width: h, height: p.height, material: p.material, group: g, base_kote: k0 })); }
+      return out; } },
+  shed: { no: "Bod", say: "A shed with a gable roof (one volume; from to to is its length along the ridge, params.width across)", params: SHED, classes: ["volumes"],
+    make(e, site) { const { f, t } = axis(e, 1.5), p = params(withMat(e, "wood"), SHED), name = e.name ?? "Bod"; if (p.height <= p.wall_height) throw new Error("height (mønet) må være over wall_height (raftet)");
+      return [base(site, e, { name, shape: "gable", from: f, to: t, width: p.width, height: p.height, wall_height: p.wall_height, material: p.material, group: e.group ?? name })]; } },
+  retaining_wall: { no: "Støttemur", say: "A retaining wall (one box; from to to is its length, params.thickness across, params.height above the lower ground)", params: RETAIN, classes: ["volumes"],
+    make(e, site) { const { f, t } = axis(e, 1), p = params(withMat(e, "concrete"), RETAIN), name = e.name ?? "Støttemur";
+      return [base(site, e, { name, from: f, to: t, width: p.thickness, height: p.height, material: p.material, group: e.group ?? name })]; } },
+  pergola: { no: "Pergola", say: "A pergola: four posts and cross beams on top (boxes in one group); from to to is its length, params.width across", params: PERGOLA, classes: ["volumes"],
+    make(e, site) { const { f, t, L, u } = axis(e, 1.5), p = params(withMat(e, "wood"), PERGOLA), name = e.name ?? "Pergola", g = e.group ?? name, s = p.post_size, w = p.width, n = p.beams ? Math.round(p.beams) : Math.max(2, Math.round(L / 0.6));
+      if (L < 3 * s || w < 3 * s) throw new Error("Pergolaen er for liten for stolpene");
+      const { ps, kote } = posts(site, e, f, t, u, L, w, s, p.height, name, g, p.material), out = [...ps], pitch = (L - s) / Math.max(1, n - 1);
+      for (let k = 0; k < n; k++) { const c = at(f, u, s / 2 + pitch * k); out.push(base(site, e, { name: `${name} (bjelke ${k + 1})`, from: at(c, u, -s / 4), to: at(c, u, s / 4), width: w, height: s, material: p.material, group: g, base_kote: r2(kote + p.height) })); }
+      return out; } },
+  carport: { no: "Carport", say: "A carport: a flat roof on four posts (boxes in one group); from to to is its length, params.width across", params: CARPORT, classes: ["volumes"],
+    make(e, site) { const { f, t, L, u } = axis(e, 3), p = params(withMat(e, "wood"), CARPORT), name = e.name ?? "Carport", g = e.group ?? name;
+      const { ps, kote } = posts(site, e, f, t, u, L, p.width, 0.15, p.height, name, g, p.material);
+      return [...ps, base(site, e, { name: `${name} (tak)`, from: f, to: t, width: p.width, height: p.roof_thickness, material: p.material, group: g, base_kote: r2(kote + p.height) })]; } },
+};
+/* every part the server builds itself */
+export const OWN = { ...CASTLE, ...HOUSEHOLD };
 
 /* ---- the short list: what the after holds, one line each, small enough for a chat turn ---- */
 const ms = x => String(r2(x)).replace(".", ",");
