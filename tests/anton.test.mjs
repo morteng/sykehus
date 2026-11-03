@@ -175,7 +175,8 @@ test("«Ny samtale» asks gulden-ai for a new thread and empties every page", as
   await fetch(O + "/api/anton/historikk", { headers: { cookie } });
   const h = seen.filter(s => s.path.startsWith("/internal/sykehus/history")).at(-1); assert.match(h.path, /session=sykehus%3Alars%3A1/, "history asks the new session");
   await post("/api/anton", { text: "etter ny" }, { cookie });
-  assert.equal(seen.filter(x => x.path === "/internal/sykehus/chat").at(-1).body.session, "sykehus:lars:1");
+  for (let i = 0; i < 50 && !seen.some(x => x.path === "/internal/sykehus/chat" && x.body.message === "etter ny"); i++) await new Promise(ok => setTimeout(ok, 100));
+  assert.equal(seen.find(x => x.path === "/internal/sykehus/chat" && x.body.message === "etter ny").body.session, "sykehus:lars:1");
 });
 
 test("a qr line reaches the pages only when it points at this site's /inn/", async () => {
