@@ -11,3 +11,11 @@ Leaf pictures: the EZ-Tree repository's own leaf images (MIT with the repository
 Facade colours and layout (viewer.js FACADE) are measured on photos in the hospital's case documents (Drammen
 kommune innsyn: "Fotoskisse fasade Forsyningsblokka" 2018, "2 Fasadefoto" 2020) by tools/facades.py; the photos
 themselves are not in the repository.
+
+Material library (public/renderkit/materials.js, U3618): each set below is ambientCG's, CC0 1.0 (https://docs.ambientcg.com/license),
+1K colour, OpenGL normal and roughness maps downscaled to 512 px; no attribution required. Source page: https://ambientcg.com/view?id=<set>.
+  concrete  Concrete034      brick   Bricks097      wood    Planks037A     gravel  Gravel023
+  grass     Grass005         paving  PavingStones138   asphalt Asphalt033
+Glass, steel and water have no picture: they are drawn by their settings (roughness, metalness, opacity).
+Hatches (hatch-*.svg): FreeCAD Patterns/Pattern Files, David Carter, CC-BY-4.0. Material cards (IFC names, densities): FreeCAD
+Material workbench, CC-BY-3.0 or LGPL-2.1-or-later as each card states (materials.js card.license).
