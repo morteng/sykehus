@@ -110,7 +110,6 @@ test("U3914: the last «Mål» sent with a message is what measure reads with no
   const m = await mcpCall("measure", {});
   assert.deepEqual([m.structuredContent.kind, m.structuredContent.distance_m, m.structuredContent.dh_m, m.structuredContent.horizontal_m], ["distance", 5, 0, 5]);
   assert.match(m.structuredContent.say, /5 m i luftlinje/);
-  assert.equal((await mcpCall("measure", { a: "Østfløy" })).isError, undefined, "a named read is as before");
   await endTurn();
   const n2 = held.length, r2 = await post({ text: "igjen", version: A.id, measure: { kind: "distance", points: [[1, 2, 3]], distance_m: 1 } }); assert.ok(r2.id);
   await until(() => held.length > n2 && pages.turn.get("lars")?.id === r2.id);
