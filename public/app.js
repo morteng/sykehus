@@ -280,7 +280,9 @@ setNames(names, false); $("names").onclick = () => setNames(!names);
 const openFasade = (preset = {}, keep = {}) => import("./fasade-view.js?v=20261031es").then(m => m.open({ ...preset, keep, host: document.body, site0, floors0, wingOf: (s, w) => (s.wings || []).find(x => x.id === String(w ?? "").toLowerCase() || x.name.toLowerCase() === String(w ?? "").toLowerCase()),
   baseEdits: () => draft?.edits || [], commit: async edits => !!(await edit(edits, "Fikk ikke lagret")),
   send: (text, drawing) => new Promise(res => { let done = false; const t = setTimeout(() => !done && res({ error: "Anton kan ikke svare akkurat nå. Prøv igjen senere." }), 20000); document.dispatchEvent(new CustomEvent("sykehus:anton-say", { detail: { text, drawing, done: p => Promise.resolve(p).then(r => { done = true; clearTimeout(t); res(r === false ? { error: "Anton kan ikke svare akkurat nå. Logg inn og prøv igjen." } : r); }) } })); }) }));
-import("./miniapp.js?v=1").then(m => { m.registerMiniapp("fasade", { open: openFasade }); m.openFromAddress(); });   // the button, the chat's chip and ?fasade=… all open it through the one miniapp.js
+/* U3835: «Mål»: the measured plan and section, with lengths, axis and kotes, for the person to read (mal-view.js) */
+const openMal = (preset = {}) => import("./mal-view.js?v=20261103a").then(m => m.open({ ...preset, site: () => modelOf(draft?.edits).site, wingOf: (s, w) => (s.wings || []).find(x => x.id === String(w ?? "").toLowerCase() || x.name.toLowerCase() === String(w ?? "").toLowerCase()) }));
+import("./miniapp.js?v=1").then(m => { m.registerMiniapp("fasade", { open: openFasade }); m.registerMiniapp("mal", { open: openMal }); m.openFromAddress(); });   // the button, the chat's chip and ?fasade=… all open it through the one miniapp.js
 $("m3d").onclick = () => { setMode("3d"); viewer.eye(false); pressMode(); }; $("mplan").onclick = () => setMode("plan");
 /* U3605: in «Gateplan» the keys are said once each time one goes there (not on a phone, which has no keys) */
 const EYE_KEYS = "Gateplan: dra for å se deg rundt · W A S D eller piltastene for å gå · Shift går fortere · rull for å gå nærmere";

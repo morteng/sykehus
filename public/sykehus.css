@@ -798,3 +798,12 @@ html.pk-wait .loading { visibility: hidden; }
 /* «Om stedet» (U3823) */
 .om-stedet { margin: 0 0 8px; } .om-stedet summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
 .om-stedet h4 { margin: 10px 0 4px; font-size: 14px; } .om-stedet ul { margin: 0; padding-left: 18px; } .om-stedet li { margin-bottom: 6px; }
+/* U3835: plan and section with measures */
+.mal-modal { width: min(96vw, 1180px); }
+.mal-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mal-top select, .mal-kinds button { min-height: 44px; font: inherit; padding: 0 var(--sp-3); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+.mal-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.mal-kinds button[aria-pressed="true"] { background: var(--accent-panel); color: var(--accent); border-color: var(--accent-panel-edge); font-weight: 600; }
+.mal-pic { overflow: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.mal-pic svg { display: block; width: 100%; height: auto; }
+.mal-rows { margin: 4px 0 0; padding-left: 1.2em; }
