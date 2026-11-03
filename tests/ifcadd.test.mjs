@@ -76,3 +76,12 @@ test("nothing built: the before's file as it was", () => {
   const t = readFileSync(new URL("../public/data/sykehus.ifc", import.meta.url), "utf8");
   assert.equal(withAdded(t, base, applyEdits(site, floors, []).site, site).text, t);
 });
+
+test("U3643: a brick draft and a library object carry their licences in the IFC", () => {
+  const ed = add([], { kind: "volume", id: "nTegl", name: "Teglhus", shape: "box", from: [-46, -62], to: [-16, -62], width: 10, height: 6.4, storeys: 2, material: "brick" });
+  const m = applyEdits(site, floors, ed), a = m.site.added.find(x => x.id === "nTegl");
+  a.bim = { sha: "ab12", licence: "CC-BY-3.0 (Yorik van Havre)", source: { url: "https://github.com/FreeCAD/FreeCAD-library" } };
+  const { text } = withAdded(withoutBuildings(base, []).text, base, m.site, site, new Map()), p = parseIfc(text), has = s => [...p.ents.values()].some(e => e.args.includes(s));
+  assert.ok(has("'Sykehustomta_Lisens'") && has("'Bricks097'") && has("'Bilde_lisens',$,IFCLABEL('CC0-1.0 (ambientCG)')") && has("CC-BY-4.0 (David Carter, FreeCAD)"), "brick: picture CC0, hatch CC-BY-4.0");
+  assert.ok(has("IFCLABEL('CC-BY-3.0 (Yorik van Havre)')") && has("IFCLABEL('api/bim/ab12/model.ifc')"), "library object's licence");
+});
