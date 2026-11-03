@@ -262,20 +262,24 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       empty(); return h;
     }).then(async h => { if (h) await fetch("api/skisser").then(r => r.ok ? r.json() : null).then(j => (j?.sketches || []).reduce((p, x) => p.then(() => sketchCard(x)), Promise.resolve())).catch(() => {}); return h; }).catch(() => null);   // the plans Anton showed come back with the thread (U3635)
     fromHistory();
-    const es = new EventSource("api/anton/strom");
+    let es = null; const bound = [];   // [event, listener]: a stream opened again gets them all
+    const connect = () => { es = new EventSource("api/anton/strom"); for (const [ev, f] of bound) es.addEventListener(ev, f); es.addEventListener("error", onErr); es.addEventListener("open", onOpen); };
     /* U3622 (10:39Z): the stream broke under a turn (the server restarted: ERR_HTTP2_PROTOCOL_ERROR), so its words and
        its «done» never came, though the answer was in the thread. When the stream is back, the chat is drawn again from
        the thread, the last answer goes on the card, and the version is shown again (the turn may have changed it) */
     let dropped = false;
-    es.addEventListener("error", () => { if (es.readyState !== EventSource.OPEN) dropped = true; });
-    es.addEventListener("open", async () => {
+    /* a 502 on the way back makes the browser close the stream for good (no retry on a non-200), so it is opened again here */
+    let reopen = 0;
+    const onErr = () => { if (es.readyState === EventSource.OPEN) return; dropped = true;
+      if (es.readyState === EventSource.CLOSED) { const dead = es; clearTimeout(reopen); reopen = setTimeout(() => { dead.close(); connect(); }, 2500); } };
+    const onOpen = async () => {
       if (!dropped) return; dropped = false;
       const h = await fromHistory(); if (!h) return;
       const last = (h.items || []).filter(it => it.type === "message").at(-1);
       if (last?.from === "assistant") showReply(last.text);
       if (!h.queue?.running) { redraw = false; refresh(); }
-    });
-    const on = (ev, f) => es.addEventListener(ev, e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } });   // the stream's own "error" (a reconnect) has no data
+    };
+    const on = (ev, f) => { const g = e => { if (e.data == null) return; try { f(JSON.parse(e.data)); } catch (x) { console.error(x); } }; bound.push([ev, g]); };   // the stream's own "error" (a reconnect) has no data
     on("queue", q => { for (const x of [q.running, ...q.waiting]) if (x) seen.add(x.id); running = q.running?.id ?? null; waiting = q.waiting.length; state(); });
     on("message", m => { seen.add(m.id); line("from-me", m.text, null, m.image, m.about ?? (m.attachment ? `fila ${m.attachment}` : undefined)); lastStep = ""; said(); });
     on("text", t => {
@@ -349,7 +353,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       li.append(createStill({ src: `${s.still}?w=640`, alt: "Bilde av visningen", more: "Vis i 3D", live: () => { li.remove(); empty(); goShow(s.view || {}); } })); });
     on("signed_out", signedOut);
     on("cleared", () => { log.textContent = ""; replies.clear(); answer = ""; showReply(); empty(); });
-    placePill(); state(); empty();
+    connect(); placePill(); state(); empty();
     /* ready: what was typed while the page loaded (early.js) goes now */
     form.classList.remove("wait"); btn.disabled = false; words(); state(); if (form.dataset.queued) { delete form.dataset.queued; const go = () => { busy.textContent = ""; sendIt(); }; if (es.readyState === EventSource.OPEN) go(); else es.addEventListener("open", go, { once: true }); }   // once the stream listens, so the page sees its own turn
   }
