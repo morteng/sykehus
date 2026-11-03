@@ -35,6 +35,7 @@ import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts
 import { loadCosts, summarize as areaSummary } from "./area.mjs";
 import { loadAmounts, amountsOf, compareAmounts } from "./amounts.mjs";   // U3630: amounts and a rough price, against Før or another version   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
+import { createTasks, inputRequired, answersOf } from "./tasks.mjs";   // U3932: task handles and input_required
 import { createSiteFacts } from "./sitefacts.mjs";
 import { createHeritage, KINDS as HERITAGE_KINDS } from "./heritage.mjs";
 import { readPart } from "./partmerge.mjs";
@@ -667,16 +668,19 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         const isV = /^v.{8}$/.test(String(a.draft)), edits = editsOf(a.draft, req), after = afterOf(applyEdits(site, floors, edits)), o = originOf(req);
         const vo = isV ? versionOut(versionOf(a.draft, req), o, req) : null;   // T11: the IFC link beside the page link (print is the page's «Skriv ut» on a saved view series: no link of its own)
         return { ...(vo ?? { draft: String(a.draft), link: draftUrl(o, a.draft) }), ifc: vo ? vo.link.replace("/?versjon=", "/api/ifc?versjon=") : `${o}/api/ifc?utkast=${a.draft}`, changes: edits.map((e, i) => ({ n: i + 1, ...e })), ...(after ? { after } : {}), saved: isV, saved_views: viewsOut(viewsOf(a.draft, req)) }; } },
-    { name: "make_shots", tgt: "draft", title: "Lag en bildeserie", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, pictures: { type: "boolean", description: "Leave out (true): each shot comes back as a small picture for you to look at" } }),
+    { name: "make_shots", task: true, tgt: "draft", title: "Lag en bildeserie", writeIf: a => /^v.{8}$/.test(String(a.draft)), schema: S({ target: TARGET, draft: OLD, pictures: { type: "boolean", description: "Leave out (true): each shot comes back as a small picture for you to look at" } }),
       description: "Puts together 4–6 good shots of the version or draft that also explain it (U3527): the whole from the air, each new building at eye level from the nearest named street, a torn-down wing before and after from the same place, and the plan, each with a caption. They are saved as its views (in place of the last series), and the page plays them as «Bildeserie» under Visninger, with Før/Etter on the pairs. For «lag noen gode bilder», «sett sammen en presentasjon», «vis prosjektet for noen». Say what each shot shows.",
-      run: async (a, req) => {
+      run: async (a, req, ctx) => {
         const { shots } = await makeShots(a.draft, req), o = originOf(req), isV = /^v.{8}$/.test(String(a.draft)), m = model(a.draft, req);
         const out = { draft: String(a.draft), shots: shots.map(s => ({ name: s.name, caption: s.state.caption, camera: s.state.cam === "eye" ? "øyehøyde" : s.state.mode })), link: `${o}/${isV ? `?versjon=${a.draft}` : `?utkast=${a.draft}`}`,
           note: "On the page: Visninger › Bildeserie plays them, one tap a shot; «Skriv ut» prints them, one A4 page each. Below, each shot as you see it (a narrower lens than the page's at eye level): say what each shows, and if one shows the wrong thing or nothing, say so and offer another (show_building save_as, or look saved_view to look again)." };
         if (a.pictures === false) return out;
         /* Anton looks at each shot before it says what they show (U3527): small pictures, one after another */
         const content = [{ type: "text", text: JSON.stringify(out) }];
-        for (const s of shots) {
+        for (const [i, s] of shots.entries()) {
+          /* U3932: a task is steered between the pictures: {stop: true} ends it with those drawn so far */
+          if (ctx?.take().some(x => x.stop)) { ctx.progress(`Stoppet etter ${i} av ${shots.length}`); content.push({ type: "text", text: `Stoppet etter ${i} av ${shots.length} bilder, som bestilt.` }); break; }
+          ctx?.progress(`Bilde ${i + 1} av ${shots.length}: ${s.name}`);
           try { const png = await shotPicture(m, s.state); content.push({ type: "text", text: `${s.name}: ${s.state.caption}` }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }); }
           catch (e) { content.push({ type: "text", text: `${s.name}: fikk ikke tegnet bildet (${e.message}).` }); }
         }
@@ -1132,11 +1136,12 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
   /* 2026-07-28 CacheableResult: lists and the app change only with a deploy, but deploys come often, so a minute (pm
      21:55Z: gulden-ai kept show_building without save_as after a deploy); the version names the tool list, so a client
      that compares serverInfo sees a new one at once */
+  const tasks = createTasks(), WING_ASKED = new Set(["about_wing", "openings"]);
   const CACHE = { ttlMs: 60e3, cacheScope: "public" };
   SERVER_INFO.version = `0.2.0+${createHash("sha256").update(JSON.stringify(toolList())).digest("hex").slice(0, 10)}`;
   async function rpc(req, msg) {
     const { method, params = {} } = msg;
-    const caps = { tools: { listChanged: false }, resources: {}, extensions: { [M("ui")]: { mimeTypes: ["text/html;profile=mcp-app"] } } };
+    const caps = { tools: { listChanged: false }, resources: {}, extensions: { [M("ui")]: { mimeTypes: ["text/html;profile=mcp-app"] }, [M("tasks")]: { tools: ["make_shots"] } } };
     /* 2026-07-28: the version comes with every request; a version we do not speak is an error, none means an older client */
     const asked = params._meta?.[M("protocolVersion")];
     if (asked && !VERSIONS.includes(asked)) throw Object.assign(err(-32022, `Unsupported protocol version ${asked}`), { data: { supported: VERSIONS } });
@@ -1157,26 +1162,42 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         if (params.name != null && params.name !== "start") throw err(-32602, `Unknown prompt: ${params.name}`);
         return { description: "Start", messages: [{ role: "user", content: { type: "text", text: "Gi meg en oversikt over gamle Drammen sykehus: fløyene, etasjene vi har tegninger av, og hvilke dokumenter som finnes. Vis anlegget i 3D." } }] }; }
 
+      case "tasks/get": return tasks.get(params.taskId, userOf(req));
+      case "tasks/update": return tasks.update(params.taskId, userOf(req), params.inputResponses);   // steer a running task
+      case "tasks/cancel": return tasks.cancel(params.taskId, userOf(req));
+      case "tasks/result": { const r = tasks.result(params.taskId, userOf(req)); if (!r) throw Object.assign(err(-32602, "The task is not finished: tasks/get tells how far it is"), { data: tasks.get(params.taskId, userOf(req)) }); return r; }
       case "tools/call": {
         const t = BY[params.name]; if (!t) throw err(-32602, `Unknown tool: ${params.name}`);
         const who = userOf(req);
         /* a refused call in the log, by its argument names and short values (pm 21:32Z: which key did the model send
            the wing under?); an edit by its kind and field names, no text the person wrote */
         const refused = (why, args = params.arguments) => console.error("refused", params.name, argsLine(args), "→", String(why).slice(0, 120));
-        let a; try { a = resolveTarget(t, params.arguments || {}, req); } catch (e) { if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; } throw e; }
+        /* U3932 (MRTR): a retry carries inputResponses; what the person answered goes in as arguments */
+        const given = { ...(params.arguments || {}), ...answersOf(params.inputResponses) };
+        let a; try { a = resolveTarget(t, given, req); } catch (e) { if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; } throw e; }
         /* a tool that keeps a version, with no one logged in: the sign-in challenge, so a chat app asks the person to connect */
         if (!who && (t.write || (t.writeIf && t.writeIf(a)))) throw Object.assign(err(401, "Sign-in needed"), { auth: true });
-        try {
-          auth?.count(req, who); bump("open", 3000, 3600e3);
-          const out = await t.run(a, req);
-          for (const r of out?.rejected || []) refused(r.error, { edit: a.edits?.[r.index] });
-          if (out?._result) return out._result;
-          const refusedAll = out?.applied === 0 && Array.isArray(out.rejected) && out.rejected.length > 0 && typeof out.reason === "string";   // try_change: every change refused
-          return { content: [{ type: "text", text: refusedAll ? `${out.reason}\n${JSON.stringify({ ...out, reason: undefined })}` : JSON.stringify(out) }], structuredContent: out, ...(refusedAll ? { isError: true } : {}) };
-        } catch (e) {
-          if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; }
-          throw e;
+        /* a wing that is missing or not known is a question, not a failure: which wing? */
+        if (WING_ASKED.has(t.name) && !wingOf(site, a.wing)) {
+          const q = inputRequired("wing", a.wing == null || a.wing === "" ? "Hvilken fløy?" : `Fant ikke fløyen «${a.wing}». Hvilken fløy mener du?`, { wing: { type: "string", enum: wingsAll().map(v => v.id), enumNames: wingsAll().map(v => v.name), description: "Fløyen" } });
+          return q.inputRequired;
         }
+        const go = async ctx => {
+          try {
+            auth?.count(req, who); bump("open", 3000, 3600e3);
+            const out = await t.run(a, req, ctx);
+            for (const r of out?.rejected || []) refused(r.error, { edit: a.edits?.[r.index] });
+            if (out?._result) return out._result;
+            const refusedAll = out?.applied === 0 && Array.isArray(out.rejected) && out.rejected.length > 0 && typeof out.reason === "string";   // try_change: every change refused
+            return { content: [{ type: "text", text: refusedAll ? `${out.reason}\n${JSON.stringify({ ...out, reason: undefined })}` : JSON.stringify(out) }], structuredContent: out, ...(refusedAll ? { isError: true } : {}) };
+          } catch (e) {
+            if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; }
+            throw e;
+          }
+        };
+        /* U3932 (ext-tasks): a long call may be asked for as a task: a handle to poll (tasks/get), steer (tasks/update) and fetch (tasks/result) */
+        if (params.task && t.task) return { resultType: "task", task: tasks.start(who, ctx => go(ctx)) };
+        return go(null);
       }
       default:
         if (method?.startsWith("notifications/")) return undefined;

@@ -30,7 +30,7 @@ test("the site, a wing, the storeys", async () => {
   assert.equal(w.id, "sentralblokka"); assert.equal(w.levels.length, 14); assert.ok(w.sources.length);
   const st = (await call("storeys", { wing: "Østfløy" })).data;
   assert.ok(st.storeys.find(x => x.storey === "3. etasje").wings[0].kote === 23.54);
-  assert.equal((await call("about_wing", { wing: "nowhere" })).isError, true);
+  assert.equal((await call("about_wing", { wing: "nowhere" })).resultType, "input_required");   // U3932: asked, not failed
 });
 test("rooms of a storey across wings, and openings", async () => {
   const f = (await call("floor_plan", { storey: "5" })).data;
