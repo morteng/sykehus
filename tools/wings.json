@@ -34,25 +34,25 @@
      "name": "1. etasje",
      "kote": 16.4,
      "how": "antatt",
-     "src": "ca. 3,9 m under 2. etasje; ingen tegning med kote"
+     "src": "ca. 3,9 m under 2. etasje; ingen tegning med kote. Ingen tegning vi når viser Sentralblokkas etasje 1–4; den gamle blokkas etasjehøyder (4,22 m) gjelder ikke her."
     },
     {
      "name": "2. etasje",
      "kote": 20.28,
      "how": "antatt",
-     "src": "som 2. etasje i den gamle blokka (f36d080d5af8)"
+     "src": "som 2. etasje i den gamle blokka (f36d080d5af8); antatt for Sentralblokka. Ingen tegning vi når viser Sentralblokkas etasje 1–4; den gamle blokkas etasjehøyder (4,22 m) gjelder ikke her."
     },
     {
      "name": "3. etasje",
      "kote": 24.24,
      "how": "beregnet",
-     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser); kotene på fasaden er ikke lesbare. Ingen tegning vi når viser Sentralblokkas etasje 1–4; den gamle blokkas etasjehøyder (4,22 m) gjelder ikke her."
     },
     {
      "name": "4. etasje",
      "kote": 28.01,
      "how": "beregnet",
-     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser)"
+     "src": "fra 5. etasje +31,77 og 3,76 m per etasje (fasade 1972 90a04eb00225, tak fra laser); kotene på fasaden er ikke lesbare. Ingen tegning vi når viser Sentralblokkas etasje 1–4; den gamle blokkas etasjehøyder (4,22 m) gjelder ikke her."
     },
     {
      "name": "5. etasje",
