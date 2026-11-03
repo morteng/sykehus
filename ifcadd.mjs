@@ -21,7 +21,8 @@
 import { createHash } from "node:crypto";
 import { stepText } from "./ifcfilter.mjs";
 import { ifcMaterial, MATERIALS } from "./public/renderkit/materials.js";   // U3619: the one list of materials
-import { placePart, typeLine } from "./partmerge.mjs";   // U3690: a balcony is the worker's part, written in where it stands
+import { placePart, typeLine } from "./partmerge.mjs";
+import { PSET } from "./ifcbox.mjs";   // U3631: the set that says which part of the version an element is   // U3690: a balcony is the worker's part, written in where it stands
 
 /* the balcony part's widths: at most 12 m a balcony (the part's limit), at least 1.2; a size is its key in the parts handed in */
 export const BALCONY_MAX = 12;
@@ -71,7 +72,7 @@ function anchors(parsed) {
 
 /* the before's IFC text (parsed) and the after (applyEdits(...).site) and the before's site → the lines to add, and the
    wings' new names by IfcBuilding id */
-export function addedLines(parsed, after, before, parts = null) {
+export function addedLines(parsed, after, before, parts = null, opts = {}) {
   const none = { lines: [], renamed: new Map(), counts: {} };
   const moved = !!(after.terrain?.z && before.terrain?.z && after.terrain.z !== before.terrain.z), waters = (after.landscape || []).filter(w => w.basin && w.level != null);
   if (!(after.added || []).length && !(after.wings || []).some(w => w.draft?.length) && !moved && !waters.length) return none;
@@ -121,8 +122,28 @@ export function addedLines(parsed, after, before, parts = null) {
       const k = Math.max(1, a.storeys || 1), sh = (a.top_kote - a.base_kote) / k;
       const sts = Array.from({ length: k }, (_, i) => { const z = a.base_kote + i * sh; return put(`IFCBUILDINGSTOREY('${gid(`${key}:storey:${i}`)}',$,${stepStr(a.storeys ? `${i + 1}. etasje` : "Hele bygget")},$,$,#${placeAt(z)},$,$,.ELEMENT.,${num(z)})`); });
       put(`IFCRELAGGREGATES('${gid(key + ":storeys")}',$,$,$,#${bld},(${sts.map(s => "#" + s).join(",")}))`);
-      const parts = a.shape === "bim" || !a.parts?.some(p => p.profile || p.tris) ? box(a) : a.parts.filter(p => p.profile || p.tris);
-      const el = put(`IFCBUILDINGELEMENTPROXY('${gid(key + ":body")}',$,${stepStr(a.name)},$,${stepStr(a.shape === "bim" ? "Konstruksjon" : a.shape)},#${placeAt(0)},#${shape(parts)},$,.ELEMENT.)`);
+      /* U3631, for FreeCAD: a part of the worker's (a stair) is its own assembly, with its type, property sets and quantities, not a box;
+         its Id in the version is in the set Sykehustomta_Del, so the file that comes back can say which part was changed */
+      const pp = opts.freecad && a.bim?.part && parts?.get("part:" + a.id);
+      if (pp) {
+        const [[x0, y0], [x1, y1]] = [a.from, a.to], L = Math.hypot(x1 - x0, y1 - y0) || 1;
+        /* written as entities of their own, the way FreeCAD writes them and a program reads them back (ifcbox.mjs) */
+        const o3 = put(`IFCCARTESIANPOINT(${pt([(x0 + x1) / 2, (y0 + y1) / 2, 0])})`), dz = put(`IFCDIRECTION(${pt([0, 0, 1])})`), dx = put(`IFCDIRECTION(${pt([(x1 - x0) / L, (y1 - y0) / L, 0])})`);
+        const place = put(`IFCLOCALPLACEMENT($,#${put(`IFCAXIS2PLACEMENT3D(#${o3},#${dz},#${dx})`)})`);
+        const got = placePart(pp, { reserve: () => ++n, emit: (id, text) => lines.push(`#${id}=${text};`), gid, key: key + ":part", place, body: A.body });
+        const ids = got.products.map(q => q.id);
+        for (const q of got.products) { const mk = Object.keys(MATERIALS).find(x => ifcMaterial(x)?.name === q.material); if (mk) made(mk, q.id); }
+        const ty = put(typeLine(pp, gid, `${key}:part:type`));
+        put(`IFCRELDEFINESBYTYPE('${gid(`${key}:part:type:rel`)}',$,$,$,(#${got.assembly}),#${ty})`);
+        contain(key + ":part", [got.assembly], sts[0]);
+        pset(key + ":del", ids, PSET, { Id: a.id, Del: a.bim.part, Navn: a.name, Parametre: JSON.stringify(a.bim.params || {}) });
+        pset(key + ":part", ids, "Sykehustomta_Nytt", { Hvorfor: a.why, Status: "NEW" });
+        pset(key, [bld], "Sykehustomta_Nytt", { Id: a.id, Bruk: a.use, Merknad: a.note, Hvorfor: a.why, Status: "NEW" });
+        counts.buildings++; counts.elements += ids.length;
+        continue;
+      }
+      const shapes = a.shape === "bim" || !a.parts?.some(p => p.profile || p.tris) ? box(a) : a.parts.filter(p => p.profile || p.tris);
+      const el = put(`IFCBUILDINGELEMENTPROXY('${gid(key + ":body")}',$,${stepStr(a.name)},$,${stepStr(a.shape === "bim" ? "Konstruksjon" : a.shape)},#${placeAt(0)},#${shape(shapes)},$,.ELEMENT.)`);
       contain(key, [el], sts[0]); made(a.material, el);
       pset(key, [bld], "Sykehustomta_Nytt", { Id: a.id, Bruk: a.use, Etasjer: a.storeys ? String(a.storeys) : null, Byggeår: a.built, Merknad: a.note, Hvorfor: a.why, Status: "NEW" });
       pset(key + ":body", [el], "Sykehustomta_Nytt", { Form: a.shape, Materiale: a.material, Fot: `kote +${a.base_kote}`, Topp: `kote +${a.top_kote}`, Grunnflate: a.footprint_m2 != null ? `${a.footprint_m2} m²` : null, Volum: a.volume_m3 != null ? `${a.volume_m3} m³` : null,
@@ -208,8 +229,8 @@ export function addedLines(parsed, after, before, parts = null) {
 }
 
 /* the whole file: the lines before ENDSEC, the renamed buildings' name in place */
-export function withAdded(text, parsed, after, before, parts = null) {
-  const { lines, renamed, counts } = addedLines(parsed, after, before, parts);
+export function withAdded(text, parsed, after, before, parts = null, opts = {}) {
+  const { lines, renamed, counts } = addedLines(parsed, after, before, parts, opts);
   if (!lines.length && !renamed.size) return { text, counts };
   let out = renamed.size ? text.replace(/^#(\d+)=IFCBUILDING\('([^']*)',([^,]*),'(?:[^']|'')*'/gm, (m, id, g, oh) => renamed.has(+id) ? `#${id}=IFCBUILDING('${g}',${oh},${stepStr(renamed.get(+id))}` : m) : text;
   const at = out.lastIndexOf("\nENDSEC;");

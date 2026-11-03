@@ -1079,7 +1079,9 @@ function versionCard(v) {
   const open = v.version === versionId, sel = selecting && v.mine;
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
   const pk = v.sharing !== "privat" && !selecting && me.person ? `<a class="fc-pk" href="${esc(prospektHref(v))}" title="Åpne prospektet: bilder og tall, uten innlogging" aria-label="Prospekt: ${esc(v.title)}">Prospekt</a>` : "";
-  const acts = v.mine && !selecting ? `<div class="fc-acts">${pk}${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
+  /* U3631: out to FreeCAD (the version as IFC, its stairs and railings as parts) and back (the file FreeCAD saved: what was changed there is one change here) */
+  const fc = v.mine && !selecting ? `<a class="fc-pk" href="api/ifc?versjon=${encodeURIComponent(v.version)}&for=freecad" download title="Last ned prosjektet som IFC til FreeCAD: hver trapp og hvert rekkverk er en del med navn og type" aria-label="Åpne i FreeCAD: ${esc(v.title)}">FreeCAD</a><label class="fc-pk fc-pkin" title="Ta tilbake fila fra FreeCAD (IFC): det du endret på delene kommer inn i prosjektet som én endring hver"><input type="file" accept=".ifc" data-vfcin="${esc(v.version)}" hidden aria-label="Ta tilbake fra FreeCAD: ${esc(v.title)}">Fra FreeCAD</label>` : "";
+  const acts = v.mine && !selecting ? `<div class="fc-acts">${fc}${pk}${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
     + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}${ownPictureHTML(thumbSrc(v), { w: 480, h: 300, alt: "" })}</span>`
     + `<span class="fc-b"><span class="t">${esc(v.title)}${open ? ' <em class="fc-open">Åpen</em>' : ""}</span><small>${v.mine ? "din" : esc(v.owner)} · <span class="vis">${VIS[v.sharing] || esc(v.sharing)}</span> · ${savedAt(v.updated)}</small></span></a>${acts || (pk ? `<div class="fc-acts">${pk}</div>` : "")}</div>`
@@ -1113,6 +1115,18 @@ $("verList").addEventListener("click", e => {
   if (d.vdel) askDelete([verRows.find(v => v.version === d.vdel) || (d.vdel === versionId && draft?.version ? { version: versionId, title: draft.title } : null)].filter(Boolean));
   else if (d.vshare) share(d.vshare); else if (d.vpriv) makePrivate(d.vpriv); else if (d.vcopy) copyVersion(d.vcopy);
   else if (d.vpub) setSharing(d.vpub, "offentlig"); else if (d.vlink) setSharing(d.vlink, "lenke");
+});
+/* U3631: the IFC FreeCAD saved, sent to the server; it answers with what changed in each part, and the open project is drawn again */
+$("verList").addEventListener("change", async e => {
+  const c = e.target.closest("input[data-vfcin]"); if (!c || !c.files?.[0]) return;
+  const id = c.dataset.vfcin, file = c.files[0]; c.value = "";
+  toast(`Leser ${file.name} …`);
+  try {
+    const r = await fetch(`api/ifc-inn?versjon=${encodeURIComponent(id)}`, { method: "POST", headers: { "content-type": "application/octet-stream" }, body: file }), j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(j.error || "Fila kunne ikke tas tilbake."); return; }
+    toast(j.say || "Ferdig.");
+    if (j.changed?.length) { if (id === versionId) await refresh(); listVersions(); }
+  } catch { toast("Fila kom ikke fram. Prøv igjen."); }
 });
 $("verList").addEventListener("change", e => { const c = e.target.closest("input[data-pkshow]"); if (c) pkSet(c.dataset.pkshow, { show: c.checked }); });
 $("verList").addEventListener("click", e => { const b = e.target.closest("[data-pkhero]"); if (b) pkSet(b.dataset.pkhero, { hero: true }); });

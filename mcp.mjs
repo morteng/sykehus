@@ -37,6 +37,7 @@ import { check as checkRules, summary as checkSummary } from "./checks.mjs";   /
 import { createSiteFacts } from "./sitefacts.mjs";
 import { createHeritage, KINDS as HERITAGE_KINDS } from "./heritage.mjs";
 import { readPart } from "./partmerge.mjs";
+import { reshapesFrom, partsOf } from "./freecad.mjs";   // U3631: a version out to FreeCAD and back
 import { libraries } from "./fetchimport.mjs";   // U3571 S4: models from open libraries, fetched for a signed-in person   // U3570: constructions a script builds, in the worker
 import { sunOf } from "./public/renderkit/sunpick.js";
 import { sunError } from "./public/gjengi-no.js";
@@ -1337,7 +1338,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
      (ifcfilter.mjs), with what it builds and the wings it renames (ifcadd.mjs); the before's file is read once, each answer kept until the draft or version changes */
   let base = null; const ifcs = new Map();
   /* the IFC of an after (the edits), kept by tag; shared by GET /api/ifc and check_model */
-  async function ifcBody(tag, edits) {
+  async function ifcBody(tag, edits, freecad = false) {
+    if (freecad) tag += "|freecad";
     let body = ifcs.get(tag);
     if (!body) {
       const m = applyEdits(site, floors, edits), left = new Set(m.site.buildings.map(b => b.wing).filter(Boolean));
@@ -1345,7 +1347,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       base ??= parseIfc(readFileSync(new URL("./public/data/sykehus.ifc", import.meta.url), "utf8"));
       /* the balconies are the worker's part (U3690): one run a size, each written in where it stands */
       const parts = new Map(); for (const [size, { width, depth }] of balconySizes(m.site)) parts.set(size, readPart(await partIfc("balcony", { width, depth, door: false })));
-      body = Buffer.from(withAdded(withoutBuildings(base, gone, replacesBuiltIn(m.site) ? [["IFCSLAB", "Balkongdekke"], ["IFCRAILING", "Rekkverk"]] : []).text, base, m.site, site, parts).text, "utf8");
+      /* U3631, for FreeCAD: each part of the worker's as its own assembly (its settings run once for the file) */
+      if (freecad) for (const a of partsOf(m.site.added).values()) parts.set("part:" + a.id, readPart(await partIfc(a.bim.part, a.bim.params)));
+      body = Buffer.from(withAdded(withoutBuildings(base, gone, replacesBuiltIn(m.site) ? [["IFCSLAB", "Balkongdekke"], ["IFCRAILING", "Rekkverk"]] : []).text, base, m.site, site, parts, { freecad }).text, "utf8");
       if (ifcs.size > 20) ifcs.delete(ifcs.keys().next().value); ifcs.set(tag, body);
     }
     return body;
@@ -1359,12 +1363,31 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
       else if (did) { const d = draftOf(did); edits = d.edits; tag = `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`; name = "utkast"; }
       else throw toolErr("Hvilket utkast eller hvilken versjon?");
     } catch (e) { return send(res, 404, { error: e.tool ? e.message : "Finnes ikke." }); }
-    let body; try { body = await ifcBody(tag, edits); } catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
-    const file = `gamle-drammen-sykehus-${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;
+    let body; try { body = await ifcBody(tag, edits, q.get("for") === "freecad"); } catch (e) { return send(res, 503, { error: e.tool ? e.message : `Balkongene bygges av arbeideren, og den svarte ikke: ${String(e.message).slice(0, 200)}` }); }
+    const file = `gamle-drammen-sykehus-${q.get("for") === "freecad" ? "freecad-" : ""}${String(name).toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "versjon"}.ifc`;
     res.writeHead(200, { ...SECURITY, "content-type": "application/x-step", "content-disposition": `attachment; filename="${file.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file)}`, "cache-control": "no-store" });
     return res.end(body);
   }
-  return { siteFacts, stills: { list: STILLS.map(({ id, title }) => ({ id, title })), of: stillsOf }, thumbOf, sketchBytes: sid => { const k = sketchMeta(sid); try { return k ? { person: k.person, bytes: readFileSync(join(SK, sid + ".png")) } : null; } catch { return null; } }, handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
+  /* POST /api/ifc-inn?versjon=<id>: the IFC FreeCAD saved, read against the one that went out (?for=freecad); each part of the version that
+     is bigger, smaller or elsewhere is changed in the version with one reshape, by its id. Its owner only. → { changed, same, missing } */
+  async function handleIfcIn(req, res) {
+    if (req.method !== "POST") return send(res, 405, { error: "POST only" }, { allow: "POST" });
+    try {
+      const q = new URL(req.url, "http://x").searchParams, v = ownVersion(String(q.get("versjon") || ""), req);
+      const chunks = []; let size = 0;
+      for await (const c of req) { size += c.length; if (size > 150e6) throw toolErr("Fila er for stor (høyst 150 MB)."); chunks.push(c); }
+      const text = Buffer.concat(chunks).toString("utf8");
+      if (!/^\s*ISO-10303-21/.test(text) || !/FILE_SCHEMA\s*\(\s*\(\s*'IFC/i.test(text)) throw toolErr("Det er ikke en IFC-fil. Lagre fra FreeCAD som IFC (Fil › Eksporter › Industry Foundation Classes).");
+      const m = applyEdits(site, floors, v.edits);
+      if (!partsOf(m.site.added).size) throw toolErr("Prosjektet har ingen ferdige deler (trapp, rekkverk …) å ta tilbake. Last ned til FreeCAD fra et prosjekt som har dem.");
+      const out = await ifcBody(`${v.id}@${v.updated}`, v.edits, true), got = reshapesFrom(out.toString("utf8"), text, m.site.added);
+      if (!got.edits.length) return send(res, 200, { changed: [], same: got.same, missing: got.missing, say: got.missing.length ? `Fant ikke ${got.missing.join(", ")} i fila.` : got.same ? "Ingen del er endret i fila." : "Fant ingen av delene i fila: lagre fra FreeCAD uten å bytte navn på delene, og ta med deler fra ifc-fila som ble lastet ned." });
+      const tool = TOOLS.find(t => t.name === "try_change"), done = await tool.run({ edits: got.edits, version: v.id, include_screenshot: false, fromPage: true }, req);
+      if (done.rejected?.length) return send(res, 422, { error: done.rejected.map(r => r.error).filter(Boolean).join(" ") || "Endringen kunne ikke settes inn.", changed: [], same: got.same, missing: got.missing });
+      return send(res, 200, { changed: got.changed, same: got.same, missing: got.missing, say: `${got.changed.map(c => `${c.name}: ${c.say}`).join("; ")}.` });
+    } catch (e) { return send(res, e.tool ? 400 : 500, { error: e.tool ? e.message : "Fila kunne ikke leses." }); }
+  }
+  return { siteFacts, handleIfcIn, stills: { list: STILLS.map(({ id, title }) => ({ id, title })), of: stillsOf }, thumbOf, sketchBytes: sid => { const k = sketchMeta(sid); try { return k ? { person: k.person, bytes: readFileSync(join(SK, sid + ".png")) } : null; } catch { return null; } }, handleMcp, handleCard, handleDraft, handleVersion, handleVersions, handleThumb, handleChange, handleIfc, handleBim: (req, res, rest) => handleBim(req, res, rest, SECURITY), TOOLS,
     setNotifier: f => { notify = f; },
     /* GET /api/skisse/<id>.png: a plan Anton showed this person */
     handleSketch: (req, res, rest, person) => {
