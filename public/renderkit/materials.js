@@ -106,3 +106,11 @@ export const ifcMaterial = key => {
   const m = MATERIALS[key]; if (!m) return null;
   return { name: m.card?.name || m.en, description: m.no, category: m.category, card: m.card?.uuid || null };
 };
+
+/* U3619: a word a person or an agent says for a material (tegl, brick, betong, «Concrete») → the library's key, or null. Norwegian names,
+   English names and the keys themselves, case and plural ignored */
+export const materialKey = word => {
+  const w = String(word ?? "").trim().toLowerCase(); if (!w) return null;
+  if (MATERIALS[w]) return w;
+  return Object.keys(MATERIALS).find(k => MATERIALS[k].no.toLowerCase() === w || MATERIALS[k].en.toLowerCase() === w) ?? ({ murstein: "brick", teglstein: "brick", bricks: "brick", tre: "wood", trevirke: "wood", staal: "steel", stål: "steel", belegg: "paving", heller: "paving", stein: "paving" })[w] ?? null;
+};

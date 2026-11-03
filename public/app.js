@@ -701,7 +701,7 @@ function describe(e) {   // by the wings as they were, since a wing torn down is
   const wings = site0.wings || [], w = wings.find(x => x.id === e.wing)?.name || e.wing;
   const why = e.why && !PAGE_WHY.test(e.why) ? ` (${e.why})` : "";
   if (e.kind === "level") return `${w}, ${e.storey}: kote ${kote(e.kote)}${why}`;
-  if (e.kind === "wing") return `${w}, ${{ name: "navn", use: "bruk", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
+  if (e.kind === "wing") return `${w}, ${{ name: "navn", use: "bruk", built: "bygget", storeys: "etasjer", construction: "konstruksjon", facade: "fasade", facade_material: "fasadematerial", note: "merknad" }[e.field] || e.field}: ${e.value}${why}`;
   if (e.kind === "room") return `${e.storey}, ${e.room}: ${Object.entries(e.set).map(([k, v]) => `${{ name: "navn", use: "bruk", area_m2: "areal" }[k] || k} ${k === "area_m2" ? v + " m²" : v}`).join(", ")}${why}`;
   if (e.kind === "demolish") return `Rives: ${nameOf(e.building)}${why}`;
   if (e.kind === "restore") return `Beholdes: ${nameOf(e.building)}${why}`;
