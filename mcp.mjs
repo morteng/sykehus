@@ -175,18 +175,29 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     } return out;
   };
   const brief = v => ({ version: v.id, title: v.title });
-  const deleteVersions = (me, refs) => {
+  /* U3936: a destructive tool is preview → confirm → receipt → restore. Without confirm: true nothing changes and the answer names
+     the parts that would go; with it the change lands and the receipt is read back from the store (in the trash, off the lists),
+     with the restore call to make. The page's own delete (HTTP, its «Angre» toast) is its own confirm and calls this with true */
+  const deleteVersions = (me, refs, confirm = true) => {
     if (!me) throw toolErr("Å slette en versjon krever innlogging."); if (!versions) throw toolErr("Versions are not kept on this server.");
-    const gone = pick(refs, versions.list({ owner: me, viewer: me }), "versjon"), hadWork = gone.some(v => v.work);
+    const gone = pick(refs, versions.list({ owner: me, viewer: me }), "versjon"), hadWork = gone.some(v => v.work), ids = gone.map(v => v.id);
+    if (!confirm) {
+      const next = hadWork ? versions.list({ owner: me, viewer: me }).find(x => x.owner === me && !ids.includes(x.id)) : null;
+      return { preview: true, confirmed: false, would_delete: gone.map(v => ({ ...brief(v), changes: v.edits.length, sharing: v.sharing, ...(v.work ? { open_on_website: true } : {}) })), ...(hadWork ? { then_open: next ? brief(next) : null } : {}), restorable_days: TRASH_DAYS, note: `Ingenting er slettet ennå. Si til personen hva som slettes (navnene over); ved ja, kall delete_version igjen med de samme versjonene og confirm: true.` };
+    }
     for (const v of gone) versions.remove(v);
     let work = null; if (hadWork) { const next = versions.list({ owner: me, viewer: me }).find(x => x.owner === me); if (next) { next.work = true; versions.save(next); work = brief(next); } }
-    return { deleted: gone.map(v => ({ ...brief(v), restorable_until: new Date(Date.parse(v.deleted) + TRASH_DAYS * 864e5).toISOString() })), ...(work ? { now_open: work } : {}), note: `Slettet. Versjonene ligger i papirkurven i ${TRASH_DAYS} dager; undelete_version henter dem tilbake.` };
+    const live = new Set(versions.list({ owner: me, viewer: me }).map(x => x.id)), bin = ids.filter(id => versions.getTrashed(id));
+    return { deleted: gone.map(v => ({ ...brief(v), restorable_until: new Date(Date.parse(v.deleted) + TRASH_DAYS * 864e5).toISOString() })), ...(work ? { now_open: work } : {}),
+      receipt: { observed: "read back from the store after the change", in_trash: bin, still_in_lists: ids.filter(id => live.has(id)), all_in_trash: bin.length === ids.length && !ids.some(id => live.has(id)) },
+      restore: { tool: "undelete_version", versions: ids }, note: `Slettet. Versjonene ligger i papirkurven i ${TRASH_DAYS} dager; undelete_version henter dem tilbake.` };
   };
   const undeleteVersions = (me, refs) => {
     if (!me) throw toolErr("Å hente en versjon tilbake krever innlogging."); if (!versions) throw toolErr("Versions are not kept on this server.");
     const back = pick(refs, versions.trash(me).filter(v => versions.getTrashed(v.id)), "slettet versjon");
     try { for (const v of back) versions.restore(v); } catch (e) { throw toolErr(e.message); }
-    return { restored: back.map(brief) };
+    const live = new Set(versions.list({ owner: me, viewer: me }).map(x => x.id));
+    return { restored: back.map(brief), receipt: { observed: "read back from the store after the change", back_in_lists: back.map(v => v.id).filter(id => live.has(id)), still_in_trash: back.map(v => v.id).filter(id => versions.getTrashed(id)) } };
   };
   /* its link as the asker may give it: plain when public; the share link when link-only; the owner's own when private */
   const SHARE_NOTE = { privat: "Privat: bare du ser den. Lenken er din egen; ikke del den. Endre med set_sharing.", lenke: "Bare de med lenken ser den; den står ikke i lista.", offentlig: "Delt åpent: står i lista på forsiden og åpner for alle." };
@@ -809,9 +820,9 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
           return { versions: versions.trash(me).map(v => ({ ...brief(v), changes: v.edits.length, deleted: v.deleted, restorable_until: new Date(Date.parse(v.deleted) + TRASH_DAYS * 864e5).toISOString() })), you: me, trash: true }; }
         const me = userOf(req), owner = a.owner === "me" ? me : a.owner; if (a.owner === "me" && !owner) throw toolErr("Ikke innlogget, så det finnes ingen egne versjoner.");
         return { versions: versions.list({ owner, viewer: me }).slice(0, 100).map(v => versionOut(v, originOf(req), req)), you: me }; } },
-    { name: "delete_version", title: "Slett versjoner", write: true, schema: S({ versions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "The person's own versions to delete: each a version id (v and 8 more) or its name, as the person calls it" } }, ["versions"]),
-      description: `Deletes one or more of the person's own versions (by id or name; never anyone else's). They go to the trash for ${TRASH_DAYS} days: nothing is lost at once, and undelete_version brings them back. Only after the person has said which ones to delete: name them in your question when it is not plain. If the deleted one was the one open on the website, the page moves to their newest other. All or nothing: a name that matches none or two stops it.`,
-      run: async (a, req) => deleteVersions(userOf(req), a.versions) },
+    { name: "delete_version", title: "Slett versjoner", write: true, schema: S({ versions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "The person's own versions to delete: each a version id (v and 8 more) or its name, as the person calls it" }, confirm: { type: "boolean", description: "false or left out: only a preview of what would go, nothing changes. true: delete, after the person has said yes to the preview" } }, ["versions"]),
+      description: `Deletes one or more of the person's own versions (by id or name; never anyone else's) in two steps: first without confirm, which only previews the versions that would go and changes nothing; then, once the person has said yes, with confirm: true, which deletes and answers with a receipt read back from the store and the undelete_version call that restores. They go to the trash for ${TRASH_DAYS} days: nothing is lost at once, and undelete_version brings them back. Only after the person has said which ones to delete: name them in your question when it is not plain. If the deleted one was the one open on the website, the page moves to their newest other. All or nothing: a name that matches none or two stops it.`,
+      run: async (a, req) => deleteVersions(userOf(req), a.versions, a.confirm === true) },
     { name: "undelete_version", title: "Hent slettede versjoner tilbake", write: true, schema: S({ versions: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 50, description: "Deleted versions to bring back: each an id or a name (list_versions with trash: true shows them)" } }, ["versions"]),
       description: `Brings the person's own deleted versions back from the trash (within ${TRASH_DAYS} days of deleting them), with their changes, name and sharing as they were.`,
       run: async (a, req) => undeleteVersions(userOf(req), a.versions) },
@@ -1018,7 +1029,7 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     list_site_photos: "Lists the person's own photos of the real building (wing, facade side, note, year). Read-only; they are read off a photo, never measured.",
     look_at_site_photo: "Shows you one of the person's photos of the building with the wing's numbers in the model beside it. What you read off it is «leser fra bilde», never measured: anchor any size on a drawing number (storeys, openings) and say so; then try_change with a why that says it.",
     retake_photos: "Proposes new pictures from the person's saved photo spots. It makes NOTHING and costs nothing: a card with the count and total price opens on their Gjengi tab, and only their press makes them. Say the count and price; never claim a picture is made.",
-    delete_version: "Deletes the person's own versions (by id or name; never anyone else's) to the trash for 30 days; undelete_version brings them back. Only after the person has said which ones: name them when it is not plain. All or nothing.",
+    delete_version: "Deletes the person's own versions (by id or name; never anyone else's) to the trash for 30 days; undelete_version brings them back. Two steps: call without confirm to preview (nothing changes), say what would go, and after a yes call again with confirm: true; the receipt says what was read back. All or nothing.",
     new_version: "Only when the person asks for a new, separate alternative (their changes otherwise go into the version they have open). Makes a saved version owned by the person (needs the login), privat until set_sharing makes it lenke or offentlig; from: copies a draft's or visible version's changes. Then add to it with try_change (version:).",
     find_models: "Searches open libraries (Poly Haven, CC0, glTF; the FreeCAD parts library, CC-BY-3.0, name its author) for a model to bring in. Also Wikimedia Commons pictures (pictures[]: licence per file; restriction says NC/ND; link_only = open the page). Each hit has its licence: say it before you use one. link_only lists libraries that need an account or forbid downloading: give the person those links, never fetch from them. Needs the login.",
     look: "A picture of the model for you to look at (plan has a scale bar). With target: that version or draft; without, the one the person has open. Use it to check your own work from the side that shows it best. The person does not see it; to show them, use show_building.",
@@ -1071,8 +1082,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     openings: O({ wing: "string", facades: "array" }),
     show_draft: O({ changes: "array", after: "object", saved: "boolean", saved_views: "array", ...TARGET_OUT }),
     list_versions: O({ versions: "array", you: { type: ["string", "null"] }, trash: "boolean" }),
-    delete_version: O({ deleted: "array", now_open: "object", note: "string" }),
-    undelete_version: O({ restored: "array" }),
+    delete_version: O({ preview: "boolean", confirmed: "boolean", would_delete: "array", then_open: { type: ["object", "null"] }, restorable_days: "number", deleted: "array", now_open: "object", receipt: "object", restore: "object", note: "string" }),
+    undelete_version: O({ restored: "array", receipt: "object" }),
     search_documents: O({ query: "string", documents: "array", more: "number" }),
     read_document: O({ id: { type: ["string", "number"] }, title: "string", pages: "array", next_page: { type: ["number", "null"] } }),
     list_documents: O({ documents: "array" }),

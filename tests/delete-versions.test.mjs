@@ -35,7 +35,7 @@ const apiGet = (id, h = lars) => fetch(`${O}/api/versjon/${id}`, { headers: h })
 test("the owner deletes by name: the list, the link and the page's list all lose it", async () => {
   const a = (await call("new_version", { title: "Drivhus" }, lars)).out, b = (await call("new_version", { title: "Rive alt" }, lars)).out;
   assert.deepEqual((await mine(lars)).sort(), ["Drivhus", "Rive alt"]);
-  const d = await call("delete_version", { versions: ["drivhus"] }, lars);
+  const d = await call("delete_version", { versions: ["drivhus"], confirm: true }, lars);
   assert.equal(d.error, null); assert.deepEqual(d.out.deleted.map(x => x.version), [a.version]);
   assert.ok(Date.parse(d.out.deleted[0].restorable_until) - Date.now() > 29 * DAY, "30 days to bring it back");
   assert.deepEqual(await mine(lars), ["Rive alt"], "gone from the list");
@@ -47,20 +47,20 @@ test("the owner deletes by name: the list, the link and the page's list all lose
 
 test("only the owner: another person's delete is refused and changes nothing; signed out needs the login", async () => {
   const v = (await call("new_version", { title: "Larsens" }, lars)).out;
-  const r = await call("delete_version", { versions: [v.version] }, morten);
+  const r = await call("delete_version", { versions: [v.version], confirm: true }, morten);
   assert.match(r.error, /Fant ingen versjon/); assert.ok(r.error);
-  const byName = await call("delete_version", { versions: ["Larsens"] }, morten); assert.match(byName.error, /Fant ingen versjon/);
+  const byName = await call("delete_version", { versions: ["Larsens"], confirm: true }, morten); assert.match(byName.error, /Fant ingen versjon/);
   assert.ok((await mine(lars)).includes("Larsens"), "still there");
   const pageTry = await page({ delete: [v.version] }, { "remote-user": "morten", "x-edge-auth": secret }); assert.equal(pageTry.status, 400);
   assert.ok((await mine(lars)).includes("Larsens"));
-  const anon = await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/call", params: { name: "delete_version", arguments: { versions: [v.version] } } }) });
+  const anon = await fetch(O + "/mcp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/call", params: { name: "delete_version", arguments: { versions: [v.version], confirm: true } } }) });
   assert.equal(anon.status, 401);
 });
 
 test("all or nothing: a name that matches none, or two, stops the whole delete", async () => {
   await call("new_version", { title: "Likt" }, lars); await call("new_version", { title: "Likt" }, lars); const one = (await call("new_version", { title: "Enslig" }, lars)).out;
-  assert.match((await call("delete_version", { versions: ["Enslig", "Likt"] }, lars)).error, /navnet på 2 versjoner/);
-  assert.match((await call("delete_version", { versions: ["Enslig", "Finnes ikke"] }, lars)).error, /Fant ingen versjon/);
+  assert.match((await call("delete_version", { versions: ["Enslig", "Likt"], confirm: true }, lars)).error, /navnet på 2 versjoner/);
+  assert.match((await call("delete_version", { versions: ["Enslig", "Finnes ikke"], confirm: true }, lars)).error, /Fant ingen versjon/);
   assert.ok((await mine(lars)).includes("Enslig"), "nothing was deleted");
   assert.equal((await apiGet(one.version)).status, 200);
 });
@@ -68,7 +68,7 @@ test("all or nothing: a name that matches none, or two, stops the whole delete",
 test("restore brings it back with its changes; the trash shows it meanwhile; a live one cannot be restored", async () => {
   const v = (await call("new_version", { title: "Med endring" }, lars)).out;
   await call("try_change", { target: v.version, edits: [{ kind: "demolish", building: "Østfløy" }] }, lars);
-  await call("delete_version", { versions: [v.version] }, lars);
+  await call("delete_version", { versions: [v.version], confirm: true }, lars);
   const trash = (await call("list_versions", { trash: true }, lars)).out.versions; assert.ok(trash.some(t => t.version === v.version && t.changes === 1));
   assert.ok(!(await call("list_versions", { trash: true }, morten)).out.versions.some(t => t.version === v.version), "the trash is the owner's alone");
   assert.match((await call("undelete_version", { versions: [v.version] }, morten)).error, /Fant ingen slettet versjon/);
@@ -106,4 +106,19 @@ test("versions.mjs with an injected clock: kept for 30 days, then gone for good;
   assert.equal(existsSync(join(d, v.id + ".json")), false, "the file is gone");
   assert.ok(existsSync(join(d, w.id + ".json")), "the live one is not touched");
   assert.equal(createVersions(d, () => now).get(w.id).title, "Blir", "a restart reads the live one");
+});
+
+test("U3936: preview names the parts and changes nothing; confirm lands it; the receipt reads it back; undelete restores", async () => {
+  const v = (await call("new_version", { title: "Forhåndsvist" }, lars)).out;
+  const pre = await call("delete_version", { versions: ["Forhåndsvist"] }, lars);
+  assert.equal(pre.error, null); assert.equal(pre.out.preview, true); assert.equal(pre.out.deleted, undefined);
+  assert.deepEqual(pre.out.would_delete.map(x => [x.version, x.title]), [[v.version, "Forhåndsvist"]]);
+  assert.ok((await mine(lars)).includes("Forhåndsvist"), "the preview deleted nothing");
+  const done = await call("delete_version", { versions: ["Forhåndsvist"], confirm: true }, lars);
+  assert.deepEqual(done.out.deleted.map(x => x.version), [v.version]);
+  assert.equal(done.out.receipt.all_in_trash, true); assert.deepEqual(done.out.receipt.in_trash, [v.version]); assert.deepEqual(done.out.receipt.still_in_lists, []);
+  assert.ok(!(await mine(lars)).includes("Forhåndsvist"));
+  const back = await call(done.out.restore.tool, { versions: done.out.restore.versions }, lars);
+  assert.deepEqual(back.out.restored.map(x => x.version), [v.version]); assert.deepEqual(back.out.receipt.back_in_lists, [v.version]); assert.deepEqual(back.out.receipt.still_in_trash, []);
+  assert.ok((await mine(lars)).includes("Forhåndsvist"));
 });
