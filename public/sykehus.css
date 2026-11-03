@@ -321,6 +321,19 @@ body.tegner .nz, body.tegner #scale { opacity: .4; pointer-events: none; z-index
 .fl-two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .fl-three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-2); }
 .fl-three input, .fl-two input { min-width: 0; width: 100%; box-sizing: border-box; }
+/* U3646: a part's sheet at 390 px: the construction's parameters flow into as many columns as fit (a long label wraps, a field never
+   spills), the form scrolls inside the sheet with «Ferdig» kept in sight, and a field is 16 px so a phone does not zoom on it */
+.fl-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: var(--sp-2); }
+.fl-form label, .fl-form input, .fl-form select { min-width: 0; box-sizing: border-box; }
+.fl-form input, .fl-form select { width: 100%; }
+.fl-form label { overflow-wrap: anywhere; }
+.fl-formacts { position: sticky; bottom: calc(-1 * var(--sp-3)); padding: var(--sp-2) 0 var(--sp-1); background: var(--panel); }
+@media (max-width: 899px) {
+  .fl-form { min-width: 0; max-height: calc(100dvh - 180px); overflow-y: auto; overscroll-behavior: contain; }
+  .fl-form input, .fl-form select { font-size: 16px; }
+  .fl-three { grid-template-columns: repeat(auto-fit, minmax(min(96px, 100%), 1fr)); }
+  .fl-formacts button { flex: 1; }
+}
 body.placing #view { cursor: crosshair; }
 
 /* U3685: the thin line over the pill: the step while Anton works, then the first sentence of his answer and «Les mer» */

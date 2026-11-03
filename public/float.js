@@ -78,12 +78,12 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     host.innerHTML = `<form class="fl-form" autocomplete="off"><div class="fl-h"><b>Endre ${esc(a ? a.name : w.name)}</b></div>
       ${f("name", "Navn", a ? a.name : w.name, 'maxlength="80" required')}${f("use", "Bruk", a ? a.use : w.use, 'maxlength="80" placeholder="f.eks. boliger"')}
       <div class="fl-two">${bim ? "" : a ? f("storeys", "Etasjer", a.storeys, 'inputmode="numeric" pattern="[0-9]*" maxlength="2"') : f("storeys", "Etasjer", w.storeys, 'maxlength="80"')}${f("built", "Bygget", a ? a.built : w.built, 'maxlength="40"')}</div>
-      ${bim ? `<div class="fl-two">${bimKeys.map(k => f(`p_${k}`, PARAM[k] || k.replace(/_/g, " "), String(a.bim.params[k]).replace(".", ","), 'inputmode="decimal"')).join("")}</div>` : ""}
+      ${bim ? `<div class="fl-params">${bimKeys.map(k => f(`p_${k}`, PARAM[k] || k.replace(/_/g, " "), String(a.bim.params[k]).replace(".", ","), 'inputmode="decimal"')).join("")}</div>` : ""}
       ${a ? `${bim ? "" : `<div class="fl-two">${f("length", "Lengde, m", m1(L), 'inputmode="decimal"')}${f("width", "Bredde, m", m1(a.width), 'inputmode="decimal"')}</div>`}
       <div class="fl-three">${f("angle", "Retning, °", String(Math.round(((90 - Math.atan2(a.to[1] - a.from[1], a.to[0] - a.from[0]) * 180 / Math.PI) % 360 + 360) % 360)), 'inputmode="numeric" title="Lengderetningen, som på et kompass: 0 nord, 90 øst"')}${f("east", "Øst, m", m1((a.from[0] + a.to[0]) / 2), 'inputmode="decimal" title="Midten, meter øst for tomtas origo"')}${f("north", "Nord, m", m1((a.from[1] + a.to[1]) / 2), 'inputmode="decimal" title="Midten, meter nord for tomtas origo"')}</div>` : ""}
       ${a && !a.bim?.plan && !a.on ? `<label>Trinnfri inngang<select name="entrance"><option value="">Ingen valgt</option>${[["N", "mot nord"], ["Ø", "mot øst"], ["S", "mot sør"], ["V", "mot vest"]].map(([k, t]) => `<option value="${k}"${a.entrance === k ? " selected" : ""}>${t}</option>`).join("")}</select></label>` : ""}
       ${f("note", "Merknad", a ? a.note : w.note, 'maxlength="600"')}
-      <div class="fl-acts"><button type="submit" class="riv">Ferdig</button><button type="button" data-x>Avbryt</button></div></form>`;
+      <div class="fl-acts fl-formacts"><button type="submit" class="riv">Ferdig</button><button type="button" data-x>Avbryt</button></div></form>`;
     const fm = host.querySelector("form");
     fm.onsubmit = e => { e.preventDefault(); const v = Object.fromEntries(new FormData(fm)); for (const k of ["length", "width", "angle", "east", "north", ...bimKeys.map(k => `p_${k}`)]) if (v[k]) v[k] = v[k].replace(",", "."); editing = null; render(); onSave(i, v); };
     host.querySelector("[data-x]").onclick = () => { editing = null; render(); };
