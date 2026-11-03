@@ -291,12 +291,14 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const files = [BIM[b.wing], ...(BIM_EXTRA[b.wing] && !replacesBuiltIn(site) ? [BIM_EXTRA[b.wing]] : [])];   // the built-in balconies, unless a balconies edit stands on them
     Promise.all(files.map(f => fetch(f).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))).then(async bufs => {
       const old = [...grp.children], parts = bufs.flatMap(buf => [...readGlb(buf)]), cutPlane = [cuts.get(b.id)];
-      const pic = Q.pbr && MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, clippingPlanes: cutPlane } }).catch(() => null) : null;
+      const fk = (site.wings || []).find(w => w.id === b.wing)?.facade_material, wall = MATERIALS[fk] && fk !== "glass" ? fk : "concrete";   // U3619: the wing's walls in the material it names (the edit wing / facade_material)
+      const pic = Q.pbr && MATERIALS[wall].texture ? await texturedMaterial(wall, { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, clippingPlanes: cutPlane } }).catch(() => null) : null;
       for (const p of parts) {
         const glass = p.material === "window_glass", M = MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};
         let g = new THREE.BufferGeometry(), m;
         g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1));
-        if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.3 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
+        if (p.material === "concrete" && wall !== "concrete" && !pic?.tile) m = mat(MATERIALS[wall].colour, { ...MATERIALS[wall].look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // steel: no picture, its colour and look
+        else if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.3 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
         else m = mat(M.colour, { ...M.look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // the library's look; flat: the file carries no normals, and every face is plane
         g.computeBoundingSphere();
         const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass && p.material !== "steel"; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
@@ -306,9 +308,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       dirty = true;
     }).catch(e => console.warn("bim:", b.id, e.message));
   }
+  const bimOf = new Map();   // the buildings that wear a BIM model: [building, its group], to dress again when the wing's facade material changes (U3619)
   for (const b of site.buildings) {
     const grp = new THREE.Group(), b0 = b.base - 0.5, ring = b.ring;
-    if (b.own && b.blocks?.length) { grp.add(blocksMesh(b, wallTex[kindOf(b)])); if (BIM[b.wing]) loadBim(b, grp); }   // a wing with a model: the extruded outline stands till the model has come (or when it cannot)
+    if (b.own && b.blocks?.length) { grp.add(blocksMesh(b, wallTex[kindOf(b)])); if (BIM[b.wing]) { bimOf.set(b.id, [b, grp]); loadBim(b, grp); } }   // a wing with a model: the extruded outline stands till the model has come (or when it cannot)
     else if (!b.own || b.top == null) {
       const top = b.top ?? b.base + (b.osmHeight || (b.levels || 2) * 3);
       grp.add(wallsTo(ring, b0, () => top, mat(b.own ? C.own : C.nb)));
@@ -460,20 +463,24 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const gradeMeshes = [], CONCRETE = "#b9b5ad", TILE = "#d6e6ea";
   let gradingNow = site.grading || [];
   function setGrading(list, redraw = true) { gradingNow = list || []; if (redraw) setLandscape(landNow); }   // redraw false: a setLandscape follows
-  function quads(list, color) {   // list: [[x, y, z], × 4] each, drawn as two triangles
+  function quads(list, color, key) {   // list: [[x, y, z], × 4] each, drawn as two triangles; key: a material of the library, in its picture where the tier carries it (U3619)
     if (!list.length) return;
     const pos = []; for (const q of list) for (const k of [0, 1, 2, 0, 2, 3]) { const v = P([q[k][0], q[k][1]], q[k][2]); pos.push(v.x, v.y, v.z); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, mat(color)); m.castShadow = m.receiveShadow = true; scene.add(m); gradeMeshes.push(m);
+    if (key && Q.pbr && MATERIALS[key]?.texture) texturedMaterial(key, { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide } }).then(({ material, tile }) => {
+      if (!m.parent) { material.dispose(); return; }
+      worldUV(geo, tile, "x", "z"); const old = m.material; m.material = material; old.dispose(); dirty = true; }).catch(() => {});
   }
-  function drawBasin(ring, b) {
+  function drawBasin(ring, b, copingKey) {
     const out = offsetRing(ring, b.coping || 0.05), n = ring.length, top = b.kote + 0.03, cop = [], sides = [];
     for (let i = 0; i < n; i++) {
       const a = ring[i], c = ring[(i + 1) % n], A = out[i], C = out[(i + 1) % n];
       cop.push([[...a, top], [...c, top], [...C, top], [...A, top]]);
       sides.push([[...a, top], [...c, top], [...c, b.bottom], [...a, b.bottom]]);
     }
-    quads(cop, CONCRETE); quads(sides, TILE);
+    const ck = MATERIALS[copingKey]?.kind.includes("ground") || MATERIALS[copingKey]?.kind.includes("building") ? copingKey : null;   // U3619: the edge in its material (betong, tre, belegningsstein …)
+    quads(cop, ck ? MATERIALS[ck].colour : CONCRETE, ck); quads(sides, TILE);
     const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []);
     quads(tris.map(([i, j, k]) => [[...ring[i], b.bottom + 0.02], [...ring[j], b.bottom + 0.02], [...ring[k], b.bottom + 0.02], [...ring[k], b.bottom + 0.02]]), TILE);
   }
@@ -504,7 +511,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const lift = roof ? 0.03 + 0.02 * n + (g.kind === "path" ? 0.02 : 0) : 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
     const lvl = g.level ?? (roof ? g.kote + lift : null), flat = lvl != null;   // water lies flat at its own level (U3616), whatever the ground under it
     const put = p => { const v = P(p, flat ? lvl : ground(...p) + lift); pos.push(v.x, v.y, v.z); };
-    if (g.pool && g.basin) drawBasin(ring, g.basin);
+    if (g.pool && g.basin) drawBasin(ring, g.basin, g.coping_material);
     const split = (a, b, c, d) => {
       const e = [[a, b], [b, c], [c, a]].map(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1])), m = Math.max(...e);
       if (m <= lim || d > 9) { put(a); put(b); put(c); return; }
@@ -746,6 +753,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a storey's kote set in a wing (an edit of kind level): its levels taken over, the storey shown cut anew there */
   function setLevels(ws) {
     for (const w of ws || []) { const o = wingOf.get(w.id); if (o && JSON.stringify(o.levels || []) !== JSON.stringify(w.levels || [])) o.levels = structuredClone(w.levels || []); }
+    for (const w of ws || []) { const o = wingOf.get(w.id); if (o && (o.facade_material || null) !== (w.facade_material || null)) { o.facade_material = w.facade_material || undefined; for (const [b, grp] of bimOf.values()) if (b.wing === w.id) loadBim(b, grp); } }   // U3619
     if (storey) show(storey, shownIds); dirty = true;
   }
   /* floors.json ids, as before: the drawing's storey in every building */

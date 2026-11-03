@@ -70,8 +70,8 @@ test("the IFC: the moved ground as TERRAIN with its m³, the pool's water on the
   const base = parseIfc(readFileSync(new URL("../public/data/sykehus.ifc", import.meta.url), "utf8"));
   const m = after([check([], terrace), check([], pool)]), { text } = withAdded(withoutBuildings(base, []).text, base, m, site0);
   const geo = text.split("\n").filter(l => /=IFCGEOGRAPHICELEMENT\(/.test(l));
-  assert.equal(geo.length, 2); assert.match(geo[0], /'Terreng etter'.*\.TERRAIN\.\);$/); assert.match(geo[1], /'Basseng',\$,'Vann'.*\.USERDEFINED\.\);$/);
+  assert.equal(geo.length, 3); assert.match(geo[0], /'Terreng etter'.*\.TERRAIN\.\);$/); assert.match(geo[1], /'Basseng',\$,'Vann'.*\.USERDEFINED\.\);$/); assert.match(geo[2], /'Basseng \(kant\)',\$,'Kant'/, "the pool's edge (U3619)");
   assert.match(text, /IFCPROPERTYSINGLEVALUE\('Utgraving',\$,IFCLABEL\('\d+ m\\X2\\00B3\\X0\\'\)/);
-  assert.match(text, /IFCRELCONTAINEDINSPATIALSTRUCTURE\('[^']+',\$,\$,\$,\(#\d+,#\d+\),#14\);/, "contained in the site (#14)");
+  assert.match(text, /IFCRELCONTAINEDINSPATIALSTRUCTURE\('[^']+',\$,\$,\$,\(#\d+,#\d+,#\d+\),#14\);/, "contained in the site (#14)");
   assert.equal(withAdded(withoutBuildings(base, []).text, base, after([]), site0).text, withoutBuildings(base, []).text, "nothing moved, nothing added");
 });
