@@ -4,6 +4,9 @@
    { kind: "surface", ring, surface, name?, plants?, why? }
         an area laid as grass, meadow, planting (a bed), gravel, paving, asphalt or water; plants are hagekart ids
         (or Latin names) for a bed, listed, not drawn one by one
+        bed: roser | stauder | groent (U3820, only on a planting): the bed fills itself with that kind of plants, hagekart's even
+        layout, the same bed and seed (default 1) the same plants; density 1 = each plant at its own spacing, 0.5 = twice as far apart.
+        They come as plantings (tre-n, species by species) and count in site.planted.
    { kind: "path", line, width?, surface?, name?, why? }
         a path or a road along line (2 or more points), width metres (default 2), gravel, paving, asphalt or wood
    { kind: "trees", species, points? | line + spacing?, height?, crown?, why? }
@@ -28,6 +31,7 @@ import { pointInRing as inRing, ringArea as signedArea, ringOf, ringDist } from 
 import { roofOf } from "./roof.js";
 import { SIDE_KEYS } from "./renderkit/dirs.js";
 import { ALL_PLANTS, fold } from "./plants.js";
+import { BIOMES, kindsOf, populate } from "./hagekart/biome.js";   // U3820: a bed fills itself, hagekart's layout (taken by lock, tools/take-hagekart.mjs)
 import { checkPaint, checkTerrain, applyPaint, paintPlan, SOIL } from "./paint-edit.js";
 
 export const SURFACES = ["grass", "meadow", "planting", "gravel", "paving", "asphalt", "soil", "water"];
@@ -127,6 +131,12 @@ export function checkLandscape(site, e, str) {
       const surface = String(e.surface ?? ""); if (!SURFACES.includes(surface)) throw new Error(`surface er ${SURFACES.join(", ")}`);
       const out = { kind: "surface", ring, surface, ...corners, ...w_ }, n = name(); if (n) out.name = n;
       if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
+      if (e.bed != null) {   // U3820
+        if (!BIOMES[e.bed]) throw new Error(`bed er ${Object.keys(BIOMES).join(", ")}: hva et bed fyller seg med`);
+        if (surface !== "planting") throw new Error("bed gjelder en flate med surface planting");
+        if (e.on != null) throw new Error("bed fylles ikke på et tak ennå");
+        out.bed = e.bed; out.density = num(e.density, 0.2, 3, "density", 1); out.seed = Math.round(num(e.seed, 1, 1e6, "seed", 1));
+      }
       if (e.on != null) {   // T4: on a roof; kote is the roof's level, and water has a level of its own
         if (surface === "water") throw new Error("Vann legges ikke på et tak som flate. Bruk et volum med material water på taket ({kind: volume, material: water, at: {wing, roof: true, u, v}, length, width, height fra 0.1}), eller delen pool_basin med params {water: true} og on = fløyen.");
         Object.assign(out, onOf(roofPlace(site, e, sampleRing(outlineOf(ring, corners.radius, corners.smooth)), "flaten")));
@@ -256,6 +266,13 @@ export function pathRing(line, width) {
   return [...L, ...R.reverse()];
 }
 
+/* The plants a bed type puts in a ring, as hagekart lays them (biome.js): [{ pid, x, y }], the same ring, type, density and seed
+   the same plants. Metres from the site origin; the ring is closed here if it is not. */
+export function bedPlants(ring, type, { density = 1, seed = 1 } = {}) {
+  const r = ring[0][0] === ring.at(-1)[0] && ring[0][1] === ring.at(-1)[1] ? ring : [...ring, ring[0]];
+  return populate({ ring: r, kinds: kindsOf(type, Object.fromEntries(ALL_PLANTS.map(p => [p.id, p]))), density, seed });
+}
+
 export function applyLandscape(site, edits) {
   /* n, nt: the ids given, so one taken away leaves the others' ids as they were; a planting's id has its own count, so
      the surfaces and paths keep the ids they had before plantings had any */
@@ -277,6 +294,14 @@ export function applyLandscape(site, edits) {
       if (g.kind === "path" && (e.line || e.width != null)) { g.line = e.line || g.line; g.width = e.width ?? g.width; g.ring = pathRing(g.line, g.width); g.length_m = round1(lineLength(g.line)); g.area_m2 = round1(lineLength(g.line) * g.width); }
     }
     else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[e.surface] } : Object.fromEntries(["pool", "depth", "coping", "kote"].filter(k => e[k] != null).map(k => [k, e[k]]))), why: e.why });
+    if (e.kind === "surface" && e.bed) {   // U3820: the bed fills itself, species by species, each its own planting
+      const by = new Map(); for (const q of bedPlants(land.at(-1).ring, e.bed, e)) (by.get(q.pid) || by.set(q.pid, []).get(q.pid)).push([round1(q.x), round1(q.y)]);
+      for (const [pid, at] of by) {
+        const p = plantOf(pid), cat = p.cat === "conifer" ? "conifer" : /shrub|hedge|rose/.test(p.cat) ? "shrub" : "tree", h = p.ht ?? DEFAULT[cat].ht, r = (p.sp ?? DEFAULT[cat].sp) / 2, id = `tre-${++nt}`;
+        for (const [x, y] of at) trees.push([x, y, h, r, "round", pid, id]);
+        plantings.push({ id, kind: "trees", species: pid, name: p.no, latin: p.la || null, count: at.length, height: h, crown: Math.round(r * 200) / 100, bed: land.at(-1).id, why: e.why });
+      }
+    }
     else if (e.kind === "path") land.push({ id: `sti-${++n}`, kind: "path", name: e.name || null, surface: e.surface, line: e.line, width: e.width, ring: pathRing(e.line, e.width), length_m: round1(lineLength(e.line)), area_m2: round1(lineLength(e.line) * e.width), ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[e.surface] } : {}), why: e.why });
     else if (e.kind === "paint" && e.on) {   // T4: the brush stops at the roof level's edge, block by block; what it cut off is said
       const s0 = { ...site, buildings: [] }, rings = roofRegion(site, e.on, e.kote), free = paintPlan(land, { ...e, lot: undefined }, s0, torn).m2;

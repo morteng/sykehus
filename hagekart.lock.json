@@ -1,0 +1,18 @@
+{
+  "hagekart": "02e09f2c3216b4950e67c276cc9889c96e4904b1",
+  "from": "stack/hagekart/public",
+  "dest": "public/hagekart",
+  "map": {
+    "./renderkit/paths2d.js": "../renderkit/paths2d.js"
+  },
+  "files": {
+    "biome.js": "5f8b50d35842b55ca38d6de987ef6c006d28a222",
+    "history.js": "c6cedf9304c4c8157ad097852c5640be769796c6",
+    "merge.js": "cdfd1eaf4b92e4ccf5c5ddcb0dc1d0032192be8b",
+    "walk.js": "7040f2d5e0c5bba67989631b22b068e2f59ae11a",
+    "catalog.js": "833f978091f2f0e61fff0b799a9540aea696588a",
+    "anchor.js": "968304aee3218f1db3cb7c4875772088d6e98472",
+    "pose.js": "b40b2f9fb2dff73141a2a810416bb5dad14c7879",
+    "detect.js": "a9f861daa6772e92913d243d3c16c126ec614911"
+  }
+}
