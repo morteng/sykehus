@@ -783,3 +783,16 @@ html.pk-wait .loading { visibility: hidden; }
 .fx-sf input[type=checkbox] { height: 30px; width: 30px; align-self: center; margin-top: 9px; accent-color: var(--accent); }   /* «Understøttet»: en vanlig avkrysningsboks, ikke et tallfelt */
 .fx-sb, .fx-more { display: flex; gap: 8px; flex-wrap: wrap; } .fx-sb button { flex: 1; } .fx-sb .fx-ok { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .fx-hand { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; } .fx-hand div { position: fixed; pointer-events: auto; touch-action: none; border-radius: 50%; background: rgba(31,95,191,.25); border: 3px solid #1f5fbf; box-sizing: border-box; cursor: ew-resize; }
+
+/* U3646: a part's settings sheet («Endre» on a construction) at phone width: no 340 px floor, the fields scroll inside
+   the sheet with «Ferdig» and «Avbryt» kept at the bottom, 16 px fields (iOS does not zoom), grids that wrap to fit */
+.fl-form { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.fl-two, .fl-three { grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr)); }
+.fl-form label { min-width: 0; }
+.fl-form select { min-width: 0; width: 100%; box-sizing: border-box; }
+@media (max-width: 599px) {
+  .fl.docked .fl-form { max-height: calc(100dvh - 180px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .fl-form input, .fl-form select { font-size: 16px; }
+  .fl-form .fl-acts { position: sticky; bottom: 0; z-index: 1; flex-wrap: nowrap; padding: var(--sp-2) 0 0; background: var(--panel); }
+  .fl-form .fl-acts button { flex: 1 1 0; min-height: var(--tap); }
+}
