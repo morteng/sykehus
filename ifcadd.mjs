@@ -128,6 +128,7 @@ export function addedLines(parsed, after, before, parts = null) {
       pset(key + ":body", [el], "Sykehustomta_Nytt", { Form: a.shape, Materiale: a.material, Fot: `kote +${a.base_kote}`, Topp: `kote +${a.top_kote}`, Grunnflate: a.footprint_m2 != null ? `${a.footprint_m2} m²` : null, Volum: a.volume_m3 != null ? `${a.volume_m3} m³` : null,
         ...(a.bim ? { Konstruksjon: a.bim.sha, Fil: `api/bim/${a.bim.sha}/model.ifc`, Kilde: a.bim.source?.url || a.bim.fetched_from, Lisens: a.bim.licence } : {}), ...(a.on ? { "Står på": wingName(a.on) } : {}) });
       pset(key + ":body", [el], "Pset_BuildingElementProxyCommon", { Status: "NEW" });
+      if (a.bim?.licence) pset(key + ":body", [el], "Sykehustomta_Lisens", { Lisens: a.bim.licence, Kilde: a.bim.source?.url || a.bim.fetched_from, Fil: a.bim.filename });   // U3643
       counts.buildings++; counts.elements++;
     } else if (a.kind === "balconies") {
       const bid = A.building.get(wingName(a.wing)), sts = A.storeys.get(bid); if (!bid || !sts?.length || !(after.buildings || []).some(b => b.wing === a.wing)) continue;
@@ -190,6 +191,11 @@ export function addedLines(parsed, after, before, parts = null) {
     const props = [d.density && put(`IFCPROPERTYSINGLEVALUE('MassDensity',$,IFCMASSDENSITYMEASURE(${num(d.density)}),$)`)].filter(Boolean);
     if (props.length) put(`IFCMATERIALPROPERTIES('Pset_MaterialCommon',$,(${props.map(v => "#" + v).join(",")}),#${mat})`);
     const own = [m.card && put(`IFCPROPERTYSINGLEVALUE('FreeCAD_kort',$,IFCLABEL(${stepStr(m.card)}),$)`), d.density && d.density_from !== "card" && put(`IFCPROPERTYSINGLEVALUE('Densitet_kilde',$,IFCLABEL(${stepStr(d.density_from)}),$)`)].filter(Boolean);
+    /* U3643: the licence of what the material is drawn from: its picture (ambientCG, CC0), its hatch (FreeCAD, CC-BY-4.0), its card */
+    const lic = [d.texture && put(`IFCPROPERTYSINGLEVALUE('Bilde',$,IFCLABEL(${stepStr(d.texture.set)}),$)`), d.texture && put(`IFCPROPERTYSINGLEVALUE('Bilde_lisens',$,IFCLABEL('CC0-1.0'),$)`),
+      d.hatch && put(`IFCPROPERTYSINGLEVALUE('Skravur',$,IFCLABEL(${stepStr(d.hatch)}),$)`), d.hatch && put(`IFCPROPERTYSINGLEVALUE('Skravur_lisens',$,IFCLABEL('CC-BY-4.0 (David Carter, FreeCAD)'),$)`),
+      d.card && put(`IFCPROPERTYSINGLEVALUE('Kort_lisens',$,IFCLABEL(${stepStr(`${d.card.license} (${d.card.author})`)}),$)`)].filter(Boolean);
+    if (lic.length) put(`IFCMATERIALPROPERTIES('Sykehustomta_Lisens',$,(${lic.map(v => "#" + v).join(",")}),#${mat})`);
     if (own.length) put(`IFCMATERIALPROPERTIES('Sykehustomta_Materiale',$,(${own.map(v => "#" + v).join(",")}),#${mat})`);
     put(`IFCRELASSOCIATESMATERIAL('${gid("material:" + key)}',$,${stepStr(m.description)},$,(${els.map(e => "#" + e).join(",")}),#${mat})`);
   }

@@ -76,3 +76,14 @@ test("nothing built: the before's file as it was", () => {
   const t = readFileSync(new URL("../public/data/sykehus.ifc", import.meta.url), "utf8");
   assert.equal(withAdded(t, base, applyEdits(site, floors, []).site, site).text, t);
 });
+
+test("U3643: a brick draft and a library object carry their licences in the IFC", () => {
+  let ed = add([], { kind: "volume", id: "nTegl", name: "Teglhus", shape: "box", from: [-46, -62], to: [-16, -62], width: 14, height: 6.4, storeys: 2, material: "brick" });
+  ed = add(ed, { kind: "volume", id: "nBenk", name: "Benk", shape: "box", from: [20, -90], to: [22, -90], width: 1, height: 1, material: "steel" });
+  const m = applyEdits(site, floors, ed), bench = m.site.added.find(a => a.id === "nBenk");
+  bench.bim = { sha: "a".repeat(64), licence: "CC-BY-3.0 (navngi forfatteren)", source: { url: "https://github.com/FreeCAD/FreeCAD-library" } };
+  const part = readPart(readFileSync(new URL("./fixtures/balcony-part.ifc", import.meta.url), "utf8")), parts = new Map([...balconySizes(m.site).keys()].map(k => [k, part]));
+  const t = withAdded(withoutBuildings(base, []).text, base, m.site, site, parts).text;
+  assert.ok(/IFCMATERIALPROPERTIES\('Sykehustomta_Lisens'/.test(t) && t.includes("IFCLABEL('Bricks097')") && t.includes("'Bilde_lisens',$,IFCLABEL('CC0-1.0')") && t.includes("CC-BY-4.0 (David Carter, FreeCAD)"), "brick: picture CC0 and hatch CC-BY-4.0");
+  assert.ok(/IFCPROPERTYSET\('[^']*',\$,'Sykehustomta_Lisens'/.test(t) && t.includes("CC-BY-3.0 (navngi forfatteren)"), "the library object's licence");
+});
