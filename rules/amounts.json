@@ -1,0 +1,21 @@
+{
+  "_about": "U3630: the table behind «mengder og grov pris» (amounts.mjs). Edit the numbers here; a price with no source is refused at load. The prices are the builder's ROUGH placeholders (NOK ex. VAT, 2026), NOT from a price book or an offer: Morten replaces them with his own and sets the source. Everything priced from them is «antatt».",
+  "assumptions": {
+    "slab_m": 0.25,
+    "wall_m": 0.2,
+    "pool_wall_m": 0.25,
+    "soil_t_per_m3": 1.8,
+    "density_t_per_m3": { "concrete": 2.4, "steel": 7.85, "wood": 0.5, "brick": 1.8, "glass": 2.5 },
+    "how": "A new building: a concrete ground slab (footprint × slab_m); a concrete building also has a slab on each upper storey; walls are perimeter × height × wall_m of the building's material; a glass building's skin (walls and roof, glass_m²) is glass. A pool basin: floor and walls × pool_wall_m of concrete. Earth: m³ dug × soil_t_per_m3 is the tonnes moved."
+  },
+  "prices": [
+    { "item": "Betong, plasstøpt med forskaling og armering", "quantity": "concrete_m3", "unit": "kr/m³", "nok_low": 4000, "nok_high": 7000, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Stål, konstruksjon levert og montert", "quantity": "steel_t", "unit": "kr/tonn", "nok_low": 30000, "nok_high": 60000, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Tre, bærende vegger", "quantity": "wood_m3", "unit": "kr/m³", "nok_low": 6000, "nok_high": 12000, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Tegl, murt", "quantity": "brick_m3", "unit": "kr/m³", "nok_low": 5000, "nok_high": 9000, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Glassfasade eller drivhusglass", "quantity": "glass_m2", "unit": "kr/m²", "nok_low": 2500, "nok_high": 6000, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Graving og bortkjøring av masse", "quantity": "cut_m3", "unit": "kr/m³", "nok_low": 150, "nok_high": 400, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Fylling og komprimering", "quantity": "fill_m3", "unit": "kr/m³", "nok_low": 100, "nok_high": 300, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" },
+    { "item": "Riving av bygg", "quantity": "demolished_m3", "unit": "kr/m³", "nok_low": 150, "nok_high": 450, "source": "Byggerens grove anslag 2026-11 (ikke prisbok eller tilbud); Morten rett dem" }
+  ]
+}

@@ -31,7 +31,8 @@ import { fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, 
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
 import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts, partIfc, checkIfc } from "./bim.mjs";
-import { loadCosts, summarize as areaSummary } from "./area.mjs";   // T6: areas and a cost range
+import { loadCosts, summarize as areaSummary } from "./area.mjs";
+import { loadAmounts, amountsOf, compareAmounts } from "./amounts.mjs";   // U3630: amounts and a rough price, against Før or another version   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
 import { createSiteFacts } from "./sitefacts.mjs";
 import { createHeritage, KINDS as HERITAGE_KINDS } from "./heritage.mjs";
@@ -847,9 +848,13 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
     { name: "measure", tgt: "read", title: "Mål og les tilbake", ro: true, schema: S({ a: REF, b: { ...REF, description: "Leave out to read a back alone" }, target: TARGET, draft: OLD }, ["a"]),
       description: "The page's «Mål» in numbers, and the read-back of what was placed. a alone: its corners [east, north], axis bearing, length × width, foot and top kote, m², what it stands on. With b: distance, height difference and run from the middle of each footprint at its foot (a wing: its biggest roof level), and for two things with an axis the angle between them (parallel = under 0.5°), the offset to b's axis, and, for a part and a wing, how far the part sticks out past the roof edge. Quote the say.",
       run: async (a, req) => { const m = model(a.draft, req); try { return measureParts(m.site, a.a, a.b, wingOf); } catch (e) { throw toolErr(e.message); } } },
-    { name: "summary", tgt: "read", title: "Areal og kostnad", ro: true, schema: S({ target: TARGET, draft: OLD }),
-      description: "Areas and a cost range for the after (a version or draft), in one read: BTA per new volume (storeys × footprint, «beregnet»; BRA only when a sourced factor is in rules/costs.json), what is demolished (m², m³), the ground surfaces laid (m² per kind), earthwork (cut, fill, net m³), and a cost range where every price carries its source and is «antatt». With no prices in rules/costs.json the cost is «ikke målt»: say so, never guess a price. Quote the note.",
-      run: async (a, req) => { const m = model(a.draft, req); let costs; try { costs = loadCosts(); } catch (e) { throw toolErr(e.message); } return areaSummary(m.site, costs); } },
+    { name: "summary", tgt: "read", title: "Areal, mengder og kostnad", ro: true, schema: S({ target: TARGET, draft: OLD, against: { type: "string", description: "Amounts compared with: «Før» (default) or another version/draft id" } }),
+      description: "Areas and a cost range for the after (a version or draft), in one read: BTA per new volume (storeys × footprint, «beregnet»; BRA only when a sourced factor is in rules/costs.json), what is demolished, ground surfaces, earthwork, and a cost range from rules/costs.json (empty: «ikke målt», never guess). U3630 amounts: m³ concrete/steel/wood/brick, m² glass, tonnes and m³ of earth, with a rough price per amount from rules/amounts.json and the difference against Før (or against), table included. Quote amounts.say, say «antatt», and name the table.",
+      run: async (a, req) => {
+        const m = model(a.draft, req); let costs, table; try { costs = loadCosts(); table = loadAmounts(); } catch (e) { throw toolErr(e.message); }
+        const other = a.against && !/^(før|before)$/i.test(String(a.against).trim()) ? resolveTarget({ tgt: "read" }, { target: a.against }, req).draft : null, then = model(other, req);
+        return { ...areaSummary(m.site, costs), amounts: compareAmounts(amountsOf(m.site, table), amountsOf(then.site, table), table, { of: a.draft ? `«${a.draft}»` : "Prosjektet", against: other ? `«${other}»` : "Før" }) };
+      } },
     ...drawTools({ S, WING, TARGET, OLD, model, wingOf, toolErr }),   // T5
     { name: "check_fit", tgt: "read", title: "Passer delene sammen", ro: true, schema: S({ wing: { ...WING, description: "Only the roof of this wing" }, target: TARGET, draft: OLD }),
       description: "Do the new parts sit right: pairs that meet on one roof (names, m²), what sticks out past a roof's edge, what is off the lot, what overlaps a wing that stands. Nothing changed; quote the say, and when ok, say none.",

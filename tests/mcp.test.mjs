@@ -178,6 +178,8 @@ test("summary (T6): a draft's 3-storey 20x10 box is 600 m² BTA, and no price me
   const t = (await call("try_change", { edits: [{ kind: "volume", id: "nboks6", name: "Boks", shape: "box", from: [-46, -62], to: [-26, -62], width: 10, storeys: 3 }], include_screenshot: false })).data;
   const s = (await call("summary", { target: t.draft })).data;
   assert.equal(s.totals.bta_m2, 600); assert.equal(s.cost.nok_low, null); assert.match(s.note, /beregnet/);
+  /* U3630: the amounts against Før, with the table used */
+  assert.equal(s.amounts.against, "Før"); assert.ok(s.amounts.rows.find(r => r.key === "concrete_m3").diff > 0); assert.ok(s.amounts.difference_nok.nok_low > 0); assert.equal(s.amounts.table.file, "rules/amounts.json"); assert.match(s.amounts.say, /antatt/);
   const tool = (await rpc("tools/list")).tools.find(x => x.name === "summary"); assert.ok(tool.description.length / 3.6 <= 800);
 });
 

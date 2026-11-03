@@ -109,7 +109,7 @@ export const TOOL_WORDS = {
   look: "se look bilde picture", show_building: "vis show 3d plan snitt section fasade sol sun kamera camera lagre visning", make_shots: "bildeserie shots", photo_spots: "bildesteder photos", retake_photos: "ta på nytt retake bilder", list_site_photos: "mine bilder foto photos site bygget som det står", look_at_site_photo: "se på bilde foto photo leser fra bilde fasade etasjer tak vinduer",
   search_documents: "søk search dokument tegning", read_document: "les read dokument side page", list_documents: "dokumenter documents liste", show_draft: "utkast draft endringer changes ifc lenke link",
   new_version: "ny versjon new version alternativ", list_versions: "versjoner versions liste", rename_version: "gi nytt navn rename", delete_version: "slett delete papirkurv", undelete_version: "gjenopprett undelete", set_sharing: "del share lenke offentlig privat",
-  summary: "areal kostnad cost bta bra kvadratmeter area oppsummering", draw_plan: "tegn plan planbilde mål dimensjoner draw plan zoom hjørne", draw_section: "snitt section tegn mål kote høyde fasade",
+  summary: "areal kostnad cost bta bra kvadratmeter area oppsummering mengder betong glass jord tonn pris mengde", draw_plan: "tegn plan planbilde mål dimensjoner draw plan zoom hjørne", draw_section: "snitt section tegn mål kote høyde fasade",
   send_wish: "ønske wish feil bug send", list_wishes: "ønsker wishes status sendt", ask_point: "pek pin sted point sett", find_tool: "finn find verktøy tool hjelp help",
 };
 
