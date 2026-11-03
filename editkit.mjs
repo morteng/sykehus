@@ -32,7 +32,7 @@ const pair = (v, what) => { if (!Array.isArray(v) || v.length !== 2 || !v.every(
 
 /* does this edit stand for several: a copy, a group, a castle part, or a move, turn or resize (not a plain reshape the server takes as it is) */
 export function needsExpand(e, edits = []) {
-  if (e?.kind === "clone" || e?.kind === "group" || e?.kind === "part" && e.part in CASTLE) return true;
+  if (e?.kind === "clone" || e?.kind === "group" || e?.kind === "join" || e?.kind === "cut" || e?.kind === "part" && e.part in CASTLE) return true;
   if (e?.kind !== "reshape") return false;
   if (SELECTORS.some(k => e[k] != null)) return true;
   const vols = volumesOf(edits); return !vols.has(e.id) && [...vols.values()].some(v => v.group != null && v.group === e.id);   // a group's name where an id goes
@@ -45,6 +45,8 @@ export function expandChange(e, edits, site) {
     return e.ids.map(id => { if (!vols.has(id)) throw new Error(`Fant ikke det nye bygget «${id}» (group tar bare nye bygg)`); return { kind: "reshape", id, group: name, ...(e.why ? { why: e.why } : {}) }; });
   }
   if (e.kind === "part") return CASTLE[e.part].make(e, site);
+  if (e.kind === "join") return joinEdits(e, vols);
+  if (e.kind === "cut") return cutEdits(e, vols, site);
   const key = String(e.id ?? ""), src = membersOf(vols, key);
   if (e.kind === "clone") {
     if (e.offset == null) throw new Error("clone trenger offset: [øst, nord] i meter fra originalen");
@@ -73,6 +75,51 @@ export function expandChange(e, edits, site) {
     if (name != null && src.length === 1) o.name = name;
     return o;
   });
+}
+
+/* U3837 join: new volumes that overlap on purpose become one set: one group name (so they move and turn together) and allow_overlap, so the overlap is no longer flagged */
+function joinEdits(e, vols) {
+  const ids = Array.isArray(e.ids) ? [...new Set(e.ids.map(String))] : [];
+  if (ids.length < 2) throw new Error("join trenger ids: id-ene til to eller flere nye bygg som slås sammen");
+  for (const id of ids) if (!vols.has(id)) throw new Error(`Fant ikke det nye bygget «${id}» (join tar bare nye bygg)`);
+  const name = e.name != null ? String(e.name).trim() : ids.map(id => vols.get(id).name).join(" + ");
+  if (!name) throw new Error("name kan ikke være tomt");
+  return ids.map(id => ({ kind: "reshape", id, group: name.slice(0, 40), allow_overlap: true, ...(e.why ? { why: e.why } : {}) }));
+}
+/* U3837 cut: the volume `by` is taken out of the volume `id` (as a box cut from a box; `by` stays unless remove_by). What is left of `id` is up to six boxes in `id`'s own frame:
+   a slab under and over the cutter, and round it a strip each side along, and each side across. A cutter turned against `id` is counted as its bounding box in id's frame. */
+function cutEdits(e, vols, site) {
+  const add = x => (site?.added || []).find(a => a.kind === "volume" && a.id === String(x));
+  const a = add(e.id), b = add(e.by);
+  if (!a) throw new Error(`Fant ikke det nye bygget «${e.id}» (cut skjærer i et nytt bygg)`);
+  if (!b) throw new Error(`Fant ikke det nye bygget «${e.by}» (by er byggene som skjæres ut)`);
+  if (a.id === b.id) throw new Error("id og by må være to ulike bygg");
+  for (const x of [a, b]) if (x.shape !== "box" || x.bim || x.on || x.base_kote == null) throw new Error(`«${x.name}» er ${x.bim ? "en konstruksjon eller del fra serveren" : x.on ? "satt på et tak" : "ikke en enkel boks"}: cut tar bokser på bakken eller på en kote`);
+  const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]), u = [(a.to[0] - a.from[0]) / L, (a.to[1] - a.from[1]) / L], nrm = [-u[1], u[0]], w = a.width;
+  const loc = p => [(p[0] - a.from[0]) * u[0] + (p[1] - a.from[1]) * u[1], (p[0] - a.from[0]) * nrm[0] + (p[1] - a.from[1]) * nrm[1]];
+  const Lb = Math.hypot(b.to[0] - b.from[0], b.to[1] - b.from[1]), nb = [-(b.to[1] - b.from[1]) / Lb * b.width / 2, (b.to[0] - b.from[0]) / Lb * b.width / 2];
+  const cs = [[b.from[0] + nb[0], b.from[1] + nb[1]], [b.to[0] + nb[0], b.to[1] + nb[1]], [b.to[0] - nb[0], b.to[1] - nb[1]], [b.from[0] - nb[0], b.from[1] - nb[1]]].map(loc);
+  const I = { s0: Math.max(0, Math.min(...cs.map(c => c[0]))), s1: Math.min(L, Math.max(...cs.map(c => c[0]))), t0: Math.max(-w / 2, Math.min(...cs.map(c => c[1]))), t1: Math.min(w / 2, Math.max(...cs.map(c => c[1]))),
+    z0: Math.max(a.base_kote, b.base_kote), z1: Math.min(a.top_kote, b.top_kote) };
+  if (!(I.s1 - I.s0 > 0.05 && I.t1 - I.t0 > 0.05 && I.z1 - I.z0 > 0.05)) throw new Error(`«${a.name}» og «${b.name}» overlapper ikke, så det er ingenting å skjære ut`);
+  const za = a.base_kote, zb = a.top_kote, box = (s0, s1, t0, t1, z0, z1) => ({ s0, s1, t0, t1, z0, z1 });
+  const raw = [box(0, L, -w / 2, w / 2, za, I.z0), box(0, L, -w / 2, w / 2, I.z1, zb), box(0, I.s0, -w / 2, w / 2, I.z0, I.z1), box(I.s1, L, -w / 2, w / 2, I.z0, I.z1), box(I.s0, I.s1, -w / 2, I.t0, I.z0, I.z1), box(I.s0, I.s1, I.t1, w / 2, I.z0, I.z1)];
+  const left = raw.filter(p => p.s1 - p.s0 > 0.05 && p.t1 - p.t0 > 0.05 && p.z1 - p.z0 > 0.05);
+  const thin = left.find(p => p.s1 - p.s0 < 1 || p.t1 - p.t0 < 1 || p.z1 - p.z0 < 1);
+  if (thin) throw new Error(`Det som blir igjen av «${a.name}» har en del som er bare ${r2(Math.min(thin.s1 - thin.s0, thin.t1 - thin.t0, thin.z1 - thin.z0)).toString().replace(".", ",")} m i en retning (minst 1 m kan tegnes). Flytt «${b.name}» litt eller gjør den litt større eller mindre`);
+  const out = [], why = e.why ? { why: e.why } : {}, per = a.storeys ? a.height / a.storeys : null, group = e.group ?? a.group ?? `${a.name} (utskåret)`;
+  const at = (s, t) => [r2(a.from[0] + u[0] * s + nrm[0] * t), r2(a.from[1] + u[1] * s + nrm[1] * t)];
+  const geo = p => ({ from: at(p.s0, (p.t0 + p.t1) / 2), to: at(p.s1, (p.t0 + p.t1) / 2), width: r2(p.t1 - p.t0), height: r2(p.z1 - p.z0) });
+  const keepsFoot = left.find(p => Math.abs(p.z0 - za) < 1e-6);   // the one that still stands on the old foot is `id` itself (reshape cannot move a foot)
+  const rest = Object.fromEntries(KEEP.filter(k => a[k] != null && !["from", "to", "width", "height", "base_kote", "storeys", "name", "on", "overhang_m", "allow_overlap"].includes(k)).map(k => [k, a[k]]));
+  if (!left.length) out.push({ kind: "demolish", building: a.id, ...why });
+  else {
+    if (keepsFoot) out.push({ kind: "reshape", id: a.id, ...geo(keepsFoot), ...(per ? { storeys: Math.max(1, Math.round((keepsFoot.z1 - keepsFoot.z0) / per)) } : {}), group, ...why });
+    else out.push({ kind: "demolish", building: a.id, ...why });
+    left.filter(p => p !== keepsFoot).forEach((p, i) => out.push({ ...rest, kind: "volume", name: `${a.name} (del ${i + 2})`, ...geo(p), base_kote: r2(p.z0), ...(per ? { storeys: Math.max(1, Math.round((p.z1 - p.z0) / per)) } : {}), group, ...why }));
+  }
+  if (e.remove_by === true) out.push({ kind: "demolish", building: b.id, ...why });
+  return out;
 }
 
 /* ---- castle parts: a few volumes under one group name, from the boxes and pyramids that already exist ---- */

@@ -141,16 +141,35 @@ function collideCheck(site, v, w) {
   const base = v.base_kote ?? baseOf(site, v), c = roofCollisions(site, { ...v, base_kote: base, top_kote: base + v.height });
   if (c.length) throw new Error(`${v.name || "Volumet"} overlapper ${collisionSay(c, w.name)}. Flytt det eller gjør det mindre, eller send allow_overlap: true hvis det skal stå slik`);
 }
+/* U3837: two new volumes that share space (in plan AND in height): the m², the shared height and the m³ (boxes: a gable or pyramid is counted as its box).
+   Not counted: water (it lies in its basin on purpose), two parts on a roof (T2 above says those), parts of one group, a pair where either was laid over
+   the other on purpose (allow_overlap: what join sets). -> [{ a, b, m2, height_m, volume_m3, inside, say }], biggest first */
+export function volumeOverlaps(site, ids = null) {
+  const vols = (site.added || []).filter(a => a.kind === "volume" && Array.isArray(a.from) && Array.isArray(a.to) && a.width > 0 && a.material !== "water" && a.base_kote != null && a.top_kote != null);
+  const ring = a => { const d = [a.to[0] - a.from[0], a.to[1] - a.from[1]], L = Math.hypot(...d) || 1, n = [-d[1] / L * a.width / 2, d[0] / L * a.width / 2]; return [[a.from[0] + n[0], a.from[1] + n[1]], [a.to[0] + n[0], a.to[1] + n[1]], [a.to[0] - n[0], a.to[1] - n[1]], [a.from[0] - n[0], a.from[1] - n[1]]]; };
+  const com = v => String(v).replace(".", ","), out = [];
+  vols.forEach((a, i) => { for (const b of vols.slice(i + 1)) {
+    if (ids && !ids.has(a.id) && !ids.has(b.id)) continue;
+    if (a.allow_overlap || b.allow_overlap || a.on && b.on || a.group != null && a.group === b.group) continue;
+    const m2 = overlapArea(ring(a), ring(b), [a.base_kote, a.top_kote], [b.base_kote, b.top_kote]); if (m2 < 0.5) continue;
+    const h = Math.min(a.top_kote, b.top_kote) - Math.max(a.base_kote, b.base_kote), small = (a.footprint_m2 ?? a.width * Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1])) < (b.footprint_m2 ?? Infinity) ? a : b;
+    const inside = m2 >= 0.98 * Math.min(a.footprint_m2 ?? Infinity, b.footprint_m2 ?? Infinity) && h >= 0.98 * Math.min(a.top_kote - a.base_kote, b.top_kote - b.base_kote) ? small.id : null;
+    const r = x => Math.round(x * 10) / 10;
+    out.push({ a: { id: a.id, name: a.name }, b: { id: b.id, name: b.name }, m2: r(m2), height_m: r(h), volume_m3: Math.round(m2 * h), inside,
+      say: `«${a.name}» og «${b.name}» overlapper ${com(r(m2))} m² i plan og ${com(r(h))} m i høyden (om lag ${Math.round(m2 * h)} m³)${inside ? `; «${small.name}» står helt inni det andre` : ""}. Slå dem sammen med join (de blir ett sett og overlappen er med vilje), skjær det ene ut av det andre med cut, eller flytt dem fra hverandre.` });
+  } });
+  return out.sort((x, y) => y.volume_m3 - x.volume_m3);
+}
 /* T2 check_fit: what is wrong with how the new parts sit, in words: meetings between parts on one roof (m², by name), what sticks out past a roof's edge,
    what is off the lot, and (not on a roof) what overlaps a wing that stands. wing: only the roof of that wing. -> { collisions, overhangs, off_lot, overlaps, ok, say } */
 export function checkFit(site, wing = null) {
   const vols = (site.added || []).filter(a => a.kind === "volume" && (!wing || a.on === wing.id)), name = id => (site.wings || []).find(w => w.id === id)?.name || id, com = v => String(v).replace(".", ",");
-  const collisions = [], overhangs = [];
+  const collisions = [], overhangs = [], volume_overlaps = volumeOverlaps(site, wing ? new Set(vols.map(v => v.id)) : null);
   vols.forEach((a, i) => { for (const c of roofCollisions(site, a)) { const j = vols.findIndex(v => v.id === c.id); if (j > i) collisions.push({ a: a.name, b: c.name, roof: name(a.on), m2: c.m2, kept: !!(a.allow_overlap || vols[j].allow_overlap) }); }
     if (a.on) { const r = roofSay(site, a); if (r && r.overhang_m > 0.05) overhangs.push({ part: a.name, roof: r.on, overhang_m: r.overhang_m, outside_m2: r.outside_m2, allowed_m: a.overhang_m ?? 0, over: r.over, judged_on: r.judged_on ?? null, say: overSay(r, r.on) }); } });
-  const fit = fitOf(site).filter(f => vols.some(v => v.id === f.id)), off_lot = fit.filter(f => f.on_lot && f.on_lot !== "helt på tomta").map(f => ({ part: f.name, says: f.on_lot })), overlaps = fit.filter(f => !vols.find(v => v.id === f.id).on).flatMap(f => f.overlaps.map(o => ({ part: f.name, with: o.with, m2: o.m2 })));
-  const said = [...collisions.map(c => `«${c.a}» og «${c.b}» overlapper ${com(c.m2)} m² på taket til ${c.roof}${c.kept ? " (lagt slik med vilje)" : ""}`), ...overhangs.map(o => `«${o.part}» ${o.say}`), ...off_lot.map(o => `«${o.part}» står ikke helt på tomta (${o.says})`), ...overlaps.map(o => `«${o.part}» overlapper ${o.with} med ${o.m2} m²`)];
-  return { collisions, overhangs, off_lot, overlaps, ok: !said.length, say: said.length ? said.join("; ") + "." : vols.length ? `Ingen kollisjoner${wing ? ` på taket til ${wing.name}` : ""}: ${vols.length} ${vols.length === 1 ? "del" : "deler"} sjekket.` : "Prosjektet har ingen nye deler å sjekke." };
+  const fit = fitOf(site).filter(f => vols.some(v => v.id === f.id)), off_lot = fit.filter(f => f.on_lot && f.on_lot !== "helt på tomta").map(f => ({ part: f.name, says: f.on_lot })), overlaps = fit.filter(f => !vols.find(v => v.id === f.id).on).flatMap(f => f.overlaps.filter(o => !(site.added || []).some(x => x.kind === "volume" && x.name === o.with)).map(o => ({ part: f.name, with: o.with, m2: o.m2 })));   // new against new is volume_overlaps' (height and allow_overlap known)
+  const said = [...collisions.map(c => `«${c.a}» og «${c.b}» overlapper ${com(c.m2)} m² på taket til ${c.roof}${c.kept ? " (lagt slik med vilje)" : ""}`), ...overhangs.map(o => `«${o.part}» ${o.say}`), ...off_lot.map(o => `«${o.part}» står ikke helt på tomta (${o.says})`), ...overlaps.map(o => `«${o.part}» overlapper ${o.with} med ${o.m2} m²`), ...volume_overlaps.map(o => o.say.replace(/ Slå dem sammen.*$/, ""))];
+  return { collisions, overhangs, off_lot, overlaps, volume_overlaps, ok: !said.length, say: said.length ? said.join("; ") + "." : vols.length ? `Ingen kollisjoner${wing ? ` på taket til ${wing.name}` : ""}: ${vols.length} ${vols.length === 1 ? "del" : "deler"} sjekket.` : "Prosjektet har ingen nye deler å sjekke." };
 }
 /* the facts a new building's card shows, checked (volume and reshape alike) */
 function facts(e, str, out) {
@@ -856,7 +875,7 @@ export function applyDesign(site, floors, edits) {
     const L = Math.hypot(e.to[0] - e.from[0], e.to[1] - e.from[1]), ground = free != null && Math.abs(base - free) <= PAD_FAR ? padGround(site, e, base, true, keep, guard, lot) : null, near = lotOf(site, e);
     if (ground && e.base_kote == null && e.shape !== "bim") ground.balanced = true;
     added.push({ id, kind: "volume", name: e.name, shape: e.shape, material: e.material, from: e.from, to: e.to, width: e.width, height: e.height, base_kote: round1(base), top_kote: round1(base + e.height), parts,
-      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m != null ? { overhang_m: e.overhang_m } : {}), ...(e.on && e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), ...(e.group ? { group: e.group } : {}), why: e.why });
+      footprint_m2: round1(L * e.width), volume_m3: e.shape === "bim" ? null : Math.round(e.shape === "pyramid" ? L * e.width * e.height / 3 : parts.reduce((s, p) => s + profArea(p.profile), 0) * L), ...(e.bim ? { bim: e.bim } : {}), ...(ground ? { ground } : {}), ...(e.on ? { on: e.on } : {}), ...(e.on && e.overhang_m != null ? { overhang_m: e.overhang_m } : {}), ...(e.allow_overlap ? { allow_overlap: true } : {}), ...(e.align ? { align: e.align } : {}), ...(e.storeys ? { storeys: e.storeys } : {}), ...(e.entrance ? { entrance: e.entrance } : {}), ...(near ? { lot: near } : {}), ...(e.use ? { use: e.use } : {}), ...(e.built ? { built: e.built } : {}), ...(e.note ? { note: e.note } : {}), ...(e.group ? { group: e.group } : {}), why: e.why });
   }
   roofGardenUnder(site, added);
   /* a meeting is said on both: the one laid first learns of the one that met it */
