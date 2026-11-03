@@ -3,6 +3,7 @@
    viewed and deleted here; Anton reads them with the connector's look_at_site_photo. Only the person's own are ever shown. */
 import { ownPictureHTML } from "./kit/picture.js";
 import { esc } from "./kit/html.js";
+import { WORDS as sitewalkWords } from "./sitewalk.js";
 export const MAX_EDGE = 2000, SIDES = ["nord", "øst", "sør", "vest", "ukjent"];
 /* the size a picture is sent at: as it is when small enough, else the long edge brought to max */
 export function fitSize(w, h, max = MAX_EDGE) { const k = Math.min(1, max / Math.max(w, h)); return { w: Math.round(w * k), h: Math.round(h * k) }; }
@@ -21,7 +22,7 @@ export async function downscale(file, { max = MAX_EDGE, bitmap = createImageBitm
   return await new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error("toBlob")), "image/jpeg", 0.85));
 }
 
-export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => fetch(...a), shrink = downscale }) {
+export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => fetch(...a), shrink = downscale, site = null, aim = null }) {
   const $ = s => root.querySelector(s);
   const form = $("#phForm"), file = $("#phFile"), wing = $("#phWing"), side = $("#phSide"), note = $("#phNote"), year = $("#phYear"), go = $("#phGo"), list = $("#phList"), say = $("#phSay");
   const drop = $("#phDrop"), pick = $("#phPick"); let busy = false;
@@ -38,6 +39,19 @@ export function startSitePhotos({ root, toast = () => {}, fetchImpl = (...a) => 
     drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); const fs = [...(e.dataTransfer?.files || [])].filter(f => /^image\//.test(f.type)); if (fs.length) setFiles([...file.files, ...fs]); };
   }
   const speak = t => { say.textContent = t; say.hidden = !t; };
+  /* U3824: «Bruk der jeg står» sets wing and side from the GPS and the compass: what the camera points at */
+  const here = $("#phHere");
+  if (here && site && aim) {
+    here.hidden = false;
+    here.onclick = async () => {
+      here.disabled = true;
+      try {
+        const r = await aim(site);
+        if (r.wing && [...wing.options].some(o => o.value === r.wing)) { wing.value = r.wing; side.value = r.side; speak(sitewalkWords.found([...wing.options].find(o => o.value === r.wing).textContent)); }
+        else speak(sitewalkWords[(r.why || "nothing").replace("-", "_")] || sitewalkWords.nothing);
+      } finally { here.disabled = false; }
+    };
+  }
   async function load() {
     const r = await fetchImpl("api/bilder").catch(() => null);
     if (!r || !r.ok) { list.innerHTML = ""; if (r?.status === 401) speak(WORDS.signedOut); return; }
