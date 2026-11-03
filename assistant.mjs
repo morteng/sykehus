@@ -90,9 +90,17 @@ function selectionOf(s) {
 
 /* a point the page sends with a message (U3671: the pin Anton asked for): metres east and north on the site, shown to Anton only */
 function pointOf(p) { return p && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.abs(p.x) < 5000 && Math.abs(p.y) < 5000 ? { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } : null; }
-const HIDDEN = /\\n\(Nål: [^)]*\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
+const HIDDEN = /\\n\((?:Nål: [^)]*|Versjon: (?:(?!\\n).)*?\.)\)/g;   // as it reads inside JSON text: a backslash and n   // what pointOf's note looks like in the door's text: taken out of what the person sees again (history)
 import { createPersist } from "./persist.mjs";
 import { createDoor, whyOf, codeOf } from "./door.mjs";   // one way to call gulden-ai's door (U3978)
+/* U3785: a message that names another of the person's versions in «…» gets a note for Anton: which version is open, which is named (with ids), and to read the named one with show_draft target=<id> or say which he works in */
+export function versionNote(text, open, mine) {
+  const named = [...String(text).matchAll(/«([^»]{1,120})»/g)].map(m => m[1].trim().toLowerCase());
+  const hit = named.length && mine.find(v => v.id !== open?.id && named.includes(String(v.title ?? "").trim().toLowerCase()));
+  if (!hit) return "";
+  return `\n(Versjon: Meldingen nevner «${hit.title}» (${hit.id}); siden som er åpen viser ${open ? `«${open.title}» (${open.id})` : "ingen versjon"}. Les «${hit.title}» med show_draft target=${hit.id}, eller si: «Jeg jobber i ${open ? `«${open.title}»` : "den åpne versjonen"}, ikke «${hit.title}».» Bruk aldri den åpne versjonen stilltiende.)`;
+}
+
 export function createAssistant({ SECURITY, readJson, login, versions, pages, fetchImpl = fetch, dataDir = process.env.SYKEHUS_VERSIONS_DIR }) {
   /* what survives a restart (persist.mjs): the pins, the drawings, the turns a restart cut */
   const keep = createPersist(dataDir);
@@ -179,7 +187,7 @@ export function createAssistant({ SECURITY, readJson, login, versions, pages, fe
       if (!turn.job) publish(person, "message", { type: "message", from: person, id: turn.id, text: turn.text, at: turn.at, ...(turn.drawing || turn.picture ? { image: picUrl(turn.id) } : {}), ...(turn.attachment ? { attachment: turn.attachment.name } : {}), ...(turn.selection ? { about: turn.selection.summary } : {}) });
       publish(person, "queue", queueView(t));
       const body = turn.job ? { person, session: session(person), job: turn.job, request_id: turn.id, ui_lang: "nb" }
-        : { person, session: session(person), message: turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text, request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.picture ? { picture: turn.picture } : {}), ...(turn.attachment ? { attachment: turn.attachment } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
+        : { person, session: session(person), message: (turn.point ? `${turn.text}\n(Nål: x=${turn.point.x}, y=${turn.point.y} meter på tomta, som try_change tar dem.)` : turn.text) + (versions ? versionNote(turn.text, turn.version, versions.list({ owner: person, viewer: person })) : ""), request_id: turn.id, ui_lang: "nb", ...(turn.version ? { version: turn.version } : {}), ...(turn.drawing ? { drawing: turn.drawing } : {}), ...(turn.picture ? { picture: turn.picture } : {}), ...(turn.attachment ? { attachment: turn.attachment } : {}), ...(turn.selection ? { selection: turn.selection } : {}) };
       /* the turn's own copy of what the person's page said when the message was sent (Morten: «while Anton works, the user
          should be free to move around without that affecting what Anton sees or does»): mcp.mjs reads it, never pages.open, until the turn ends */
       const ctx = pin(person, turn);
