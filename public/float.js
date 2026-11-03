@@ -164,11 +164,14 @@ export function createFloat({ viewer, site, valg, panel, stage, bstack, onRiv, o
     const W = stage.clientWidth, H = stage.clientHeight, pts = box.map(p => viewer.project(p.slice(0, 2), p[2])).filter(p => p[2]);
     if (!pts.length) { el.style.visibility = "hidden"; return; }
     el.style.visibility = "";
-    size ??= [el.offsetWidth, el.offsetHeight];
-    const [w, h] = size, G = 16, L0 = 100, T0 = 8;
     const sb = stage.getBoundingClientRect(), pb = bstack.getBoundingClientRect(), pill = pb.height ? [pb.left - sb.left, pb.top - sb.top, pb.right - sb.left, pb.bottom - sb.top] : null;
+    /* U3565: the card ends above the pill: its floor is the pill's top, a tall form scrolls in its own height and keeps «Ferdig» in view */
+    const floor = pill ? Math.min(H, pill[1] - 8) : H, T0 = 8;
+    el.style.maxHeight = `${Math.max(160, floor - T0 - 8)}px`;
+    size ??= [el.offsetWidth, el.offsetHeight];
+    const [w, h] = size, G = 16, L0 = 100;
     const x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, clampX = x => Math.max(L0, Math.min(W - w - 8, x)), clampY = y => Math.max(T0, Math.min(H - h - 8, y));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, clampX = x => Math.max(L0, Math.min(W - w - 8, x)), clampY = y => Math.max(T0, Math.min(floor - h - 8, y));
     const hit = (l, t, r) => r && l < r[2] && l + w > r[0] && t < r[3] && t + h > r[1];
     const over = (l, t) => Math.max(0, Math.min(l + w, x1) - Math.max(l, x0)) * Math.max(0, Math.min(t + h, y1) - Math.max(t, y0));
     const tries = [[x1 + G, clampY(cy - h / 2)], [x0 - G - w, clampY(cy - h / 2)], [clampX(cx - w / 2), y0 - G - h], [clampX(cx - w / 2), y1 + G]]

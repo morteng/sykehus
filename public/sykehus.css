@@ -457,10 +457,10 @@ input.dr-t:focus { border-color: var(--accent); background: var(--bg, #fff); out
    a little polish»): the open version and its views in the app bar, the site's name smaller beside them; and one
    scale for every control over the model: one height (--tap), one radius (--radius-lg), one shadow (--shadow-sm),
    one gap (--sp-2), 12 px in from the view's edges */
-.appbar .brand { font-size: var(--fs-md); flex: none; }
-.appbar .brand small { font-size: var(--fs-sm); }
-.appbar .wherebar { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; flex: 0 1 auto; margin-left: var(--sp-2); padding-left: var(--sp-3); border-left: 1px solid var(--border); }
-.appbar .where { flex-direction: column; justify-content: center; height: var(--tap); min-width: 0; max-width: 380px; padding: 0 var(--sp-3); box-shadow: none; background: var(--panel); }
+.appbar .brand { font-size: var(--fs-sm); flex: none; margin-left: var(--sp-3); font-weight: 500; color: var(--muted); }
+.appbar .brand small { font-size: var(--fs-xs, .75rem); }
+.appbar .wherebar { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; flex: 0 1 auto; margin-left: 0; padding-left: 0; border-left: 0; }
+.appbar .where { flex-direction: column; justify-content: center; height: var(--tap); min-width: 0; max-width: 460px; padding: 0 var(--sp-3); box-shadow: none; background: var(--panel); }
 .appbar .where b { font-size: var(--fs-md); line-height: 1.2; }
 .appbar .where span { line-height: 1.2; }
 .appbar .views-btn { height: var(--tap); padding: 0 var(--sp-3); box-shadow: none; white-space: nowrap; }
@@ -783,3 +783,15 @@ html.pk-wait .loading { visibility: hidden; }
 .fx-sf input[type=checkbox] { height: 30px; width: 30px; align-self: center; margin-top: 9px; accent-color: var(--accent); }   /* «Understøttet»: en vanlig avkrysningsboks, ikke et tallfelt */
 .fx-sb, .fx-more { display: flex; gap: 8px; flex-wrap: wrap; } .fx-sb button { flex: 1; } .fx-sb .fx-ok { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .fx-hand { position: fixed; left: 0; top: 0; z-index: 4; pointer-events: none; } .fx-hand div { position: fixed; pointer-events: auto; touch-action: none; border-radius: 50%; background: rgba(31,95,191,.25); border: 3px solid #1f5fbf; box-sizing: border-box; cursor: ew-resize; }
+
+/* U3565 one pass over the controls: the same radius (--radius-lg), the same shadow (--shadow-sm), the same height (--tap) and the
+   same gap (--sp-2) on the toolbar, the version card, «Visninger», the zoom column, the scale and the card over a pick */
+.vt { gap: var(--sp-2); }
+.vt .seg2, .vt .tgl, .flr .seg2 { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.vt .seg2 button, .vt .tgl, .flr .seg2 button { min-height: var(--tap); }
+.appbar .where, .appbar .views-btn { border-radius: var(--radius-lg); height: var(--tap); }
+#scale, .fl, .flr-pop { border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+/* the card over a pick ends above the pill (float.js sets its max-height): a tall form scrolls and «Ferdig» stays at its foot */
+.fl { overflow-y: auto; overscroll-behavior: contain; }
+.fl.docked { overflow: visible; }
+.fl .fl-form .fl-acts { position: sticky; bottom: calc(-1 * var(--sp-3)); z-index: 1; padding: var(--sp-2) 0 var(--sp-1); background: var(--panel); }
