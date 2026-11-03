@@ -22,6 +22,8 @@ import { feedbackOf } from "./sketchsend.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
 import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=20261028a";   // what the chat box attaches
+import { openMenu, closeMenu } from "./kit/menu.js";
+import { iconButton } from "./kit/pieces.js";
 import { esc as kitEsc } from "./kit/html.js";
 import { createStill } from "./kit/still.js";   // a picture of a live view first, one button for the live view (kits ui, U3996)
 
@@ -60,12 +62,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
   chip.hidden = false; chip.style.position = "relative";
   meReady();   // the person's chip is in the bar (U3669)
   if (me.via !== "gulden.no") {   // signed in on gulden.no: signed out there, not here
-    const menu = document.createElement("div"); menu.className = "g-menu me-menu"; menu.setAttribute("role", "menu"); menu.hidden = true;
-    menu.innerHTML = `<button type="button" role="menuitem" id="meOut">Logg ut</button>`; chip.append(menu);
-    $("meBtn").onclick = () => { menu.hidden = !menu.hidden; $("meBtn").setAttribute("aria-expanded", String(!menu.hidden)); if (!menu.hidden) $("meOut").focus(); };
-    $("meOut").onclick = async () => { await json("api/logg-ut"); location.reload(); };
-    addEventListener("pointerdown", e => { if (!chip.contains(e.target)) { menu.hidden = true; $("meBtn").setAttribute("aria-expanded", "false"); } });
-    menu.addEventListener("keydown", e => { if (e.key === "Escape") { menu.hidden = true; $("meBtn").focus(); } });
+    /* the kit's menu (kit/menu.js): it opens under the button, Esc and a click outside close it, Up and Down move */
+    $("meBtn").onclick = () => { if ($("meBtn").getAttribute("aria-expanded") === "true") closeMenu(); else openMenu($("meBtn"), [{ label: "Logg ut", run: async () => { await json("api/logg-ut"); location.reload(); } }]); };
   }
   if (me.anton) talk(); else { unmark(); $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten en tilbakemelding.</p>`; }
 
@@ -193,8 +191,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     function setAtt(a) {
       att = a; chipBox.hidden = !a; chipBox.replaceChildren();
       if (!a) return;
-      const name = a.picture?.name || a.attachment?.name || "", x = Object.assign(document.createElement("button"), { type: "button", className: "att-x", title: "Ta bort vedlegget", textContent: "×" });
-      x.setAttribute("aria-label", "Ta bort vedlegget"); x.onclick = () => setAtt(null);
+      const name = a.picture?.name || a.attachment?.name || "", x = iconButton("x", "Ta bort vedlegget", { class: "att-x" });
+      x.onclick = () => setAtt(null);
       chipBox.append(Object.assign(document.createElement("span"), { textContent: `Vedlegg: ${name}` }), x);
     }
     async function attach(file) {

@@ -30,6 +30,9 @@
     "shell.css": "fa605f472cc83178945069a80ba542dd87a40634",
     "toast.js": "a963966aeaf4d2de1cd8c6a5cc55ac4e24153294",
     "still.js": "cf26f1f009c064267120ec2fa4b2e8b96b66dad7",
-    "lightbox.js": "266143b2df21cea79978619bc262bd59f9060aba"
+    "lightbox.js": "266143b2df21cea79978619bc262bd59f9060aba",
+    "menu.js": "c8c40dcc8350583d7247673a40877819c1b7769f",
+    "place.js": "bc298a2b3fb498213838cbb14e63975e4a4a9226",
+    "pieces.js": "1efe4dd79a6a1610862528c891f6e1a7904e67bd"
   }
 }

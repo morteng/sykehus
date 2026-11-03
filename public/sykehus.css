@@ -77,7 +77,6 @@ dialog.nc.pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
 .ab-ic svg, .vt svg, .bygg-acts svg, .pill .tegn svg, .oc-acts svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .me { position: relative; display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--tap); padding: 0 var(--sp-3); border: 0; border-radius: var(--radius-pill); background: var(--panel-2); color: var(--text); font-size: var(--fs-md); }
 .me i { width: 10px; height: 10px; border-radius: 50%; background: var(--person-1, #2f6db0); }
-.me-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; min-width: 12rem; }
 
 /* S4 the view tools, top left (right of the storey strip): 3D | Plan and Navn */
 .vt { position: absolute; z-index: var(--z-canvas); top: 12px; left: max(12px, env(safe-area-inset-left)); display: flex; gap: var(--sp-2); align-items: center; }
