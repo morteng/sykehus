@@ -883,7 +883,26 @@ export function applyDesign(site, floors, edits) {
     f.rooms = (f.rooms || []).filter(r => !inGone(r.at));
   }
   for (let i = floors.length - 1; i >= 0; i--) if (whole.has(floors[i].wing) || gone.size && !floors[i].walls.length && !floors[i].rooms.length) floors.splice(i, 1);
+  for (const a of added) floors.push(...insideOf(a));   // U3838: a new building's storeys and rooms are drawn plans too
   site.added = added;
+}
+
+/* U3838: the plans a new building with storeys gets: one per storey, the outer wall as a closed line and the footprint divided
+   along its length into rooms of about 6 m. A draft, not a drawing: the source says so. Nothing for water, a construction
+   from a script, or a building with no storeys. */
+export function insideOf(a) {
+  if (a.kind !== "volume" || !a.storeys || a.shape === "bim" || a.material === "water" || !a.from || !a.to) return [];
+  const L = Math.hypot(a.to[0] - a.from[0], a.to[1] - a.from[1]); if (!(L > 0)) return [];
+  const d = [(a.to[0] - a.from[0]) / L, (a.to[1] - a.from[1]) / L], n = [-d[1], d[0]], h = a.width / 2, r2 = x => Math.round(x * 100) / 100;
+  const pt = (t, w) => [r2(a.from[0] + d[0] * t + n[0] * w), r2(a.from[1] + d[1] * t + n[1] * w)];
+  const k = Math.max(1, Math.round(L / 6)), step = L / k, per = a.height / a.storeys;
+  const walls = [[pt(0, -h), pt(L, -h), pt(L, h), pt(0, h), pt(0, -h)]];
+  for (let i = 1; i < k; i++) walls.push([pt(i * step, -h), pt(i * step, h)]);
+  return Array.from({ length: a.storeys }, (_, i) => ({
+    id: `${a.id}-e${i + 1}`, name: `${i + 1}. etasje`, wing: a.id, kote: r2(a.base_kote + i * per), height: r2(per), draft: true,
+    source: `Utkast: etasjene og rommene i «${a.name}» er delt jevnt av programmet, ikke tegnet`,
+    walls: walls.map(w => w.map(p => [...p])),
+    rooms: Array.from({ length: k }, (_, j) => ({ name: `Rom ${j + 1}`, at: pt((j + 0.5) * step, 0), poly: [pt(j * step, -h), pt((j + 1) * step, -h), pt((j + 1) * step, h), pt(j * step, h)], area_calc: Math.round(step * a.width * 10) / 10, draft: true })) }));
 }
 
 /* T4: a garden on a roof (landscape.js: on, kote) that a new volume on the same roof covers (a greenhouse over a lawn): under = [{ id, name, all }]
