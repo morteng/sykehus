@@ -37,7 +37,7 @@ test("a triangular greenhouse: its volume is half width × height × length", ()
 test("wrong input is refused with a reason", () => {
   assert.throws(() => add([], { kind: "balconies", wing: "Sentralblokka", side: "Q" }), /side/);
   assert.throws(() => add([], { kind: "demolish", building: "Slottet" }), /Fant ikke/);
-  assert.throws(() => add([], { kind: "volume", from: [0, 0], to: [0, 0.2], width: 5, height: 5 }), /mellom 1 og 250/);
+  assert.throws(() => add([], { kind: "volume", from: [0, 0], to: [0, 0.02], width: 5, height: 5 }), /mellom 0,05 og 250/);
 });
 
 test("a new building from the page (U3556): storeys, facts, reshaped, and torn down by its id", () => {

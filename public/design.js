@@ -292,11 +292,11 @@ export function checkDesign(site, e, str) {
       const material = String(e.material ?? "glass"); if (!MATERIALS.includes(material)) throw new Error(`material er ${MATERIALS.join(", ")}`);
       const from = pt(e.from, "from"), to = pt(e.to, "to"), L = Math.hypot(to[0] - from[0], to[1] - from[1]);
       /* a plan brought in (DXF, DWG) may be a whole quarter's: to 1 km */
-      const maxL = /^(dxf|dwg)$/.test(e.bim?.format || "") ? 1000 : 250; if (L < 1 || L > maxL) throw new Error(`Fra from til to må være mellom 1 og ${maxL} m`);
+      const maxL = /^(dxf|dwg)$/.test(e.bim?.format || "") ? 1000 : 250; if (L < 0.05 || L > maxL) throw new Error(`Fra from til to må være mellom 0,05 og ${maxL} m`);
       const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : material === "water" ? "Vann" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
       if (out.id) out.id = freeId(out.id, site);
       if (shape === "bim") { out.bim = bimOf(e.bim); Object.assign(out, bimBody(from, to, out.bim.box), w_); return footOf(site, e, out, num); }
-      out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), material === "water" || material === "glass" ? 0.1 : 1, 80, "Høyden"); Object.assign(out, w_);
+      out.width = num(e.width, 0.03, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), 0.1, 80, "Høyden")  /* U3639: a deck, a fence board, a post is thinner than a metre */; Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }
       if (shape === "terraces") {
