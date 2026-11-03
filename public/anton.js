@@ -23,8 +23,8 @@ import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are mar
 import { announces, matcher, isTry } from "./livetries.js";
 import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=20261028a";   // what the chat box attaches
 import { openMenu, closeMenu } from "./kit/menu.js";
-import { iconButton } from "./kit/pieces.js";
-import { esc as kitEsc } from "./kit/html.js";
+import { iconButton, statusHTML } from "./kit/pieces.js";
+import { esc as kitEsc, element } from "./kit/html.js";
 import { createStill } from "./kit/still.js";   // a picture of a live view first, one button for the live view (kits ui, U3996)
 
 const $ = id => document.getElementById(id);
@@ -193,11 +193,11 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       if (!a) return;
       const name = a.picture?.name || a.attachment?.name || "", x = iconButton("x", "Ta bort vedlegget", { class: "att-x" });
       x.onclick = () => setAtt(null);
-      chipBox.append(Object.assign(document.createElement("span"), { textContent: `Vedlegg: ${name}` }), x);
+      chipBox.append(element(statusHTML(`Vedlegg: ${name}`, "accent")), x);
     }
     async function attach(file) {
       if (!file || reading) return;
-      reading = true; chipBox.hidden = false; chipBox.replaceChildren(Object.assign(document.createElement("span"), { textContent: `Leser ${file.name || "bildet"} …` }));
+      reading = true; chipBox.hidden = false; chipBox.replaceChildren(element(statusHTML(`Leser ${file.name || "bildet"} …`, "muted")));
       try { setAtt(isPicture(file) ? { picture: await pictureOf(file) } : { attachment: await uploadFile(file) }); }
       catch (e) { setAtt(null); line("err", e.message || "Fikk ikke lagt ved fila."); }
       finally { reading = false; }
