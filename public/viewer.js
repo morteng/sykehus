@@ -22,6 +22,7 @@ import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the windo
 import { bimPlace, replacesBuiltIn } from "./design.js";
 import { planAdded, addedKey } from "./added-cache.js";
 import { BIM, BIM_EXTRA, readGlb } from "./bimglb.js";   // the wings drawn from their BIM model (U3656)
+import { highlighter } from "./renderkit/highlight.js";   // the pick drawn as a see-through fill and an outline over the mesh (Fab's look, U3881)
 import { createAreaClip, gridSkirt } from "./renderkit/areaclip.js";
 import { createAtmosphere } from "./renderkit/atmosphere.js";   // snow, wind in the trees, the sky by the sun, haze, tone mapping, the shade under crowns (U3886)
 import { createSkyBodies } from "./skybodies.js";   // the sun's disc and the moon in the sky, visual only
@@ -300,7 +301,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
         else m = mat(M.colour, { ...M.look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // the library's look; flat: the file carries no normals, and every face is plane
         g.computeBoundingSphere();
         const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass && p.material !== "steel"; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
-        if (selected === b.id) m.emissive.set("#6b5200");
+        if (selected === b.id) lightUp(mesh, SEL);
       }
       for (const o of old) { grp.remove(o); o.traverse(x => { x.geometry?.dispose(); x.material?.dispose?.(); }); }
       dirty = true;
@@ -1115,23 +1116,39 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     }
     dirty = true;
   }
+  /* a pick drawn over its meshes (U3881): a see-through fill and an outline in the pick's colour, children of the mesh so they move with it */
+  const SEL = { c: "#ffb300", a: 0.35 }, HOV = { c: "#ffd873", a: 0.18 };
+  const HL = highlighter({}, { domElement: { width: 1 }, getPixelRatio: () => 1 });
+  function lightUp(mesh, look) {
+    if (!mesh.isMesh || mesh.userData.hl || !mesh.geometry?.attributes?.position) return;
+    const g = mesh.geometry, fill = HL.fill(g.attributes.position, g.index ? g.index.array : [...Array(g.attributes.position.count).keys()], look.c, look.a);
+    if (mesh.material?.clippingPlanes) fill.material.clippingPlanes = mesh.material.clippingPlanes;
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), new THREE.LineBasicMaterial({ color: look.c, transparent: true, depthTest: false, clippingPlanes: mesh.material?.clippingPlanes || null }));
+    fill.renderOrder = lines.renderOrder = 14; fill.raycast = lines.raycast = () => {}; fill.userData.hl = lines.userData.hl = true;
+    mesh.add(fill, lines); mesh.userData.hl = [fill, lines];
+  }
+  function lightOff(mesh) {
+    for (const o of mesh.userData.hl || []) { mesh.remove(o); o.geometry.dispose(); o.material.dispose(); }
+    mesh.userData.hl = null;
+  }
+  const paint = (id, look) => { const list = []; groupOf(id)?.traverse(o => { if (o.isMesh && o.userData.hl !== true) list.push(o); }); for (const o of list) { lightOff(o); if (look) lightUp(o, look); } };
   function mark(ids) {
     treePicked = ids.filter(id => /^tre-/.test(id)); ringTrees(treePicked, treeHov);
-    for (const id of marked) if (id !== selected) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
-    marked = ids.filter(id => groupOf(id)); for (const id of marked) groupOf(id).traverse(o => o.material?.emissive?.set("#6b5200")); rimGround(); dirty = true;
+    for (const id of marked) if (id !== selected) paint(id, null);
+    marked = ids.filter(id => groupOf(id)); for (const id of marked) paint(id, SEL); rimGround(); dirty = true;
   }
-  /* the pick before the click (U3569, renderkit select.js): a lighter glow on what a click would take */
+  /* the pick before the click (U3569, renderkit select.js): a lighter fill on what a click would take */
   let hovered = [];
   function hover(ids) {
     const th = ids.filter(id => /^tre-/.test(id)); if (th.join() !== treeHov.join()) { treeHov = th; ringTrees(treePicked, treeHov); }
     const lit = new Set([...marked, selected].filter(Boolean));
-    for (const id of hovered) if (!lit.has(id)) groupOf(id)?.traverse(o => o.material?.emissive?.set("#000"));
-    hovered = ids.filter(id => groupOf(id) && !lit.has(id)); for (const id of hovered) groupOf(id).traverse(o => o.material?.emissive?.set("#3d3420")); rimGround(); dirty = true;
+    for (const id of hovered) if (!lit.has(id)) paint(id, null);
+    hovered = ids.filter(id => groupOf(id) && !lit.has(id)); for (const id of hovered) paint(id, HOV); rimGround(); dirty = true;
   }
   function select(id) {
-    if (selected) groupOf(selected)?.traverse(o => o.material?.emissive?.set("#000"));
+    if (selected) paint(selected, null);
     selected = id && groupOf(id) ? id : null;
-    if (selected) groupOf(selected).traverse(o => o.material?.emissive?.set("#6b5200"));
+    if (selected) paint(selected, SEL);
     rimGround(); dirty = true;
   }
   /* materials are shared within a building, so a building's own copies (made once) light up alone */

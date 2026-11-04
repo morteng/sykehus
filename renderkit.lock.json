@@ -90,6 +90,7 @@
     "dragsnap.js": "348a591aaf26f5f90ae410eaec69bc02b9c0da25",
     "guidelines.js": "4353b2403cf4bc12846274d092957b2fb4df31a4",
     "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78",
-    "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71"
+    "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71",
+    "highlight.js": "827ad3fb72a652906aa98231440a03b07f318853"
   }
 }
