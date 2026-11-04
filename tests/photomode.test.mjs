@@ -105,8 +105,8 @@ test("Anton's proposal makes nothing: the model is not called and the month's sp
 /* Anton's tools, through the real server: they list and propose, never make */
 const base = mkdtempSync(join(tmpdir(), "sykehus-photo-mcp-")), vdir = join(base, "v");
 mkdirSync(join(vdir, "gjengi"), { recursive: true });
-writeFileSync(join(vdir, "gjengi", "index.json"), JSON.stringify([{ id: "aaaaaaaaaaaaaaaa", at: "2026-10-25T10:00:00.000Z", by: "lars", work: "versjon:vAbcdefgh", model: "m", size: "1K", ext: "png", cost_usd: 0.07, est_usd: 0.07, spot: spotOf(view), fav: false },
-  { id: "bbbbbbbbbbbbbbbb", at: "2026-10-25T11:00:00.000Z", by: "mia", work: "utkast:xyzxyzxy", model: "m", size: "1K", ext: "png", cost_usd: 0.07, est_usd: 0.07, spot: spotOf(view), fav: false }]));
+writeFileSync(join(vdir, "gjengi", "index.json"), JSON.stringify([{ id: "aaaaaaaaaaaaaaaa", at: new Date(Date.now() - 6e4).toISOString(), by: "lars", work: "versjon:vAbcdefgh", model: "m", size: "1K", ext: "png", cost_usd: 0.07, est_usd: 0.07, spot: spotOf(view), fav: false },
+  { id: "bbbbbbbbbbbbbbbb", at: new Date(Date.now() - 6e4).toISOString(), by: "mia", work: "utkast:xyzxyzxy", model: "m", size: "1K", ext: "png", cost_usd: 0.07, est_usd: 0.07, spot: spotOf(view), fav: false }]));
 const secret = "proxy-secret-for-tests-0123456789", PORT = 9900 + Math.floor(Math.random() * 90), M = `http://localhost:${PORT}`;
 const sv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_VERSIONS_DIR: vdir, SYKEHUS_PROXY_SECRET: secret, SYKEHUS_ASSISTANT_URL: "http://127.0.0.1:9", SYKEHUS_ASSISTANT_TOKEN: "test-token", DOCS: "" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => sv.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
@@ -122,6 +122,6 @@ test("Anton lists the person's own spots, and retake_photos only proposes: the c
   assert.equal(r.structuredContent.proposed, 1, "another person's spot is not taken"); assert.equal(r.structuredContent.total_usd, r.structuredContent.each_usd);
   assert.match(r.structuredContent.said, /1 bilde · ca\. \$/);
   const s = await (await fetch(`${M}/api/gjengi?utkast=zzzzzzzz`, { headers: { "remote-user": "lars", "x-edge-auth": secret } })).json();
-  assert.deepEqual(s.retake, { ids: ["aaaaaaaaaaaaaaaa"] }); assert.equal(s.month_usd, 0.14, "nothing spent by the proposal (the two seeded pictures, October)");
+  assert.deepEqual(s.retake, { ids: ["aaaaaaaaaaaaaaaa"] }); assert.equal(s.month_usd, 0.14, "nothing spent by the proposal (the two seeded pictures, this month)");
   assert.equal((await rpc("tools/call", { name: "retake_photos", arguments: { spots: ["bbbbbbbbbbbbbbbb"] } })).isError, true);
 });
