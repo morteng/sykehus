@@ -25,11 +25,25 @@ export const LOOKS = {
 }
 // the picture size for a quality tier (quality.js): 2K on a desktop, 1K on a touch device or a card
 export const sizeFor = tier => tier === 'high' ? '2k' : '1k'
+// U3996: the sizes of a set that also has KTX2 (Basis Universal) copies, `<set>_<name>_<size>.ktx2` next to the JPEGs (tools/make-ktx2.mjs):
+// about a quarter of the JPEG bytes, and the GPU keeps them compressed. Needs a renderer to tell which format it can transcode to.
+export const KTX2_SIZES = { black_walnut_veneer_02: ['1k', '2k'] }
 
 const memo = new Map(), once = (k, f) => { if (!memo.has(k)) memo.set(k, f().catch(e => { memo.delete(k); throw e })); return memo.get(k) }
-export function picture(url, colour) {                       // a picture once per page, repeating (materials-three.js too)
-  return once(url, () => new T.TextureLoader().loadAsync(url).then(t => {
+export function picture(url, colour, ktx2) {                  // a picture once per page, repeating (materials-three.js too); ktx2: a KTX2Loader for a .ktx2 url
+  return once((ktx2 ? 'ktx2:' : '') + url, () => (ktx2 ? ktx2.loadAsync(url) : new T.TextureLoader().loadAsync(url)).then(t => {
     t.wrapS = t.wrapT = T.RepeatWrapping; t.colorSpace = colour ? T.SRGBColorSpace : T.NoColorSpace; t.anisotropy = 8; return t }))
+}
+// the KTX2 loader for a renderer (once per renderer): the basis transcoder is served by the app at `path` (basis_transcoder.js and .wasm, no CDN)
+const loaders = new WeakMap()
+export async function ktx2For(r, path) {
+  let l = loaders.get(r)
+  if (!l) {
+    const { KTX2Loader } = await import('./ktx2-loader.js'), k = new KTX2Loader().setTranscoderPath(path).detectSupport(r)
+    if (!Object.values(k.workerConfig).some(Boolean)) { k.dispose(); throw new Error('this GPU takes no compressed texture format') }   // no transcoder download for nothing: the JPEGs
+    loaders.set(r, l = k)
+  }
+  return l
 }
 function plyPicture(layers) {
   const c = document.createElement('canvas'); c.width = 4; c.height = 256
@@ -44,14 +58,22 @@ function layerPicture(tilt) {                                    // one layer's 
 }
 
 // the face and the cut edge's materials for look id, or null when renderkit has no set for it (the app keeps its own colour).
-// o: {url(name): where a picture is served, size: '1k' | '2k', extra: material settings both take (polygon offset)}
+// o: {url(name): where a picture is served, size: '1k' | '2k', extra: material settings both take (polygon offset),
+//     ktx2: {renderer, path} (U3996): take the set's .ktx2 copies when it has them at this size, the JPEGs when the device cannot transcode}
 // -> {tile, face, edge}: tile > 0: UVs by sheetUV at that scale; a filament also has layer (mm): UVs by printUV at that pitch.
-export async function lookMaterials(id, { url, size = '1k', extra = {} } = {}) {
+export async function lookMaterials(id, { url, size = '1k', extra = {}, ktx2 = null } = {}) {
   const L = LOOKS[id]
   if (!L) return null
   if (L.set) {
-    const p = n => url(`${L.set}_${n}_${size}.jpg`)
-    const [map, normalMap, arm] = await Promise.all([picture(p('diff'), true), picture(p('nor_gl')), picture(p('arm'))])
+    const p = (n, ext = 'jpg') => url(`${L.set}_${n}_${size}.${ext}`)
+    let ktx = null
+    if (ktx2 && KTX2_SIZES[L.set]?.includes(size)) try { ktx = await ktx2For(ktx2.renderer, ktx2.path) } catch { ktx = null }
+    const get = async (n, colour) => {
+      // a transcoder that never answers (a blocked worker, a wasm that will not compile) must not hold the look: 6 s, then the JPEG
+      if (ktx) try { return await Promise.race([picture(p(n, 'ktx2'), colour, ktx), new Promise((_, no) => setTimeout(() => no(new Error('ktx2 timeout')), 6000))]) } catch { /* no transcoder here: the JPEG, the low level */ }
+      return picture(p(n), colour)
+    }
+    const [map, normalMap, arm] = await Promise.all([get('diff', true), get('nor_gl'), get('arm')])
     return {
       tile: L.tile,
       face: new T.MeshStandardMaterial({ map, normalMap, aoMap: arm, roughnessMap: arm, metalnessMap: arm, roughness: 1, metalness: 1, color: L.tint, ...extra }),

@@ -1,7 +1,7 @@
 /* T5: draw_plan and draw_section, the two tools that draw a measured plan or section (public/drawing.js) as a PNG for Anton to
    look at (the same image content look makes). mcp.mjs spreads drawTools(...) into TOOLS; the logic is in drawing.js. */
 import { planDrawing, sectionDrawing } from "./public/drawing.js";
-import { rasterize } from "./drawing-png.mjs";
+import { rasterize } from "./public/renderkit/sheet-png.mjs";
 
 export function drawTools({ S, WING, TARGET, OLD, model, wingOf, toolErr }) {
   const FOCUS = { type: "string", description: "A wing (name or id) or a new part (id or name)" };

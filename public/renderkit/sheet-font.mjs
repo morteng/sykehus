@@ -1,4 +1,4 @@
-/* T5: the 5 x 7 dot font of the drawings (drawing-png.mjs): digits, A-Z, Æ Ø Å and what a dimension needs. A glyph is 7 rows of
+/* T5: the 5 x 7 dot font of the drawings (sheet-png.mjs): digits, A-Z, Æ Ø Å and what a dimension needs. A glyph is 7 rows of
    5 columns ("#" = dot); Å has 9 (two rows above the line). Lower case reads as upper case, except m. Pure. */
 export const GLYPH_W = 5, ADVANCE = 6;
 const F = {

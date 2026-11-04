@@ -1,5 +1,5 @@
 /* T5: a plan and a section as a measured drawing, not a picture of a model: dimension lines, axes, kotes and north. Pure: it makes
-   primitives (drawing-png.mjs makes the PNG; a page may make SVG of the same) and the words that say what is drawn.
+   primitives (sheet-png.mjs (the kit) makes the PNG; a page may make SVG of the same) and the words that say what is drawn.
    One copy of the maths: every length and bearing on a wing or a new part is measureParts' own (T1, which is roof.js's and
    renderkit measure.js's), every roof piece is roof.js's (roofPieces), the ground is fit.js's groundAt. A dimension's text
    is that number, so the drawing and about_part / measure cannot disagree.
@@ -10,17 +10,10 @@ import { roofOf, roofPieces, measureParts, footRing } from "./roof.js";
 import { groundAt, inRing } from "./renderkit/fit.js";
 import { dirWord, norm360 } from "./renderkit/dirs.js";
 
-const r2 = v => Math.round(v * 100) / 100 + 0, r1 = v => Math.round(v * 10) / 10 + 0, com = v => String(v).replace(".", ",");
-const kote = v => (v < 0 ? "-" : "+") + Math.abs(v).toFixed(2).replace(".", ",");
+import { INK, DIMC, AXIS, GREY, ORANGE, TEXT_BG, PX_PER_M_1_1, r2, r1, com, kote, sub, add, mul, len, unit, textW, fitScale, T, Ln, Pg, dimLine, northArrow, scaleBar, frameBox } from "./renderkit/sheet.js";   // the drafting pieces: one copy, the kits repo (U3943)
 export { com, kote };   // the facade drawing (fasade.js) writes its numbers the same way
-const INK = [30, 30, 36], DIMC = [0, 84, 150], AXIS = [190, 40, 40], GREY = [120, 120, 128], ORANGE = [235, 110, 20], TEXT_BG = true;
 const TONES = [[140, 140, 148], [176, 176, 184], [208, 208, 216]];   // the roof's levels, the highest darkest
-const PX_PER_M_1_1 = 3779.5;   // pixels per metre at 1:1 on a 96 dpi screen; at 1:N it is this / N
-const NICE = [20, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
 
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]], mul = (a, k) => [a[0] * k, a[1] * k], len = a => Math.hypot(a[0], a[1]);
-const unit = a => { const L = len(a) || 1; return [a[0] / L, a[1] / L]; };
-const textW = (s, size) => String(s).length * 6 * size - size;
 
 function resolveFocus(site, ref, wingOf) {
   const key = String(ref ?? "").trim().toLowerCase();
@@ -30,45 +23,6 @@ function resolveFocus(site, ref, wingOf) {
   if (w) return { kind: "wing", w };
   throw new Error(`Fant ikke «${ref ?? ""}»: en fløy eller et nytt bygg (id eller navn: ${(site.added || []).filter(x => x.kind === "volume").map(x => x.id).slice(0, 12).join(", ") || "prosjektet har ingen ennå"})`);
 }
-
-/* scale: px per metre for what must fit in avail pixels; `scale` is the 1:N asked for. Refuses with the smallest 1:N that fits. */
-function fitScale(spanW, spanH, availW, availH, N) {
-  const fit = Math.min(availW / Math.max(spanW, 1e-6), availH / Math.max(spanH, 1e-6));
-  if (N == null) { const n = PX_PER_M_1_1 / fit, nice = NICE.find(x => x >= n) || Math.ceil(n / 1000) * 1000; return { p: fit, N: nice, said: `ca. 1:${nice}` }; }
-  if (!(N >= 10 && N <= 100000)) throw new Error("scale er målestokken som tall, for eksempel 200 for 1:200 (mellom 10 og 100000)");
-  const p = PX_PER_M_1_1 / N;
-  if (p > fit * 1.0001) { const n = PX_PER_M_1_1 / fit, nice = NICE.find(x => x >= n) || Math.ceil(n / 1000) * 1000; throw new Error(`Det får ikke plass i 1:${N}; det minste målet som passer i bildet er 1:${nice}. Bruk scale: ${nice} eller la scale stå.`); }
-  return { p, N, said: `1:${N}` };
-}
-
-/* ----- the drawing's furniture ----- */
-const T = (prims, p, s, o = {}) => prims.push({ t: "text", p, s, size: o.size || 2, col: o.col || INK, anchor: o.anchor || "l", rot: o.rot || 0, bg: o.bg });
-const Ln = (prims, a, b, col = INK, w = 1, dash = null) => prims.push({ t: "line", a, b, col, w, dash });
-const Pg = (prims, pts, fill, stroke, w = 1) => prims.push({ t: "poly", pts, fill, stroke, w });
-
-/* an architect's dimension line between two points in pixels, pushed off by `off` px along n (unit, px), ticks at both ends, text in the middle */
-function dimLine(prims, dims, A, B, n, off, text, rec) {
-  const a = add(A, mul(n, off)), b = add(B, mul(n, off)), e = mul(n, off > 0 ? 5 : -5);
-  Ln(prims, A, add(a, e), DIMC, 1); Ln(prims, B, add(b, e), DIMC, 1); Ln(prims, a, b, DIMC, 1.2);
-  const d = unit(sub(b, a)), t = [-d[1], d[0]];
-  for (const q of [a, b]) Ln(prims, add(q, mul(add(d, t), -5)), add(q, mul(add(d, t), 5)), DIMC, 1.6);
-  const mid = mul(add(a, b), 0.5), steep = Math.abs(d[1]) > Math.abs(d[0]) * 1.5, fits = len(sub(b, a)) > textW(text, 1.6) + 10;
-  if (steep && !fits) T(prims, [mid[0] + 8, mid[1] + 5], text, { size: 1.6, col: DIMC, bg: TEXT_BG });   // a short vertical dimension: the text beside it, not along it
-  else T(prims, steep ? [mid[0] - 4, mid[1]] : [mid[0], mid[1] - 4], text, { size: 1.6, col: DIMC, anchor: "m", rot: steep ? -90 : 0, bg: TEXT_BG });
-  dims.push({ ...rec, text });
-}
-
-function northArrow(prims, x, y, ang = 0) {   // ang: the screen angle of north, radians clockwise from up
-  const rot = ([u, v]) => [x + u * Math.cos(ang) - v * Math.sin(ang), y + u * Math.sin(ang) + v * Math.cos(ang)];
-  Pg(prims, [rot([0, -26]), rot([11, 16]), rot([0, 8]), rot([-11, 16])], INK, INK, 1);
-  T(prims, rot([0, -32]), "N", { size: 2, anchor: "m" });
-}
-function scaleBar(prims, x, y, p, W) {
-  const m = [5, 10, 20, 50, 100].find(v => v * p >= 90) || 100, L = m * p;
-  for (let i = 0; i < 4; i++) Pg(prims, [[x + i * L / 4, y], [x + (i + 1) * L / 4, y], [x + (i + 1) * L / 4, y + 6], [x + i * L / 4, y + 6]], i % 2 ? [255, 255, 255] : INK, INK, 1);
-  T(prims, [x, y - 4], "0", { size: 1.6 }); T(prims, [x + L, y - 4], `${m} m`, { size: 1.6, anchor: "m" });
-}
-const frameBox = (prims, W, H) => Pg(prims, [[1, 1], [W - 1, 1], [W - 1, H - 1], [1, H - 1]], null, GREY, 1.5);
 
 /* the longest side first: the rectangle's corners c0..c3 → { u, v (unit, the long and the short side), L, Wd, o (origin c0) } */
 function frameOfRect(c) {

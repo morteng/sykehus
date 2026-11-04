@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import { checkEdit, applyEdits, wingOf } from "../public/edits.js";
 import { measureParts, roofOf } from "../public/design.js";
 import { planDrawing, sectionDrawing } from "../public/drawing.js";
-import { rasterize } from "../drawing-png.mjs";
+import { rasterize } from "../public/renderkit/sheet-png.mjs";
 
 const TH = 30 * Math.PI / 180, c = Math.cos(TH), s = Math.sin(TH);
 const X = (u, v) => [Math.round((u * c - v * s) * 100) / 100 + 0, Math.round((u * s + v * c) * 100) / 100 + 0];

@@ -1,10 +1,10 @@
-/* T5: the drawing's primitives (public/drawing.js) as a PNG, in Node: no browser, no fonts (a 5 x 7 dot font of its own), the
+/* T5: the sheet primitives (sheet.js) as a PNG, in Node: no browser, no fonts (a 5 x 7 dot font of its own), the
    picture drawn twice the size and halved for smooth lines. The 3D picture's PNG writer (renderkit look.js) is a vendored
    file that does not export it, so the 12 lines of the PNG container are here (a change there: take it from there).
      prims: { t: "line", a, b, col, w?, dash? } | { t: "poly", pts, fill?, stroke?, w? } | { t: "text", p, s, size?, col?, anchor?, rot?, bg? }
      all in pixels of the final picture; text size = pixels per font cell (2 gives letters 10 x 14 px). */
 import { deflateSync } from "node:zlib";
-import { glyph, GLYPH_W, ADVANCE } from "./drawing-font.mjs";
+import { glyph, GLYPH_W, ADVANCE } from "./sheet-font.mjs";
 
 const SS = 2;
 export function rasterize(prims, W, H) {
