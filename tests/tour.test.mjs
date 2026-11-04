@@ -72,3 +72,21 @@ test("U3669: the tour is counted after the bar has its «Logg inn» or the perso
   assert.equal(s.length, 5); assert.equal(s.at(-1).title, "Logg inn");
   assert.equal(s.at(-1).el.length === 0, true, "its part is looked up when the tour starts (a function), which is why the timing mattered");
 });
+
+test("U4277: the «Nytt bygg og Hent fil» step has a before (so it is always counted) and points at the tab on a phone when the buttons are hidden", async () => {
+  const calls = [];
+  const els = {};
+  globalThis.document = { getElementById: id => els[id] ?? null };
+  globalThis.requestAnimationFrame = f => f();
+  try {
+    const hh = { phone: () => true, tab() { }, pick: () => calls.push("pick") };
+    const s = steps(hh).find(x => x.title === "Nytt bygg og Hent fil");
+    assert.ok(s, "step exists");
+    assert.equal(typeof s.before, "function");
+    els["tab-selected"] = { id: "tab-selected" };
+    els.byggActs = { getClientRects: () => [], scrollIntoView() { calls.push("scroll"); } };
+    await s.before();
+    assert.deepEqual(calls, ["pick", "scroll"]);
+    assert.equal(s.el().id, "tab-selected");
+  } finally { delete globalThis.document; delete globalThis.requestAnimationFrame; }
+});
