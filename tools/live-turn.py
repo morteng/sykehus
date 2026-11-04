@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: E501
 """live-turn.py: ONE live Anton turn through Sykehus's own chat (/api/anton), as the page does it. For a root door run by pm.
 
   python3 -I tools/live-turn.py [--base URL] [--wait S] [--version ID] "<message>"   (header JSON on stdin, see below)
@@ -72,10 +71,10 @@ def run(opts, headers, deadline=None):
         return urllib.request.Request(base + path, data=data, headers=hh)
 
     out = {"answer": "", "tools": [], "approvals": 0, "versions": [], "history": [], "ended": "timeout", "error": None}
-    resp = urllib.request.urlopen(req("/api/anton/strom"), timeout=opts["wait"])  # noqa: S310
+    resp = urllib.request.urlopen(req("/api/anton/strom"), timeout=opts["wait"])
     try:
         body = {"text": opts["text"], **({"version": opts["version"]} if opts["version"] else {})}
-        turn = json.load(urllib.request.urlopen(req("/api/anton", body), timeout=60))["id"]  # noqa: S310
+        turn = json.load(urllib.request.urlopen(req("/api/anton", body), timeout=60))["id"]
         for ev, d in events(resp, deadline):
             if not isinstance(d, dict):
                 continue
@@ -94,7 +93,7 @@ def run(opts, headers, deadline=None):
                 out["approvals"] += 1
                 out["ended"] = "approval"
                 try:
-                    urllib.request.urlopen(req("/api/anton/stopp", {}), timeout=30)  # noqa: S310
+                    urllib.request.urlopen(req("/api/anton/stopp", {}), timeout=30)
                 except OSError:
                     pass
                 break
@@ -107,7 +106,7 @@ def run(opts, headers, deadline=None):
     finally:
         resp.close()
     try:
-        j = json.load(urllib.request.urlopen(req("/api/anton/historikk"), timeout=30))  # noqa: S310
+        j = json.load(urllib.request.urlopen(req("/api/anton/historikk"), timeout=30))
         items = j.get("items", []) if isinstance(j, dict) else j
         out["history"] = items[-8:] if isinstance(items, list) else []
     except (OSError, ValueError):
