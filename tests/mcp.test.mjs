@@ -203,3 +203,7 @@ test("U3966: every tool carries its nb/en card words in _meta (a new tool needs 
   assert.deepEqual(toolWords({ name: "ny_ting", title: "Ny ting" }), { nb: { title: "Ny ting" }, en: { title: "Ny ting" } });
   assert.equal(toolWords({ name: "ny_ting", title: "Ny ting", en: "New thing" }).en.title, "New thing");
 });
+test("U3608: try_change without edits is a refusal the model can read, not «Internal error»", async () => {
+  const r = await call("try_change", { change: { kind: "volume" } });
+  assert.equal(r.isError, true); assert.match(r.content[0].text, /Mangler «edits»/);
+});

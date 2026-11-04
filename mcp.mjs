@@ -1178,6 +1178,8 @@ export function createMcp({ site, floors, sections = [], docs, docUrl, SECURITY,
         /* U3932 (MRTR): a retry carries inputResponses; what the person answered goes in as arguments */
         const given = { ...(params.arguments || {}), ...answersOf(params.inputResponses) };
         let a; try { a = resolveTarget(t, given, req); } catch (e) { if (e.tool) { refused(e.message); return { content: [{ type: "text", text: e.message }], isError: true }; } throw e; }
+        /* U3608: a required argument that is not there is a refusal the model can read, not «Internal error» (try_change without edits) */
+        { const miss = (t.schema?.required || []).filter(f => a[f] == null && !(f === "wing" && WING_ASKED.has(t.name))); if (miss.length) { const m = `Mangler ${miss.map(f => "«" + f + "»").join(", ")}. Send ${miss.join(", ")} (find_tool ${t.name} viser feltene).`; refused(m); return { content: [{ type: "text", text: m }], isError: true }; } }
         /* a tool that keeps a version, with no one logged in: the sign-in challenge, so a chat app asks the person to connect */
         if (!who && (t.write || (t.writeIf && t.writeIf(a)))) throw Object.assign(err(401, "Sign-in needed"), { auth: true });
         /* a wing that is missing or not known is a question, not a failure: which wing? */
