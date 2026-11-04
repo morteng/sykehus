@@ -71,3 +71,20 @@ test("U3617: a surface is kept as its points and how its corners go; one setting
   g = after([e, sm]).landscape[0]; assert.ok(g.smooth && g.ring.length > 20, "a curve through the points");
   assert.throws(() => checkEdit(site, [], { kind: "surface", surface: "grass", ring: sq, smooth: "ja" }), /smooth er true/);
 });
+
+test("U3617: one rounded end, then longer, then deeper: each change leaves the rest", () => {
+  const sq = [[40, 60], [50, 60], [50, 66], [40, 66]];   // 10 east × 6 north
+  const e = checkEdit(site, [], { kind: "surface", surface: "water", pool: true, ring: sq, round_end: "Ø", name: "Basseng" });
+  assert.deepEqual(e.radius, [0, 3, 3, 0], "the two east corners, half the end's width (3 m)");
+  let g = after([e]).landscape[0];
+  assert.ok(Math.abs(g.area_m2 - (60 - (6 * 6 - Math.PI * 9) / 2)) < 0.8, `one end a half circle: ${g.area_m2}`);
+  assert.ok(g.ring.some(p => p[0] > 49 && p[1] > 62 && p[1] < 64) && g.ring.some(p => p[0] === 40 && p[1] === 60), "round east, sharp west");
+  const s1 = applyEdits(site, [], [e]).site;
+  const l = checkEdit(s1, [], { kind: "reshape", id: g.id, length_m: 12 });
+  g = after([e, l]).landscape[0];
+  const xs = g.points.map(p => p[0]); assert.equal(Math.max(...xs) - Math.min(...xs), 12, "2 m longer"); assert.equal(Math.max(...g.points.map(p => p[1])) - Math.min(...g.points.map(p => p[1])), 6, "as wide");
+  assert.deepEqual(g.radius, [0, 3, 3, 0], "the rounding stays");
+  const d = checkEdit(applyEdits(site, [], [e, l]).site, [], { kind: "reshape", id: g.id, depth: 1.8 });
+  g = after([e, l, d]).landscape[0]; assert.equal(g.depth, 1.8); assert.equal(g.points.length, 4); assert.deepEqual(g.radius, [0, 3, 3, 0]);
+  assert.throws(() => checkEdit(site, [], { kind: "surface", surface: "grass", ring: sq, radius: [1, 2] }), /ett tall per punkt/);
+});

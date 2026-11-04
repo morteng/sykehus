@@ -75,13 +75,50 @@ export function plantOf(s) {
 /* one landscape change, checked: its tidy form, or null when it is not one */
 /* U3617: a surface is kept as its settings: the points given (ring), and how its corners go (radius: rounded with an arc
    of that many metres; smooth: a curve through the points); its outline is made from them, so one setting can change */
-const outlineOf = (points, radius, smooth) => radius || smooth ? ringOf({ points, radius: radius || 0, smooth: !!smooth, step: 1 }).map(p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]) : points;
-function cornersOf(e, out) {
-  if (e.radius != null) out.radius = num(e.radius, 0, 50, "Hjørneradien (radius, m)");
+/* radius is one number for every corner, or a list with one per point (0 = that corner sharp): a pool with one rounded end.
+   A listed corner is rounded by ringOf alone, as the near corner of a huge triangle with the same angle (its far corners' arcs
+   lie far off and are dropped), so the arc maths stays in renderkit; the radius is held to what the real sides leave. */
+const r2 = ps => ps.map(p => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]);
+function cornerArc(a, b, c, radius, step) {
+  const la = Math.hypot(a[0] - b[0], a[1] - b[1]), lc = Math.hypot(c[0] - b[0], c[1] - b[1]); if (!la || !lc) return [b];
+  const u = [(a[0] - b[0]) / la, (a[1] - b[1]) / la], v = [(c[0] - b[0]) / lc, (c[1] - b[1]) / lc], th = Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1])));
+  if (th < 1e-3 || Math.PI - th < 1e-3) return [b];
+  const r = Math.min(radius, Math.tan(th / 2) * Math.min(la, lc) / 2), F = 1e5;
+  const out = ringOf({ points: [[b[0] + u[0] * F, b[1] + u[1] * F], b, [b[0] + v[0] * F, b[1] + v[1] * F]], radius: r, step });
+  const near = out.filter(p => Math.hypot(p[0] - b[0], p[1] - b[1]) <= 2 * r + 1e-6); return near.length > 2 ? near : [b];
+}
+function outlineOf(points, radius, smooth) {
+  if (Array.isArray(radius) && !smooth) {
+    const n = points.length;
+    return r2(points.flatMap((b, i) => +radius[i] > 0 ? cornerArc(points[(i + n - 1) % n], b, points[(i + 1) % n], +radius[i], 1) : [b]));
+  }
+  return radius && !Array.isArray(radius) || smooth ? r2(ringOf({ points, radius: Array.isArray(radius) ? 0 : radius || 0, smooth: !!smooth, step: 1 })) : points;
+}
+/* U3617: the two corners at one end (N, Ø, S or V: the points furthest that way) rounded to a half circle, or radius m; the rest sharp */
+const SIDE_VEC = { N: [0, 1], S: [0, -1], Ø: [1, 0], V: [-1, 0] };
+function endRadii(points, side, radius) {
+  const d = SIDE_VEC[side]; if (!d) throw new Error("round_end er N, Ø, S eller V (enden som rundes)");
+  const order = points.map((p, i) => [p[0] * d[0] + p[1] * d[1], i]).sort((x, y) => y[0] - x[0]), [i, j] = [order[0][1], order[1][1]];
+  const half = Math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]) / 2;
+  return points.map((_, k) => k === i || k === j ? (radius > 0 ? radius : half) : 0);
+}
+/* length_m / width_m: the points stretched along their long axis and across it, about their middle (a pool 2 m longer) */
+function stretched(points, length, width) {
+  const n = points.length, mx = points.reduce((t, p) => t + p[0], 0) / n, my = points.reduce((t, p) => t + p[1], 0) / n;
+  let sxx = 0, syy = 0, sxy = 0; for (const p of points) { sxx += (p[0] - mx) ** 2; syy += (p[1] - my) ** 2; sxy += (p[0] - mx) * (p[1] - my); }
+  const th = 0.5 * Math.atan2(2 * sxy, sxx - syy), ax = [Math.cos(th), Math.sin(th)], nx = [-ax[1], ax[0]];   // the principal axis: the long side
+  const al = points.map(p => p[0] * ax[0] + p[1] * ax[1]), ac = points.map(p => p[0] * nx[0] + p[1] * nx[1]);
+  const [a0, a1, c0, c1] = [Math.min(...al), Math.max(...al), Math.min(...ac), Math.max(...ac)], ka = length != null ? length / (a1 - a0) : 1, kc = width != null ? width / (c1 - c0) : 1;
+  const am = (a0 + a1) / 2, cm = (c0 + c1) / 2;
+  return points.map((_, k) => { const x = am + (al[k] - am) * ka, y = cm + (ac[k] - cm) * kc; return [Math.round((x * ax[0] + y * nx[0]) * 100) / 100, Math.round((x * ax[1] + y * nx[1]) * 100) / 100]; });
+}
+function cornersOf(e, out, points) {
+  if (Array.isArray(e.radius)) { if (e.radius.length !== points.length) throw new Error(`radius som liste må ha ett tall per punkt (${points.length})`); out.radius = e.radius.map(r => num(r, 0, 50, "Hjørneradien (radius, m)")); }
+  else if (e.radius != null) out.radius = num(e.radius, 0, 50, "Hjørneradien (radius, m)");
+  if (e.round_end != null) out.radius = endRadii(points, String(e.round_end), e.radius != null && !Array.isArray(e.radius) ? out.radius : 0);
   if (e.smooth != null) { if (typeof e.smooth !== "boolean") throw new Error("smooth er true (en myk kurve gjennom punktene) eller false"); out.smooth = e.smooth; }
   return out;
 }
-
 
 /* ---------- T4: the roof a landscape change stands on ---------- */
 const com = v => String(v).replace(".", ",");
@@ -126,7 +163,7 @@ export function checkLandscape(site, e, str) {
   const name = (d) => e.name == null ? undefined : str(String(e.name), 80, "Navnet") || d;
   switch (e.kind) {
     case "surface": {
-      const ring = pts(e.ring, "ring", 3), corners = cornersOf(e, {}), a = ringArea(outlineOf(ring, corners.radius, corners.smooth));
+      const ring = pts(e.ring, "ring", 3), corners = cornersOf(e, {}, ring), a = ringArea(outlineOf(ring, corners.radius, corners.smooth));
       if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²");
       const surface = String(e.surface ?? ""); if (!SURFACES.includes(surface)) throw new Error(`surface er ${SURFACES.join(", ")}`);
       const out = { kind: "surface", ring, surface, ...corners, ...w_ }, n = name(); if (n) out.name = n;
@@ -230,7 +267,8 @@ export function checkGroundEdit(site, e, str) {
     if (e.crown != null) out.crown = num(e.crown, 0.3, 30, "Kronebredden (crown)");
   } else if (g.kind === "surface") {
     if (e.surface != null) { if (!SURFACES.includes(String(e.surface))) throw new Error(`surface er ${SURFACES.join(", ")}`); out.surface = String(e.surface); }
-    cornersOf(e, out);
+    if (e.length_m != null || e.width_m != null) e = { ...e, ring: stretched(g.points || g.ring, e.length_m != null ? num(e.length_m, 1, 300, "Lengden (length_m)") : null, e.width_m != null ? num(e.width_m, 1, 300, "Bredden (width_m)") : null) };
+    cornersOf(e, out, e.ring || g.points || g.ring);
     if (g.on && (e.ring != null || out.radius != null || out.smooth != null)) roofPlace(site, { on: g.on, kote: g.kote }, sampleRing(outlineOf(out.ring || g.points || g.ring, out.radius ?? g.radius, out.smooth ?? g.smooth)), "flaten");
     if (e.ring != null || out.radius != null || out.smooth != null) { if (e.ring != null) out.ring = pts(e.ring, "ring", 3); const a = ringArea(outlineOf(out.ring || g.points || g.ring, out.radius ?? g.radius, out.smooth ?? g.smooth)); if (a < 1 || a > 60000) throw new Error("Flaten må være mellom 1 og 60 000 m²"); }
     if (e.plants != null) { if (!Array.isArray(e.plants) || e.plants.length > 30) throw new Error("plants er en liste med høyst 30 arter"); out.plants = e.plants.map(p => { const q = plantOf(p); return q.id || q.la; }); }
