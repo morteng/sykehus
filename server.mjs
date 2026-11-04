@@ -31,6 +31,7 @@ import { readFile } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { extname, normalize, join } from "node:path";
 import { gzip } from "node:zlib";
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { createMcp } from "./mcp.mjs";
 import { createVersions } from "./versions.mjs";
@@ -176,8 +177,11 @@ createServer(async (req, res) => {
     const file = normalize(join(PUB, ICON || (path.endsWith("/") ? path + "index.html" : path)));
     if (!file.startsWith(PUB) || req.method !== "GET" && req.method !== "HEAD") throw new Error("not served");
     let body = await readFile(file); if (req.mount && file.endsWith("/prospekt.html")) body = Buffer.from(String(body).replace('<base href="/">', `<base href="${req.mount}/">`));   // its relative links climb to the mount
+    /* U4253: modules import each other without ?v= (./renderkit/..., ./kit/...), so those stay no-cache; an ETag lets the browser revalidate with a 304 instead of fetching the bytes again */
+    const versioned = !!url.searchParams.get("v"), etag = versioned ? "" : `"${createHash("sha1").update(body).digest("hex").slice(0, 20)}"`;
+    if (etag && req.headers["if-none-match"] === etag) return res.writeHead(304, { ...SECURITY, ...OPEN, etag, "cache-control": "no-cache" }).end();
     const zip = /\bgzip\b/.test(req.headers["accept-encoding"] || "") && [".glb", ".js", ".json", ".css", ".html"].includes(extname(file)) && body.length > 1024;
     if (zip) body = await gzipped(body, file);   // the model (U3656), the data and the scripts, whoever sits in front of this
-    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": url.searchParams.get("v") ? "public, max-age=31536000, immutable" : "no-cache", ...(zip ? { "content-encoding": "gzip", vary: "Accept-Encoding" } : {}) }).end(req.method === "HEAD" ? undefined : body);
+    res.writeHead(200, { ...SECURITY, ...OPEN, "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": versioned ? "public, max-age=31536000, immutable" : "no-cache", ...(etag ? { etag } : {}), ...(zip ? { "content-encoding": "gzip", vary: "Accept-Encoding" } : {}) }).end(req.method === "HEAD" ? undefined : body);
   } catch { if (!res.headersSent) res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Ikke funnet"); }
 }).listen(PORT, () => console.log(`Sykehustomta on http://localhost:${PORT}${docs ? "" : " (no document store: set DOCS)"}`));

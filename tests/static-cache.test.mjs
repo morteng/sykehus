@@ -18,3 +18,9 @@ test("app.js without ?v= is revalidated", async () => {
   const r = await get("/app.js"); assert.equal(r.status, 200);
   assert.equal(r.headers.get("cache-control"), "no-cache");
 });
+test("an unversioned module (renderkit) has an ETag and answers 304 to it", async () => {
+  const r = await get("/renderkit/paths2d.js"); assert.equal(r.status, 200);
+  assert.equal(r.headers.get("cache-control"), "no-cache");
+  const etag = r.headers.get("etag"); assert.ok(etag);
+  const r2 = await fetch(O + "/renderkit/paths2d.js", { headers: { "if-none-match": etag } }); assert.equal(r2.status, 304);
+});
