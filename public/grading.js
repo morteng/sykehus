@@ -63,11 +63,11 @@ export function applyGrading(site, edits) {
   if (!site.grading.length) delete site.grading;
   for (const w of waters) {
     if (w.pool) {
-      const coping = w.coping ?? POOL.coping, depth = w.depth ?? POOL.depth, pad = offsetRing(w.ring, coping + POOL.surround), [lo, hi] = span(site, pad);
-      const kote = w.kote ?? balanceKote(k => { const g = gradeRing(T, { ring: pad, z: k, keep }, false); return g.cut_m3 - g.fill_m3; }, lo, hi);
-      const g = gradeRing(T, { ring: pad, z: kote, hole: { ring: w.ring, z: kote - depth }, keep }), trees = rootsHit(T, site.trees, g.moved), hole = Math.round(Math.abs(ringArea(w.ring)) * depth);
+      const coping = w.coping ?? POOL.coping, depth = w.depth ?? POOL.depth, deck = w.deck ?? POOL.surround, edge = w.edge || "batter", pad = offsetRing(w.ring, coping + deck), [lo, hi] = span(site, pad);
+      const kote = w.kote ?? balanceKote(k => { const g = gradeRing(T, { ring: pad, z: k, edge, keep }, false); return g.cut_m3 - g.fill_m3; }, lo, hi);
+      const g = gradeRing(T, { ring: pad, z: kote, edge, hole: { ring: w.ring, z: kote - depth }, keep }), trees = rootsHit(T, site.trees, g.moved), hole = Math.round(Math.abs(ringArea(w.ring)) * depth);
       w.level = r2(kote - POOL.freeboard);
-      w.basin = { kote: r2(kote), bottom: r2(kote - depth), depth, coping, surround: POOL.surround, cut_m3: g.cut_m3 + hole, fill_m3: g.fill_m3, hole_m3: hole, max_cut: g.max_cut, max_fill: g.max_fill, reach_m: g.reach_m,
+      w.basin = { kote: r2(kote), bottom: r2(kote - depth), depth, coping, surround: deck, edge, ...(edge === "wall" && Math.abs(g.edge_step) >= 0.05 ? { wall_m: r2(Math.abs(g.edge_step)) } : {}), cut_m3: g.cut_m3 + hole, fill_m3: g.fill_m3, hole_m3: hole, max_cut: g.max_cut, max_fill: g.max_fill, reach_m: g.reach_m,
         ...(Math.abs(g.kept_step) >= 0.05 ? { lot_wall: g.kept_step } : {}), ...(trees ? { trees } : {}), balanced: w.kote == null };
     } else {
       const depth = w.depth ?? POND_DEPTH, level = w.kote ?? Math.min(...along(w.ring).map(p => groundAt(site, p)));
@@ -92,5 +92,5 @@ export function basinText(w) {
   const b = w?.basin; if (!b) return "";
   if (!w.pool) return `Vannet ligger flatt på kote +${m1(w.level)}, ${m1(b.depth)} m dypt; utgraving ${m3(b.cut_m3)} m³.` + treesText(b.trees);
   return `Bassenget graves ${m1(b.depth)} m dypt under kanten (${m1(b.coping)} m bred) på kote +${m1(b.kote)}${b.balanced ? ", der utgraving og fylling rundt går opp i opp" : ""}; vannet står flatt på kote +${m1(w.level)}. `
-    + `Rundt det planeres ${m1(b.surround)} m på samme kote, med skråning 1:${SLOPE} til terrenget. Utgraving ${m3(b.cut_m3)} m³ (${m3(b.hole_m3)} m³ av det er bassenget), fylling ${m3(b.fill_m3)} m³.` + lotText(b.lot_wall) + treesText(b.trees);
+    + `Dekket rundt, ${m1(b.surround)} m bredt, ligger på samme kote som kanten, ${b.edge === "wall" ? `og en støttemur tar opp forskjellen til terrenget${b.wall_m ? `, opptil ${m1(b.wall_m)} m` : ""}.` : `med skråning 1:${SLOPE} til terrenget.`} Utgraving ${m3(b.cut_m3)} m³ (${m3(b.hole_m3)} m³ av det er bassenget), fylling ${m3(b.fill_m3)} m³.` + lotText(b.lot_wall) + treesText(b.trees);
 }

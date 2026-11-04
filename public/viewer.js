@@ -474,6 +474,15 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       sides.push([[...a, top], [...c, top], [...c, b.bottom], [...a, b.bottom]]);
     }
     quads(cop, CONCRETE); quads(sides, TILE);
+    if (b.surround > 0.05) {   // the deck, level with the coping, and with edge "wall" the retaining wall round it
+      const far = offsetRing(ring, (b.coping || 0) + b.surround), deck = [], walls = [], dz = b.kote + 0.02;
+      for (let i = 0; i < n; i++) {
+        const A = out[i], C = out[(i + 1) % n], F = far[i], G = far[(i + 1) % n];
+        deck.push([[...A, dz], [...C, dz], [...G, dz], [...F, dz]]);
+        if (b.edge === "wall") { const m = [(F[0] + G[0]) / 2, (F[1] + G[1]) / 2], zo = Math.min(b.kote, ground(m[0], m[1])); walls.push([[...F, Math.min(zo, b.kote) - 0.3], [...G, Math.min(zo, b.kote) - 0.3], [...G, dz], [...F, dz]]); }
+      }
+      quads(deck, "#cfc8bb"); quads(walls, CONCRETE);
+    }
     const tris = THREE.ShapeUtils.triangulateShape(ring.map(([x, y]) => new THREE.Vector2(x, y)), []);
     quads(tris.map(([i, j, k]) => [[...ring[i], b.bottom + 0.02], [...ring[j], b.bottom + 0.02], [...ring[k], b.bottom + 0.02], [...ring[k], b.bottom + 0.02]]), TILE);
   }

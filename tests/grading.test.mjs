@@ -75,3 +75,11 @@ test("the IFC: the moved ground as TERRAIN with its m³, the pool's water on the
   assert.match(text, /IFCRELCONTAINEDINSPATIALSTRUCTURE\('[^']+',\$,\$,\$,\(#\d+,#\d+\),#14\);/, "contained in the site (#14)");
   assert.equal(withAdded(withoutBuildings(base, []).text, base, after([]), site0).text, withoutBuildings(base, []).text, "nothing moved, nothing added");
 });
+
+test("a pool with a wide deck and a retaining wall where the deck meets the slope (U3566)", () => {
+  const e = check([], { ...pool, deck: 4, edge: "wall" }), b = after([e]).landscape[0].basin;
+  assert.deepEqual([b.surround, b.edge], [4, "wall"]); assert.ok(b.wall_m > 0.3, `a wall ${b.wall_m} m`);
+  assert.match(basinText(after([e]).landscape[0]), /Dekket rundt, 4 m bredt.*støttemur/);
+  const b1 = after([check([], pool)]).landscape[0].basin; assert.equal(b1.edge, "batter"); assert.equal(b1.wall_m, undefined);
+  assert.throws(() => check([], { ...pool, edge: "fence" }), /edge er batter/);
+});

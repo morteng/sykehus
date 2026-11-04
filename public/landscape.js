@@ -199,13 +199,15 @@ function groundOf(e) {
 }
 /* a water surface's settings: a pool (dug basin under a coping) or a pond, its depth and its kote */
 function waterOf(e, surface) {
-  const has = ["pool", "depth", "coping", "kote"].filter(k => e[k] != null);
+  const has = ["pool", "depth", "coping", "deck", "edge", "kote"].filter(k => e[k] != null);
   if (!has.length) return {};
   if (surface !== "water") throw new Error(`${has.join(", ")} gjelder bare vann (surface: water)`);
   const out = {};
   if (e.pool != null) out.pool = !!e.pool;
   if (e.depth != null) out.depth = num(e.depth, 0.2, 4, "Dybden");
   if (e.coping != null) out.coping = num(e.coping, 0, 1.5, "Kanten (coping)");
+  if (e.deck != null) out.deck = num(e.deck, 0, 10, "Dekket (deck)");
+  if (e.edge != null) { if (!["batter", "wall"].includes(e.edge)) throw new Error("edge er batter eller wall"); out.edge = e.edge; }
   if (e.kote != null) out.kote = num(e.kote, -20, 200, "Koten");
   return out;
 }
@@ -289,11 +291,11 @@ export function applyLandscape(site, edits) {
     }
     else if (e.kind === "reshape" && GROUND_ID.test(e.id)) {
       const g = land.find(x => x.id === e.id); if (!g) continue;
-      for (const k of ["name", "surface", "plants", "pool", "depth", "coping", "kote", "why"]) if (e[k] != null) g[k] = e[k];
+      for (const k of ["name", "surface", "plants", "pool", "depth", "coping", "deck", "edge", "kote", "why"]) if (e[k] != null) g[k] = e[k];
       if (g.kind === "surface" && (e.ring || e.radius != null || e.smooth != null)) { if (e.ring) g.points = e.ring; if (e.radius != null) g.radius = e.radius; if (e.smooth != null) g.smooth = e.smooth; g.ring = outlineOf(g.points, g.radius, g.smooth); g.area_m2 = round1(ringArea(g.ring)); }
       if (g.kind === "path" && (e.line || e.width != null)) { g.line = e.line || g.line; g.width = e.width ?? g.width; g.ring = pathRing(g.line, g.width); g.length_m = round1(lineLength(g.line)); g.area_m2 = round1(lineLength(g.line) * g.width); }
     }
-    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[e.surface] } : Object.fromEntries(["pool", "depth", "coping", "kote"].filter(k => e[k] != null).map(k => [k, e[k]]))), why: e.why });
+    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[e.surface] } : Object.fromEntries(["pool", "depth", "coping", "deck", "edge", "kote"].filter(k => e[k] != null).map(k => [k, e[k]]))), why: e.why });
     if (e.kind === "surface" && e.bed) {   // U3820: the bed fills itself, species by species, each its own planting
       const by = new Map(); for (const q of bedPlants(land.at(-1).ring, e.bed, e)) (by.get(q.pid) || by.set(q.pid, []).get(q.pid)).push([round1(q.x), round1(q.y)]);
       for (const [pid, at] of by) {
