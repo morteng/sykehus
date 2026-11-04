@@ -64,6 +64,7 @@ test("find_tool: «hage på taket» gives surface and paint with on; the map and
   const sec = (await call("find_tool", { intent: "vis et snitt gjennom Sentralblokka" })).data.matches.map(m => m.id); assert.ok(sec.includes("show_building"), sec.join());
   const map = (await call("find_tool", {})).data; assert.ok(map.tool_families.Les.includes("about_wing")); assert.ok(map.edit_kinds_in_try_change.Landskap.includes("surface"));
   assert.match((await call("find_tool", { topic: "ui:gjengi" })).data.text, /Ta bildet/);
+  assert.match((await call("find_tool", { topic: "ui:qr" })).data.text, /four digits/);   // the iPad QR steps (U4321)
   assert.match((await call("find_tool", { tool: "show_building" })).data.description, /Gjengi|MCP Apps/);
 });
 
