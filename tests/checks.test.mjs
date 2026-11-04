@@ -148,3 +148,15 @@ test("try_change carries checks[] for the change it tried; check_design reads th
   assert.equal((await call("check_design", { draft: "nodraft1" })).isError, true);
   assert.equal((await call("check_design")).data.counted, 0);   // the before: nothing proposed, nothing to measure
 });
+
+test("U3870 shadow_view: the before has no neighbours to count; a tall volume beside a neighbour gives sun hours and a view", async () => {
+  const t = (await rpc("tools/list")).tools.find(x => x.name === "shadow_view");
+  assert.ok(t && t.annotations?.readOnlyHint === true); assert.ok(t.outputSchema.properties.neighbours);
+  assert.equal((await call("shadow_view")).data.counted, 0);
+  const v = { kind: "volume", name: "Høyt hus", shape: "box", from: [-15, -62], to: [5, -62], width: 12, height: 25 };
+  const tr = (await call("try_change", { edits: [v], include_screenshot: false })).data; assert.equal(tr.rejected.length, 0, JSON.stringify(tr.rejected));
+  const r = (await call("shadow_view", { draft: tr.draft, radius_m: 150 })).data;
+  assert.ok(r.counted > 0, JSON.stringify(r)); const n = r.neighbours[0];
+  assert.equal(n.sun.length, 3); assert.ok(n.distance_m > 0 && n.span_deg > 0 && n.up_deg > 0);
+  assert.ok(n.sun.every(s => s.sun_hours_after <= s.sun_hours_before));
+});
