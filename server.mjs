@@ -34,6 +34,7 @@ import { gzip } from "node:zlib";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { createMcp } from "./mcp.mjs";
+import { createIntake } from "./intake.mjs";
 import { createVersions } from "./versions.mjs";
 import { createAuth } from "./auth.mjs";
 import { createLogin } from "./login.mjs";
@@ -116,7 +117,8 @@ const guide = createGuide({ SECURITY, readJson, personOf: login.personOf });   /
    turn) and a way to move those pages to a view (show_building); one object, filled in by both */
 const pages = { open: new Map(), show: () => false };
 const gjengi = createRenderings({ SECURITY, readJson, login, versions, px, media });   // «Gjengi» (U3526): needs SYKEHUS_VERSIONS_DIR
-const mcp = createMcp({ site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, sitePhotos, pages, photos: gjengi, px, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
+const intake = createIntake({ SECURITY, readBytes });   // U4357: Dokumenter files by a one-use link, as Fab takes them
+const mcp = createMcp({ intake, site, floors, sections, docs, docUrl: f => RELEASE + f, SECURITY, readJson, versions, auth, wishes, sitePhotos, pages, photos: gjengi, px, ways: ms => streets.ways(ms), places: ms => streets.places(ms) });
 const prospekt = createProspekt({ SECURITY, px, login, versions, photos: gjengi, site, floors, siteFacts: () => mcp.siteFacts(), stills: mcp.stills });   // the read-only page of a shared project
 /* who may open what, and where the scaler fetches it (px.mjs): the access rules are the routes' own, said once more for the signed address */
 const SHOWN = (v, id) => (gjengi?.rendersOf(v.id) || []).some(r => r.prospekt && r.id === id);
@@ -147,6 +149,7 @@ createServer(async (req, res) => {
     if (refused) { console.log(`assertion refused: ${refused}`); return res.writeHead(401, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ error: "assertion refused", reason: refused })); }
     if (/^\/prospekt\/[^/]+\/?$/.test(path)) path = "/prospekt.html";   // the page reads the id from its address
     if (path === "/mcp") return await mcp.handleMcp(req, res);
+    if (await intake.route(req, res, path)) return;   // PUT /up/<token>: the token is the capability (U4357)
     if (await px.route(req, res, path)) return;   // Caddy's forward_auth (/px-may) and the scaler's source (/internal/px-src/)
     if (path === "/mcp/server-card") return mcp.handleCard(req, res);
     if (await auth.route(req, res, url) || await streets.route(req, res, path, url) || await snow.route(req, res, path, url)) return;
