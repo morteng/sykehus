@@ -25,7 +25,7 @@ test("U3685: the conversation is not a card over the view: anton.js wires no she
   const a = readFileSync(new URL("../public/anton.js", import.meta.url), "utf8"), html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
   assert.doesNotMatch(a, /chatSheet\(/);
   assert.match(a, /\$\("reply-more"\)\.onclick = .*panel\.reveal\("chat"\)/);
-  assert.match(a, /panel\.reveal\("chat"\); return true;/, "a send opens the tab");
+  assert.match(a, /said\(\); panel\.reveal\("chat"\); \} catch/, "a send opens the tab");
   assert.match(html, /id="reply-more"/);
 });
 
