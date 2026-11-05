@@ -36,7 +36,7 @@ test("the lens sets the field of view; the look's shape and the line to the mode
   const frog = shotOf({ viewpoint: "froskeperspektiv", lens: 17, eyeh: 0.4 }); assert.deepEqual([frog.mm, frog.eye, frog.aspect], [17, 0.4, "2:3"]);
   assert.equal(shotOf({ viewpoint: "øyehøyde", lens: 5 }).mm, 10, "a lens is held to 10-200 mm");
   assert.match(promptLine(eye), /^Eye-level view, two-point perspective, verticals corrected\. Architectural photograph, tilt-shift lens \(24 mm\)/);
-  assert.match(promptLine(shotOf({ viewpoint: "øyehøyde", look: "blåtime" })), /blue hour.*warm lit windows/);
+  assert.match(promptLine(shotOf({ viewpoint: "øyehøyde", look: "blåtime" })), /^Eye-level view/);
   assert.match(promptLine(shotOf({ viewpoint: "fugleperspektiv", lens: 28 })), /Aerial photograph, 28 mm lens/);
   assert.match(promptLine(plan), /White clay massing model/); assert.match(promptLine(shotOf({ look: "skisse" })), /watercolour/); assert.match(promptLine(shotOf({ look: "konkurransebilde" })), /people and planting/);
   for (const [v, l] of [["aksonometri", "arkitektfoto"], ["fasade", "arkitektfoto"], ["fasade", "konkurransebilde"], ["aksonometri", "drone"], ["fasade", "blåtime"]]) assert.doesNotMatch(promptLine(shotOf({ viewpoint: v, look: l })), /\bmm\b|tilt-shift/, `${v}/${l}: orthographic, no lens`);
@@ -74,7 +74,7 @@ test("gjengi: the estimate by size, and one call whose body carries the size, th
   assert.equal(a.status, 200, JSON.stringify(a.j)); assert.equal(calls.length, 1, "one image call a picture");
   const b = calls[0];
   assert.deepEqual([b.image_config.image_size, b.image_config.aspect_ratio], ["4K", "2:3"], "the size chosen; the froskeperspektiv's portrait shape, not the picture's 3:2");
-  assert.match(b.messages[0].content[0].text, /Low viewpoint looking up, two-point perspective.*blue hour.*\(18 mm\)/);
+  assert.match(b.messages[0].content[0].text, /blue hour.*Low viewpoint looking up, two-point perspective.*\(18 mm\)/);
   assert.equal(b.messages[0].content[1].image_url.url, shot, "the view is still the only geometry");
   assert.match(b.messages[0].content[0].text, /Natural light of a Norwegian summer afternoon/, "no sun sent: the default's light");
   assert.doesNotMatch(b.messages[0].content[0].text, /summer day/);
