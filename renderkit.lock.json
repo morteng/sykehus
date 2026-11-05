@@ -1,5 +1,5 @@
 {
-  "kits": "a7867bda166fe6e74096b856d824d429b1912b8e",
+  "kits": "612a0736caf5b9f9f206b5f264207dbde56c6d40",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -67,7 +67,7 @@
     "hatch-solid.svg": "1196ffcb2e0e37a11766f27319421a3e9ed99f21",
     "hatch-steel.svg": "b9ded695a08d1e38dc9a306eb655a55d38dbd570",
     "hatch-wood.svg": "68d5bc8f5d43f963aa11b5e0ddba60acace139a5",
-    "sketch.js": "610ca910eeb2719b759e8feb868376441ceefc4d",
+    "sketch.js": "f7c02574dc233f00b59cd510854c5368c74633c9",
     "sunpick.js": "e4efe0f58fab9f20f478a5d8cb45f1b786b27899",
     "photo.js": "c16dbfc07d2795b7d0dc3174a173e836b00f8959",
     "grid2d.js": "7ba402edbec5bb2aaeb5d057588e626c4b06163a",

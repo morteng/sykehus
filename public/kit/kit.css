@@ -33,11 +33,21 @@ g-item{--status:var(--muted)}
 .g-empty p{margin:0}.g-empty__title{color:var(--text);font-weight:600}.g-empty__act{margin-top:var(--sp-2)}
 .g-nomatch{margin:var(--sp-4) 0;color:var(--muted)}
 
+/* ---- the popover that holds controls (pop.ts): a button and a panel under it that stays open while its controls are used */
+.g-pop{position:relative}.g-pop[hidden],.g-pop__panel[hidden]{display:none}
+.g-pop__btn{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.g-pop__btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.g-pop__panel{position:absolute;top:100%;left:0;z-index:var(--z-sheet);margin-top:2px;min-width:12rem;display:flex;flex-direction:column;gap:var(--sp-1);padding:var(--sp-2);
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);box-shadow:var(--shadow-md)}
+.g-pop__panel:focus{outline:none}
+
 /* ---- the ⋯ menu */
 .g-more{position:relative;z-index:1;display:flex;justify-content:flex-end}
 .g-menu{position:fixed;inset:auto;margin:0;overflow:auto;z-index:var(--z-sheet);display:flex;flex-direction:column;min-width:10rem;padding:var(--sp-1);
   background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md)}
 .g-menu button{min-height:var(--control-h);padding:0 var(--sp-3);border:0;border-radius:var(--radius-sm);background:none;color:var(--text);text-align:left;font:inherit;cursor:pointer}
+.g-menu button:has(.g-menu__icon){display:flex;align-items:center;gap:var(--sp-2)}
+.g-menu__icon{display:grid;place-items:center;flex:0 0 auto;color:var(--muted)}.g-menu__icon svg{width:1.125rem;height:1.125rem}
 .g-menu button:hover{background:var(--hover-wash)}.g-menu button[data-danger]{color:var(--danger-text)}
 
 /* ---- the toolbar */
@@ -236,6 +246,10 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-chat-head{display:flex;align-items:center;gap:var(--sp-2);flex:none;padding:var(--sp-1) var(--sp-2) 0 var(--sp-3);min-height:var(--tap)}
 .g-chat-title{flex:1;min-width:0;color:var(--muted);font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .g-chat-acts{display:inline-flex;align-items:center}
+.g-chat-new{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:var(--tap);padding:0 var(--sp-2);border:0;border-radius:var(--radius);background:none;color:var(--muted);font:inherit;font-size:var(--fs-sm);cursor:pointer}
+.g-chat-new:hover{color:var(--text);background:var(--hover-wash)}
+.g-chat-new svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.g-chat-new:focus-visible,.g-chat-fold:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
 .g-chat-fold{flex:none;display:inline-grid;place-items:center;width:var(--tap);height:var(--tap);padding:0;border:0;border-radius:var(--radius);background:none;color:var(--muted);cursor:pointer}
 .g-chat-fold:hover{color:var(--text)}
 .g-chat-fold svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
@@ -396,3 +410,19 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-still__img{display:block;width:100%;height:auto;border-radius:var(--radius-sm)}
 .g-still__more{border:1px solid var(--border);border-radius:var(--radius-sm);background:none;color:var(--accent);font:inherit;min-height:var(--control-h);padding:0 var(--sp-3);cursor:pointer}
 .g-still__more:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+
+/* ---- .g-attach: the + button, its menu and the chips of what is attached (attach.ts). The button is a .g-pill__btn; the tray holds
+   one chip per file (a name and ×, no picture); a refusal is a line under it. */
+.g-attach__tray{display:flex;flex-wrap:wrap;gap:var(--sp-1);flex:1 0 100%;min-width:0}.g-attach__tray:empty{display:none}
+.g-attach__chip{display:inline-flex;align-items:center;gap:var(--sp-1);max-width:100%;min-height:var(--control-h);padding:0 var(--sp-1) 0 var(--sp-2);
+  border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font-size:var(--fs-sm)}
+.g-attach__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.g-attach__x{display:grid;place-items:center;flex:0 0 auto;width:var(--control-h);height:var(--control-h);padding:0;border:0;border-radius:var(--radius-sm);background:none;color:var(--muted);font:inherit;cursor:pointer}
+.g-attach__x:hover{background:var(--hover-wash);color:var(--text)}
+.g-attach__x:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
+.g-attach__say{flex:1 0 100%;margin:0;color:var(--danger-text);font-size:var(--fs-sm)}.g-attach__say:empty{display:none}
+.g-attach--drop{outline:var(--focus-w) dashed var(--focus-color);outline-offset:calc(-1 * var(--focus-w))}
+/* ---- .g-camera: the desktop camera in a modal (camera.ts) */
+.g-camera__view{display:block;width:100%;max-height:60vh;background:var(--bed);border-radius:var(--radius);object-fit:contain}
+.g-camera__acts{display:flex;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-3)}
+.g-camera__said{margin:var(--sp-2) 0 0;color:var(--danger-text)}.g-camera__said:empty{display:none}

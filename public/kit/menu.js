@@ -2,6 +2,7 @@
 // Down move between the actions. The words are the app's.
 // The box lives in the top layer (popover) and is placed from the button's rectangle, so no card, scroller or overflow:hidden
 // ancestor can clip it: it opens under the button, above it when there is no room below, and stays inside the window.
+import { iconSVG } from "./icons.js";
 import { placeFromButton } from "./place.js";
 let open = null;
 /** Closes the menu that is open, if any. */
@@ -19,7 +20,16 @@ export function openMenu(button, actions, doc = button.ownerDocument) {
         b.type = "button";
         b.setAttribute("role", "menuitem");
         b.tabIndex = -1;
-        b.textContent = a.label;
+        if (a.icon) {
+            const i = doc.createElement("span");
+            i.className = "g-menu__icon";
+            i.innerHTML = iconSVG(a.icon);
+            const t = doc.createElement("span");
+            t.textContent = a.label;
+            b.append(i, t);
+        }
+        else
+            b.textContent = a.label;
         if (a.danger)
             b.dataset.danger = "";
         b.addEventListener("click", () => {

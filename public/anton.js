@@ -21,10 +21,11 @@ import { doorSentence } from "./kit/assistant-door.js";   // one sentence for ea
 import { feedbackOf } from "./sketchsend.js";
 import { setMd } from "./md.js?v=20261027b";   // U3680: Anton's answers are markdown; the person's own lines stay plain
 import { announces, matcher, isTry } from "./livetries.js";
-import { isPicture, pictureOf, uploadFile, fieldsOf } from "./attach.js?v=20261028a";   // what the chat box attaches
+import { isPicture, pictureOf, uploadFile, fieldsOf, MAX_FILE } from "./attach.js?v=20261028a";   // what the chat box attaches
 import { openMenu, closeMenu } from "./kit/menu.js";
-import { iconButton, statusHTML } from "./kit/pieces.js";
-import { esc as kitEsc, element } from "./kit/html.js";
+import { attach as kitAttach } from "./kit/attach.js";   // the + of the pill: Tegn, Last opp fil, Ta bilde (kits ui, U4447)
+import { takePhoto, cameraAvailable } from "./kit/camera.js";
+import { esc as kitEsc } from "./kit/html.js";
 import { createStill } from "./kit/still.js";   // a picture of a live view first, one button for the live view (kits ui, U3996)
 
 const $ = id => document.getElementById(id);
@@ -32,6 +33,7 @@ const esc = s => kitEsc(s ?? ""); // null-safe; the escaping is the kit's (kit/h
 const SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 4.5 19 11.5 17.6 12.9 13 8.3V20h-2V8.3L6.4 12.9 5 11.5z"/></svg>`, STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`;
 const doorWords = (code, turn = false) => doorSentence(code, { lang: "nb", name: "Anton", turn });   // the kit's one table (U3976)
 const POSE = "sykehus-pose";
+const PHOTO = { title: "Ta bilde", take: "Ta bilde", retake: "Ta på nytt", use: "Bruk bildet", cancel: "Avbryt", close: "Lukk", denied: "Fikk ikke tilgang til kameraet." };
 const json = (url, body) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }).catch(() => null);
 
 /* version(): the version the page has open now (a «Riv» can make one after the page loaded); refresh(): that version
@@ -184,29 +186,30 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       try { lastStep = ""; said(); panel.reveal("chat"); } catch (x) { console.error(x); }   // the message is taken: nothing after it may keep the drawing's window open
       return true;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
     }
-    /* the attachment: one picture or one file, chosen with the button, pasted into the box or dropped on the pill; it is read first
-       (a picture shrunk, a file taken in as «Hent fil» does) and goes with the next message */
+    /* the attachment: one picture or one file, from the + menu (Tegn, Last opp fil, Ta bilde), pasted into the box or dropped on the
+       pill (the kit's attach: its chip shows the name and ×); it is read first (a picture shrunk, a file taken in as «Hent fil»
+       does) and goes with the next message in the same fields as before */
     let att = null, reading = false;
-    const chipBox = $("talkAtt");
-    function setAtt(a) {
-      att = a; chipBox.hidden = !a; chipBox.replaceChildren();
-      if (!a) return;
-      const name = a.picture?.name || a.attachment?.name || "", x = iconButton("x", "Ta bort vedlegget", { class: "att-x" });
-      x.onclick = () => setAtt(null);
-      chipBox.append(element(statusHTML(`Vedlegg: ${name}`, "accent")), x);
-    }
-    async function attach(file) {
-      if (!file || reading) return;
-      reading = true; chipBox.hidden = false; chipBox.replaceChildren(element(statusHTML(`Leser ${file.name || "bildet"} …`, "muted")));
-      try { setAtt(isPicture(file) ? { picture: await pictureOf(file) } : { attachment: await uploadFile(file) }); }
-      catch (e) { setAtt(null); line("err", e.message || "Fikk ikke lagt ved fila."); }
-      finally { reading = false; }
-    }
-    $("talkAttach").onclick = () => $("talkFile").click();
-    $("talkFile").onchange = () => { const f = $("talkFile").files?.[0]; $("talkFile").value = ""; attach(f); };
-    input.addEventListener("paste", e => { const f = [...(e.clipboardData?.files || [])][0]; if (f) { e.preventDefault(); attach(f); } });
-    for (const t of ["dragover", "drop"]) form.addEventListener(t, e => { if (![...(e.dataTransfer?.types || [])].includes("Files")) return; e.preventDefault(); if (t === "drop") attach(e.dataTransfer.files?.[0]); });
-    $("talkTegn").onclick = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));
+    const draw = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));   // the picture goes as a drawing, as before: nothing is returned to the tray
+    const kitAtt = kitAttach({
+      host: form, before: $("talkPick").parentElement, label: "Legg ved", field: "vedlegg", accept: "*/*", maxFiles: 1, cap: MAX_FILE,
+      items: [
+        { key: "tegn", label: "Tegn", icon: "pen", run: () => { draw(); return null; } },
+        { key: "fil", label: "Last opp fil", icon: "clip" },
+        { key: "bilde", label: "Ta bilde", icon: "camera", run: () => takePhoto({ words: PHOTO }), when: () => camera !== "none" },
+      ],
+      words: { tooBig: (n, cap) => `${n} er større enn ${cap}.`, tooMany: () => "Du kan legge ved én fil.", remove: n => `Ta bort ${n}` },
+      onChange: async files => {
+        const file = files[0];
+        if (!file) { att = null; return; }
+        reading = true;
+        try { att = isPicture(file) ? { picture: await pictureOf(file) } : { attachment: await uploadFile(file) }; }
+        catch (e) { att = null; kitAtt.remove(0); line("err", e.message || "Fikk ikke lagt ved fila."); }
+        finally { reading = false; }
+      },
+    });
+    const setAtt = a => { if (!a) kitAtt.clear(); };
+    let camera = "none"; cameraAvailable().then(c => { camera = c; });
     let gone = false;
     /* U3668: an Anton refusal (401: a device gulden-ai does not know, a revoked one, a restart) says so and leaves the page
        signed in: it never logs the person out of sykehus or reloads (pm 16:13Z); the line shows once a half minute */

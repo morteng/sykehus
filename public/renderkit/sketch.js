@@ -3,14 +3,17 @@
    notes and write feedback; strokes and pins go back as a picture plus plan coordinates in metres»; 12:36Z «the system
    should be good at creating modules and re-using them»). hagekart and Fab take it later by the same lock.
 
-   createSketch({ host, image, frame, title, legend, numbers, labels, colours, onSend, onBuild }) → { element, destroy() }
+   createSketch({ host, image, frame, place, camera, title, legend, numbers, labels, colours, onSend, onBuild }) → { element, destroy() }
      image    the picture's address (a plan, north up, east right)
      frame    { centre: [east, north], k } where k is picture pixels to the metre, as the picture was drawn
               (look.js plan: k = (H / 2) / (dist * tan(fov / 2)); the picture's own size is read from the image)
+     place    optional place(x, y) → [east, north, up]: the app turns a picture pixel into a world point (a photo, not a plan);
+              with none, `frame` maps the pixel as a north-up plan (toMetres). A pin's `at` is the first two of it.
+     camera   optional, handed through untouched as drawing.camera (the app's own pose of the picture)
      numbers  [{ label, value }] the key numbers (count, size, facing)
      labels   the app's words: { pen, pin, undo, clear, build, send, note, placeholder, empty }
-     onSend({ text, drawing })   drawing = { image: JPEG data URL with the marks on it, strokes: [{ colour, points:
-              [[east, north, 0], …] }], pins: [{ n, at: [east, north], note }] }; resolves true when it went
+     onSend({ text, drawing })   drawing = { image: JPEG data URL with the marks on it, camera?, strokes: [{ colour, points:
+              [[east, north, 0], …] (at most 40 a stroke) }], pins: [{ n, at: [east, north], note }] }; resolves true when it went
      onBuild()                   «Bygg det»
    toMetres(frame, size, [x, y]) and toPixels(frame, size, [e, n]) are the mapping, for the app's own tests.
    Classes (the app styles them): sk, sk-large (enlarged: the app makes it fill the screen), sk-stage, sk-legend, sk-nums, sk-tools, sk-sw, sk-dot, sk-pins, sk-feed, sk-act; the icon buttons are `button.icon` with a title.
@@ -26,7 +29,18 @@ const ICON = {   // 24 px line icons; the app's button styles do the rest
   big: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', small: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' };
 const icon = k => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
 
-export function createSketch({ host, image, frame, title = "", legend = "", numbers = [], labels = {}, colours = COLOURS, onSend, onBuild }) {
+/** A stroke down-sampled to at most 40 points, first and last kept. */
+export const step = pts => { const k = Math.max(1, Math.ceil(pts.length / 40)); const o = pts.filter((_, i) => i % k === 0); if (o[o.length - 1] !== pts[pts.length - 1]) o.push(pts[pts.length - 1]); return o.length > 40 ? [...o.slice(0, 39), pts[pts.length - 1]] : o; };
+/** What goes back: strokes and pins in the world's units. place(x, y) when the app gave one, else the plan frame. */
+export function toDrawing({ strokes, pins, colours = COLOURS, frame, size, place, camera }) {
+  const round = v => Math.round(v * 10) / 10;
+  const w = ([x, y]) => place ? place(x, y) : [...toMetres(frame, size, [x, y]).map(round), 0];
+  const out = { strokes: strokes.map(t => ({ colour: colours.find(c => c[1] === t.colour)?.[0].toLowerCase() || t.colour, points: step(t.points).map(w) })),
+    pins: pins.map((p, i) => ({ n: i + 1, at: place ? place(p.x, p.y).slice(0, 2) : toMetres(frame, size, [p.x, p.y]).map(round), note: p.note.trim() })) };
+  if (camera !== undefined) out.camera = camera;
+  return out;
+}
+export function createSketch({ host, image, frame, place, camera, title = "", legend = "", numbers = [], labels = {}, colours = COLOURS, onSend, onBuild }) {
   const L = { ...WORDS, ...labels }, el = document.createElement("figure"); el.className = "sk";
   const tip = (k, c = "") => `class="icon ${c}" title="${esc(L[k])}" aria-label="${esc(L[k])}"`;
   el.innerHTML = `<figcaption>${esc(title)}</figcaption>
@@ -76,10 +90,7 @@ export function createSketch({ host, image, frame, title = "", legend = "", numb
     const text = q(".sk-feed").value.trim(); if (!text && !strokes.length && !pins.length) { say.textContent = L.empty; return; }
     const [W, H] = size(), s = Math.min(1, 1280 / W), out = document.createElement("canvas"); out.width = Math.round(W * s); out.height = Math.round(H * s);
     const o = out.getContext("2d"); o.drawImage(img, 0, 0, out.width, out.height); paint(o, s);
-    const step = pts => { const k = Math.max(1, Math.ceil(pts.length / 40)); return pts.filter((_, i) => i % k === 0 || i === pts.length - 1); };
-    const round = v => Math.round(v * 10) / 10, m = ([x, y]) => toMetres(frame, [W, H], [x, y]).map(round);
-    const drawing = { image: out.toDataURL("image/jpeg", 0.85), strokes: strokes.map(t => ({ colour: colours.find(c => c[1] === t.colour)?.[0].toLowerCase() || t.colour, points: step(t.points).map(p => [...m(p), 0]) })),
-      pins: pins.map((p, i) => ({ n: i + 1, at: m([p.x, p.y]), note: p.note.trim() })) };
+    const drawing = { image: out.toDataURL("image/jpeg", 0.85), ...toDrawing({ strokes, pins, colours, frame, size: [W, H], place, camera }) };
     const ok = await onSend?.({ text, drawing }); say.textContent = ok ? "" : say.textContent;
     if (ok) { strokes.length = pins.length = 0; q(".sk-feed").value = ""; note(); redraw(); }
   };

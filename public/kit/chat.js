@@ -5,6 +5,7 @@
 // kit draws no message: the app draws them into `log` and `actions` as it does elsewhere, and the sheet takes those two
 // elements in while it shows and gives them back where they were when it does not (one list, moved, never copied).
 // Words are always arguments.
+import { iconSVG } from "./icons.js";
 import { split } from "./split.js";
 /** Whether the sheet shows: there is something said, and the conversation is not already open elsewhere. */
 export const sheetShown = (messages, openElsewhere) => messages > 0 && !openElsewhere;
@@ -33,6 +34,16 @@ export function chatSheet(o) {
     foldBtn.type = "button";
     foldBtn.className = "g-chat-fold";
     foldBtn.innerHTML = CHEVRON;
+    if (o.newLabel && o.onNew) {
+        const nb = doc.createElement("button");
+        nb.type = "button";
+        nb.className = "g-chat-new";
+        nb.innerHTML = iconSVG("plus") + "<span></span>";
+        nb.lastElementChild.textContent = o.newLabel;
+        nb.title = o.newLabel;
+        nb.addEventListener("click", () => o.onNew());
+        acts.append(nb);
+    }
     head.append(title, acts, foldBtn);
     const body = doc.createElement("div");
     body.className = "g-chat-body";
