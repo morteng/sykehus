@@ -8,10 +8,10 @@ const js = readFileSync(new URL("../public/anton.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/sykehus.css", import.meta.url), "utf8");
 
 test("the stop button carries the working class and the ring moves, standing still under reduced motion", () => {
-  assert.match(js, /"is-stop", "stop", "working"/);
-  assert.match(css, /\.g-anton \.g-pill__go\.stop\.working::after \{[^}]*animation: anton-works/);
+  assert.match(js, /setBusy\(!!running\)/);
+  assert.match(css, /\.g-anton \.g-pill__go\.g-anton-busy::after \{[^}]*animation: anton-works/);
   assert.match(css, /@keyframes anton-works/);
-  assert.match(css, /prefers-reduced-motion: reduce\) \{ \.g-anton \.g-pill__go\.stop\.working::after \{ animation: none/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{ \.g-anton \.g-pill__go\.g-anton-busy::after \{ animation: none/);
 });
 
 test("the step line is plain Norwegian from the tool, with a fallback and the time after 10 s", () => {

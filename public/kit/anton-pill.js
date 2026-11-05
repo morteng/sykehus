@@ -21,13 +21,21 @@ export function antonPill(o) {
         h.addEventListener("click", () => o.onHistory?.());
         el.append(h);
     }
-    const mid = mk("div", "g-pill__mid"), input = mk("textarea", "g-pill__in");
+    const mid = mk("div", "g-pill__mid"), input = mk("textarea", "g-pill__in g-anton-input");
     input.rows = o.rows ?? 1;
     input.placeholder = o.placeholder;
     input.setAttribute("aria-label", o.placeholder);
     mid.append(input);
-    const go = mk("button", "g-pill__go");
-    el.append(mid, go);
+    const goBtn = mk("button", "g-pill__go g-anton-send"), icon = mk("span", "g-anton-send-icon");
+    goBtn.append(icon);
+    if (o.idPrefix) {
+        input.id = `${o.idPrefix}-input`;
+        goBtn.id = `${o.idPrefix}-send`;
+    }
+    el.append(mid, goBtn);
+    const sticky = o.disableWhileSending !== false;
+    const micOpt = typeof o.mic === "function" ? { mode: "click", onClick: o.mic } : o.mic;
+    const hold = micOpt?.mode === "hold";
     o.host.append(el);
     const items = [];
     if (o.onNewChat)
@@ -44,23 +52,32 @@ export function antonPill(o) {
         },
         onChange: () => face(),
     });
-    let off = false;
-    const wantsMic = () => !!o.mic && !input.value.trim() && !a.files().length;
+    let off = false, busy = false;
+    const wantsMic = () => !!micOpt && !input.value.trim() && !a.files().length;
     function face() {
-        const mic = wantsMic();
-        go.type = mic ? "button" : "submit";
-        go.innerHTML = iconSVG(mic ? "mic" : "send");
-        const l = mic ? (w.mic ?? w.send) : w.send;
-        go.title = l;
-        go.setAttribute("aria-label", l);
+        const mic = !busy && wantsMic();
+        goBtn.type = mic || busy ? "button" : "submit";
+        icon.innerHTML = iconSVG(busy ? "stop" : mic ? "mic" : "send");
+        const l = busy ? (w.stop ?? w.send) : mic ? (w.mic ?? w.send) : w.send;
+        goBtn.title = l;
+        goBtn.setAttribute("aria-label", l);
+        goBtn.classList.toggle("g-anton-busy", busy);
     }
     face();
     const disabled = (on) => {
         off = on;
         el.classList.toggle("is-busy", on);
         el.setAttribute("aria-busy", String(on));
+        if (!sticky) {
+            el.setAttribute("aria-disabled", String(on));
+            goBtn.setAttribute("aria-disabled", String(on));
+            input.setAttribute("aria-disabled", String(on));
+            if (on)
+                closeMenu();
+            return;
+        }
         input.disabled = on;
-        go.disabled = on;
+        goBtn.disabled = on;
         for (const b of el.querySelectorAll(".g-pill__btn, .g-attach__x"))
             b.disabled = on;
         if (on)
@@ -75,37 +92,76 @@ export function antonPill(o) {
         const files = a.take();
         const was = input.value;
         input.value = "";
-        disabled(true);
+        if (sticky)
+            disabled(true);
         try {
             await o.onSend(text, files);
         }
         catch (e) {
-            input.value = was;
+            if (!input.value)
+                input.value = was;
             for (const f of files)
                 a.add(f);
             o.onError?.({ kind: "send", message: e instanceof Error ? e.message : String(e) });
         }
         finally {
-            disabled(false);
+            if (sticky)
+                disabled(false);
             face();
         }
     };
+    const enterSends = () => {
+        const m = o.enterSends ?? true;
+        if (m !== "auto")
+            return m;
+        const win = doc.defaultView;
+        const coarse = !!win?.matchMedia?.("(pointer: coarse)").matches;
+        return !(coarse || (win?.innerWidth ?? 1024) < 768);
+    };
     el.addEventListener("submit", (e) => { e.preventDefault(); void submit(); });
-    go.addEventListener("click", () => { if (go.type === "button" && !off)
-        o.mic?.(); });
+    goBtn.addEventListener("click", () => {
+        if (busy) {
+            o.onStop?.();
+            return;
+        }
+        if (goBtn.type === "button" && !off && !hold)
+            micOpt?.onClick?.();
+    });
+    if (hold) {
+        let down = false;
+        const up = () => { if (down) {
+            down = false;
+            micOpt?.onUp?.();
+        } };
+        goBtn.addEventListener("pointerdown", () => { if (!busy && !off && wantsMic() && !down) {
+            down = true;
+            micOpt?.onDown?.();
+        } });
+        for (const t of ["pointerup", "pointercancel", "pointerleave"])
+            goBtn.addEventListener(t, up);
+    }
     input.addEventListener("input", face);
+    const api = {
+        el, input, attach: a, send: goBtn, sendIcon: icon,
+        disabled, setDisabled: disabled, isDisabled: () => off,
+        setBusy: (on) => { busy = on; face(); }, isBusy: () => busy,
+        go: submit,
+        value: () => input.value,
+        setValue: (v) => { input.value = v; face(); },
+        focus: () => input.focus(),
+        clear: () => { input.value = ""; a.clear(); face(); },
+    };
     input.addEventListener("keydown", (e) => {
+        if (o.beforeKey?.(e, api))
+            return;
         if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-            e.preventDefault();
-            void submit();
+            if (enterSends()) {
+                e.preventDefault();
+                void submit();
+            }
         }
         else if (e.key === "Escape")
             closeMenu();
     });
-    return {
-        el, input, attach: a,
-        disabled, isDisabled: () => off,
-        focus: () => input.focus(),
-        clear: () => { input.value = ""; a.clear(); face(); },
-    };
+    return api;
 }

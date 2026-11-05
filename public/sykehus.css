@@ -130,10 +130,10 @@ dialog.nc.pop.up::before{top:auto;bottom:-7px;transform:rotate(225deg)}
 
 /* S8 the pill is the kit's (kit/anton-pill.js, .g-anton); only the working ring on Stop is the app's */
 /* U3564: the stop button breathes while Anton works, a ring going out from it; reduced motion: the ring stands still */
-.g-anton .g-pill__go.stop.working { position: relative; overflow: visible; }
-.g-anton .g-pill__go.stop.working::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 2px solid var(--danger); opacity: 0; animation: anton-works 1.8s ease-out infinite; pointer-events: none; }
+.g-anton .g-pill__go.g-anton-busy { position: relative; overflow: visible; }
+.g-anton .g-pill__go.g-anton-busy::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; border: 2px solid var(--danger); opacity: 0; animation: anton-works 1.8s ease-out infinite; pointer-events: none; }
 @keyframes anton-works { 0% { transform: scale(.92); opacity: .7; } 70% { transform: scale(1.28); opacity: 0; } 100% { transform: scale(1.28); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .g-anton .g-pill__go.stop.working::after { animation: none; opacity: .55; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .g-anton .g-pill__go.g-anton-busy::after { animation: none; opacity: .55; transform: none; } }
 body.ed.talk-on:not(.m) .bstack { width: min(620px, calc(100% - 220px)); max-width: none; bottom: 20px; }
 body.plan.ed.talk-on:not(.m) .bstack { bottom: 20px; }
 
@@ -675,7 +675,7 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 .talk-item a:has(> .snap) { display: block; width: fit-content; cursor: zoom-in; }
 
 /* «Forslag»: one list of cards, a picture each (Morten 2026-10-27); one column, the picture over the text on a phone, beside it from 560 px */
-.ver-list li.fc { display: block; margin: 0 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); overflow: hidden; }
+.ver-list li.fc { container-type: inline-size; display: block; margin: 0 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); overflow: hidden; }
 .ver-list li.fc.open { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .fc-row { display: flex; flex-direction: column; }
 .ver-list .fc-a { display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; min-height: 0; }
@@ -686,7 +686,7 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 .ver-list .fc-a > span.fc-img { flex: none; }
 .fc-b { display: block; padding: var(--sp-2) var(--sp-3) var(--sp-2); }
 .fc-b .t { font-weight: 600; } .fc-open { margin-left: var(--sp-1); padding: 1px 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: var(--fs-sm); font-style: normal; font-weight: 600; }
-.fc-acts { display: flex; justify-content: flex-end; gap: 2px; padding: 0 var(--sp-2) var(--sp-1); }
+.fc-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; padding: 0 var(--sp-2) var(--sp-1); }
 .ver-list .fc-row > input.vsel { margin: var(--sp-2) var(--sp-3) 0; }
 .fc-det { border-top: 1px solid var(--border); padding: var(--sp-2) var(--sp-3); }
 .fc-det > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
@@ -694,7 +694,7 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 .fc-det .dr-top { margin-top: var(--sp-1); } .fc-det svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .fc-for { display: inline-block; margin-top: var(--sp-2); font-size: var(--fs-sm); }
 .ver-list .fc-acts button.icon svg { width: 18px; height: 18px; }
-@media (min-width: 560px) { .fc-row { flex-direction: row; align-items: stretch; } .ver-list .fc-a { flex-direction: row; } .fc-img { width: 168px; flex: none; aspect-ratio: auto; } .fc-b { flex: 1; min-width: 0; } .fc-row .fc-acts { flex-direction: column; justify-content: flex-start; padding: var(--sp-1); } }
+@container (min-width: 560px) { .fc-row { flex-direction: row; align-items: stretch; } .ver-list .fc-a { flex-direction: row; } .fc-img { width: 168px; flex: none; aspect-ratio: auto; } .fc-b { flex: 1; min-width: 0; } .fc-row .fc-acts { flex-direction: column; justify-content: flex-start; padding: var(--sp-1); } }
 .fc-det li { border-bottom: 0; }
 
 /* «Vis offentlig i Prosjekter»: the box under a project's «Detaljer» */

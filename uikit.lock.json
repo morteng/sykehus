@@ -1,12 +1,12 @@
 {
-  "kits": "b8045a2288391dcda862775b639d1407ae9809ef",
+  "kits": "1e552700ce2aa69a42b381cd06b3a81497d03861",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "9ea345b5830d91080b47204b377c40529b9f46f3",
+    "kit.css": "0f7ffa441ba05d76baae83d0f3d98b8b75addb1d",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
@@ -36,6 +36,6 @@
     "pieces.js": "1efe4dd79a6a1610862528c891f6e1a7904e67bd",
     "attach.js": "3c3c21f90930beeb004b40932b2e1e3967e5a138",
     "camera.js": "105ad320f1a637dbf6f869f02d968e389dcb6633",
-    "anton-pill.js": "e03154470d4a6e39dea9da9267c1289605dae242"
+    "anton-pill.js": "a940d48ba69e17103cf1783e596e1a3e52c407c4"
   }
 }

@@ -25,7 +25,6 @@ import { isPicture, pictureOf, uploadFile, fieldsOf, MAX_FILE } from "./attach.j
 import { openMenu, closeMenu } from "./kit/menu.js";
 import { fxPills } from "./fx.js";
 import { antonPill } from "./kit/anton-pill.js";   // the one Anton input pill: [+][text][send], the chips, the + menu (kits ui, U4487)
-import { iconSVG } from "./kit/icons.js";
 import { takePhoto, cameraAvailable } from "./kit/camera.js";
 import { esc as kitEsc } from "./kit/html.js";
 import { createStill } from "./kit/still.js";   // a picture of a live view first, one button for the live view (kits ui, U3996)
@@ -87,11 +86,12 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
         { id: "bilde", label: "Ta bilde", icon: "camera", run: () => takePhoto({ words: PHOTO }), when: () => camera !== "none" },
       ],
       onNewChat: () => newChat(),
-      words: { attach: "Legg ved", history: "Historikk", send: "Send", newChat: "Ny samtale", remove: n => `Ta bort ${n}`, tooBig: (n, cap) => `${n} er større enn ${cap}.`, tooMany: () => "Du kan legge ved én fil." },
+      onStop: () => { json("api/anton/stopp"); },
+      words: { attach: "Legg ved", history: "Historikk", send: "Send", stop: "Stopp (Anton arbeider)", newChat: "Ny samtale", remove: n => `Ta bort ${n}`, tooBig: (n, cap) => `${n} er større enn ${cap}.`, tooMany: () => "Du kan legge ved én fil." },
       onSend: (text, files) => pillSend(text, files),
       onError: e => { if (e.kind === "send" && e.message) line("err", e.message); },
     });
-    const form = pill.el, input = pill.input, btn = form.querySelector(".g-pill__go"), mid = form.querySelector(".g-pill__mid");
+    const form = pill.el, input = pill.input, mid = form.querySelector(".g-pill__mid");
     form.id = "talk-form"; input.maxLength = 4000;
     mid.prepend(Object.assign(document.createElement("div"), { id: "talkPick" }));
     const busy = Object.assign(document.createElement("p"), { className: "g-pill__busy" }); busy.setAttribute("aria-live", "polite"); mid.append(busy);
@@ -160,14 +160,8 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       search_documents: "Leter i dokumentene", read_document: "Leser et dokument", list_documents: "Leter i dokumentene", list_versions: "Ser på prosjektene",
       new_version: "Lagrer prosjektet", rename_version: "Lagrer navnet", set_sharing: "Endrer delingen", search_plants: "Leter etter planter" };
     let step = "", since = 0, ticking = null, turnOf = null;
-    /* the send button is Stop while a turn runs and nothing is typed or attached; the kit redraws its icon and name on a change, so the face is kept by a watcher */
-    const STOP = iconSVG("stop"), stopFace = () => {
-      const was = btn.classList.contains("is-stop");
-      if (running) { if (!was) btn.classList.add("is-stop", "stop", "working"); if (btn.innerHTML !== STOP) btn.innerHTML = STOP; if (btn.title !== "Stopp (Anton arbeider)") { btn.title = "Stopp (Anton arbeider)"; btn.setAttribute("aria-label", "Stopp, Anton arbeider"); } }
-      else if (was) { btn.classList.remove("is-stop", "stop", "working"); btn.innerHTML = iconSVG("send"); btn.title = "Send"; btn.setAttribute("aria-label", "Send"); }
-    };
-    new MutationObserver(stopFace).observe(btn, { childList: true, attributes: true, attributeFilter: ["title"] });
-    form.addEventListener("click", e => { if (running && e.target.closest(".g-pill__go") && !input.value.trim() && !pill.attach.files().length) { e.preventDefault(); e.stopPropagation(); json("api/anton/stopp"); } }, true);   // Stop, before the form submits
+    /* the send button is Stop while a turn runs: the pill's own busy mode (setBusy / onStop, kits ui 1e55270); nothing here touches the button, so nothing can loop on the kit's redraw (U4535) */
+    const stopFace = () => { if (pill.isBusy() !== !!running) pill.setBusy(!!running); };
     const stepOf = key => STEP[String(key || "").split(/[.:/]/).pop()] || "Arbeider";
     function state() {
       stopFace();

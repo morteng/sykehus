@@ -17,5 +17,6 @@ test("the pill is the kit's (U4487): the page has no pill markup, anton.js makes
   const js = read("anton.js");
   assert.ok(js.includes('import { movePill } from "./kit/pill.js"') && js.includes("movePill(form, to, { chat: open })"));
   assert.ok(js.includes('import { antonPill } from "./kit/anton-pill.js"') && /const pill = antonPill\(\{/.test(js));
-  assert.ok(/classList\.add\("is-stop", "stop", "working"\)/.test(js), "the send button keeps the kit class and turns into Stop");
+  assert.ok(/pill\.setBusy\(!!running\)/.test(js) && /onStop: \(\) =>/.test(js), "Stop goes through the pill's own busy mode (U4535)");
+  assert.ok(!/MutationObserver/.test(js), "nothing watches the send button: writing it re-fires the kit's redraw and the observer, an endless loop that froze the tab (U4535: <path/> is read back as <path></path>, so innerHTML !== the icon string every time)");
 });
