@@ -18,6 +18,7 @@ import { ease } from "./renderkit/camera.js";
 import { offsetRing, pointInRing } from "./renderkit/paths2d.js";
 import { MATERIALS, BUILDING, CLASS_MAT } from "./renderkit/materials.js";   // one list of materials (U3618)
 import { texturedMaterial, worldUV, skyEnvironment } from "./renderkit/materials-three.js";
+import { libraryMaterial } from "./lookmap.js";   // a material's look from the kit library when it has a record (U4471); the texture and flat look otherwise
 import { BAY, WINDOWS, kindOf, rowsOf, stepOf } from "./bays.js";   // the window bays, one rule with the balconies (U3624)
 import { bimPlace, replacesBuiltIn } from "./design.js";
 import { planAdded, addedKey } from "./added-cache.js";
@@ -292,12 +293,15 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const files = [BIM[b.wing], ...(BIM_EXTRA[b.wing] && !replacesBuiltIn(site) ? [BIM_EXTRA[b.wing]] : [])];   // the built-in balconies, unless a balconies edit stands on them
     Promise.all(files.map(f => fetch(f).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))).then(async bufs => {
       const old = [...grp.children], parts = bufs.flatMap(buf => [...readGlb(buf)]), cutPlane = [cuts.get(b.id)];
-      const pic = Q.pbr && MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, clippingPlanes: cutPlane } }).catch(() => null) : null;
+      const concreteExtra = { side: THREE.DoubleSide, clippingPlanes: cutPlane };
+      const pic = Q.pbr ? (await libraryMaterial("concrete", { extra: concreteExtra }) || (MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: concreteExtra }).catch(() => null) : null)) : null;
+      const libSteel = envMap ? await libraryMaterial("steel", { tier: Q.pbr ? null : "low", extra: { flatShading: true, clippingPlanes: cutPlane, envMap } }) : null;   // steel by its library record, when it has one; a metal needs the sky to mirror, so none without it
       for (const p of parts) {
         const glass = p.material === "window_glass", M = MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};
         let g = new THREE.BufferGeometry(), m;
         g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1));
         if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.3 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
+        else if (p.material === "steel" && libSteel) m = libSteel.material;
         else m = mat(M.colour, { ...M.look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // the library's look; flat: the file carries no normals, and every face is plane
         g.computeBoundingSphere();
         const mesh = new THREE.Mesh(g, m); mesh.position.y = -base; mesh.castShadow = !glass && p.material !== "steel"; mesh.receiveShadow = true; mesh.userData.id = b.id; grp.add(mesh);
@@ -440,7 +444,8 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const groundMat = Object.fromEntries(Object.entries(MATERIALS).filter(([, m]) => m.kind.includes("ground")).map(([k, m]) => [k, mat(m.colour, { ...m.look, ...LIFTED })]));
   /* U3618: on a tier that carries it, the surface in its material's picture (ambientCG, at true scale), once it has come */
   const pictured = (m, surface) => { if (!Q.pbr || !MATERIALS[surface]?.texture) return;
-    texturedMaterial(surface, { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide, ...LIFTED } }).then(({ material, tile }) => {
+    const extra = { side: THREE.DoubleSide, ...LIFTED };
+    libraryMaterial(surface, { extra }).then(lib => lib?.tile ? lib : texturedMaterial(surface, { url: n => `renderkit/${n}`, extra })).then(({ material, tile }) => {
       if (!m.parent) { material.dispose(); return; }
       worldUV(m.geometry, tile, "x", "z"); const old = m.material; m.material = material; old.dispose(); dirty = true; }).catch(() => {}); };
   /* drawn again in place when the after changes (setLandscape, 21:07Z «when i edit the whole page reloads»: a pool is a surface) */
