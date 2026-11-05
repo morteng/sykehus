@@ -15,6 +15,15 @@ for (const f of ["drawing.js", "renderkit/sheet.js"]) {
   test(`${f} imports`, async () => { assert.ok(await import(`../public/${f}`)); });
 }
 
+// U4533: the kit's sheet constants equal what drawing.js held locally in 49bf6a62 (values pinned, not just present).
+test("sheet.js constants are the values drawing.js used before", async () => {
+  const k = await import("../public/renderkit/sheet.js");
+  assert.deepEqual(k.AXIS, [190, 40, 40]);
+  assert.equal(k.PX_PER_M_1_1, 3779.5);
+  assert.deepEqual([k.INK, k.DIMC, k.GREY, k.ORANGE], [[30, 30, 36], [0, 84, 150], [120, 120, 128], [235, 110, 20]]);
+  assert.equal(k.r2(1.234), 1.23); assert.deepEqual(k.unit([3, 4]), [0.6, 0.8]);
+});
+
 const SPEC = /(?:\bfrom\s*|\bimport\s*\(?\s*)(['"])(\.{1,2}\/[^'"\n?]+)(?:\?[^'"\n]*)?\1/g;
 function graph(entry) {
   const seen = new Set(), todo = [entry];

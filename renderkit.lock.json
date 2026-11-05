@@ -1,5 +1,5 @@
 {
-  "kits": "16b7e164513ff393c4614a1094bcc31ed8973bf1",
+  "kits": "6e1da0d1d7db1205cd373412b6131e6ae8b59086",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -92,7 +92,7 @@
     "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78",
     "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71",
     "highlight.js": "827ad3fb72a652906aa98231440a03b07f318853",
-    "sheet.js": "2c65e92a472831ce6e0b020ecd9e1c2a27448608",
+    "sheet.js": "833271f528f8cab7ce3db7df62128c74e09e017b",
     "sheet-png.mjs": "d0a950dfc958a6d6666f136631a31cb98a92d2a4",
     "sheet-font.mjs": "36da74a255b4683656efc2667e8215c624bbe881",
     "ktx2-loader.js": "7812a1ae0e288553cff03cdf6b470d0b7b88b84f",

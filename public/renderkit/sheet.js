@@ -4,15 +4,16 @@
    text size = pixels per font cell (2 gives letters 10 x 14 px). toSVG(sheet) writes them as SVG; sheet-png.mjs (node only) as a PNG.
    Every helper pushes prims and, for a dimension, a record in `dims` ({ ...rec, text }): the drawing's numbers come from the
    caller's model, the helper only draws them. */
-const INK = [30, 30, 36], DIMC = [0, 84, 150], AXIS = [190, 40, 40], GREY = [120, 120, 128], ORANGE = [235, 110, 20], TEXT_BG = true;
-const PX_PER_M_1_1 = 3779.5;   // pixels per metre at 1:1 on a 96 dpi screen; at 1:N it is this / N
+export const INK = [30, 30, 36], DIMC = [0, 84, 150], AXIS = [190, 40, 40], GREY = [120, 120, 128], ORANGE = [235, 110, 20], TEXT_BG = true;
+export const PX_PER_M_1_1 = 3779.5;   // pixels per metre at 1:1 on a 96 dpi screen; at 1:N it is this / N
 const NICE = [20, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
 
-const r2 = v => Math.round(v * 100) / 100 + 0, r1 = v => Math.round(v * 10) / 10 + 0;
+export const r2 = v => Math.round(v * 100) / 100 + 0;
+export const r1 = v => Math.round(v * 10) / 10 + 0;
 export const com = v => String(v).replace(".", ",");
 export const kote = v => (v < 0 ? "-" : "+") + Math.abs(v).toFixed(2).replace(".", ",");
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]], mul = (a, k) => [a[0] * k, a[1] * k], len = a => Math.hypot(a[0], a[1]);
-const unit = a => { const L = len(a) || 1; return [a[0] / L, a[1] / L]; };
+export const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]], mul = (a, k) => [a[0] * k, a[1] * k], len = a => Math.hypot(a[0], a[1]);
+export const unit = a => { const L = len(a) || 1; return [a[0] / L, a[1] / L]; };
 export const textW = (s, size) => String(s).length * 6 * size - size;
 
 /* scale: px per metre for what must fit in avail pixels; N is the 1:N asked for. Refuses with the smallest 1:N that fits. */
