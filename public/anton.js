@@ -24,14 +24,14 @@ import { announces, matcher, isTry } from "./livetries.js";
 import { isPicture, pictureOf, uploadFile, fieldsOf, MAX_FILE } from "./attach.js?v=20261028a";   // what the chat box attaches
 import { openMenu, closeMenu } from "./kit/menu.js";
 import { fxPills } from "./fx.js";
-import { attach as kitAttach } from "./kit/attach.js";   // the + of the pill: Tegn, Last opp fil, Ta bilde (kits ui, U4447)
+import { antonPill } from "./kit/anton-pill.js";   // the one Anton input pill: [+][text][send], the chips, the + menu (kits ui, U4487)
+import { iconSVG } from "./kit/icons.js";
 import { takePhoto, cameraAvailable } from "./kit/camera.js";
 import { esc as kitEsc } from "./kit/html.js";
 import { createStill } from "./kit/still.js";   // a picture of a live view first, one button for the live view (kits ui, U3996)
 
 const $ = id => document.getElementById(id);
 const esc = s => kitEsc(s ?? ""); // null-safe; the escaping is the kit's (kit/html.js)
-const SEND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 4.5 19 11.5 17.6 12.9 13 8.3V20h-2V8.3L6.4 12.9 5 11.5z"/></svg>`, STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`;
 const doorWords = (code, turn = false) => doorSentence(code, { lang: "nb", name: "Anton", turn });   // the kit's one table (U3976)
 const POSE = "sykehus-pose";
 const PHOTO = { title: "Ta bilde", take: "Ta bilde", retake: "Ta på nytt", use: "Bruk bildet", cancel: "Avbryt", close: "Lukk", denied: "Fikk ikke tilgang til kameraet." };
@@ -46,7 +46,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
   const meReady = () => { window.sykehusMeReady = true; dispatchEvent(new Event("sykehus:me")); };
   const me = await fetch("api/meg").then(r => r.json()).catch(() => ({ person: null, login: false }));
   const chip = $("me");
-  const unmark = () => { $("talk-form").hidden = true; $("talk-form").classList.remove("wait"); document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };   // early.js showed it waiting
+  const unmark = () => { document.body.classList.remove("talk-on"); try { localStorage.removeItem("sykehus-anton"); } catch { } };
   if (!me.person) {
     /* not signed in (U3662): no pill, no chips, only «Logg inn» in the bar, with the code in a dialog. The Bygg, Anton and Gjengi tabs are not there at all (Morten
        2026-10-26 21:16Z «should not see greyed out anton, bygg or gjengi tabs … keep it as simple and anonymous»; this replaces the greyed tabs of U3677); a page
@@ -73,8 +73,28 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
 
   function talk() {
     document.body.classList.add("talk-on");
-    const form = $("talk-form"), log = $("talkLog"), input = $("talkIn"), btn = $("talkSend"), busy = $("talkBusy");
-    form.hidden = false; try { localStorage.setItem("sykehus-anton", "1"); } catch { }
+    const log = $("talkLog");
+    try { localStorage.setItem("sykehus-anton", "1"); } catch { }
+    /* the pill is the kit's (anton-pill.js): [+][text][send]; the + holds New chat, Tegn, Last opp fil, Ta bilde. A pick adds a chip only;
+       the file is read and uploaded at send (pillSend), and the body of api/anton is as before */
+    let camera = "none"; cameraAvailable().then(c => { camera = c; });
+    const draw = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));   // the picture goes as a drawing, as before: nothing is returned to the tray
+    const pill = antonPill({
+      host: $("bstack"), placeholder: "Spør Anton, eller be ham vise noe", accept: "*/*", maxBytes: MAX_FILE, maxFiles: 1,
+      items: [
+        { id: "tegn", label: "Tegn", icon: "pen", run: () => { draw(); return null; } },
+        { id: "fil", label: "Last opp fil", icon: "clip" },
+        { id: "bilde", label: "Ta bilde", icon: "camera", run: () => takePhoto({ words: PHOTO }), when: () => camera !== "none" },
+      ],
+      onNewChat: () => newChat(),
+      words: { attach: "Legg ved", history: "Historikk", send: "Send", newChat: "Ny samtale", remove: n => `Ta bort ${n}`, tooBig: (n, cap) => `${n} er større enn ${cap}.`, tooMany: () => "Du kan legge ved én fil." },
+      onSend: (text, files) => pillSend(text, files),
+      onError: e => { if (e.kind === "send" && e.message) line("err", e.message); },
+    });
+    const form = pill.el, input = pill.input, btn = form.querySelector(".g-pill__go"), mid = form.querySelector(".g-pill__mid");
+    form.id = "talk-form"; input.maxLength = 4000;
+    mid.prepend(Object.assign(document.createElement("div"), { id: "talkPick" }));
+    const busy = Object.assign(document.createElement("p"), { className: "g-pill__busy" }); busy.setAttribute("aria-live", "polite"); mid.append(busy);
     const replies = new Map(), told = new Set();
     let running = null, redraw = false, waiting = 0, unread = 0, asking = 0;
     const seen = new Set();   // the turns the stream has shown taken
@@ -115,7 +135,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     $("reply-more").onclick = $("reply-card").onclick = () => { if (answer) panel.reveal("chat"); };
     /* «Ny samtale» stays for the signed-in person even when this page has drawn nothing: gulden-ai may hold a thread
        the history did not give back (21:23Z: not there on testperson's page) */
-    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; $("chat-top").hidden = false; }
+    function empty() { const has = log.children.length > 0; $("talk-empty").hidden = has; }
     function line(cls, text, who, image, about) {
       const li = document.createElement("li"); li.className = "talk-item " + cls;
       if (who) li.append(Object.assign(document.createElement("span"), { className: "talk-who", textContent: who }));
@@ -140,10 +160,17 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       search_documents: "Leter i dokumentene", read_document: "Leser et dokument", list_documents: "Leter i dokumentene", list_versions: "Ser på prosjektene",
       new_version: "Lagrer prosjektet", rename_version: "Lagrer navnet", set_sharing: "Endrer delingen", search_plants: "Leter etter planter" };
     let step = "", since = 0, ticking = null, turnOf = null;
+    /* the send button is Stop while a turn runs and nothing is typed or attached; the kit redraws its icon and name on a change, so the face is kept by a watcher */
+    const STOP = iconSVG("stop"), stopFace = () => {
+      const was = btn.classList.contains("is-stop");
+      if (running) { if (!was) btn.classList.add("is-stop", "stop", "working"); if (btn.innerHTML !== STOP) btn.innerHTML = STOP; if (btn.title !== "Stopp (Anton arbeider)") { btn.title = "Stopp (Anton arbeider)"; btn.setAttribute("aria-label", "Stopp, Anton arbeider"); } }
+      else if (was) { btn.classList.remove("is-stop", "stop", "working"); btn.innerHTML = iconSVG("send"); btn.title = "Send"; btn.setAttribute("aria-label", "Send"); }
+    };
+    new MutationObserver(stopFace).observe(btn, { childList: true, attributes: true, attributeFilter: ["title"] });
+    form.addEventListener("click", e => { if (running && e.target.closest(".g-pill__go") && !input.value.trim() && !pill.attach.files().length) { e.preventDefault(); e.stopPropagation(); json("api/anton/stopp"); } }, true);   // Stop, before the form submits
     const stepOf = key => STEP[String(key || "").split(/[.:/]/).pop()] || "Arbeider";
     function state() {
-      btn.innerHTML = running ? STOP : SEND; btn.className = "round g-pill__go " + (running ? "is-stop stop working" : "send");
-      btn.title = running ? "Stopp (Anton arbeider)" : "Send"; btn.setAttribute("aria-label", running ? "Stopp, Anton arbeider" : "Send");
+      stopFace();
       if (running && turnOf !== running) { turnOf = running; step = ""; since = Date.now(); }
       if (!running) { turnOf = null; step = ""; }
       if (running && !ticking) ticking = setInterval(state, 1000); else if (!running && ticking) { clearInterval(ticking); ticking = null; }
@@ -160,58 +187,48 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     addEventListener("sykehus:valg", onPicks); onPicks();
     addEventListener("sykehus:ask", () => { placePill(); input.focus(); });
     input.addEventListener("keydown", e => { if (e.key === "Escape" && valg.items.length) { e.stopPropagation(); valg.clear(); } });
-    $("talkNew").onclick = async () => {
+    async function newChat() {
       /* one request id for the click and its retry (gulden-ai's /new-chat is idempotent by it); a server restarting
          answers 502 or nothing for a moment (U3623, 10:39Z: the click fell in a restart and the old turns stayed) */
       const rid = `ny-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       let r = await json("api/anton/ny", { request_id: rid });
       if (!r || r.status === 502 || r.status === 503) { await new Promise(ok => setTimeout(ok, 2500)); r = await json("api/anton/ny", { request_id: rid }); }
       if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; line("err", j.error === "signed_out" ? "Anton kan ikke svare akkurat nå. Prøv igjen senere." : j.error || doorWords("unavailable")); }
-    };
-    for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; sendIt(); };
-    input.oninput = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
-    input.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendIt(); } };
+    }
+    for (const s of document.querySelectorAll("#talkSugg [data-say]")) s.onclick = () => { input.value = s.dataset.say; form.requestSubmit(); };
+    const grow = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 118) + "px"; };
+    input.addEventListener("input", grow);
     /* «Nytt prosjekt» (nytt-forslag.js) hands over its first turn here: the text goes in as if typed, then is sent */
     document.addEventListener("sykehus:anton-say", e => { if (e.detail?.text) { const r = sendIt({ text: e.detail.text, ...(e.detail.point ? { point: e.detail.point } : {}), ...(e.detail.drawing ? { drawing: e.detail.drawing } : {}) }); e.detail.done?.(r); } });   // the facade view (fasade-view.js) sends its drawing here and waits for the answer
-    form.onsubmit = e => { e.preventDefault(); if (running && !input.value.trim()) json("api/anton/stopp"); else sendIt(); };
-    async function sendIt(drawn) {
-      const text = drawn ? drawn.text : input.value.trim() || (att ? "Se på det jeg la ved." : ""); if (!text) return false;
-      if (!drawn && reading) { line("err", "Vent til vedlegget er lest."); return false; }
-      const sel = valg.forMessage(), withIt = drawn ? {} : fieldsOf(att);   // a drawing carries its own picture: nothing is attached to it
-      const r = await json("api/anton", { text, version: version(), ...withIt, ...(drawn?.point ? { point: drawn.point } : {}), ...(drawn?.drawing ? { drawing: drawn.drawing } : {}), ...(sel ? { selection: sel } : {}) });
-      if (r?.status === 401) { signedOut(); return false; }
-      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; const why = j.error || doorWords("unavailable"); line("err", why); return drawn ? { error: why } : false; }   // a drawing's window shows the reason too
-      if (!drawn) { input.value = ""; input.oninput(); setAtt(null); }
+    /* one POST to api/anton: null when taken, else the reason ("" when the line is already drawn) */
+    async function post(text, extra, restore) {
+      const sel = valg.forMessage();
+      const r = await json("api/anton", { text, version: version(), ...extra, ...(sel ? { selection: sel } : {}) });
+      if (r?.status === 401) { signedOut(); return ""; }
+      if (!r?.ok) { const j = r ? await r.json().catch(() => ({})) : {}; return j.error || doorWords("unavailable"); }
       /* the stream must show the turn taken (queued or running); else the text comes back with a word (pm 21:31Z: the
          first message after load went away and reached no one) */
-      const { id } = await r.json().catch(() => ({})); if (id && !seen.has(id)) setTimeout(() => { if (seen.has(id)) return; line("err", "Fikk ikke bekreftet at Anton fikk meldingen; den står i feltet igjen om du vil sende den på nytt."); if (!input.value.trim() && !drawn) { input.value = text; input.oninput(); } }, 8000);
+      const { id } = await r.json().catch(() => ({})); if (id && !seen.has(id)) setTimeout(() => { if (seen.has(id)) return; line("err", "Fikk ikke bekreftet at Anton fikk meldingen; den står i feltet igjen om du vil sende den på nytt."); if (!input.value.trim() && restore) { input.value = text; grow(); } }, 8000);
       try { lastStep = ""; said(); panel.reveal("chat"); } catch (x) { console.error(x); }   // the message is taken: nothing after it may keep the drawing's window open
-      return true;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
+      return null;   // the answer comes in the tab: it opens now (a phone: the sheet at half height)
     }
-    /* the attachment: one picture or one file, from the + menu (Tegn, Last opp fil, Ta bilde), pasted into the box or dropped on the
-       pill (the kit's attach: its chip shows the name and ×); it is read first (a picture shrunk, a file taken in as «Hent fil»
-       does) and goes with the next message in the same fields as before */
-    let att = null, reading = false;
-    const draw = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));   // the picture goes as a drawing, as before: nothing is returned to the tray
-    const kitAtt = kitAttach({
-      host: form, before: $("talkPick").parentElement, label: "Legg ved", field: "vedlegg", accept: "*/*", maxFiles: 1, cap: MAX_FILE,
-      items: [
-        { key: "tegn", label: "Tegn", icon: "pen", run: () => { draw(); return null; } },
-        { key: "fil", label: "Last opp fil", icon: "clip" },
-        { key: "bilde", label: "Ta bilde", icon: "camera", run: () => takePhoto({ words: PHOTO }), when: () => camera !== "none" },
-      ],
-      words: { tooBig: (n, cap) => `${n} er større enn ${cap}.`, tooMany: () => "Du kan legge ved én fil.", remove: n => `Ta bort ${n}` },
-      onChange: async files => {
-        const file = files[0];
-        if (!file) { att = null; return; }
-        reading = true;
-        try { att = isPicture(file) ? { picture: await pictureOf(file) } : { attachment: await uploadFile(file) }; }
-        catch (e) { att = null; kitAtt.remove(0); line("err", e.message || "Fikk ikke lagt ved fila."); }
-        finally { reading = false; }
-      },
-    });
-    const setAtt = a => { if (!a) kitAtt.clear(); };
-    let camera = "none"; cameraAvailable().then(c => { camera = c; });
+    /* a drawing (Tegn, the facade view, «Nytt prosjekt»): its own picture goes with it, nothing is attached */
+    async function sendIt(drawn) {
+      if (!drawn?.text) return false;
+      const why = await post(drawn.text, { ...(drawn.point ? { point: drawn.point } : {}), ...(drawn.drawing ? { drawing: drawn.drawing } : {}) }, false);
+      if (why === "") return false;
+      if (why) { line("err", why); return { error: why }; }   // a drawing's window shows the reason too
+      return true;
+    }
+    /* the pill's send: the chip's file is read first (a picture shrunk, a file taken in as «Hent fil» does) and goes in the same fields as before; a refusal throws and the pill gives text and chip back */
+    async function pillSend(text, files) {
+      grow();
+      let withIt = {};
+      try { if (files[0]) withIt = fieldsOf(isPicture(files[0]) ? { picture: await pictureOf(files[0]) } : { attachment: await uploadFile(files[0]) }); }
+      catch (e) { setTimeout(grow, 0); throw new Error(e.message || "Fikk ikke lagt ved fila."); }
+      const why = await post(text || "Se på det jeg la ved.", withIt, true);
+      if (why !== null) { setTimeout(grow, 0); throw new Error(why); }
+    }
     let gone = false;
     /* U3668: an Anton refusal (401: a device gulden-ai does not know, a revoked one, a restart) says so and leaves the page
        signed in: it never logs the person out of sykehus or reloads (pm 16:13Z); the line shows once a half minute */
@@ -353,7 +370,6 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     on("signed_out", signedOut);
     on("cleared", () => { log.textContent = ""; replies.clear(); answer = ""; showReply(); empty(); });
     placePill(); state(); empty();
-    /* ready: what was typed while the page loaded (early.js) goes now */
-    form.classList.remove("wait"); btn.disabled = false; words(); state(); if (form.dataset.queued) { delete form.dataset.queued; const go = () => { busy.textContent = ""; sendIt(); }; if (es.readyState === EventSource.OPEN) go(); else es.addEventListener("open", go, { once: true }); }   // once the stream listens, so the page sees its own turn
+    words(); state();   // once the stream listens, so the page sees its own turn
   }
 }

@@ -29,10 +29,11 @@ test("U3685: the conversation is not a card over the view: anton.js wires no she
   assert.match(html, /id="reply-more"/);
 });
 
-test("U3787: «Ny samtale» says it starts a new one and that Anton can look up the old ones, in the button and in the tour", () => {
-  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8"), tour = readFileSync(new URL("../public/tour.js", import.meta.url), "utf8");
-  const b = /<button[^>]*id="talkNew"[^>]*>/.exec(html)?.[0] ?? "";
-  assert.ok(b.includes('title="Starter en ny samtale. Anton kan slå opp i de gamle når du viser til dem."'));
-  assert.ok(b.includes('aria-label="Ny samtale"'), "the name of the button is unchanged"); assert.ok(!/glemmer/.test(b + tour), "nothing says Anton forgets");
+test("U3787/U4487: «Ny samtale» is the first item of the pill's + menu (onNewChat), not a button of its own; the tour says Anton can look up the old ones", () => {
+  const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8"), tour = readFileSync(new URL("../public/tour.js", import.meta.url), "utf8"), a = readFileSync(new URL("../public/anton.js", import.meta.url), "utf8");
+  assert.ok(!html.includes('id="talkNew"'), "the old button is gone");
+  assert.match(a, /onNewChat: \(\) => newChat\(\)/); assert.match(a, /newChat: "Ny samtale"/);
+  assert.match(a, /api\/anton\/ny", \{ request_id: rid \}/, "the same request");
+  assert.ok(!/glemmer/.test(tour), "nothing says Anton forgets");
   assert.ok(tour.includes("«Ny samtale» starter en ny samtale. Anton kan slå opp i de gamle når du viser til dem."));
 });

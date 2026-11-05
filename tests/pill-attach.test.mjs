@@ -10,10 +10,10 @@ const read = p => readFileSync(new URL(`../public/${p}`, import.meta.url), "utf8
 
 test("the + menu shows three items, in Norwegian, and the old buttons are gone", () => {
   const js = read("anton.js"), html = read("index.html");
-  const items = js.slice(js.indexOf("items: ["), js.indexOf("words: {", js.indexOf("items: ["))), labels = [...items.matchAll(/key: "[a-z]+", label: "([^"]+)"/g)].map(m => m[1]);
+  const items = js.slice(js.indexOf("antonPill({"), js.indexOf("onNewChat:", js.indexOf("antonPill({"))), labels = [...items.matchAll(/id: "[a-z]+", label: "([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(labels, ["Tegn", "Last opp fil", "Ta bilde"]);
-  assert.match(js, /label: "Legg ved"/);
-  assert.match(js, /import \{ attach as kitAttach \} from "\.\/kit\/attach\.js"/);
+  assert.match(js, /attach: "Legg ved"/);
+  assert.match(js, /import \{ antonPill \} from "\.\/kit\/anton-pill\.js"/); assert.ok(!/kitAttach|kit\/attach\.js/.test(js), "no own attach wiring");
   assert.match(js, /import \{ takePhoto, cameraAvailable \} from "\.\/kit\/camera\.js"/);
   for (const gone of ["talkTegn", "talkAttach", "talkFile", "talkAtt"]) { assert.ok(!html.includes(`id="${gone}"`), gone); assert.ok(!js.includes(`$("${gone}")`), gone); }
   assert.ok(!/<button[^>]*>\s*(<svg.*?<\/svg>)?\s*Tegn\s*<\/button>/s.test(html), "no separate Tegn text button");
@@ -23,7 +23,8 @@ test("Tegn opens the existing draw mode and sends the drawing as before; the bod
   const js = read("anton.js");
   assert.match(js, /run: \(\) => \{ draw\(\); return null; \}/);
   assert.match(js, /import\("\.\/tegn\.js\?v=\d+a"\)\.then\(m => m\.startDrawing\(\{ viewer, labels: viewer\.labels, host: \$\("stage"\), send: \(text, drawing\) => sendIt\(\{ text, drawing \}\) \}\)\)/);
-  assert.match(js, /json\("api\/anton", \{ text, version: version\(\), \.\.\.withIt, /);
+  assert.match(js, /json\("api\/anton", \{ text, version: version\(\), \.\.\.extra, \.\.\.\(sel \? \{ selection: sel \} : \{\}\) \}\)/);
+  assert.match(js, /withIt = fieldsOf\(isPicture\(files\[0\]\) \? \{ picture: await pictureOf\(files\[0\]\) \} : \{ attachment: await uploadFile\(files\[0\]\) \}\)/, "uploaded at send, same fields");
   assert.deepEqual(fieldsOf({ picture: { image: "data:x", name: "a.png" } }), { picture: { image: "data:x", name: "a.png" } });
   assert.deepEqual(fieldsOf({ attachment: { file: "a".repeat(64), name: "x.ifc" } }), { attachment: { file: "a".repeat(64), name: "x.ifc" } });
   assert.deepEqual(fieldsOf(null), {});

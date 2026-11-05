@@ -18,6 +18,9 @@ export const ICONS = {
     help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7 M12 17h.01",
     send: "M12 19V5 M5 12l7-7 7 7",
     stop: "M7 7h10v10H7z",
+    history: "M3 12a9 9 0 1 0 3-6.7 M3 4v5h5 M12 7.5V12l3 2",
+    mic: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5 11a7 7 0 0 0 14 0 M12 18v3",
+    chat: "M4 5h16v11H9l-5 4z M12 8.5v4 M10 10.5h4",
 };
 /** The glyph as SVG markup, hidden from assistive technology. */
 export function iconSVG(name) {

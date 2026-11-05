@@ -1,12 +1,12 @@
 {
-  "kits": "9b73dd7ec83c1df1d6c8647a6f9bd2eaf607a74b",
+  "kits": "b8045a2288391dcda862775b639d1407ae9809ef",
   "kit": "ui",
   "dest": "public/kit",
   "file": "{}",
   "import": "./{}",
   "files": {
     "tokens.css": "5c3a0e479ebbd28531b539a16c9997d8a995592e",
-    "kit.css": "ebadf5c63b9a44cf399b462d3d3e0871b9c7e414",
+    "kit.css": "9ea345b5830d91080b47204b377c40529b9f46f3",
     "levels.js": "c44ab4b7587297ae9044500cfe61f7e0ac66c105",
     "pick.js": "929954ef8480e84198dab58ec839a5dddd57ba9a",
     "split.js": "a294fe1ca20b7b6d8b99712e3908e40be7cd07a6",
@@ -17,7 +17,7 @@
     "feedback.js": "7b78ded9f2e7e88599bc93fcca4090304d24709a",
     "markdown.js": "a46483dab0a696e36c0aeab8a47dbe5b38de7e24",
     "follow.js": "e366b039579ec52682462033d8ced16335d30d67",
-    "icons.js": "49a54f8c7670dc4fef5f6c76152cf941f7733a55",
+    "icons.js": "e9961346d62e6bce09dea11fcdc4225cbd1def65",
     "surfaces.js": "931571fcc8bfa87dee1dd24f3e1214b1cd73c4ce",
     "typein.js": "c2a067fb12c213d003444ec42ee69343c6c6b33b",
     "html.js": "fddaca736d72d73ab32408e89c42ef4cfb634ebd",
@@ -35,6 +35,7 @@
     "place.js": "bc298a2b3fb498213838cbb14e63975e4a4a9226",
     "pieces.js": "1efe4dd79a6a1610862528c891f6e1a7904e67bd",
     "attach.js": "3c3c21f90930beeb004b40932b2e1e3967e5a138",
-    "camera.js": "105ad320f1a637dbf6f869f02d968e389dcb6633"
+    "camera.js": "105ad320f1a637dbf6f869f02d968e389dcb6633",
+    "anton-pill.js": "e03154470d4a6e39dea9da9267c1289605dae242"
   }
 }

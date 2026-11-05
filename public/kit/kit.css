@@ -427,6 +427,9 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-attach__x:focus-visible{outline:var(--focus-w) solid var(--focus-color);outline-offset:var(--focus-off)}
 .g-attach__say{flex:1 0 100%;margin:0;color:var(--danger-text);font-size:var(--fs-sm)}.g-attach__say:empty{display:none}
 .g-attach--drop{outline:var(--focus-w) dashed var(--focus-color);outline-offset:calc(-1 * var(--focus-w))}
+/* .g-anton: the Anton input pill (anton-pill.ts): a .g-pill whose chips (.g-attach__tray) sit above the field. Disabled while a send runs. */
+.g-anton .g-pill__in:disabled{color:var(--muted)}
+.g-anton.is-busy{cursor:progress}.g-anton.is-busy .g-pill__btn:disabled,.g-anton.is-busy .g-attach__x:disabled{cursor:progress}
 /* ---- .g-camera: the desktop camera in a modal (camera.ts) */
 .g-camera__view{display:block;width:100%;max-height:60vh;background:var(--bed);border-radius:var(--radius);object-fit:contain}
 .g-camera__acts{display:flex;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-3)}
