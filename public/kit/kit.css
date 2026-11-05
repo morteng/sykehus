@@ -356,6 +356,11 @@ body.g-sizing:has(.g-split.y.sizing){cursor:row-resize}
 .g-fx-spark{width:5px;height:5px;border-radius:50%;animation:g-fx-leaf .6s ease-out forwards}
 .g-fx-pop{animation:g-fx-pop .35s var(--ease)}
 .g-fx-rise{animation:g-fx-rise .3s var(--ease)}
+.g-fx-pulse::after{content:"";position:absolute;inset:0;border:2px solid var(--g-fx-c,var(--accent));border-radius:inherit;pointer-events:none;animation:g-fx-pulse .45s ease-out forwards}
+.g-fx-sweep{overflow:hidden}
+.g-fx-sweep::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--text) 14%,transparent),transparent);animation:g-fx-sweep .7s ease-in-out forwards}
+@keyframes g-fx-pulse{from{transform:scale(.9);opacity:1}to{transform:scale(1.3);opacity:0}}
+@keyframes g-fx-sweep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 @keyframes g-fx-leaf{from{transform:translate(-50%,-50%) scale(var(--g-fx-s,1));opacity:1}55%{opacity:1}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) rotate(var(--g-fx-rot)) scale(var(--g-fx-s,1));opacity:0}}
 @keyframes g-fx-dust{from{transform:translate(-50%,-50%) scale(.6);opacity:.9}45%{opacity:.75}to{transform:translate(calc(-50% + var(--g-fx-dx)),calc(-50% + var(--g-fx-dy))) scale(calc(var(--g-fx-s,1) * 1.7));opacity:0}}
 @keyframes g-fx-pop{from{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}to{transform:none;opacity:1}}

@@ -27,3 +27,11 @@ test("anton.js follows the log (#talkLog, the scroller) with the kit, and nothin
   assert.match(css, /\.talk-log\{[^}]*overflow-y:auto/);
   assert.match(readFileSync(new URL("../public/sykehus.css", import.meta.url), "utf8"), /#p-chat #talk \{ position: relative; \}/);
 });
+
+/* U4482: the vendored effects file is the kit's dist/effects.js byte for byte (the lock's blob id is git's id of that file) */
+test("public/kit/effects.js is the kit's effects.js: the lock's blob id and the switch exports", () => {
+  const lock = JSON.parse(readFileSync(new URL("../uikit.lock.json", import.meta.url), "utf8"));
+  const buf = readFileSync(new URL("../public/kit/effects.js", import.meta.url));
+  assert.equal(createHash("sha1").update(`blob ${buf.length}\0`).update(buf).digest("hex"), lock.files["effects.js"]);
+  assert.match(buf.toString("utf8"), /export const FX_COOKIE = "gulden_fx";[\s\S]*export function fxCookie\(/);
+});

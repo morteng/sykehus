@@ -2,6 +2,8 @@
    The layout is Fab's (the Anton-first redlines, 2026-10-25): the view, the storey strip at its left edge, the view's
    tools over it, Anton's pill at the bottom, and the panel on the right with «Bygget», «Anton», «Prosjekter» and
    «Prosjekter», «Bygg» and «Anton» (panel.js). */
+import { stampFx } from "./fx.js";
+stampFx();   // the person's effects switch (cookie gulden_fx) as data-fx on <html>, before anything else draws (U4482)
 import { createViewer } from "./viewer.js";
 import { freeName } from "./saved.js";
 import { shareActs, publicBox, sharingFor, SHARE_TOAST, listHtml } from "./sharing.js?v=20261027sl";
