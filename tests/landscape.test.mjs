@@ -88,3 +88,14 @@ test("U3617: one rounded end, then longer, then deeper: each change leaves the r
   g = after([e, l, d]).landscape[0]; assert.equal(g.depth, 1.8); assert.equal(g.points.length, 4); assert.deepEqual(g.radius, [0, 3, 3, 0]);
   assert.throws(() => checkEdit(site, [], { kind: "surface", surface: "grass", ring: sq, radius: [1, 2] }), /ett tall per punkt/);
 });
+
+test("U4424: a four-number radius list is kept exactly, also beside round_end, on make and on reshape", () => {
+  const sq = [[40, 60], [50, 60], [50, 65], [40, 65]], want = [0.5, 1.7, 1.7, 0.5];
+  const e = checkEdit(site, [], { kind: "surface", surface: "water", pool: true, ring: sq, radius: want, round_end: "Ø" });
+  assert.deepEqual(e.radius, want, "the list wins over round_end");
+  const first = checkEdit(site, [], { kind: "surface", surface: "water", pool: true, ring: sq, round_end: "Ø" });
+  const s1 = applyEdits(site, [], [first]).site, id = s1.landscape[0].id;
+  const r = checkEdit(s1, [], { kind: "reshape", id, radius: want, round_end: "S" });
+  assert.deepEqual(r.radius, want);
+  assert.deepEqual(applyEdits(site, [], [first, r]).site.landscape[0].radius, want, "the stored radii are exactly the asked ones");
+});

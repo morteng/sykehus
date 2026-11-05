@@ -107,6 +107,8 @@ test("look takes the camera: at, views (2 pictures), era før; a bad value is re
   assert.ok(Math.abs(cs[1].target[0] - south[0]) < 0.06); assert.match(text(two), /Bilde 2: /); assert.match(text(two), /modellen slik den var før/);
   const off = await call("look", { draft: d, at: [999999, 0] }); assert.ok(off.isError); assert.match(text(off), /ligger utenfor modellen: øst -?\d+–-?\d+, nord/);
   const eye = await call("look", { draft: d, eye: { at: [south[0], south[1] - 60], look_at: [south[0], south[1] - 20] } }); assert.ok(!eye.isError, text(eye)); assert.equal(eye.structuredContent.cameras[0].eye.height_m, 1.7);
+  const low = await call("look", { draft: d, at: [south[0], south[1] - 20], eye: { height_m: 0.9, distance_m: 25 } }); assert.ok(!low.isError, text(low));   // U4425: eye alone is a low pose, 25 m off, looking at `at`
+  const lc = low.structuredContent.cameras[0]; assert.equal(lc.eye.height_m, 0.9); assert.equal(lc.from_deg, 180, "from the south by default"); assert.ok(Math.abs(lc.eye.at[1] - (south[1] - 45)) < 0.06 && Math.abs(lc.eye.at[0] - south[0]) < 0.06, JSON.stringify(lc.eye));
   const ts = await call("try_change", { edits: [{ ...p, id: "npavx3", from: [south[0] - 8, south[1] - 40], to: [south[0] + 8, south[1] - 40] }], picture: { at: [1e7, 0] } }); assert.match(JSON.stringify(ts.structuredContent), /picture_refused.*utenfor modellen/); assert.ok(ts.structuredContent.added.length === 1, "the change itself stands");
 });
 

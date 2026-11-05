@@ -102,6 +102,7 @@ function endRadii(points, side, radius) {
   const half = Math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]) / 2;
   return points.map((_, k) => k === i || k === j ? (radius > 0 ? radius : half) : 0);
 }
+/* U4424: a radius list is exact, one number per point as asked; round_end only fills in when no list was given */
 /* length_m / width_m: the points stretched along their long axis and across it, about their middle (a pool 2 m longer) */
 function stretched(points, length, width) {
   const n = points.length, mx = points.reduce((t, p) => t + p[0], 0) / n, my = points.reduce((t, p) => t + p[1], 0) / n;
@@ -115,7 +116,7 @@ function stretched(points, length, width) {
 function cornersOf(e, out, points) {
   if (Array.isArray(e.radius)) { if (e.radius.length !== points.length) throw new Error(`radius som liste må ha ett tall per punkt (${points.length})`); out.radius = e.radius.map(r => num(r, 0, 50, "Hjørneradien (radius, m)")); }
   else if (e.radius != null) out.radius = num(e.radius, 0, 50, "Hjørneradien (radius, m)");
-  if (e.round_end != null) out.radius = endRadii(points, String(e.round_end), e.radius != null && !Array.isArray(e.radius) ? out.radius : 0);
+  if (e.round_end != null && !Array.isArray(e.radius)) out.radius = endRadii(points, String(e.round_end), e.radius != null && !Array.isArray(e.radius) ? out.radius : 0);
   if (e.smooth != null) { if (typeof e.smooth !== "boolean") throw new Error("smooth er true (en myk kurve gjennom punktene) eller false"); out.smooth = e.smooth; }
   return out;
 }

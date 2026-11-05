@@ -13,7 +13,7 @@ export const cameraProps = VIEW_NAME => ({
   from_direction: { type: ["string", "number"], description: "Where the camera stands: N, NØ, Ø, SØ, S, SV, V, NV or degrees" },
   tilt_deg: { type: "number", minimum: 5, maximum: 90, description: "90 = plan" },
   view_name: VIEW_NAME,
-  eye: { type: "object", description: "Person's view: at [e,n], height_m 1.7, look_at [e,n,kote?]", properties: { at: PT, height_m: { type: "number" }, look_at: PT } },
+  eye: { type: "object", description: "A low, person's-eye-level view: height_m 1.7 over the ground; at [e,n] where the eye stands and look_at [e,n,kote?]. Leave them out and it stands distance_m (default 30) off the focus / at on the from_direction side (default S), looking at it: a pool or terrace from the side", properties: { at: PT, height_m: { type: "number" }, look_at: PT, distance_m: { type: "number" } } },
   era: { type: "string", enum: ["før", "etter"], description: "før: draw the before" },
   views: { type: "array", maxItems: 3, items: { type: "object", description: "Another camera, same fields" }, description: "Up to 3 cameras in one call" },
   width: { type: "integer", minimum: 320, maximum: 1280 }, height: { type: "integer", minimum: 240, maximum: 960 },
@@ -45,7 +45,11 @@ export function aimCamera(c, base, ctx) {
   }
   if (c.distance_m != null) { const d = fin(c.distance_m, "distance_m"); if (d < 30 || d > 1200) throw err(`distance_m må være 30–1200 m; ${d} er utenfor.`); out.dist = d; }
   if (c.eye != null) {
-    const e = c.eye, p = onSite(e.at, "eye.at"), h = e.height_m == null ? 1.7 : fin(e.height_m, "eye.height_m");
+    /* U4425: eye alone (or with height_m / distance_m) is a low pose: it stands distance_m (default 30) from what is looked at, on the from_direction side (default S), the eye height_m over the ground, looking at the focus / at / frame */
+    const e = { ...c.eye }, h = e.height_m == null ? 1.7 : fin(e.height_m, "eye.height_m");
+    if (e.look_at == null && (c.focus != null || c.at != null || c.frame != null || e.at == null)) e.look_at = out.target;
+    if (e.at == null) { const dd = e.distance_m == null ? 30 : fin(e.distance_m, "eye.distance_m"), a = (c.from_direction != null ? out.from : 180) * Math.PI / 180; e.at = [out.target[0] + Math.sin(a) * dd, out.target[1] + Math.cos(a) * dd]; }
+    const p = onSite(e.at, "eye.at");
     if (h < 0.5 || h > 100) throw err(`eye.height_m må være 0,5–100 m; ${h} er utenfor.`);
     if (!Array.isArray(e.look_at)) throw err("eye trenger look_at [øst, nord] eller [øst, nord, kote].");
     const tg = [...onSite(e.look_at, "eye.look_at"), kote(e.look_at, "eye.look_at")], d = Math.hypot(p[0] - tg[0], p[1] - tg[1]);

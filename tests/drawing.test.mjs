@@ -108,3 +108,16 @@ test("draw_section through the MCP call: a PNG and the kotes in words; draw_plan
 test("tool text stays small: each of the two tools is under 800 tokens (plan section 2)", async () => {
   for (const t of (await rpc("tools/list")).tools.filter(x => /^draw_/.test(x.name))) assert.ok(JSON.stringify(t).length / 3.6 <= 800, `${t.name}: ${Math.round(JSON.stringify(t).length / 3.6)} tokens`);
 });
+
+test("U4425: a section through a ground edit (a pool) needs no wing or part: a line alone, or the edit's id", () => {
+  const full = JSON.parse(readFileSync(new URL("../public/data/site.json", import.meta.url), "utf8"));
+  const sq = [[40, 60], [50, 60], [50, 65], [40, 65]], e = checkEdit(full, [], { kind: "surface", surface: "water", pool: true, ring: sq, depth: 1.5, name: "Bassenget" });
+  const st = applyEdits(full, [], [e]).site, id = st.landscape[0].id;
+  const byLine = sectionDrawing(st, { line: [[35, 62.5], [55, 62.5]] }, wingOf);
+  assert.deepEqual(byLine.cut.from, [35, 62.5]); assert.equal(byLine.cut.length_m, 20); assert.match(byLine.say, /Snitt A-A gjennom terrenget/);
+  assert.ok(isPng(rasterize(byLine.prims, byLine.W, byLine.H)), "drawn");
+  const byId = sectionDrawing(st, { focus: id }, wingOf);
+  assert.equal(byId.cut.length_m, 22, "along the long side, 10 m and 6 m beyond each end"); assert.match(byId.say, /Bassenget/);
+  assert.deepEqual(byId.cut.from, [34, 62.5]);
+  assert.throws(() => sectionDrawing(st, { focus: "flate-99" }, wingOf), /Fant ikke/);
+});

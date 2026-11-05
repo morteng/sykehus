@@ -15,8 +15,12 @@ export { com, kote };   // the facade drawing (fasade.js) writes its numbers the
 const TONES = [[140, 140, 148], [176, 176, 184], [208, 208, 216]];   // the roof's levels, the highest darkest
 
 
-function resolveFocus(site, ref, wingOf) {
+/* U4425: a ground edit (a pool, a terrace, planed ground: its id from after.ground / after.grading) is a focus for a section; with no focus at all, a line alone is a cut through the ground */
+const groundOf = (site, key) => [...(site.landscape || []), ...(site.grading || [])].find(g => String(g.id).toLowerCase() === key && (g.ring || g.points)?.length > 2);
+function resolveFocus(site, ref, wingOf, line) {
   const key = String(ref ?? "").trim().toLowerCase();
+  if (!key && line != null) return { kind: "ground", name: "terrenget" };
+  const gd = key && groundOf(site, key); if (gd) return { kind: "ground", g: gd, name: gd.name || gd.id };
   const v = key && (site.added || []).find(x => x.kind === "volume" && x.from && x.to && (x.id.toLowerCase() === key || x.name.toLowerCase() === key));
   if (v) return { kind: "part", v };
   const w = key && wingOf(site, ref);
@@ -108,8 +112,8 @@ function runsOf(ivs) {
 }
 
 export function sectionDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
-  const f = resolveFocus(site, o.focus, wingOf), prims = [], dims = [];
-  const wingId = f.kind === "wing" ? f.w.id : f.v.on || null, wing = wingId ? (site.wings || []).find(w => w.id === wingId) : null, R = wingId ? roofOf(site, wingId) : null;
+  const f = resolveFocus(site, o.focus, wingOf, o.line), prims = [], dims = [], fname = f.kind === "wing" ? f.w.name : f.kind === "part" ? f.v.name : f.name;
+  const wingId = f.kind === "wing" ? f.w.id : f.kind === "part" ? f.v.on || null : null, wing = wingId ? (site.wings || []).find(w => w.id === wingId) : null, R = wingId ? roofOf(site, wingId) : null;
   const baseOf = new Map(site.buildings.map(b => [b.id, b.base]));
   const pcs = [...new Set(site.buildings.map(b => b.wing))].flatMap(wg => roofPieces(site, wg).map(k => ({ ...k, own: wg === wingId && wingId != null })));
   const vols = (site.added || []).filter(x => x.kind === "volume" && x.from && x.to && x.top_kote != null && x.base_kote != null);
@@ -120,7 +124,8 @@ export function sectionDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
     return { ...out, d };
   };
   /* the cut: across or along the wing or part through its middle, or a line given; none asked: the one of those that goes through most of the roof's levels */
-  const A0 = measureParts(site, f.kind === "wing" ? f.w.id : f.v.id, undefined, wingOf).a, fr = frameOfRect(f.kind === "wing" && R ? R.bounding_rect.corners : A0.corners);   // the whole roof's rectangle, not only its biggest level
+  const gr = f.kind === "ground" && f.g ? (f.g.ring || f.g.points) : null, gb = gr ? [Math.min(...gr.map(q => q[0])), Math.min(...gr.map(q => q[1])), Math.max(...gr.map(q => q[0])), Math.max(...gr.map(q => q[1]))] : null;
+  const A0 = f.kind === "ground" ? null : measureParts(site, f.kind === "wing" ? f.w.id : f.v.id, undefined, wingOf).a, fr = f.kind === "ground" ? null : frameOfRect(f.kind === "wing" && R ? R.bounding_rect.corners : A0.corners);   // the whole roof's rectangle, not only its biggest level
   const mk = (kind, g) => kind === "across" ? { kind, A: add(fr.o, add(mul(fr.u, g * fr.L), mul(fr.v, -3))), B: add(fr.o, add(mul(fr.u, g * fr.L), mul(fr.v, fr.Wd + 3))) }
     : { kind, A: add(fr.o, add(mul(fr.v, g * fr.Wd), mul(fr.u, -3))), B: add(fr.o, add(mul(fr.v, g * fr.Wd), mul(fr.u, fr.L + 3))) };
   let cut;
@@ -128,6 +133,10 @@ export function sectionDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
     const l = o.line; if (!Array.isArray(l) || l.length !== 2 || !l.every(q => Array.isArray(q) && q.length >= 2 && q.slice(0, 2).every(Number.isFinite))) throw new Error("line er to punkter [[øst, nord], [øst, nord]] i meter: snittlinjen fra venstre til høyre");
     if (len(sub(l[1], l[0])) < 3) throw new Error("line er for kort: snittlinjen må være minst 3 m lang");
     cut = { kind: "line", A: l[0].slice(0, 2), B: l[1].slice(0, 2) };
+  } else if (f.kind === "ground") {
+    if (!gb) throw new Error("Et snitt gjennom bakken trenger line, to punkter [[øst, nord], [øst, nord]], eller id-en til en flate eller planert grunn");
+    const mid = [(gb[0] + gb[2]) / 2, (gb[1] + gb[3]) / 2], eastWest = o.across ? gb[3] - gb[1] >= gb[2] - gb[0] : gb[2] - gb[0] >= gb[3] - gb[1], half = (eastWest ? gb[2] - gb[0] : gb[3] - gb[1]) / 2 + 6;
+    cut = { kind: o.along || o.across ? (o.across ? "across" : "along") : "line", A: eastWest ? [mid[0] - half, mid[1]] : [mid[0], mid[1] - half], B: eastWest ? [mid[0] + half, mid[1]] : [mid[0], mid[1] + half] };
   } else if (o.across && o.along) throw new Error("Velg across eller along, ikke begge (eller line for en egen snittlinje)");
   else if (o.across || o.along) cut = mk(o.across ? "across" : "along", 0.5);
   else {
@@ -159,7 +168,7 @@ export function sectionDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
     for (const l of wing.levels.filter(l => l.kote != null && l.kote > zlo && l.kote < zhi).sort((a, b) => b.kote - a.kote)) { const y = px(0, l.kote)[1]; if (Math.abs(lastY - y) < 15) continue; lastY = y;
       Ln(prims, [tx(span[0]), y], [tx(span[1]), y], [110, 150, 200], 1, [6, 5]); T(prims, [mL - 18, y + 5], `${l.name} ${kote(l.kote)}`, { size: 1.5, anchor: "r", col: [70, 110, 170] }); } }
   /* the centre axis of the wing (where the cut meets the long axis of the biggest level) */
-  const cn = R ? R.levels.slice().sort((a, b) => b.area_m2 - a.area_m2)[0].bounding_rect.corners.reduce(add, [0, 0]).map(v => v / 4) : A0.corners.reduce(add, [0, 0]).map(v => v / 4), tc = (cn[0] - A[0]) * u[0] + (cn[1] - A[1]) * u[1];
+  const cn = f.kind === "ground" ? null : R ? R.levels.slice().sort((a, b) => b.area_m2 - a.area_m2)[0].bounding_rect.corners.reduce(add, [0, 0]).map(v => v / 4) : A0.corners.reduce(add, [0, 0]).map(v => v / 4), tc = cn ? (cn[0] - A[0]) * u[0] + (cn[1] - A[1]) * u[1] : -1;
   if (tc > 0 && tc < Ld) { Ln(prims, [tx(tc / Ld), mT - 18], [tx(tc / Ld), zbot + 14], AXIS, 1.2, [14, 4, 2, 4]); T(prims, [tx(tc / Ld) + 6, mT - 8], "MIDTAKSE", { size: 1.5, col: AXIS, bg: true }); }
   /* the kotes on the right: each level's top, a leader, its number; dimensions between them and from the foot */
   const baseKote = own.length ? Math.min(...own.map(r => r.base)) : null, topsAll = [...new Set([...own.map(r => r.top), ...iv.parts.map(r => r.top)])].sort((a, b) => a - b);
@@ -184,16 +193,16 @@ export function sectionDrawing(site, o, wingOf, { W = 1280, H = 800 } = {}) {
     T(prims, [nx, ny + 34], nv.away > 0 ? "N BAK" : "N FORAN", { size: 1.6, anchor: "m" }); }
   else { const dx = Math.sign(nv.cross) * 26; Ln(prims, [nx - dx, ny], [nx + dx, ny], INK, 2); Pg(prims, [[nx + dx, ny], [nx + dx - Math.sign(dx) * 10, ny - 6], [nx + dx - Math.sign(dx) * 10, ny + 6]], INK, INK, 1); T(prims, [nx + dx * 1.25 + Math.sign(dx) * 4, ny + 6], "N", { size: 2, anchor: dx > 0 ? "l" : "r" }); }
   const looking = dirWord(norm360(Math.atan2(face[0], face[1]) * 180 / Math.PI)), kind = cut.kind === "across" ? "tverrsnitt" : cut.kind === "along" ? "lengdesnitt" : "snitt";
-  const title = `SNITT A-A ${(f.kind === "wing" ? f.w.name : f.v.name).toUpperCase()}   ${kind.toUpperCase()}   ${sc.said.toUpperCase()}   SETT MOT ${looking.toUpperCase()}`;
+  const title = `SNITT A-A ${fname.toUpperCase()}   ${kind.toUpperCase()}   ${sc.said.toUpperCase()}   SETT MOT ${looking.toUpperCase()}`;
   T(prims, [40, 36], title, { size: 2 }); frameBox(prims, W, H);
   const crossed = [...new Set(own.filter(r => (r.t1 - r.t0) * Ld >= 0.5).map(r => r.top))].sort((a, b) => b - a), all = R ? R.levels.map(l => l.kote) : [];
   const missed = all.filter(k => !crossed.includes(k));
-  const say = `Snitt A-A gjennom ${f.kind === "wing" ? f.w.name : f.v.name} (${kind}, ${com(r1(Ld))} m langt, ${sc.said}, sett mot ${looking}). `
+  const say = `Snitt A-A gjennom ${fname} (${kind}, ${com(r1(Ld))} m langt, ${sc.said}, sett mot ${looking}). `
     + (all.length ? `Taket på ${wing?.name || "bygget"} ligger på kote ${all.map(com).join(", ")} (høyeste først); snittet går gjennom ${crossed.length ? crossed.map(com).join(", ") : "ingen av dem"}${missed.length ? ` og treffer ikke ${missed.map(com).join(", ")} (bruk line for en snittlinje der)` : ""}. ` : "")
     + (baseKote != null ? `Foten ligger på kote ${com(baseKote)}. ` : "")
     + (chain.length > 1 ? `Høydeforskjeller: ${chain.slice(1).map((k, i) => `${com(chain[i])} til ${com(k)} er ${com(r2(k - chain[i]))} m`).join("; ")}. ` : "")
     + (iv.parts.length ? `Nytt i snittet: ${[...new Set(iv.parts.map(r => `${r.v.name} (kote ${com(r.base)} til ${com(r.top)}${r.v.shape && r.v.shape !== "box" ? `, tegnet som en kasse opp til toppen fordi formen er ${r.v.shape}` : ""})`))].join("; ")}. ` : "")
     + `Snittlinjen går fra [${com(r1(A[0]))}, ${com(r1(A[1]))}] til [${com(r1(B[0]))}, ${com(r1(B[1]))}] (øst, nord i m). `
-    + `Dette er et snitt gjennom takkotene og terrenget, ikke en fasadetegning: det finnes ingen tegnet fasade (oppriss) av ${f.kind === "wing" ? f.w.name : wing?.name || "bygget"} i dataene, så ingen fasade er tegnet; vinduene står i openings.`;
+    + `Dette er et snitt gjennom takkotene og terrenget, ikke en fasadetegning: det finnes ingen tegnet fasade (oppriss) av ${f.kind === "wing" ? f.w.name : wing?.name || fname} i dataene, så ingen fasade er tegnet; vinduene står i openings.`;
   return { prims, W, H, scale: sc.N, dims, kotes, say, cut: { kind: cut.kind, from: A.map(r1), to: B.map(r1), length_m: r1(Ld), looking }, crossed, levels: all };
 }
