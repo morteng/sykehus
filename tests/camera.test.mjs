@@ -76,11 +76,11 @@ test("gjengi: the estimate by size, and one call whose body carries the size, th
   assert.deepEqual([b.image_config.image_size, b.image_config.aspect_ratio], ["4K", "2:3"], "the size chosen; the froskeperspektiv's portrait shape, not the picture's 3:2");
   assert.match(b.messages[0].content[0].text, /blue hour.*Low viewpoint looking up, two-point perspective.*\(18 mm\)/);
   assert.equal(b.messages[0].content[1].image_url.url, shot, "the view is still the only geometry");
-  assert.match(b.messages[0].content[0].text, /Natural light of a Norwegian summer afternoon/, "no sun sent: the default's light");
+  assert.match(b.messages[0].content[0].text, /Norwegian 21\. June at 14:00/, "no sun sent: the default's light");
   assert.doesNotMatch(b.messages[0].content[0].text, /summer day/);
   const cheap = await post({ image: shot, versjon: "vAbcdefgh", size: "1K", shown_usd: k1, sunM: 12, sunD: 21, sunH: 15 }); assert.equal(cheap.status, 200);
   assert.equal(calls[1].image_config.image_size, "1K"); assert.equal(calls[1].image_config.aspect_ratio, "3:2", "no camera: the picture's own shape");
-  assert.doesNotMatch(calls[1].messages[0].content[0].text, /Camera and look/); assert.match(calls[1].messages[0].content[0].text, /Norwegian winter afternoon \(the sun as on 21\. December at 15:00\)/, "the view's sun, said in words");
+  assert.doesNotMatch(calls[1].messages[0].content[0].text, /Camera and look/); assert.match(calls[1].messages[0].content[0].text, /Norwegian 21\. December at 15:00/, "the view's sun, said in words");
   assert.equal((await post({ image: shot, versjon: "vAbcdefgh", size: "2K", shown_usd: 0.01 })).status, 409, "a price shown lower than the size's is refused");
 });
 
