@@ -703,6 +703,7 @@ body:not(.talk-on) .bstack { bottom: calc(64px + env(safe-area-inset-bottom)); }
 .pub-note { color: var(--muted); }
 /* Prospekt: the card's link, and the open project's choice of pictures under «Detaljer» */
 .fc-pk { align-self: center; padding: 4px 12px; border: 1px solid var(--border); border-radius: var(--radius-pill); font-size: var(--fs-sm); font-weight: 600; text-decoration: none; color: var(--text); margin-right: var(--sp-1); }
+.ver-list .fc-acts .fc-pk { flex: none; display: inline-flex; align-items: center; min-height: 0; padding: 4px 12px; white-space: nowrap; }   /* not «.ver-list a»: that row rule (flex: 1; min-width: 0) shrank the pills under their own words */
 .fc-pk:hover { background: var(--hover-wash); }
 .fc-pkp:not(:empty) { margin: var(--sp-2) 0; } .pk-h { display: block; font-size: var(--fs-sm); margin-bottom: var(--sp-1); }
 .pk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); } .pk-list li { display: flex; align-items: center; gap: var(--sp-2); }
