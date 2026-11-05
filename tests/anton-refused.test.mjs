@@ -21,5 +21,5 @@ test("signedOut says one line, calls no logg-ut and no reload, whatever the logi
 test("every 401 path of the page goes through it, and no other code in anton.js logs out but the person's own button", () => {
   assert.match(src, /r\.status === 401 \? signedOut\(\)/); assert.match(src, /r\?\.status === 401\) \{ signedOut\(\)/); assert.match(src, /on\("signed_out", signedOut\)/);
   assert.equal([...src.matchAll(/api\/logg-ut/g)].length, 1, "only «Logg ut» (the person menu's action) calls it");
-  assert.match(src, /openMenu\(\$\("meBtn"\), \[\{ label: "Logg ut", run: async \(\) => \{ await json\("api\/logg-ut"\)/);
+  assert.match(src, /(?:openMenu|meMenu)\((?:\$\("meBtn"\), )?\[\{ label: "Logg ut", run: async \(\) => \{ await json\("api\/logg-ut"\)/);
 });
