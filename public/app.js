@@ -2,6 +2,7 @@
    The layout is Fab's (the Anton-first redlines, 2026-10-25): the view, the storey strip at its left edge, the view's
    tools over it, Anton's pill at the bottom, and the panel on the right with «Bygget», «Anton», «Prosjekter» and
    «Prosjekter», «Bygg» and «Anton» (panel.js). */
+const antonLoad = import("./anton.js?v=20261105a");   // fetched at once, in step with the rest of the page: the pill is drawn the moment app.js is done, not after one more round of downloads
 import { stampFx } from "./fx.js";
 stampFx();   // the person's effects switch (cookie gulden_fx) as data-fx on <html>, before anything else draws (U4482)
 import { createViewer } from "./viewer.js";
@@ -1082,7 +1083,7 @@ function versionCard(v) {
   const act = (k, title, ic) => `<button type="button" class="icon" data-${k}="${esc(v.version)}" title="${title}" aria-label="${title}: ${esc(v.title)}">${ic}</button>`;
   const pk = v.sharing !== "privat" && !selecting && me.person ? `<a class="fc-pk" href="${esc(prospektHref(v))}" title="Åpne prospektet: bilder og tall, uten innlogging" aria-label="Prospekt: ${esc(v.title)}">Prospekt</a>` : "";
   /* U3631: out to FreeCAD (the version as IFC, its stairs and railings as parts) and back (the file FreeCAD saved: what was changed there is one change here) */
-  const fc = v.mine && !selecting ? `<a class="fc-pk" href="api/ifc?versjon=${encodeURIComponent(v.version)}&for=freecad" download title="Last ned prosjektet som IFC til FreeCAD: hver trapp og hvert rekkverk er en del med navn og type" aria-label="Åpne i FreeCAD: ${esc(v.title)}">FreeCAD</a><label class="fc-pk fc-pkin" title="Ta tilbake fila fra FreeCAD (IFC): det du endret på delene kommer inn i prosjektet som én endring hver"><input type="file" accept=".ifc" data-vfcin="${esc(v.version)}" hidden aria-label="Ta tilbake fra FreeCAD: ${esc(v.title)}">Fra FreeCAD</label>` : "";
+  const fc = v.mine && !selecting ? `<a class="fc-pk" href="api/ifc?versjon=${encodeURIComponent(v.version)}&for=freecad" download title="Last ned prosjektet som IFC til FreeCAD: hver trapp og hvert rekkverk er en del med navn og type" aria-label="Åpne i FreeCAD: ${esc(v.title)}">Til FreeCAD</a><label class="fc-pk fc-pkin" title="Ta tilbake fila fra FreeCAD (IFC): det du endret på delene kommer inn i prosjektet som én endring hver"><input type="file" accept=".ifc" data-vfcin="${esc(v.version)}" hidden aria-label="Ta tilbake fra FreeCAD: ${esc(v.title)}">Fra FreeCAD</label>` : "";
   const acts = v.mine && !selecting ? `<div class="fc-acts">${fc}${pk}${shareActs(v, act, IC)}${act("vcopy", "Ny kopi", IC.copy)}${act("vdel", "Slett prosjektet", IC.bin)}</div>` : "";
   return `<li class="fc${open ? " open" : ""}"${open ? ' aria-current="true"' : ""}><div class="fc-row">${sel ? `<input type="checkbox" class="vsel" data-id="${esc(v.version)}" aria-label="Velg «${esc(v.title)}»"${picked.has(v.version) ? " checked" : ""}>` : ""}`
     + `<a class="fc-a" href="?versjon=${encodeURIComponent(v.version)}${v.nokkel ? `&nokkel=${encodeURIComponent(v.nokkel)}` : ""}"${open ? ' aria-current="page"' : ""}><span class="fc-img">${IC.img}${ownPictureHTML(thumbSrc(v), { w: 480, h: 300, alt: "" })}</span>`
@@ -1239,7 +1240,7 @@ import("./tour.js?v=20261027zmp").then(({ createTour }) => {
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));
-import("./anton.js?v=20261105a").then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
+antonLoad.then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
 import("./gjengi.js?v=20261031es").then(m => gjengiCtl = m.startGjengi({ panel, viewer, toast, sun: () => sun, setSun: setSunTo, sunLabel: s => sunLabel(s || sun), setMode: m => setMode(m),
   rings: () => site.buildings.filter(b => b.ring?.length).map(b => b.ring), changes: () => draft?.edits?.length ?? null,
