@@ -1,5 +1,5 @@
 {
-  "kits": "612a0736caf5b9f9f206b5f264207dbde56c6d40",
+  "kits": "16b7e164513ff393c4614a1094bcc31ed8973bf1",
   "kit": "render",
   "dest": "public/renderkit",
   "file": "{}",
@@ -35,7 +35,7 @@
     "materials.js": "40cb42d2788c06499d05bc38dbbf7eb6e51ec007",
     "materials-three.js": "c7f5b02b3e879cb753778b18f2299a1580eb5ff5",
     "dirs.js": "9707c3153278720f035d43234fc51f1d4fd08e5c",
-    "looks.js": "45bf4cf8724f02fa230f11637e938c61f816e010",
+    "looks.js": "fe9659ac84534b9ae0964f14ffea0c9e34205c11",
     "hdr-loader.js": "609d29253905af3fd0a0a732d12100ef203f6ab0",
     "filaments.js": "9508eea219a418acbb55fa69b763ccfc75b1931a",
     "Asphalt033_Color.jpg": "40275e91bcfdd1d8d2b869224da7511ca4a5e8e7",
@@ -92,9 +92,16 @@
     "measure.js": "04c5e5966b966e0d55f868847d80e78b7d66ae78",
     "readout.js": "1310db00d0b616328f62a3e0ffc0bd573d04bb71",
     "highlight.js": "827ad3fb72a652906aa98231440a03b07f318853",
-    "sheet.js": "4b956ace28508aae0f5fbd510d088f5a0567e2ad",
+    "sheet.js": "2c65e92a472831ce6e0b020ecd9e1c2a27448608",
     "sheet-png.mjs": "d0a950dfc958a6d6666f136631a31cb98a92d2a4",
     "sheet-font.mjs": "36da74a255b4683656efc2667e8215c624bbe881",
-    "ktx2-loader.js": "7812a1ae0e288553cff03cdf6b470d0b7b88b84f"
+    "ktx2-loader.js": "7812a1ae0e288553cff03cdf6b470d0b7b88b84f",
+    "looklib.js": "8aee5df210da6e68fa6eb3917e9f0664fd2d177d",
+    "looklib.json": "311d19ac8bc631d918f520d48d0ef641857361f2",
+    "scenes.js": "a6c4f262544aab8754b12937f5fc2c13a1ea191a",
+    "studio.js": "56028ed938155a561cfe9b5ae68558b2aa0956cb",
+    "stillkey.js": "0df1f7cb228937b84a121ea9d9a6e3a85bce5488",
+    "cameras.js": "72b56d079a50ef3dfcaf19302e10a94cab5d31db",
+    "kloofendal_48d_partly_cloudy_puresky_1k.hdr": "cb2eb465340d23241c795a1bea963a38ad76bd04"
   }
 }
