@@ -17,7 +17,7 @@ export function setFx(on, doc = document, loc = doc.defaultView?.location ?? loc
 
 /** The «Effekter» På / Av pill pair (the kit's .g-seg), as a row to put in a menu or a settings box. */
 export function fxPills(doc = document) {
-  const row = doc.createElement("div"); row.className = "fx-row";
+  const row = doc.createElement("div"); row.className = "fx-row"; row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 10px";
   const label = doc.createElement("span"); label.textContent = "Effekter";
   const seg = doc.createElement("div"); seg.className = "g-seg"; seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Effekter");
   const mk = (text, on) => { const b = doc.createElement("button"); b.type = "button"; b.textContent = text; b.dataset.fx = on ? "on" : "off"; return b; };

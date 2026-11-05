@@ -65,13 +65,10 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
   chip.hidden = false; chip.style.position = "relative";
   meReady();   // the person's chip is in the bar (U3669)
   /* the kit's menu (kit/menu.js): it opens under the button, Esc and a click outside close it, Up and Down move. Logg ut only where this
-     page signed the person in (on gulden.no they are signed out there); the «Effekter» På / Av pills (U4482) are always in it */
-  $("meBtn").onclick = () => {
-    if ($("meBtn").getAttribute("aria-expanded") === "true") return closeMenu();
-    const acts = me.via !== "gulden.no" ? [{ label: "Logg ut", run: async () => { await json("api/logg-ut"); location.reload(); } }] : [];
-    openMenu($("meBtn"), acts);
-    chip.querySelector(".g-menu")?.append(fxPills());
-  };
+     page signed the person in (on gulden.no they are signed out there); the «Effekter» På / Av pills (U4482) are in it either way */
+  const meMenu = acts => { if ($("meBtn").getAttribute("aria-expanded") === "true") return closeMenu(); openMenu($("meBtn"), acts); chip.querySelector(".g-menu")?.append(fxPills()); };
+  if (me.via !== "gulden.no") $("meBtn").onclick = () => meMenu([{ label: "Logg ut", run: async () => { await json("api/logg-ut"); location.reload(); } }]);
+  else $("meBtn").onclick = () => meMenu([]);
   if (me.anton) talk(); else { unmark(); $("talk-empty").hidden = true; const t = $("talkLogin"); t.hidden = false; t.innerHTML = `<p class="mut">Anton er ikke koblet til ennå. Du kan se alt, og sende Morten en tilbakemelding.</p>`; }
 
   function talk() {

@@ -798,5 +798,3 @@ html.pk-wait .loading { visibility: hidden; }
 /* «Om stedet» (U3823) */
 .om-stedet { margin: 0 0 8px; } .om-stedet summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
 .om-stedet h4 { margin: 10px 0 4px; font-size: 14px; } .om-stedet ul { margin: 0; padding-left: 18px; } .om-stedet li { margin-bottom: 6px; }
-/* the «Effekter» På / Av row in the person's menu (fx.js, U4482) */
-.g-menu .fx-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; }
