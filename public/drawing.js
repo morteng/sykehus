@@ -10,7 +10,13 @@ import { roofOf, roofPieces, measureParts, footRing } from "./roof.js";
 import { groundAt, inRing } from "./renderkit/fit.js";
 import { dirWord, norm360 } from "./renderkit/dirs.js";
 
-import { INK, DIMC, AXIS, GREY, ORANGE, TEXT_BG, PX_PER_M_1_1, r2, r1, com, kote, sub, add, mul, len, unit, textW, fitScale, T, Ln, Pg, dimLine, northArrow, scaleBar, frameBox } from "./renderkit/sheet.js";   // the drafting pieces: one copy, the kits repo (U3943)
+import { com, kote, textW, fitScale, T, Ln, Pg, dimLine, northArrow, scaleBar, frameBox } from "./renderkit/sheet.js";   // the drafting pieces: one copy, the kits repo (U3943)
+// The kit (16b7e16, U4501) made its colours and vector helpers module-private, so the drawing keeps its own copy of these (U4522).
+const INK = [30, 30, 36], DIMC = [0, 84, 150], AXIS = [190, 40, 40], GREY = [120, 120, 128], ORANGE = [235, 110, 20];
+const PX_PER_M_1_1 = 3779.5;
+const r2 = v => Math.round(v * 100) / 100 + 0, r1 = v => Math.round(v * 10) / 10 + 0;
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], add = (a, b) => [a[0] + b[0], a[1] + b[1]], mul = (a, k) => [a[0] * k, a[1] * k], len = a => Math.hypot(a[0], a[1]);
+const unit = a => { const L = len(a) || 1; return [a[0] / L, a[1] / L]; };
 export { com, kote };   // the facade drawing (fasade.js) writes its numbers the same way
 const TONES = [[140, 140, 148], [176, 176, 184], [208, 208, 216]];   // the roof's levels, the highest darkest
 
