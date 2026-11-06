@@ -1229,7 +1229,7 @@ try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeIt
 if (me.person) Promise.all([import("./sitephotos.js"), import("./sitewalk.js")]).then(([m, w]) => m.startSitePhotos({ root: $("phPanel"), toast: t => toast(t), site: site0, aim: w.pointedAt })).catch(e => console.error("sitephotos:", e));   // «Bilder» under Bygg: the person's own photos of the building
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Prosjekter" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
-import("./tour.js?v=20261106s7").then(({ createTour, skipTo }) => {
+import("./tour.js?v=20261106s8").then(({ createTour, skipTo }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");
   const tour = createTour({
     home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },

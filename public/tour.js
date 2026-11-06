@@ -56,7 +56,9 @@ export function steps(h) {
     { since: 2, el: "#mfb", title: "Tilbakemelding", text: "Noe som ikke virker, en ide eller et spørsmål? Send det her, så ser Morten det. Du kan ta med et bilde av siden, og se hva du har sendt før." },
     { el: "#tourBtn", title: "Det var alt", text: "Du finner omvisningen igjen her, når du vil. Lykke til med tomta!" },
   ];
-  return all;
+  /* U4819: on a phone the Anton pill floats over the bottom of the sheet and hid half of «Nytt bygg / Hent fil» (read live, step 7):
+     while that step is shown the page carries «tour-bygg», which lays the pill down (sykehus.css); every other step takes it off */
+  return all.map(s => ({ ...s, before: async () => { document.body?.classList.toggle("tour-bygg", s.title === "Nytt bygg og Hent fil"); await s.before?.(); } }));
 }
 /* the visitor's short list: the same words for the model, the views and the storeys, then the way in */
 export function visitorSteps(h) {
@@ -88,7 +90,7 @@ export function createTour(h) {
   return createGuide({
     version: VERSION, signedIn: () => !!h.signedIn?.(), full: () => steps(h), visitor: () => visitorSteps(h), intro: NYTT, store,
     words: { count: (n, m) => `${n} av ${m}`, back: "Tilbake", next: "Neste", done: "Ferdig", close: "Lukk guiden", closeTitle: "Lukk guiden (Esc). Den åpner ikke av seg selv igjen" },
-    onEnd: () => h.done?.(),
+    onEnd: () => { document.body.classList.remove("tour-bygg"); h.done?.(); },
   });
 }
 
