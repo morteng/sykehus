@@ -90,3 +90,16 @@ test("U4277: the «Nytt bygg og Hent fil» step has a before (so it is always co
     assert.equal(s.el().id, "tab-selected");
   } finally { delete globalThis.document; delete globalThis.requestAnimationFrame; }
 });
+
+/* U4860: the pick's fill gets a plain index list; a typed array would stand as the index itself (no .array) and the renderer read undefined.byteLength every frame */
+test("viewer.js hands the highlight fill a plain index list, not a typed array", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../public/viewer.js", import.meta.url), "utf8");
+  assert.match(src, /g\.index \? Array\.from\(g\.index\.array\)/);
+  assert.doesNotMatch(src, /g\.index \? g\.index\.array :/);
+});
+test("app.js applies ?tursteg on the guide's self-opened start too", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(src, /tour\.start\(true\)\.then\(skipTo\)/);
+});

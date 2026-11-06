@@ -1124,9 +1124,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a pick drawn over its meshes (U3881): a see-through fill and an outline in the pick's colour, children of the mesh so they move with it */
   const SEL = { c: "#ffb300", a: 0.35 }, HOV = { c: "#ffd873", a: 0.18 };
   const HL = highlighter({}, { domElement: { width: 1 }, getPixelRatio: () => 1 });
+  /* U4860: the fill's index must be a plain list (three's setIndex keeps a typed array as the index itself, with no .array, and the renderer reads undefined.byteLength every frame) */
   function lightUp(mesh, look) {
     if (!mesh.isMesh || mesh.userData.hl || !mesh.geometry?.attributes?.position) return;
-    const g = mesh.geometry, fill = HL.fill(g.attributes.position, g.index ? g.index.array : [...Array(g.attributes.position.count).keys()], look.c, look.a);
+    const g = mesh.geometry, fill = HL.fill(g.attributes.position, g.index ? Array.from(g.index.array) : [...Array(g.attributes.position.count).keys()], look.c, look.a);
     if (mesh.material?.clippingPlanes) fill.material.clippingPlanes = mesh.material.clippingPlanes;
     const lines = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), new THREE.LineBasicMaterial({ color: look.c, transparent: true, depthTest: false, clippingPlanes: mesh.material?.clippingPlanes || null }));
     fill.renderOrder = lines.renderOrder = 14; fill.raycast = lines.raycast = () => {}; fill.userData.hl = lines.userData.hl = true;

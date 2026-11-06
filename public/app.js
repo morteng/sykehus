@@ -1238,7 +1238,7 @@ import("./tour.js?v=20261106s8").then(({ createTour, skipTo }) => {
   });
   $("tourBtn").onclick = () => tour.start().then(skipTo);   // ?tursteg=N opens the guide on step N (U4310: a shot can click five times only)
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
-  tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
+  tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true).then(skipTo); }, 1500); });
 }).catch(e => console.error("tour:", e));
 antonLoad.then(m => m.start({ viewer, version: () => versionId, refresh, showView, panel, valg, pickStorey, tries })).catch(e => console.error("anton:", e));
 /* «Gjengi» (U3526, gjengi.js): the view made a realistic picture, its price said first; kept in the open work */
