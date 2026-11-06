@@ -1229,14 +1229,14 @@ try { if (sessionStorage.getItem("sykehus-innlogget")) { sessionStorage.removeIt
 if (me.person) Promise.all([import("./sitephotos.js"), import("./sitewalk.js")]).then(([m, w]) => m.startSitePhotos({ root: $("phPanel"), toast: t => toast(t), site: site0, aim: w.pointedAt })).catch(e => console.error("sitephotos:", e));   // «Bilder» under Bygg: the person's own photos of the building
 import("./feedback.js").then(({ startFeedback }) => startFeedback({ button: $("mfb"), version: () => versionId || draftId || "", toast: t => toast(t), page: () => ({ tab: panel.tab, tabName: { selected: "Bygg", chat: "Anton", changes: "Prosjekter" }[panel.tab] }) })).catch(e => console.error("feedback:", e));
 /* «Omvisning» (U3528, tour.js): «?» in the bar; once by itself on the first visit, when the model is up */
-import("./tour.js?v=20261027zmp").then(({ createTour }) => {
+import("./tour.js?v=20261106s7").then(({ createTour, skipTo }) => {
   const sb = site.buildings.find(b => b.wing === "sentralblokka");
   const tour = createTour({
     home: () => { if (series) shotEnd(); setMode("3d"); viewer.eye(false); pressMode(); viewer.home(); },
     pick: () => { if (!sb) return; valg.clear(); valg.pick(sb.id, {}); showInfo(sb); panel.reveal("selected"); },
     unpick: () => valg.clear(), tab: t => panel.reveal(t), phone: () => panel.phone, signedIn: () => !!me.person,
   });
-  $("tourBtn").onclick = () => tour.start();
+  $("tourBtn").onclick = () => tour.start().then(skipTo);   // ?tursteg=N opens the guide on step N (U4310: a shot can click five times only)
   const meIn = () => window.sykehusMeReady ? Promise.resolve() : new Promise(ok => { addEventListener("sykehus:me", ok, { once: true }); setTimeout(ok, 8000); });   // anton.js puts the person's chip (or «Logg inn») in the bar a little after the page: the count is made when it is there (U3669)
   tour.ready().then(due => meIn().then(() => due)).then(due => { if (due) setTimeout(() => { if (!document.querySelector(".g-tour:not([hidden])")) tour.start(true); }, 1500); });
 }).catch(e => console.error("tour:", e));

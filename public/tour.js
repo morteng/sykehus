@@ -91,3 +91,9 @@ export function createTour(h) {
     onEnd: () => h.done?.(),
   });
 }
+
+/* U4310: «?tursteg=7» on the address opens the guide at step 7 when «?» is pressed (a screenshot tool clicks five times at most, a person goes with «Neste») */
+export async function skipTo() {
+  const n = Number(new URLSearchParams(location.search).get("tursteg")) || 1;
+  for (let i = 1; i < n; i++) { await new Promise(ok => setTimeout(ok, 400)); document.querySelector(".g-tour:not([hidden]) .g-tour-next")?.click(); }
+}
