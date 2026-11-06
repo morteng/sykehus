@@ -86,6 +86,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
         { id: "bilde", label: "Ta bilde", icon: "camera", run: () => takePhoto({ words: PHOTO }), when: () => camera !== "none" },
       ],
       onNewChat: () => newChat(),
+      onHistory: () => panel.reveal("chat"),   // the conversation lives in the Anton tab (U4536)
       onStop: () => { json("api/anton/stopp"); },
       words: { attach: "Legg ved", history: "Historikk", send: "Send", stop: "Stopp (Anton arbeider)", newChat: "Ny samtale", remove: n => `Ta bort ${n}`, tooBig: (n, cap) => `${n} er større enn ${cap}.`, tooMany: () => "Du kan legge ved én fil." },
       onSend: (text, files) => pillSend(text, files),
