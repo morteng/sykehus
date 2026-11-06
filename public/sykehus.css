@@ -793,4 +793,4 @@ html.pk-wait .loading { visibility: hidden; }
 .om-stedet { margin: 0 0 8px; } .om-stedet summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
 .om-stedet h4 { margin: 10px 0 4px; font-size: 14px; } .om-stedet ul { margin: 0; padding-left: 18px; } .om-stedet li { margin-bottom: 6px; }
 
-@media (max-width:599px) { body.tour-bygg #talk-form { visibility: hidden; } }   /* U4819: the pill hid half of the lit «Nytt bygg / Hent fil» in the guide's step 7 */
+@media (max-width:599px) { body.tour-bygg #bstack { visibility: hidden; } }   /* U4819: #bstack (white, z 40) holds the pill and painted over the lit «Nytt bygg / Hent fil» in the guide's step 7; hiding only #talk-form left the white box */
