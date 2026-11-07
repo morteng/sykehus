@@ -16,7 +16,7 @@ test("the manifest is served as a manifest and says standalone, with icons that 
   const r = await fetch(O + "manifest.webmanifest"); assert.equal(r.status, 200); assert.match(r.headers.get("content-type"), /^application\/manifest\+json/);
   const m = await r.json(); assert.deepEqual([m.name, m.display, m.start_url, m.scope], ["Sykehustomta", "standalone", "./", "./"]);
   assert.deepEqual(m.icons.map(i => i.sizes).sort(), ["192x192", "512x512"]);
-  for (const i of m.icons) { const png = await fetch(O + i.src.slice(1)); assert.equal(png.headers.get("content-type"), "image/png"); }
+  for (const i of m.icons) { const png = await fetch(O + i.src.replace(/^\.?\//, "")); assert.equal(png.headers.get("content-type"), "image/png"); }
 });
 
 test("the page links the manifest, asks for the whole screen and carries the iOS tags", () => {
