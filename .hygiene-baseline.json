@@ -1,6 +1,6 @@
 {
  "_": "hygiene ratchet: lines of files over 800, duplicated lines; lowered by land.sh, raised only by \u00abhygiene: raise\u00bb",
- "dup_lines": 1530,
+ "dup_lines": 500,
  "files": {
   "mcp.mjs": 1467,
   "public/app.js": 1379,
