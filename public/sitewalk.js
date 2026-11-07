@@ -1,7 +1,7 @@
 /* Photos taken on site land on the thing the camera points at (U3824): where the person stands (GPS) and which way the
    camera points (compass) say which wing and which side of it the picture shows. No DOM here: sitephotos.js asks.
    The pose maths for fixing a photo from known roof lines is hagekart's pose.js and anchor.js, taken as they are
-   (tools/take-pose.mjs); this file is only the sykehus end: the site's wings and the form's fields. */
+   (tools/take-hagekart.mjs); this file is only the sykehus end: the site's wings and the form's fields. */
 import { siteGrid } from "./utm.js";
 
 const RAD = Math.PI / 180, SIDE_OF = ["nord", "øst", "sør", "vest"];

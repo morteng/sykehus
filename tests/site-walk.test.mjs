@@ -7,8 +7,8 @@ import { siteGrid } from "../public/utm.js";
 import { startSitePhotos } from "../public/sitephotos.js";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { projectPoint, camAxes } from "../public/pose.js";
-import { planPose } from "../public/anchor.js";
+import { projectPoint, camAxes } from "../public/hagekart/pose.js";
+import { planPose } from "../public/hagekart/anchor.js";
 
 const site = { origin: [230311, 6633185], buildings: [
   { id: "a", wing: "midtfloy", ring: [[10, -5], [30, -5], [30, 5], [10, 5], [10, -5]] },
@@ -54,6 +54,6 @@ test("the form's button sets wing and side from what the camera points at, and s
   assert.match(els["#phSay"].textContent, /kompasset/);
 });
 test("pose.js and anchor.js are hagekart's, byte for byte (the lock)", () => {
-  assert.match(execFileSync("node", [fileURLToPath(new URL("../tools/take-pose.mjs", import.meta.url)), "--check"], { encoding: "utf8" }), /^ok:/);
+  assert.match(execFileSync("node", [fileURLToPath(new URL("../tools/take-hagekart.mjs", import.meta.url)), "--check"], { encoding: "utf8" }), /^ok: 8 files at /);
   assert.equal(typeof projectPoint, "function"); assert.equal(typeof camAxes, "function"); assert.equal(typeof planPose, "function");
 });
