@@ -1276,7 +1276,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(kote - base)), hit) ? [hit.x, -hit.z] : null;
     },
     /* what is under a screen point: the first face hit (a building, the ground, something added), as [east, north,
-       kote] in site metres, or null for the sky (tegn.js: where a pen stroke lies on the site) */
+       kote] in site metres, or null for the sky (tegnskisse.js: where a pen stroke lies on the site) */
     hit(cx, cy) {
       const r = el.getBoundingClientRect(), ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);

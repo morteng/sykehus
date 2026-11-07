@@ -7,7 +7,7 @@
      GET  /api/anton/strom       server-sent events: message, queue, text, tool, approval, done, error, steps, signed_out
      GET  /api/anton/historikk   the thread's last 50 items (gulden-ai's /history), and the queue
      POST /api/anton             {text, version?, drawing?, picture?, attachment?, selection?, point?{x,y}}  a message; it waits its turn (5 waiting at most). drawing
-                                 (tegn.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
+                                 (tegnskisse.js): {image: a JPEG data URL, strokes: [{colour, points: [[east, north, kote]…]}],
                                  camera, mode, size}, passed on as it is.
                                  picture: {image: a JPEG, PNG or WebP data URL of at most 2,5 MB (the page shrinks a bigger one), name?}, a
                                  picture the person attached; passed on as it is, never together with a drawing (one picture a turn keeps the

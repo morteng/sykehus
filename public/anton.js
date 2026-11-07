@@ -77,7 +77,7 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
     /* the pill is the kit's (anton-pill.js): [+][text][send]; the + holds New chat, Tegn, Last opp fil, Ta bilde. A pick adds a chip only;
        the file is read and uploaded at send (pillSend), and the body of api/anton is as before */
     let camera = "none"; cameraAvailable().then(c => { camera = c; });
-    const draw = () => import("./tegn.js?v=20261027a").then(m => m.startDrawing({ viewer, labels: viewer.labels, host: $("stage"), send: (text, drawing) => sendIt({ text, drawing }) }));   // the picture goes as a drawing, as before: nothing is returned to the tray
+    const draw = () => import("./tegnskisse.js?v=20261107a").then(m => m.openViewSketch({ viewer, modal, host: $("stage"), send: d => sendIt(d) }));   // the picture goes as a drawing, as before: nothing is returned to the tray
     const pill = antonPill({
       host: $("bstack"), placeholder: "Spør Anton, eller be ham vise noe", accept: "*/*", maxBytes: MAX_FILE, maxFiles: 1,
       items: [

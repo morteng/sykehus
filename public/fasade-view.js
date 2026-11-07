@@ -1,6 +1,6 @@
 /* «Fasade» on the page: one screen. The side buttons on top, the drawing in the middle (a finger moves and zooms it, the pen draws),
    the tools at the bottom (Mål | Tegn | Angre | Nullstill) and one big button, «Send til Anton». The drawing and the numbers are
-   fasade.js's; the pen is tegn.js's (a finger does not draw, so the palm can rest; a mouse does, for the desk).
+   fasade.js's; the pen is tegnskisse.js's (a finger does not draw, so the palm can rest; a mouse does, for the desk).
 
    open({ host, site0, floors0, baseEdits, wingOf, commit, send, focus, side })
      site0, floors0   the data before any change (the page's own copies)

@@ -20,7 +20,6 @@ const EXEMPT = {
   "public/gjengi.js": [1, LOCAL + " (the compare view's data: address, in pic())"],
   "public/mcp-app.js": [1, LOCAL],
   "public/sitephotos.js": [1, LOCAL],
-  "public/tegn.js": [1, LOCAL],
   "public/viewer.js": [1, LOCAL],
 };
 const BIG_OK = {
