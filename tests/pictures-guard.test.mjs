@@ -17,6 +17,7 @@ const EXEMPT = {
   "public/app.js": [4, "snapshots are LOCAL; the drawn sheet and the wish thumbnails are static 64 px WebP"],
   "public/anton.js": [2, LOCAL],
   "public/fasade-view.js": [1, LOCAL],
+  "public/hagekart/detect.js": [1, LOCAL + " (the kit file reads a picture the person chose)"],
   "public/gjengi.js": [1, LOCAL + " (the compare view's data: address, in pic())"],
   "public/mcp-app.js": [1, LOCAL],
   "public/sitephotos.js": [1, LOCAL],
