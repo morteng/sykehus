@@ -148,6 +148,7 @@ createServer(async (req, res) => {
     const refused = auth.badAssertion(req);   // a signed assertion that is not good (wrong aud, old exp, bad signature) is refused whole, never read as Remote-User (U3964)
     if (refused) { console.log(`assertion refused: ${refused}`); return res.writeHead(401, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify({ error: "assertion refused", reason: refused })); }
     if (/^\/prospekt\/[^/]+\/?$/.test(path)) path = "/prospekt.html";   // the page reads the id from its address
+    if (await wishes?.pass.route(req, res, path)) return;   // the feedback pass's read token opens /api/feedback-pass/wishes and nothing else (U5043)
     if (path === "/mcp") return await mcp.handleMcp(req, res);
     if (await intake.route(req, res, path)) return;   // PUT /up/<token>: the token is the capability (U4357)
     if (await px.route(req, res, path)) return;   // Caddy's forward_auth (/px-may) and the scaler's source (/internal/px-src/)

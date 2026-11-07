@@ -9,12 +9,14 @@
                                wontfix) and the developer's answer as note
      GET  /api/onsker/<ref>.png  the picture kept with a report, its person's or an admin's (the group "admins" at the edge, or the admin token)
      POST /api/onsker          {text, tried?, version?}  a new wish, from the page
+     /api/feedback-pass/wishes  the feedback pass's token door (feedback-pass.mjs)
      POST /api/feedback        {kind, text, page?, tab?, version?, screenshot?}  the kit's feedback dialog; 10 an hour a person */
 import { UPLOAD_CAPS } from "./public/kit/upload-caps.js";   // the one table of upload caps (U3992)
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createDoor, codeOf } from "./door.mjs";
+import { createFeedbackPass } from "./feedback-pass.mjs";   // the feedback pass's token door (U5043)
 
 export const STATUS = ["ny", "sett", "laget", "nei"];
 const PER_DAY = 20, REF = /^w[A-Za-z0-9_-]{10}$/, VERSION = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, KINDS = ["bug", "idea", "question", "other"];
@@ -23,6 +25,7 @@ const same = (a, b) => { const x = Buffer.from(String(a)), y = Buffer.from(Strin
 export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY = {}, readJson, personOf = () => null, login, fetchImpl = fetch } = {}) {
   if (!dir) return null;
   const home = join(dir, "_wishes"); mkdirSync(home, { recursive: true });
+  const pass = createFeedbackPass({ home: join(dir, "_pass"), SECURITY, readJson });
   const door = login ? createDoor({ login, fetchImpl }) : null, sent = new Map(), hour = new Map(), PNG = Buffer.from("89504e470d0a1a0a", "hex");
   const isAdmin = req => !!login?.adminOf?.(req);   // the group "admins" at the edge (login.mjs adminOf), not a list of names (U3981)
   const owner = ref => { try { return JSON.parse(readFileSync(join(home, ref + ".json"), "utf8")).person ?? null; } catch { return null; } };
@@ -42,6 +45,7 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     const ref = png ? keepPicture(person, png) : null, v = version && VERSION.test(String(version)) ? String(version) : null;
     const [st, j] = await door.call("/feedback", { person, kind: KINDS.includes(kind) ? kind : "other", text: body, ...(v ? { design_id: v } : {}), ...(tab ? { tab: String(tab).slice(0, 40) } : {}), ...(page ? { page: String(page).slice(0, 200) } : {}), ...(ref ? { attachment_ref: ref } : {}), at: new Date().toISOString() });
     if (st !== 200 || !j.id) { const e = new Error("Fikk ikke sendt. Prøv igjen."); e.status = st; e.code = codeOf(j, "unavailable"); throw e; }
+    pass.noteFiled(j.id, body);
     return { id: String(j.id), status: "ny", picture: !!ref };
   }
   /* a wish (send_wish, the page): 20 a day a person */
@@ -56,7 +60,10 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     if (!door?.ready) return [];
     const [st, j] = await door.call("/reports", null, { person });
     if (st !== 200) throw new Error("Fikk ikke hentet det du har sendt. Prøv igjen.");
-    return (j.items || []).map(r => ({ id: r.id, at: r.at, text: r.text, status: STATUS.includes(r.status) ? r.status : "ny", note: r.note || null, version: r.ref || null }));
+    return (j.items || []).map(r => {
+      const m = pass.markOf(String(r.id)), st = STATUS.includes(r.status) ? r.status : "ny";   // the pass's «sett» shows where the store still says ny
+      return { id: r.id, at: r.at, text: r.text, status: st === "ny" && m ? "sett" : st, note: r.note || (st === "ny" && m ? m.answer : null), version: r.ref || null };
+    });
   }
 
   const send = (res, code, body) => { res.writeHead(code, { ...SECURITY, "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
@@ -108,5 +115,5 @@ export function createWishes({ dir = process.env.SYKEHUS_VERSIONS_DIR, SECURITY 
     try { send(res, 201, await add(me, { text: b?.text, tried: b?.tried, version: b?.version })); } catch (e) { send(res, 400, { error: e.message }); }
     return true;
   }
-  return { add, mine, isAdmin, route, adminToken: token };
+  return { add, mine, isAdmin, route, adminToken: token, pass };
 }
