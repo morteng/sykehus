@@ -36,6 +36,7 @@ import { prepare, slim, withMeshes as meshesIn, handleBim, importFile, listParts
 import { loadCosts, summarize as areaSummary } from "./area.mjs";
 import { loadAmounts, amountsOf, compareAmounts } from "./amounts.mjs";   // U3630: amounts and a rough price, against Før or another version   // T6: areas and a cost range
 import { check as checkRules, summary as checkSummary } from "./checks.mjs";   // U3678: the building rules (TEK17) held against the after
+import { createSkills, EXTENSION_ID as SKILLS_EXT } from "./skills.mjs";   // U5246: Skills over MCP
 import { createTasks, inputRequired, answersOf } from "./tasks.mjs";   // U3932: task handles and input_required
 import { createSiteFacts } from "./sitefacts.mjs";
 import { createHeritage, KINDS as HERITAGE_KINDS } from "./heritage.mjs";
@@ -1188,12 +1189,12 @@ export function createMcp({ intake = createIntake(), site, floors, sections = []
   /* 2026-07-28 CacheableResult: lists and the app change only with a deploy, but deploys come often, so a minute (pm
      21:55Z: gulden-ai kept show_building without save_as after a deploy); the version names the tool list, so a client
      that compares serverInfo sees a new one at once */
-  const tasks = createTasks(), WING_ASKED = new Set(["about_wing", "openings"]);
+  const skills = createSkills(), tasks = createTasks(), WING_ASKED = new Set(["about_wing", "openings"]);
   const CACHE = { ttlMs: 60e3, cacheScope: "public" };
   SERVER_INFO.version = `0.2.0+${createHash("sha256").update(JSON.stringify(toolList())).digest("hex").slice(0, 10)}`;
   async function rpc(req, msg) {
     const { method, params = {} } = msg;
-    const caps = { tools: { listChanged: false }, resources: {}, extensions: { [M("ui")]: { mimeTypes: ["text/html;profile=mcp-app"] }, [M("tasks")]: { tools: ["make_shots"] } } };
+    const caps = { tools: { listChanged: false }, resources: {}, extensions: { [M("ui")]: { mimeTypes: ["text/html;profile=mcp-app"] }, [M("tasks")]: { tools: ["make_shots"] }, [SKILLS_EXT]: {} } };
     /* 2026-07-28: the version comes with every request; a version we do not speak is an error, none means an older client */
     const asked = params._meta?.[M("protocolVersion")];
     if (asked && !VERSIONS.includes(asked)) throw Object.assign(err(-32022, `Unsupported protocol version ${asked}`), { data: { supported: VERSIONS } });
@@ -1202,8 +1203,11 @@ export function createMcp({ intake = createIntake(), site, floors, sections = []
       case "server/discover": return { supportedVersions: VERSIONS, capabilities: caps, serverInfo: serverInfo(originOf(req)), instructions: INSTRUCTIONS };
       case "ping": return {};
       case "tools/list": return { tools: toolList(originOf(req)), ...CACHE };
-      case "resources/list": return { resources: [{ uri: APP_URI, name: "Sykehustomta 3D", title: "Sykehustomta: bygget i 3D og plan", mimeType: "text/html;profile=mcp-app", _meta: { ui: { csp: appCsp(originOf(req)), prefersBorder: true } } }], ...CACHE };
+      case "skills/list": return { ...skills.list(), ...CACHE };
+      case "skills/get": { const r = skills.get(String(params.uri || "")); if (!r) throw err(-32602, `Unknown skill: ${params.uri}`); return { ...r, ...CACHE }; }
+      case "resources/list": return { resources: [...skills.uris(), { uri: APP_URI, name: "Sykehustomta 3D", title: "Sykehustomta: bygget i 3D og plan", mimeType: "text/html;profile=mcp-app", _meta: { ui: { csp: appCsp(originOf(req)), prefersBorder: true } } }], ...CACHE };
       case "resources/read": {
+        const sk = skills.read(params.uri); if (sk != null) return { contents: [{ uri: params.uri, mimeType: "text/markdown", text: sk }], ...CACHE };
         if (params.uri !== APP_URI) throw err(-32602, `Unknown resource: ${params.uri}`);
         const o = originOf(req); return { contents: [{ uri: APP_URI, mimeType: "text/html;profile=mcp-app", text: appHtml(o), _meta: { ui: { csp: appCsp(o), prefersBorder: true } } }], ...CACHE };
       }
