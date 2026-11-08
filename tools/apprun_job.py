@@ -96,21 +96,21 @@ def do_run(src, name):
     try:
         code = compile(src, path, "exec")
     except SyntaxError as e:
-        return {"ok": False, "exit": 3, "kind": SYNTAX_KIND, "error": "The script has a mistake at line %s: %s" % (e.lineno, e.msg),
+        return {"ok": False, "exit": 3, "kind": SYNTAX_KIND, "error": f"The script has a mistake at line {e.lineno}: {e.msg}",
                 "line": {"n": e.lineno, "text": (e.text or "").strip()}, "traceback": [], "output": ""}
     out, was = io.StringIO(), (sys.stdout, sys.stderr)
     sys.stdout = sys.stderr = out
     try:
-        exec(code, {"__name__": "__app_run__", "__file__": path})
+        exec(code, {"__name__": "__app_run__", "__file__": path})  # noqa: S102 (the runner: fenced to the version folder)
         return {"ok": True, "exit": 0, "kind": None, "error": None, "line": None, "traceback": [], "output": out.getvalue()}
-    except BaseException as e:
+    except BaseException as e:  # noqa: BLE001 (every failure is the feedback block)
         tail = "".join(traceback.format_exception(type(e), e, e.__traceback__)).splitlines()[-TRACE:]
         line = None
         for f in reversed(traceback.extract_tb(e.__traceback__)):
             if f.filename == path:
                 line = {"n": f.lineno, "text": (f.line or "").strip()}
                 break
-        why = str(e) if isinstance(e, Fenced) else ("%s: %s" % (type(e).__name__, e) if str(e) else type(e).__name__)
+        why = str(e) if isinstance(e, Fenced) else (f"{type(e).__name__}: {e}" if str(e) else type(e).__name__)
         return {"ok": False, "exit": 2 if isinstance(e, Fenced) else 1, "kind": kind_of(e), "error": why, "line": line,
                 "traceback": tail, "output": out.getvalue()}
     finally:
@@ -128,8 +128,8 @@ def do_state(open_these):
         elif os.path.realpath(path) not in have:
             try:
                 FreeCAD.openDocument(path)
-            except Exception as e:
-                errors.append({"file": rel, "error": "%s: %s" % (type(e).__name__, e)})
+            except Exception as e:  # noqa: BLE001
+                errors.append({"file": rel, "error": f"{type(e).__name__}: {e}"})
     docs = []
     for d in FreeCAD.listDocuments().values():
         objs = []
@@ -142,7 +142,8 @@ def do_state(open_these):
 
 
 def main():
-    sent = json.load(open("params.json", encoding="utf-8"))
+    with open("params.json", encoding="utf-8") as fh:
+        sent = json.load(fh)
     for flat, name in (sent.get("restore") or {}).items():
         if os.path.isfile(flat):
             os.rename(flat, name)
@@ -156,8 +157,8 @@ def main():
     elif "state" in ask:
         try:
             done = do_state(ask["state"].get("open") or [])
-        except Exception as e:
-            done = {"error": "%s: %s" % (type(e).__name__, e)}
+        except Exception as e:  # noqa: BLE001
+            done = {"error": f"{type(e).__name__}: {e}"}
     else:
         done = {"ok": False, "exit": 3, "kind": "other", "error": "unknown ask"}
     print(json.dumps({"done": done}))
