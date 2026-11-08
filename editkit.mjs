@@ -4,6 +4,7 @@
    reaches the replay (public/design.js applyDesign), and what is stored is what a person's own page could have sent.
    node --test tests/edit-tools.test.mjs */
 import { baseOf } from "./public/design.js";
+import { HOUSEHOLD } from "./household.mjs";
 
 const r2 = x => Math.round(x * 100) / 100, mid = e => [(e.from[0] + e.to[0]) / 2, (e.from[1] + e.to[1]) / 2];
 const SELECTORS = ["shift", "turn", "length"];
@@ -32,7 +33,7 @@ const pair = (v, what) => { if (!Array.isArray(v) || v.length !== 2 || !v.every(
 
 /* does this edit stand for several: a copy, a group, a castle part, or a move, turn or resize (not a plain reshape the server takes as it is) */
 export function needsExpand(e, edits = []) {
-  if (e?.kind === "clone" || e?.kind === "group" || e?.kind === "join" || e?.kind === "cut" || e?.kind === "part" && e.part in CASTLE) return true;
+  if (e?.kind === "clone" || e?.kind === "group" || e?.kind === "join" || e?.kind === "cut" || e?.kind === "part" && e.part in PARTS) return true;
   if (e?.kind !== "reshape") return false;
   if (SELECTORS.some(k => e[k] != null)) return true;
   const vols = volumesOf(edits); return !vols.has(e.id) && [...vols.values()].some(v => v.group != null && v.group === e.id);   // a group's name where an id goes
@@ -44,7 +45,7 @@ export function expandChange(e, edits, site) {
     const name = String(e.name ?? "").trim(); if (!name || !Array.isArray(e.ids) || !e.ids.length) throw new Error("group trenger name og ids (id-ene til byggene i gruppen)");
     return e.ids.map(id => { if (!vols.has(id)) throw new Error(`Fant ikke det nye bygget «${id}» (group tar bare nye bygg)`); return { kind: "reshape", id, group: name, ...(e.why ? { why: e.why } : {}) }; });
   }
-  if (e.kind === "part") return CASTLE[e.part].make(e, site);
+  if (e.kind === "part") return PARTS[e.part].make(e, site);
   if (e.kind === "join") return joinEdits(e, vols);
   if (e.kind === "cut") return cutEdits(e, vols, site);
   const key = String(e.id ?? ""), src = membersOf(vols, key);
@@ -174,6 +175,9 @@ export const CASTLE = {
       return [left, right, base(site, e, { name: `${name} (bue)`, from: at(f, u, (L - pw) / 2), to: at(f, u, (L + pw) / 2), width: p.depth, height: r2(p.height - p.passage_height), material: p.material, group: g, base_kote: r2(left.base_kote + p.passage_height) })];
     } },
 };
+
+/* the server's own parts: the castle ones and the household ones (household.mjs), all expanded to plain volumes */
+export const PARTS = { ...CASTLE, ...HOUSEHOLD };
 
 /* ---- the short list: what the after holds, one line each, small enough for a chat turn ---- */
 const ms = x => String(r2(x)).replace(".", ",");
