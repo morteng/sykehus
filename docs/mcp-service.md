@@ -49,8 +49,10 @@ PORT=8090 DOCS=/media/sykehus/docs.sqlite PUBLIC_ORIGIN=https://sykehus.gulden.n
   base URL), `SYKEHUS_ASSISTANT_TOKEN` (the bearer for it); optional `SYKEHUS_CODE_PATH` (default
   `/internal/sykehus/code`) and `SYKEHUS_ASSISTANT_PREFIX` (default `/internal/sykehus`, + `/chat`, `/approve`,
   `/cancel`, `/history`). The cookie counts on the page's `/api/*` only, never on `/mcp`. `/api/anton/strom` is
-  server-sent events: no response buffering at the edge (`flush_interval -1`). Someone signed in on gulden.no needs no
-  code: `/api/*` behind laser_authz (anonymous passes) with `header_up X-Edge-Auth`, and Remote-User counts.
+  server-sent events: no response buffering at the edge (`flush_interval -1`). A gulden.no sign-in does
+  NOT count on the public edge today (U3613: no forward_auth on sykehus.gulden.no, FORWARD_AUTH_EXEMPT since U3583),
+  so a code or link is needed. It would count only if `/api/*` were put behind laser_authz (anonymous passes) with
+  `header_up X-Edge-Auth`; then Remote-User counts.
 - Wishes (wishes.mjs): kept in `SYKEHUS_VERSIONS_DIR/_wishes/`. An admin (the group `admins` in Authelia, read at the edge; U3981) sees all on the
   page and answer; `SYKEHUS_ADMIN_TOKEN` (24+ characters, Bearer) reads `GET /api/onsker` and `GET /api/bruk` from
   outside the box; `SYKEHUS_WISH_WEBHOOK`, when set, gets each new wish as JSON. The proxy secret is no admin: the
