@@ -360,7 +360,8 @@ def stable_ids(m):
 
 if __name__ == "__main__" and len(sys.argv) < 4 and os.path.exists("params.json"):
     # as a worker job (U3650, mcp.mjs model_wing): params.json {site, floors, envelope: [wing ids]}; the whole file, those wings as models
-    P = json.load(open("params.json"))
+    with open("params.json") as f:
+        P = json.load(f)
     m, counts = build(P["site"], P["floors"], None, envelope=tuple(ENVELOPE) + tuple(P.get("envelope", [])))
     m.write("model.ifc")
     print(json.dumps(counts))
