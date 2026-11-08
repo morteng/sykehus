@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import { stepText } from "./ifcfilter.mjs";
 import { ifcMaterial, MATERIALS } from "./public/renderkit/materials.js";   // U3619: the one list of materials
+import { offsetRing } from "./public/renderkit/paths2d.js";   // U3619: a pool's coping round the water
 import { placePart, typeLine } from "./partmerge.mjs";
 import { PSET } from "./ifcbox.mjs";   // U3631: the set that says which part of the version an element is   // U3690: a balcony is the worker's part, written in where it stands
 
@@ -75,7 +76,7 @@ function anchors(parsed) {
 export function addedLines(parsed, after, before, parts = null, opts = {}) {
   const none = { lines: [], renamed: new Map(), counts: {} };
   const moved = !!(after.terrain?.z && before.terrain?.z && after.terrain.z !== before.terrain.z), waters = (after.landscape || []).filter(w => w.basin && w.level != null);
-  if (!(after.added || []).length && !(after.wings || []).some(w => w.draft?.length) && !moved && !waters.length) return none;
+  if (!(after.added || []).length && !(after.wings || []).some(w => w.draft?.length) && !moved && !waters.length && !(after.wings || []).some(w => w.facade_material)) return none;
   const A = anchors(parsed); if (!A.site || !A.body) return none;
   let n = A.top; const lines = [], put = s => { lines.push(`#${++n}=${s};`); return n; }, counts = { buildings: 0, elements: 0 };
   const zUp = put(`IFCDIRECTION(${pt([0, 0, 1])})`);
@@ -206,6 +207,21 @@ export function addedLines(parsed, after, before, parts = null, opts = {}) {
     const el = put(`IFCGEOGRAPHICELEMENT('${gid(w.id + ":water")}',$,${stepStr(w.name || (w.pool ? "Basseng" : "Dam"))},$,${stepStr("Vann")},#${placeAt(0)},#${shp},$,.USERDEFINED.)`); onSite.push(el); made("water", el);
     pset(w.id, [el], "Sykehustomta_Nytt", { Vannstand: `kote +${w.level}`, Dybde: `${w.basin.depth} m`, Kant: w.pool ? `kote +${w.basin.kote}` : null, Utgraving: `${w.basin.cut_m3} m³`, Hvorfor: w.why, Status: "NEW" });
     counts.elements++;
+    /* U3619: a pool's edge is an element of its own, in the material the person chose (default concrete), so the file names it */
+    if (w.pool && (w.basin.coping ?? 0.3) > 0) {
+      const out = offsetRing(w.ring, w.basin.coping ?? 0.3), top = w.basin.kote + 0.03, ring = r => r.map(p => put(`IFCCARTESIANPOINT(${pt(p)})`)), loop = r => { const q = ring(r); return put(`IFCPOLYLINE((${[...q, q[0]].map(x => "#" + x).join(",")}))`); };
+      const cprof = put(`IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,${stepStr("Kant")},#${loop(out)},(#${loop(w.ring)}))`), csol = put(`IFCEXTRUDEDAREASOLID(#${cprof},IFCAXIS2PLACEMENT3D(IFCCARTESIANPOINT(${pt([0, 0, top - 0.1])}),$,$),#${zUp},0.1)`);
+      const crep = put(`IFCSHAPEREPRESENTATION(#${A.body},'Body','SweptSolid',(#${csol}))`), cshp = put(`IFCPRODUCTDEFINITIONSHAPE($,$,(#${crep}))`);
+      const ce = put(`IFCGEOGRAPHICELEMENT('${gid(w.id + ":coping")}',$,${stepStr(`${w.name || "Basseng"} (kant)`)},$,${stepStr("Kant")},#${placeAt(0)},#${cshp},$,.USERDEFINED.)`); onSite.push(ce);
+      made(MATERIALS[w.coping_material] ? w.coping_material : "concrete", ce);
+      pset(w.id + ":coping", [ce], "Sykehustomta_Nytt", { Kant: `${w.basin.coping ?? 0.3} m bred`, Materiale: w.coping_material || "concrete", Status: "NEW" });
+      counts.elements++;
+    }
+  }
+  /* U3619: a wing whose walls the after dresses in a material (the edit wing / facade_material) names it: its IfcBuilding is associated with that IfcMaterial */
+  for (const w of after.wings || []) {
+    if (!w.facade_material || !MATERIALS[w.facade_material]) continue;
+    const was = before.wings?.find(x => x.id === w.id), bid = was && A.building.get(was.name); if (bid) made(w.facade_material, bid);
   }
   for (const [key, els] of byMat) {
     const m = ifcMaterial(key), mat = put(`IFCMATERIAL(${stepStr(m.name)},${stepStr(m.description)},${stepStr(m.category)})`), d = MATERIALS[key];

@@ -296,11 +296,23 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       const concreteExtra = { side: THREE.DoubleSide, clippingPlanes: cutPlane };
       const pic = Q.pbr ? (await libraryMaterial("concrete", { extra: concreteExtra }) || (MATERIALS.concrete.texture ? await texturedMaterial("concrete", { url: n => `renderkit/${n}`, extra: concreteExtra }).catch(() => null) : null)) : null;
       const libSteel = envMap ? await libraryMaterial("steel", { tier: Q.pbr ? null : "low", extra: { flatShading: true, clippingPlanes: cutPlane, envMap } }) : null;   // steel by its library record, when it has one; a metal needs the sky to mirror, so none without it
+      const fk = (site.wings || []).find(w => w.id === b.wing)?.facade_material, wall = MATERIALS[fk] && fk !== "glass" && fk !== "concrete" ? fk : null;   // U3619: the wing's walls in the material it names (edit wing / facade_material); roofs and slabs stay concrete
+      const wallPic = wall && Q.pbr && MATERIALS[wall].texture ? await texturedMaterial(wall, { url: n => `renderkit/${n}`, extra: concreteExtra }).catch(() => null) : null;
+      if (wall) for (const p of parts.filter(p => p.material === "concrete")) {   // split the model's concrete: upright faces take the wall material, the flat ones (roof, slabs) stay concrete
+        const up = [], flat = [], P3 = i => [p.positions[i * 3], p.positions[i * 3 + 1], p.positions[i * 3 + 2]];
+        for (let i = 0; i < p.indices.length; i += 3) {
+          const [A, B, C] = [P3(p.indices[i]), P3(p.indices[i + 1]), P3(p.indices[i + 2])], u = B.map((v, k) => v - A[k]), w = C.map((v, k) => v - A[k]);
+          const ny = u[2] * w[0] - u[0] * w[2], len = Math.hypot(u[1] * w[2] - u[2] * w[1], ny, u[0] * w[1] - u[1] * w[0]) || 1;
+          (Math.abs(ny) / len > 0.7 ? flat : up).push(p.indices[i], p.indices[i + 1], p.indices[i + 2]);
+        }
+        p.indices = Uint32Array.from(flat); if (up.length) parts.push({ material: "wall", positions: p.positions, indices: Uint32Array.from(up) });
+      }
       for (const p of parts) {
-        const glass = p.material === "window_glass", M = MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};
+        const glass = p.material === "window_glass", M = p.material === "wall" ? MATERIALS[wall] : MATERIALS[p.material] || MATERIALS.concrete, sky = envMap ? { envMap } : {};
         let g = new THREE.BufferGeometry(), m;
         g.setAttribute("position", new THREE.BufferAttribute(p.positions, 3)); g.setIndex(new THREE.BufferAttribute(p.indices, 1));
         if (p.material === "concrete" && pic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, pic.tile); m = pic.material; Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.3 }); }   // concrete as the site's other buildings wear it: its picture and relief, the sky's light in its shade
+        else if (p.material === "wall" && wallPic?.tile) { g = g.toNonIndexed(); g.computeVertexNormals(); faceUV(g, wallPic.tile); m = wallPic.material.clone(); Object.assign(m, { envMap: envMap || null, envMapIntensity: 0.3 }); }   // the wall material's picture
         else if (p.material === "steel" && libSteel) m = libSteel.material;
         else m = mat(M.colour, { ...M.look, flatShading: true, ...sky, clippingPlanes: cutPlane });   // the library's look; flat: the file carries no normals, and every face is plane
         g.computeBoundingSphere();
@@ -311,9 +323,10 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
       dirty = true;
     }).catch(e => console.warn("bim:", b.id, e.message));
   }
+  const bimOf = new Map();   // the buildings that wear a BIM model: [building, its group], to dress again when the wing's facade material changes (U3619)
   for (const b of site.buildings) {
     const grp = new THREE.Group(), b0 = b.base - 0.5, ring = b.ring;
-    if (b.own && b.blocks?.length) { grp.add(blocksMesh(b, wallTex[kindOf(b)])); if (BIM[b.wing]) loadBim(b, grp); }   // a wing with a model: the extruded outline stands till the model has come (or when it cannot)
+    if (b.own && b.blocks?.length) { grp.add(blocksMesh(b, wallTex[kindOf(b)])); if (BIM[b.wing]) { bimOf.set(b.id, [b, grp]); loadBim(b, grp); } }   // a wing with a model: the extruded outline stands till the model has come (or when it cannot)
     else if (!b.own || b.top == null) {
       const top = b.top ?? b.base + (b.osmHeight || (b.levels || 2) * 3);
       grp.add(wallsTo(ring, b0, () => top, mat(b.own ? C.own : C.nb)));
@@ -466,20 +479,24 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   const gradeMeshes = [], CONCRETE = "#b9b5ad", TILE = "#d6e6ea";
   let gradingNow = site.grading || [];
   function setGrading(list, redraw = true) { gradingNow = list || []; if (redraw) setLandscape(landNow); }   // redraw false: a setLandscape follows
-  function quads(list, color) {   // list: [[x, y, z], × 4] each, drawn as two triangles
+  function quads(list, color, key) {   // list: [[x, y, z], × 4] each, drawn as two triangles; key: a material of the library, in its picture where the tier carries it (U3619)
     if (!list.length) return;
     const pos = []; for (const q of list) for (const k of [0, 1, 2, 0, 2, 3]) { const v = P([q[k][0], q[k][1]], q[k][2]); pos.push(v.x, v.y, v.z); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, mat(color)); m.castShadow = m.receiveShadow = true; scene.add(m); gradeMeshes.push(m);
+    if (key && Q.pbr && MATERIALS[key]?.texture) texturedMaterial(key, { url: n => `renderkit/${n}`, extra: { side: THREE.DoubleSide } }).then(({ material, tile }) => {
+      if (!m.parent) { material.dispose(); return; }
+      worldUV(geo, tile, "x", "z"); const old = m.material; m.material = material; old.dispose(); dirty = true; }).catch(() => {});
   }
-  function drawBasin(ring, b) {
+  function drawBasin(ring, b, copingKey) {
     const out = offsetRing(ring, b.coping || 0.05), n = ring.length, top = b.kote + 0.03, cop = [], sides = [];
     for (let i = 0; i < n; i++) {
       const a = ring[i], c = ring[(i + 1) % n], A = out[i], C = out[(i + 1) % n];
       cop.push([[...a, top], [...c, top], [...C, top], [...A, top]]);
       sides.push([[...a, top], [...c, top], [...c, b.bottom], [...a, b.bottom]]);
     }
-    quads(cop, CONCRETE); quads(sides, TILE);
+    const ck = MATERIALS[copingKey]?.kind?.some(k => k === "ground" || k === "building") ? copingKey : null;   // U3619: the edge in its material (betong, tre, belegningsstein …)
+    quads(cop, ck ? MATERIALS[ck].colour : CONCRETE, ck); quads(sides, TILE);
     if (b.surround > 0.05) {   // the deck, level with the coping, and with edge "wall" the retaining wall round it
       const far = offsetRing(ring, (b.coping || 0) + b.surround), deck = [], walls = [], dz = b.kote + 0.02;
       for (let i = 0; i < n; i++) {
@@ -519,7 +536,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
     const lift = roof ? 0.03 + 0.02 * n + (g.kind === "path" ? 0.02 : 0) : 0.15 + 0.08 * n + (g.kind === "path" ? 0.08 : 0);
     const lvl = g.level ?? (roof ? g.kote + lift : null), flat = lvl != null;   // water lies flat at its own level (U3616), whatever the ground under it
     const put = p => { const v = P(p, flat ? lvl : ground(...p) + lift); pos.push(v.x, v.y, v.z); };
-    if (g.pool && g.basin) drawBasin(ring, g.basin);
+    if (g.pool && g.basin) drawBasin(ring, g.basin, g.coping_material);
     const split = (a, b, c, d) => {
       const e = [[a, b], [b, c], [c, a]].map(([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1])), m = Math.max(...e);
       if (m <= lim || d > 9) { put(a); put(b); put(c); return; }
@@ -761,6 +778,7 @@ export function createViewer({ container, site, floors = [], lat = 59.749, lon =
   /* a storey's kote set in a wing (an edit of kind level): its levels taken over, the storey shown cut anew there */
   function setLevels(ws) {
     for (const w of ws || []) { const o = wingOf.get(w.id); if (o && JSON.stringify(o.levels || []) !== JSON.stringify(w.levels || [])) o.levels = structuredClone(w.levels || []); }
+    for (const w of ws || []) { const o = wingOf.get(w.id); if (o && (o.facade_material || null) !== (w.facade_material || null)) { o.facade_material = w.facade_material || undefined; for (const [b, grp] of bimOf.values()) if (b.wing === w.id) loadBim(b, grp); } }   // U3619
     if (storey) show(storey, shownIds); dirty = true;
   }
   /* floors.json ids, as before: the drawing's storey in every building */

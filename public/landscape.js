@@ -27,6 +27,7 @@
    record has on and kote; its trees an eighth item, the kote, and a ninth, the wing), inside that level's rectangles (roof.js): a surface, path or
    tree off the edge is refused with the metres; a brush stroke is cut at the edge and site.roof_say says by how many m².
    Ground and roof do not mix: a roof's surfaces never join, block or are blocked by the ground's. Water is not laid on a roof. */
+import { materialKey } from "./renderkit/materials.js";   // U3619: the pool edge's material by its name
 import { pointInRing as inRing, ringArea as signedArea, ringOf, ringDist } from "./renderkit/paths2d.js";   // one copy (DRY 1, 2)
 import { roofOf } from "./roof.js";
 import { SIDE_KEYS } from "./renderkit/dirs.js";
@@ -237,7 +238,7 @@ function groundOf(e) {
 }
 /* a water surface's settings: a pool (dug basin under a coping) or a pond, its depth and its kote */
 function waterOf(e, surface) {
-  const has = ["pool", "depth", "coping", "deck", "edge", "kote"].filter(k => e[k] != null);
+  const has = ["pool", "depth", "coping", "coping_material", "deck", "edge", "kote"].filter(k => e[k] != null);
   if (!has.length) return {};
   if (surface !== "water") throw new Error(`${has.join(", ")} gjelder bare vann (surface: water)`);
   const out = {};
@@ -247,6 +248,10 @@ function waterOf(e, surface) {
   if (e.deck != null) out.deck = num(e.deck, 0, 10, "Dekket (deck)");
   if (e.edge != null) { if (!["batter", "wall"].includes(e.edge)) throw new Error("edge er batter eller wall"); out.edge = e.edge; }
   if (e.kote != null) out.kote = num(e.kote, -20, 200, "Koten");
+  if (e.coping_material != null) {   // U3619: the edge's material, from the library (betong, tre, belegningsstein …)
+    const k = materialKey(e.coping_material); if (!k || !["concrete", "wood", "brick", "paving", "gravel", "asphalt"].includes(k)) throw new Error("Kantens materiale (coping_material) er concrete, wood, brick, paving, gravel eller asphalt");
+    out.coping_material = k;
+  }
   return out;
 }
 
@@ -330,11 +335,11 @@ export function applyLandscape(site, edits) {
     }
     else if (e.kind === "reshape" && GROUND_ID.test(e.id)) {
       const g = land.find(x => x.id === e.id); if (!g) continue;
-      for (const k of ["name", "surface", "plants", "pool", "depth", "coping", "deck", "edge", "kote", "why"]) if (e[k] != null) g[k] = e[k];
+      for (const k of ["name", "surface", "plants", "pool", "depth", "coping", "coping_material", "deck", "edge", "kote", "why"]) if (e[k] != null) g[k] = e[k];
       if (g.kind === "surface" && (e.ring || e.radius != null || e.smooth != null)) { if (e.ring) g.points = e.ring; if (e.radius != null) g.radius = e.radius; if (e.smooth != null) g.smooth = e.smooth; g.ring = outlineOf(g.points, g.radius, g.smooth); g.area_m2 = round1(ringArea(g.ring)); }
       if (g.kind === "path" && (e.line || e.width != null)) { g.line = e.line || g.line; g.width = e.width ?? g.width; g.ring = pathRing(g.line, g.width); g.length_m = round1(lineLength(g.line)); g.area_m2 = round1(lineLength(g.line) * g.width); }
     }
-    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[e.surface] } : Object.fromEntries(["pool", "depth", "coping", "deck", "edge", "kote"].filter(k => e[k] != null).map(k => [k, e[k]]))), why: e.why });
+    else if (e.kind === "surface") land.push({ id: `flate-${++n}`, kind: "surface", name: e.name || null, surface: e.surface, points: e.ring, ...(e.radius ? { radius: e.radius } : {}), ...(e.smooth ? { smooth: true } : {}), ring: outlineOf(e.ring, e.radius, e.smooth), area_m2: round1(ringArea(outlineOf(e.ring, e.radius, e.smooth))), plants: e.plants || [], ...(e.on ? { on: e.on, kote: e.kote, soil_depth_m: SOIL[e.surface] } : Object.fromEntries(["pool", "depth", "coping", "coping_material", "deck", "edge", "kote"].filter(k => e[k] != null).map(k => [k, e[k]]))), why: e.why });
     if (e.kind === "surface" && e.bed) {   // U3820: the bed fills itself, species by species, each its own planting
       const by = new Map(); for (const q of bedPlants(land.at(-1).ring, e.bed, e)) (by.get(q.pid) || by.set(q.pid, []).get(q.pid)).push([round1(q.x), round1(q.y)]);
       for (const [pid, at] of by) {

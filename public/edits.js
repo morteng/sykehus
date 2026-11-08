@@ -9,8 +9,9 @@
    { kind: "note", text, wing?, storey?, at?: [east, north], why? }    a note pinned to a wing, a storey or a place
    and the after's: demolish, restore, balconies, volume (design.js) */
 import { checkDesign, applyDesign } from "./design.js";
+import { MATERIALS, materialKey, nameOf } from "./renderkit/materials.js";
 
-export const WING_FIELDS = ["name", "built", "storeys", "use", "construction", "facade", "note"];
+export const WING_FIELDS = ["name", "built", "storeys", "use", "construction", "facade", "facade_material", "note"];
 const MAX = { text: 400, why: 300, name: 80 };
 const str = (v, n, what) => { if (typeof v !== "string" || !v.trim()) throw new Error(`${what} mangler`); if (v.length > n) throw new Error(`${what} er for lang (høyst ${n} tegn)`); return v.trim(); };
 
@@ -36,6 +37,11 @@ export function checkEdit(site, floors, e) {
       const w = wingOf(site, e.wing); if (!w) throw new Error(`Ukjent fløy «${e.wing}»`);
       if (!WING_FIELDS.includes(e.field)) throw new Error(`Feltet må være ett av ${WING_FIELDS.join(", ")}`);
       if (!why) throw new Error("Si hvor opplysningen kommer fra (why)");
+      if (e.field === "facade_material") {   // U3619: the wing's walls in a material of the library (tegl, betong, tre, stål), drawn in its picture
+        const k = e.value === "" || e.value == null ? "" : materialKey(e.value);
+        if (k === null || (k && (!MATERIALS[k].kind.includes("building") || k === "glass"))) throw new Error(`Fasadematerialet er ett av ${Object.keys(MATERIALS).filter(m => MATERIALS[m].kind.includes("building") && m !== "glass").map(m => `${m} (${nameOf(m)})`).join(", ")}, eller tomt for å ta det bort`);
+        return { kind: "wing", wing: w.id, field: "facade_material", value: k, why };
+      }
       return { kind: "wing", wing: w.id, field: e.field, value: str(String(e.value ?? ""), e.field === "name" ? MAX.name : MAX.text, "Verdien"), why };
     }
     case "room": {
