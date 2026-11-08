@@ -92,6 +92,10 @@ export async function start({ viewer, version, refresh, showView, panel, valg, t
       onSend: (text, files) => pillSend(text, files),
       onError: e => { if (e.kind === "send" && e.message) line("err", e.message); },
     });
+    /* The kit menu has no tooltip slot: put it on «Ny samtale» when the menu opens (U4304). */
+    const NEW_CHAT_TIP = "Starter en ny samtale. Anton kan slå opp i de gamle når du viser til dem.";
+    new MutationObserver(() => document.querySelectorAll('.g-menu [role="menuitem"]').forEach(b => { if (b.textContent.trim() === "Ny samtale" && b.title !== NEW_CHAT_TIP) b.title = NEW_CHAT_TIP; }))
+      .observe(document.body, { childList: true, subtree: true });
     const form = pill.el, input = pill.input, mid = form.querySelector(".g-pill__mid");
     form.id = "talk-form"; input.maxLength = 4000;
     mid.prepend(Object.assign(document.createElement("div"), { id: "talkPick" }));
