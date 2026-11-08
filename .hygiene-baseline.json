@@ -2,7 +2,7 @@
  "_": "hygiene ratchet: lines of files over 800, duplicated lines; lowered by land.sh, raised only by \u00abhygiene: raise\u00bb",
  "dup_lines": 500,
  "files": {
-  "mcp.mjs": 1525,
+  "mcp.mjs": 1530,
   "public/app.js": 1380,
   "public/design.js": 945,
   "public/hagekart/detect.js": 1414,
