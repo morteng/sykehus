@@ -28,7 +28,7 @@ import { edgeRail, compactRail } from "./public/roofedge.js";   // edge_rail: a 
 import { planShots, streetsAround } from "./shots.mjs";   // U3527: a few good shots of a version
 import { groundAt } from "./public/renderkit/fit.js";
 import { fallOf, findDrops, fitLine, steepestRise } from "./groundfit.mjs";   // U3684: the ground against what was asked
-import { needsExpand, expandChange, briefOf, PARTS } from "./editkit.mjs";   // move, turn, copy, group, castle parts, the short list
+import { partFoot, bigGreenhouses } from "./roofparts.mjs"; import { needsExpand, expandChange, briefOf, PARTS } from "./editkit.mjs";   // move, turn, copy, group, castle parts, the short list
 import { volumeOverlaps, fitOf, surfaceFit, groundText, padFit, lotText, windowBays, facadesOf, facadeNames, replacesBuiltIn, balconyFaces, placeBeside, alignDelta, alignSay, placeOnRoof, overhangOf, roofOf, roofSay, roofCollisions, measureParts, checkFit, stampVolumeIds, nextVolumeId, deadEdits } from "./public/design.js";
 import { gradingText, basinText } from "./public/grading.js";
 import { dirDeg as dirOf, dirWord, SIDE_KEYS, SIDE_WORD, norm360 } from "./public/renderkit/dirs.js";   // one copy (DRY 5)
@@ -433,7 +433,7 @@ export function createMcp({ intake = createIntake(), site, floors, sections = []
   function partAt(e, spec) {
     if (e.from != null || e.to != null) throw new Error("Gi enten at (på taket eller fra en fasade) eller from og to, ikke begge");
     const w = wingOf(site, e.at?.wing); if (!w) throw new Error(`Fant ikke fløyen «${e.at?.wing}»`);
-    const P = e.params || {}, dv = k => Number(P[k] ?? spec?.[k]?.default), o = e.part === "pool_basin" ? 2 * ((dv("wall") || 0.25) + (dv("coping") ?? 0.3)) : 0, L = dv("length") + o, W = dv("width") + o;
+    const { L, W } = partFoot(e.part, e.params || {}, spec);
     if (!(L > 0 && W > 0)) throw new Error("part med at trenger params.length og params.width (m): delen har ingen størrelse av seg selv");
     const { at, ...rest } = e;
     if (at.roof) { if (e.on != null && wingOf(site, e.on)?.id !== w.id) throw new Error("at.roof legger det på taket til at.wing; on må være samme fløy eller utelates");
@@ -571,7 +571,7 @@ export function createMcp({ intake = createIntake(), site, floors, sections = []
         const railIds = new Set(), ok = [], bad = [], ids = {}, max = v ? MAX_VERSION_EDITS : MAX_EDITS; let pushed = 0, pruned = 0; const touched = new Set();
         stampVolumeIds(d.edits);   // S1: a draft from before the stable ids gets them (a version got them on load); no-op when every volume has one
         /* a later change in the same call to a new building that got another id goes to the id it got */
-        const queue = expandEdits(a.edits, railIds).map((e, i) => ({ e, i }));
+        const queue = (await bigGreenhouses(expandEdits(a.edits, railIds), { site, wingOf, listParts })).map((e, i) => ({ e, i }));
         for (let qi = 0; qi < queue.length; qi++) { const { e: e00, i, synth } = queue[qi], sw = splitWater(e00), water = sw.water, e0 = water != null && water !== false && sw.e.id == null ? { ...sw.e, id: "basseng" } : sw.e; try {
             /* a copy, a group, a castle part, or a move, turn or resize by id: worked out into the plain volume and reshape edits, tried one by one under the same index */
             if (!synth && needsExpand(e00, d.edits)) { queue.splice(qi + 1, 0, ...expandChange(e00, d.edits, applyEdits(site, floors, d.edits).site).map(x => ({ e: x, i, synth: false }))); continue; }
@@ -653,7 +653,7 @@ export function createMcp({ intake = createIntake(), site, floors, sections = []
         const who = userOf(req); if (!who) throw toolErr("Skissen vises til en som er logget inn.");
         const open = versions ? versions.get(openId(who)) : null, id = open?.owner === who ? open.id : null, base = id ? editsOf(id, req) : [], ok = [], bad = [];
         let cur = applyEdits(site, floors, base);
-        for (const [i, e000] of expandEdits(a.edits).entries()) { const e00 = splitWater(e000).e; try { const { e: e0 } = placeAt(e00, e00?.kind === "part" && e00.at != null ? (await listParts().catch(() => ({})))[e00.part]?.params : null), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await withAround(await prepare(e0, cur.site)), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
+        for (const [i, e000] of (await bigGreenhouses(expandEdits(a.edits), { site, wingOf, listParts })).entries()) { const e00 = splitWater(e000).e; try { const { e: e0 } = placeAt(e00, e00?.kind === "part" && e00.at != null ? (await listParts().catch(() => ({})))[e00.part]?.params : null), f = fieldsOf(e0); if (f) throw new Error(f); const pe = await withAround(await prepare(e0, cur.site)), { _ran, ...e1 } = pe, c = checkEdit(cur.site, cur.floors, e1); ok.push(c); cur = applyEdits(site, floors, [...base, ...ok]); } catch (e) { bad.push({ n: i + 1, kind: e00?.kind, error: String(e.message || e).slice(0, 300) }); } }
         if (!ok.length) throw toolErr(`Ingen av endringene kunne tegnes: ${bad.map(b => `nr. ${b.n} (${b.kind}): ${b.error}`).join("; ")}`);
         const s = withMeshes(cur.site), before = new Set((site.added || []).concat(applyEdits(site, floors, base).site.added || []).map(x => x.id));
         const made = (s.added || []).find(x => !before.has(x.id)), want = a.focus || made?.id || ok.map(e => e.wing || e.id).find(Boolean), f = want ? aimAt(s, want) : null;

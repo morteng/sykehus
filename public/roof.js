@@ -227,8 +227,8 @@ export function roofAxes(b) {
   return { origin: s0.map(r2), origin_is: `${eight(s0[0] - mid[0], s0[1] - mid[1])}hjørnet`, u_bearing_deg: brg(u), v_bearing_deg: brg(v) };   // length and width are the level's bounding_rect (u range, v range)
 }
 export function placeOnRoof(site, w, at, length, width, allowOut = false) {
-  if (!(length >= 1 && length <= 250)) throw new Error("length er lengden i meter langs takets akse, mellom 1 og 250");
-  if (!(width >= 1 && width <= 120)) throw new Error("width er bredden i meter på tvers av taket, mellom 1 og 120");
+  if (!(length >= 0.5 && length <= 250)) throw new Error("length er lengden i meter langs takets akse, mellom 0,5 og 250");
+  if (!(width >= 0.05 && width <= 120)) throw new Error("width er bredden i meter på tvers av taket, mellom 0,05 og 120");
   const R = roofOf(site, w.id); if (!R) throw new Error(`${w.name} har ikke noe tak å legge det på`);
   const lv = at.kote != null ? R.levels.find(l => Math.abs(l.kote - +at.kote) < 0.06) : R.levels.slice().sort((a, b) => b.area_m2 - a.area_m2)[0];
   if (!lv) throw new Error(`${w.name} har ikke tak på kote ${at.kote}; takene ligger på ${R.levels.map(l => l.kote).join(", ")}`);
