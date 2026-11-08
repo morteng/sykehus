@@ -1,10 +1,10 @@
 /* U3836: a ready-made part stands on a wing's roof or beside a facade whatever its size settings are called (a railing has a length, a stair a
    height and a width, a balcony a width and a depth, a greenhouse a length and a width or a radius), and a greenhouse larger than the part's
-   12 × 30 m is laid as equal greenhouses side by side, one group. */
+   own size limits (params max, 30 × 100 m) is laid as equal greenhouses side by side, one group. */
 import { placeOnRoof, placeBeside } from "./public/design.js";
 
 const num = (v, d) => Number.isFinite(+v) && v !== null && v !== "" ? +v : d;
-const GH_MAX = { length: 30, width: 12 }, RECT = f => !["polygon", "geodesic"].includes(f);
+const RECT = f => !["polygon", "geodesic"].includes(f);
 
 /* the plan footprint { L: along from -> to, W: across } of a part with these settings; spec = the part's params from list_parts */
 export function partFoot(part, P = {}, spec = {}) {
@@ -20,7 +20,7 @@ export function partFoot(part, P = {}, spec = {}) {
   return { L: dv("length"), W: dv("width") };
 }
 
-/* a greenhouse (a rectangular form) larger than 12 × 30 m becomes several, side by side along one axis; the rest of the edits stay.
+/* a greenhouse (a rectangular form) larger than the part's own max for length and width (list_parts) becomes several, side by side along one axis; the rest of the edits stay.
    mk = { site, wingOf, listParts }. A refusal stays in the edit (__bad) so the call names it. */
 export async function bigGreenhouses(edits, { site, wingOf, listParts }) {
   const out = [];
@@ -30,8 +30,9 @@ export async function bigGreenhouses(edits, { site, wingOf, listParts }) {
       const P = e.params || {}, spec = (await listParts().catch(() => ({})))?.greenhouse?.params || {}, form = P.form ?? spec.form?.default ?? "polygon";
       if (!RECT(form)) { out.push(e); continue; }
       const { L, W } = partFoot("greenhouse", P, spec);
-      if (!(L > GH_MAX.length + 1e-9 || W > GH_MAX.width + 1e-9)) { out.push(e); continue; }
-      const nL = Math.ceil(L / GH_MAX.length - 1e-9), nW = Math.ceil(W / GH_MAX.width - 1e-9);
+      const mxL = num(spec.length?.max, Infinity), mxW = num(spec.width?.max, Infinity);   // the part's own limits; none known = no split
+      if (!(L > mxL + 1e-9 || W > mxW + 1e-9)) { out.push(e); continue; }
+      const nL = Math.ceil(L / mxL - 1e-9), nW = Math.ceil(W / mxW - 1e-9);
       if (nL * nW > 24) throw new Error(`Et drivhus på ${L} × ${W} m blir ${nL * nW} deler; mer enn 24 går ikke. Del det i to ønsker`);
       let from, to, rest;
       if (e.at != null) {

@@ -12,7 +12,8 @@ const rect = (u0, v0, u1, v1, top) => ({ p: [X(u0, v0), X(u1, v0), X(u1, v1), X(
 const bld = { id: "tw", wing: "tw", own: true, base: 2, top: 14, ring: [X(0, 0), X(40, 0), X(40, 10), X(0, 10)], area_m2: 400, grid_deg: 30, blocks: [rect(0, 0, 40, 10, 14)] };
 const site = { buildings: [bld], wings: [{ id: "tw", name: "Testfløy", levels: [] }], added: [], trees: [] };
 const wingOf = (st, k) => st.wings.find(w => w.id === k || w.name === k);
-const SPEC = { greenhouse: { params: { form: { default: "polygon" }, length: { default: 4 }, width: { default: 3 }, radius: { default: 2 } } } };
+const SPEC = { greenhouse: { params: { form: { default: "polygon" }, length: { default: 4, max: 30 }, width: { default: 3, max: 12 }, radius: { default: 2 } } } };
+const SPEC2 = { greenhouse: { params: { form: { default: "polygon" }, length: { default: 4, max: 100 }, width: { default: 3, max: 30 }, radius: { default: 2, max: 20 } } } };
 const mk = { site, wingOf, listParts: async () => SPEC };
 
 test("a part's footprint on a roof: railing, stair, balcony, greenhouse", () => {
@@ -33,6 +34,16 @@ test("a greenhouse 36 × 8 m on the roof 36 m long becomes two of 18 m", async (
   assert.ok(Math.abs(d(out[0]) - 18) < 0.05); assert.ok(Math.abs(out[0].to[0] - out[1].from[0]) < 0.05 && Math.abs(out[0].to[1] - out[1].from[1]) < 0.05, "the two meet end to end");
   const wide = await bigGreenhouses([{ kind: "part", part: "greenhouse", at: { wing: "tw", roof: true, u: 2, v: 0 }, params: { form: "gable", length: 10, width: 10 } }], mk);
   assert.equal(wide.length, 1, "within 12 × 30 it is left alone"); assert.ok(wide[0].at, "untouched");
+});
+
+test("U5519: the split follows the part's own max (30 × 100 m): 20 × 60 is one, 40 wide is several", async () => {
+  const mk2 = { site, wingOf, listParts: async () => SPEC2 }, at = { wing: "tw", roof: true, u: 2, v: 0 };
+  const one = await bigGreenhouses([{ kind: "part", part: "greenhouse", at, params: { form: "gable", length: 60, width: 20 } }], mk2);
+  assert.equal(one.length, 1, JSON.stringify(one.map(o => o.__bad))); assert.ok(one[0].at, "untouched: one part, one frame");
+  const many = await bigGreenhouses([{ kind: "part", part: "greenhouse", at, params: { form: "gable", length: 60, width: 40 } }], mk2);
+  assert.equal(many.length, 2); assert.ok(many.every(t => t.params.width === 20 && t.params.length === 60));
+  const none = await bigGreenhouses([{ kind: "part", part: "greenhouse", at, params: { form: "gable", length: 60, width: 40 } }], { site, wingOf, listParts: async () => ({}) });
+  assert.equal(none.length, 1, "no max known: left to the part");
 });
 
 test("a greenhouse wider than 12 m is laid side by side; a dome or a refusal is not split", async () => {
