@@ -3,12 +3,12 @@
  "dup_lines": 500,
  "files": {
   "mcp.mjs": 1467,
-  "public/app.js": 1379,
+  "public/app.js": 1380,
   "public/design.js": 945,
   "public/hagekart/detect.js": 1414,
   "public/hagekart/walk.js": 1628,
   "public/kit/tokens.css": 968,
   "public/renderkit/ez-tree.js": 1144,
-  "public/viewer.js": 1329
+  "public/viewer.js": 1347
  }
 }
