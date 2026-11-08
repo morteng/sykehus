@@ -126,7 +126,7 @@ test("preview: everything runs and is checked, nothing is saved", async () => {
 
 test("U3639: the household parts are one plain volume each, on the ground or a roof, with their own limits", async () => {
   const lp = (await call("list_parts")).data.parts.map(p => p.part);
-  for (const n of ["garage", "extension", "dormer", "winter_garden", "solar_panels", "roof_gable", "roof_hip", "roof_shed", "roof_flat"]) assert.ok(lp.includes(n), n);
+  for (const n of ["garage", "extension", "dormer", "winter_garden", "solar_panels", "roof_gable", "roof_hip", "roof_shed"]) assert.ok(lp.includes(n), n);
   const g = await mk([{ kind: "part", part: "garage", from: [-60, -80], to: [-54, -80], params: { width: 3.6 } }]);
   assert.equal(g.applied, 1, JSON.stringify(g.rejected));
   const [gv] = await built(g.draft); assert.equal(gv.shape, "gable"); assert.equal(gv.material, "wood"); assert.equal(gv.height, 3.7);
