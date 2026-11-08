@@ -193,7 +193,10 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
   }
   /* true when the request was ours */
   async function route(req, res, url) {
-    const p = url.pathname;
+    let p = url.pathname;
+    /* RFC 9728/8414 path-inserted form: /.well-known/oauth-*\/sykehus[/mcp] names the resource under the bygg mount (U4234) */
+    const ins = /^(\/\.well-known\/oauth-(?:protected-resource|authorization-server))\/sykehus(\/mcp)?$/.exec(p);
+    if (ins) { p = ins[1] + (ins[2] || ""); req.mount = "/sykehus"; }
     try {
       if (p === "/.well-known/oauth-protected-resource" || p === "/.well-known/oauth-protected-resource/mcp") { send(res, 200, metaPR(req), { "access-control-allow-origin": "*" }); return true; }
       if (p === "/.well-known/oauth-authorization-server" || p === "/.well-known/oauth-authorization-server/mcp") { send(res, 200, metaAS(req), { "access-control-allow-origin": "*" }); return true; }

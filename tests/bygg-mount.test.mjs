@@ -37,3 +37,10 @@ test("the connector answers a JSON-RPC POST under /sykehus/mcp", async () => {
   const r = await fetch(O + "/sykehus/mcp", { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
   assert.equal(r.status, 200); assert.ok(JSON.parse(await r.text()).result.tools.length > 10);
 });
+
+test("the path-inserted well-known form (RFC 9728/8414) names the mount (U4234)", async () => {
+  const pr = await (await fetch(O + "/.well-known/oauth-protected-resource/sykehus/mcp")).json();
+  assert.equal(pr.resource, "https://bygg.example/sykehus/mcp");
+  const as = await (await fetch(O + "/.well-known/oauth-authorization-server/sykehus")).json();
+  assert.equal(as.issuer, "https://bygg.example/sykehus");
+});
