@@ -208,5 +208,8 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
     } catch (e) { if (!res.headersSent) send(res, e.code === 429 ? 429 : e.code === 413 ? 413 : 400, { error: e.message }); return true; }
     return false;
   }
-  return { userOf, proxyUser, edgeOf, badAssertion, challenge, count, route };
+  /* U6011: logins that only look (default testperson; SYKEHUS_READONLY, comma list): the role is read, so a tool that changes anything is refused */
+  const readOnlySet = new Set((process.env.SYKEHUS_READONLY ?? "testperson").split(",").map(x => x.trim()).filter(Boolean));
+  const readOnly = who => !!who && readOnlySet.has(who);
+  return { userOf, readOnly, proxyUser, edgeOf, badAssertion, challenge, count, route };
 }
