@@ -1,5 +1,5 @@
 {
- "_": "hygiene ratchet: lines of files over 800, duplicated lines; lowered by land.sh, raised only by \u00abhygiene: raise\u00bb",
+ "_": "hygiene ratchet: lines of files over 800, duplicated lines, live-fact comment lines; lowered by land.sh, raised only by \u00abhygiene: raise\u00bb",
  "dup_lines": 500,
  "files": {
   "mcp.mjs": 1530,
@@ -10,5 +10,6 @@
   "public/kit/tokens.css": 968,
   "public/renderkit/ez-tree.js": 1144,
   "public/viewer.js": 1347
- }
+ },
+ "live_facts": 0
 }
