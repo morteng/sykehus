@@ -228,7 +228,8 @@ export function checkDesign(site, e, str) {
       /* material: the same list a volume takes, water and glass too (Anton 2026-10-27: «reshape tar ikke material»); a part's or script's own mesh keeps its IFC materials, this is its card's and tint */
       if (e.material != null) { const m = String(e.material); if (!MATERIALS.includes(m)) throw new Error(`material er ${MATERIALS.join(", ")}`); out.material = m; }
       if (e.from != null) out.from = pt(e.from, "from"); if (e.to != null) out.to = pt(e.to, "to");
-      const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]), maxL = a.bim?.plan ? 1000 : 250; if (L < 1 || L > maxL) throw new Error(`Lengden må være mellom 1 og ${maxL} m`);
+      const f = out.from || a.from, t = out.to || a.to, L = Math.hypot(t[0] - f[0], t[1] - f[1]), maxL = a.bim?.plan ? 1000 : 250; const thin = e.opening === true && shape === "box";   // U6447: a window or door part is a thin opening volume in a facade; the only volume under 1 m
+      if (L < (a.opening ? 0.3 : 1) || L > maxL) throw new Error(`Lengden må være mellom 1 og ${maxL} m`);
       if (a.shape === "bim") {
         /* a construction's size is its script's: its parameters change it (the server runs it again and sends bim) */
         if (e.bim != null) out.bim = bimOf(e.bim);
@@ -236,7 +237,7 @@ export function checkDesign(site, e, str) {
         if (e.width != null && Math.abs(+e.width - a.width) > 0.05 || e.height != null && Math.abs(+e.height - a.height) > 0.05 || e.storeys != null) throw new Error(`${a.name} får størrelsen fra skriptet: endre parametrene (${Object.keys(a.bim?.params || {}).join(", ") || "params"}) i stedet for bredde og høyde`);
         if (out.from || out.to || out.bim) Object.assign(out, bimBody(out.from || a.from, out.to || a.to, (out.bim || a.bim).box));
       } else {
-        if (e.width != null) out.width = num(e.width, 1, 120, "Bredden");
+        if (e.width != null) out.width = num(e.width, a.opening ? 0.1 : 1, 120, "Bredden");
         if (e.height != null) out.height = num(e.height, ["water", "glass"].includes(out.material ?? a.material) ? 0.1 : 1, 80, "Høyden");   // a slab of water or glass from 0.1, as a volume
       }
       /* on / overhang_m: a reshape may put it on a roof or say how far it may stick out; the roof it already stands on is kept (never silently the ground) */
@@ -314,11 +315,12 @@ export function checkDesign(site, e, str) {
       const material = String(e.material ?? "glass"); if (!MATERIALS.includes(material)) throw new Error(`material er ${MATERIALS.join(", ")}`);
       const from = pt(e.from, "from"), to = pt(e.to, "to"), L = Math.hypot(to[0] - from[0], to[1] - from[1]);
       /* a plan brought in (DXF, DWG) may be a whole quarter's: to 1 km */
-      const maxL = /^(dxf|dwg)$/.test(e.bim?.format || "") ? 1000 : 250; if (L < 1 || L > maxL) throw new Error(`Fra from til to må være mellom 1 og ${maxL} m`);
+      const maxL = /^(dxf|dwg)$/.test(e.bim?.format || "") ? 1000 : 250; const thin = e.opening === true && shape === "box";   // U6447: a window or door part is a thin opening volume in a facade; the only volume under 1 m
+      if (L < (thin ? 0.3 : 1) || L > maxL) throw new Error(`Fra from til to må være mellom 1 og ${maxL} m`);
       const out = facts(e, str, { kind: "volume", ...(e.id != null ? { id: String(e.id) } : {}), name: str(String(e.name ?? (material === "glass" ? "Drivhus" : material === "water" ? "Vann" : "Nybygg")), 80, "Navnet"), shape, from, to, material });
       if (out.id) out.id = freeId(out.id, site);
       if (shape === "bim") { out.bim = bimOf(e.bim); Object.assign(out, bimBody(from, to, out.bim.box), w_); return footOf(site, e, out, num); }
-      out.width = num(e.width, 1, 120, "Bredden"); out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), material === "water" || material === "glass" ? 0.1 : 1, 80, "Høyden"); Object.assign(out, w_);
+      out.width = num(e.width, thin ? 0.1 : 1, 120, "Bredden"); if (thin) out.opening = true; out.height = num(e.height ?? (out.storeys ? out.storeys * STOREY_M : undefined), thin || material === "water" || material === "glass" ? 0.1 : 1, 80, "Høyden"); Object.assign(out, w_);
       if (shape === "gable" || shape === "lean_to") { out.wall_height = num(e.wall_height, 0, out.height, "Vegghøyden (wall_height)", shape === "gable" ? Math.round(out.height * 50) / 100 : 0); }
       if (shape === "lean_to") { out.high_side = e.high_side == null ? "left" : String(e.high_side); if (!["left", "right"].includes(out.high_side)) throw new Error("high_side er left eller right (sett fra from mot to)"); }
       if (shape === "terraces") {
@@ -501,11 +503,11 @@ export function facadesOf(site, wing) {
    sentence the person can read. */
 const fmt = v => String(Math.round(v * 10) / 10).replace(".", ",");
 const genitive = n => /[sxz]$/i.test(n) ? n : n + "s";
-export function placeBeside(site, w, at, length, width) {
+export function placeBeside(site, w, at, length, width, thin = false) {
   const b = dirDeg(at.side); if (b == null) throw new Error(`side «${at.side}» er ikke en retning; bruk nord, sør, øst, vest, en mellomretning (sørøst) eller grader`);
-  const gap = Number(at.gap_m); if (!Number.isFinite(gap) || gap < 0 || gap > 100) throw new Error("gap_m er avstanden i meter fra fasaden, mellom 0 og 100");
-  if (!(length >= 1 && length <= 250)) throw new Error("length er lengden i meter langs fasaden, mellom 1 og 250");
-  if (!(width >= 1 && width <= 120)) throw new Error("width er dybden i meter ut fra fasaden, mellom 1 og 120");
+  const gap = Number(at.gap_m); if (!Number.isFinite(gap) || gap < (thin ? -width : 0) || gap > 100) throw new Error("gap_m er avstanden i meter fra fasaden, mellom 0 og 100");
+  if (!(length >= (thin ? 0.3 : 1) && length <= 250)) throw new Error("length er lengden i meter langs fasaden, mellom 1 og 250");
+  if (!(width >= (thin ? 0.1 : 1) && width <= 120)) throw new Error("width er dybden i meter ut fra fasaden, mellom 1 og 120");
   const near = facadesOf(site, w.id).filter(f => f.length_m >= 6 && turn(f.bearing, b) <= 65).sort((x, y) => turn(x.bearing, b) - turn(y.bearing, b));
   if (!near.length) throw new Error(`${w.name} har ingen fasade mot ${at.side}; fasadene vender ${facadesOf(site, w.id).filter(f => f.length_m >= 6).map(f => `${f.bearing}° (${dirWord(f.bearing)}, ${fmt(f.length_m)} m)`).join(", ")}`);
   /* U3615: two faces both in reach, the nearest not close to what was said (25° or more off): ask, never pick the short end and leave out the long sunny face */

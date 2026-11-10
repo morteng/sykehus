@@ -1,3 +1,5 @@
+import { placeBeside, baseOf } from "./public/design.js";
+import { wingOf } from "./public/edits.js";
 /* U3639: the household parts as plain volumes (garage, extension, dormer, winter garden, solar panels, roof types; a flat roof is the extension's).
    Each part is ONE volume from a length (from -> to) and a width, so it can stand on the ground or on a roof (on). Pure. */
 const r2 = x => Math.round(x * 100) / 100;
@@ -58,3 +60,20 @@ export const HOUSEHOLD = {
   carport: mk("Carport", "A carport as one volume with a single-slope roof; from to to is its length, params.width its width", CARPORT, ["volumes"], "wood",
     e => one(e, "Carport", CARPORT, "wood", "lean_to", p => { if (p.ridge_height <= p.wall_height) throw new Error("ridge_height må være over wall_height"); return { width: p.width, wall_height: p.wall_height, height: p.ridge_height }; })),
 };
+
+/* U6447: a window or a door set into a wall: one thin opening volume (0.2 m deep, half in the wall) on a wing's facade. at { wing, side }; params along_m (from the facade's left end, else the middle), width_m, height_m, sill_m */
+const OPEN_DEPTH = 0.2;
+const opening = (no, say, spec, defMat) => ({ no, say, params: spec, classes: ["volumes"], engine: "volumes", make(e, site) {
+  if (e.from != null || e.to != null) throw new Error(`Delen ${e.part} settes med at {wing, side}, ikke med from og to`);
+  const a = e.at || {}, w = a.wing != null && wingOf(site, a.wing); if (!w) throw new Error(`Delen ${e.part} trenger at {wing, side}: fløyen og siden veggen vender mot`);
+  if (a.side == null) throw new Error(`Delen ${e.part} trenger at.side: nord, sør, øst, vest eller grader`);
+  const p = take(e, spec, defMat), alongP = e.params?.along_m, along = a.along ?? (alongP == null ? "midt" : +alongP);
+  const r = placeBeside(site, w, { wing: a.wing, side: a.side, gap_m: -OPEN_DEPTH / 2, along }, p.width_m, OPEN_DEPTH, true);
+  const v = { kind: "volume", shape: "box", opening: true, allow_overlap: true, name: e.name ?? no, from: r.from, to: r.to, width: OPEN_DEPTH, height: r2(p.height_m), material: p.material, ...(e.group ? { group: e.group } : {}), ...(e.why ? { why: e.why } : {}) };
+  v.base_kote = r2(baseOf(site, v) + p.sill_m);
+  return [v];
+} });
+HOUSEHOLD.window = opening("Vindu", "A window set into a wall: a thin opening volume (0.2 m deep) in a wing's facade; at {wing, side}, params along_m (m from the facade's left end seen from outside; left out = the middle), width_m, height_m, sill_m (m above the ground)",
+  { along_m: P(0, 0, 250, "m from the facade's left end"), width_m: P(1.2, 0.3, 6, "m wide"), height_m: P(1.2, 0.3, 4, "m high"), sill_m: P(0.9, 0, 10, "m from the ground to the sill") }, "glass");
+HOUSEHOLD.door = opening("Dør", "A door set into a wall: a thin opening volume (0.2 m deep) in a wing's facade; at {wing, side}, params along_m (m from the facade's left end seen from outside; left out = the middle), width_m, height_m, sill_m (m above the ground)",
+  { along_m: P(0, 0, 250, "m from the facade's left end"), width_m: P(1, 0.6, 4, "m wide"), height_m: P(2.1, 1.8, 4, "m high"), sill_m: P(0, 0, 10, "m from the ground to the sill") }, "wood");

@@ -141,3 +141,14 @@ test("U3639: the household parts are one plain volume each, on the ground or a r
   const odd = await mk([{ kind: "part", part: "dormer", from: [-20, -80], to: [-18, -80], params: { colour: 1 } }]);
   assert.match(odd.reason, /tar ikke colour/);
 });
+
+test("U6447: a door and a window are thin opening parts in a facade; a plain volume under 1 m is still refused", async () => {
+  const lp = (await call("list_parts")).data.parts.map(p => p.part); assert.ok(lp.includes("door") && lp.includes("window"));
+  const d = await mk([{ kind: "part", part: "door", at: { wing: "sentralblokka", side: 120 }, params: { width_m: 1.2, height_m: 2.1 } }]);
+  assert.equal(d.applied, 1, JSON.stringify(d.rejected));
+  const [dv] = await built(d.draft); assert.equal(dv.width, 0.2); assert.equal(dv.height, 2.1); assert.equal(dv.name, "Dør");
+  const w = await mk([{ kind: "part", part: "window", at: { wing: "sentralblokka", side: 120 }, params: { width_m: 0.5, along_m: 4, sill_m: 1 } }]);
+  assert.equal(w.applied, 1, JSON.stringify(w.rejected));
+  const bad = await mk([house("nsmal", -50, { width: 0.5 })]);
+  assert.equal(bad.applied, 0); assert.match(JSON.stringify(bad.rejected ?? bad.reason), /Bredden|mellom 1/);
+});
