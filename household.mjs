@@ -27,6 +27,10 @@ const DORMER = { width: P(2, 1, 5, "m deep up the roof"), cheek_height: P(1.4, 0
 const WINTER = { width: P(3, 2, 8, "m out from the wall"), wall_height: P(2.4, 2.2, 4, "m, the glass walls"), ridge_height: P(3.2, 2.4, 6, "m, to the glass ridge") };
 const SOLAR = { width: P(3.4, 1, 20, "m across (two panels of 1,7 m: 3,4 m)"), thickness: P(0.15, 0.05, 0.5, "m, the panels with their rack") };
 const ROOF = { width: P(8, 2, 40, "m across the ridge"), rise: P(2.5, 0.3, 15, "m from the eaves to the ridge") };
+const SHED = { width: P(3, 1.5, 8, "m across"), wall_height: P(2.2, 2, 3.5, "m, the low eaves"), ridge_height: P(2.7, 2.2, 4.5, "m, the high side") };
+const WALL = { width: P(1, 1, 3, "m thick (a volume is at least 1 m)"), height: P(1.5, 1, 5, "m high") };
+const PERGOLA = { width: P(3, 1, 8, "m across"), height: P(2.5, 2, 4, "m high") };
+const CARPORT = { width: P(3.2, 2.5, 8, "m across (a car: 3 m)"), wall_height: P(2.2, 2, 3.5, "m, the low eaves"), ridge_height: P(2.8, 2.2, 4.5, "m, the high side") };
 const mk = (no, say, params, classes, defMat, run) => ({ no, say, params, classes, engine: "volumes", make: (e, site) => run(e) });
 export const HOUSEHOLD = {
   garage: mk("Garasje", "A garage as one volume with a gable roof; from to to is its length, params.width its width", GARAGE, ["volumes"], "wood",
@@ -45,4 +49,12 @@ export const HOUSEHOLD = {
     e => one(e, "Valmtak", ROOF, "wood", "pyramid", p => ({ width: p.width, height: p.rise }))),
   roof_shed: mk("Pulttak", "A single-slope roof alone (pulttak)", ROOF, ["volumes"], "wood",
     e => one(e, "Pulttak", ROOF, "wood", "lean_to", p => ({ width: p.width, wall_height: 0.1, height: p.rise + 0.1 }))),
+  shed: mk("Bod", "A garden shed as one volume with a single-slope roof; from to to is its length, params.width its width", SHED, ["volumes"], "wood",
+    e => one(e, "Bod", SHED, "wood", "lean_to", p => { if (p.ridge_height <= p.wall_height) throw new Error("ridge_height må være over wall_height"); return { width: p.width, wall_height: p.wall_height, height: p.ridge_height }; })),
+  retaining_wall: mk("Støttemur", "A retaining wall as one volume (at least 1 m thick); from to to is its length", WALL, ["volumes"], "concrete",
+    e => one(e, "Støttemur", WALL, "concrete", "box", p => ({ width: p.width, height: p.height }))),
+  pergola: mk("Pergola", "A pergola as one plain wooden volume; from to to is its length", PERGOLA, ["volumes"], "wood",
+    e => one(e, "Pergola", PERGOLA, "wood", "box", p => ({ width: p.width, height: p.height }))),
+  carport: mk("Carport", "A carport as one volume with a single-slope roof; from to to is its length, params.width its width", CARPORT, ["volumes"], "wood",
+    e => one(e, "Carport", CARPORT, "wood", "lean_to", p => { if (p.ridge_height <= p.wall_height) throw new Error("ridge_height må være over wall_height"); return { width: p.width, wall_height: p.wall_height, height: p.ridge_height }; })),
 };
