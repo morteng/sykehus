@@ -11,6 +11,7 @@ let srv, worker, id = 0; const blobs = new Map(), jobs = [];
 const WALL = { global_id: "0abc", name: "Vegg 7", class: "IfcWall", reason: "Name: The attribute value \"None\" is empty" };
 const ANSWER = {
   ids: { what: "ids", ok: false, failed: 1, specifications: [{ name: "IfcWall: name, material, predefined type", applicable: 12, passed: 11, failed: 1, failures: [WALL] }, { name: "IfcBuildingStorey: Elevation", applicable: 3, passed: 3, failed: 0, failures: [] }] },
+  rules: { what: "ids", ok: false, failed: 1, specifications: [{ name: "r1", applicable: 2, passed: 1, failed: 1, failures: [WALL] }], rows: [{ set: "hospital", rule: "r1", status: "fail", applicable: 2, passed: 1, failed: 1, failed_ids: ["0abc"], passed_ids: ["0def"] }] },
   clash: { what: "clash", a: "all", b: "all", tolerance_mm: 2, count: 1, clashes: [{ a: { name: "Vegg 1", class: "IfcWall", global_id: "g1" }, b: { name: "Dekke", class: "IfcSlab", global_id: "g2" }, depth_m: 0.2 }] },
   diff: { what: "diff", added: 1, removed: 0, changed: 2, added_first: [{ name: "Takhage", class: "IfcBuildingElementProxy", global_id: "g3" }], removed_first: [], changed_first: [{ name: "Vegg 1", class: "IfcWall", global_id: "g1", change: "geometry_changed" }] },
 };
@@ -19,7 +20,7 @@ before(async () => {
     const body = Buffer.concat(b);
     if (req.url === "/blobs") { const sha = createHash("sha256").update(body).digest("hex"); blobs.set(sha, body); return res.end(JSON.stringify({ sha256: sha, bytes: body.length })); }
     const j = JSON.parse(body); jobs.push(j);
-    res.end(JSON.stringify({ state: "done", ifccheck: ANSWER[j.ifccheck.what] }));
+    res.end(JSON.stringify({ state: "done", ifccheck: (j.ifccheck.rules ? ANSWER.rules : ANSWER[j.ifccheck.what]) }));
   }); });
   await new Promise(r => worker.listen(0, "127.0.0.1", r));
   srv = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT), SYKEHUS_WORKER: `http://127.0.0.1:${worker.address().port}` }, stdio: ["ignore", "pipe", "inherit"] });
@@ -65,6 +66,14 @@ test("changes: the draft against the shared before, both files sent", async () =
   assert.match(r.data.say, /1 lagt til, 0 tatt bort, 2 endret\. Nye: Takhage \(IfcBuildingElementProxy\)\./);
   assert.equal((await call("check_model", { what: "changes", draft: d, against: "ikke-en-id" })).isError, true);
   assert.equal((await call("check_model", { what: "nonsense" })).isError, true);
+});
+
+test("standard with rules: the sets are sent on and one row per rule comes back with the failing ids", async () => {
+  const n = jobs.length, r = await call("check_model", { what: "standard", rules: ["hospital"] });
+  assert.deepEqual(jobs[n].ifccheck, { what: "ids", file: "model.ifc", rules: ["hospital"] });
+  assert.deepEqual(r.data.rows, [{ set: "hospital", rule: "r1", status: "fail", applicable: 2, failed: 1, failed_ids: ["0abc"] }]);
+  assert.equal(r.data.ok, false);
+  assert.equal((await call("check_model", { what: "standard", rules: ["../x"] })).isError, true);
 });
 
 test("the worker down: the answer says so in plain words and gives no result", async () => {
