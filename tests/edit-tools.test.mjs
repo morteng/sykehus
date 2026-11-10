@@ -126,7 +126,7 @@ test("preview: everything runs and is checked, nothing is saved", async () => {
 
 test("U3639: the household parts are one plain volume each, on the ground or a roof, with their own limits", async () => {
   const lp = (await call("list_parts")).data.parts.map(p => p.part);
-  for (const n of ["garage", "extension", "dormer", "winter_garden", "solar_panels", "roof_gable", "roof_hip", "roof_shed"]) assert.ok(lp.includes(n), n);
+  for (const n of ["garage", "extension", "dormer", "winter_garden", "solar_panels", "window_in_wall", "door_in_wall", "roof_gable", "roof_hip", "roof_shed"]) assert.ok(lp.includes(n), n);
   const g = await mk([{ kind: "part", part: "garage", from: [-60, -80], to: [-54, -80], params: { width: 3.6 } }]);
   assert.equal(g.applied, 1, JSON.stringify(g.rejected));
   const [gv] = await built(g.draft); assert.equal(gv.shape, "gable"); assert.equal(gv.material, "wood"); assert.equal(gv.height, 3.7);
@@ -134,6 +134,8 @@ test("U3639: the household parts are one plain volume each, on the ground or a r
   assert.equal((await built(w.draft))[0].material, "glass");
   const s = await mk([{ kind: "part", part: "solar_panels", from: [-30, -80], to: [-24, -80], params: { thickness: 0.2 } }]);
   assert.equal((await built(s.draft))[0].height, 0.2);
+  const d = await mk([{ kind: "part", part: "door_in_wall", from: [-10, -80], to: [-9, -80] }]);
+  assert.equal(d.applied, 1, JSON.stringify(d.rejected)); assert.equal((await built(d.draft))[0].height, 2.1);
   const bad = await mk([{ kind: "part", part: "garage", from: [-60, -80], to: [-54, -80], params: { wall_height: 3, ridge_height: 2.6 } }]);
   assert.match(bad.reason, /ridge_height/);
   const odd = await mk([{ kind: "part", part: "dormer", from: [-20, -80], to: [-18, -80], params: { colour: 1 } }]);

@@ -27,6 +27,8 @@ const DORMER = { width: P(2, 1, 5, "m deep up the roof"), cheek_height: P(1.4, 0
 const WINTER = { width: P(3, 2, 8, "m out from the wall"), wall_height: P(2.4, 2.2, 4, "m, the glass walls"), ridge_height: P(3.2, 2.4, 6, "m, to the glass ridge") };
 const SOLAR = { width: P(3.4, 1, 20, "m across (two panels of 1,7 m: 3,4 m)"), thickness: P(0.15, 0.05, 0.5, "m, the panels with their rack") };
 const ROOF = { width: P(8, 2, 40, "m across the ridge"), rise: P(2.5, 0.3, 15, "m from the eaves to the ridge") };
+const WINDOW = { thickness: P(0.2, 0.05, 0.6, "m, how deep it sits in the wall"), height: P(1.2, 0.4, 3, "m high") };
+const DOOR = { thickness: P(0.2, 0.05, 0.6, "m, how deep it sits in the wall"), height: P(2.1, 1.8, 3.5, "m high") };
 const mk = (no, say, params, classes, defMat, run) => ({ no, say, params, classes, engine: "volumes", make: (e, site) => run(e) });
 export const HOUSEHOLD = {
   garage: mk("Garasje", "A garage as one volume with a gable roof; from to to is its length, params.width its width", GARAGE, ["volumes"], "wood",
@@ -39,6 +41,10 @@ export const HOUSEHOLD = {
     e => one(e, "Uterom", WINTER, "glass", "gable", p => { if (p.ridge_height <= p.wall_height) throw new Error("ridge_height må være over wall_height"); return { width: p.width, wall_height: p.wall_height, height: p.ridge_height }; })),
   solar_panels: mk("Solcellepanel", "A field of solar panels as one thin slab, e.g. on a roof (on = the wing); from to to is its length, params.width its width; each panel is about 1,7 × 1,1 m", SOLAR, ["volumes"], "glass",
     e => one(e, "Solcellepanel", SOLAR, "glass", "box", p => ({ width: p.width, height: p.thickness }))),
+  window_in_wall: mk("Vindu i vegg", "A window in a wall as one glass slab; from to to is its width along the wall (set base_kote for the sill), params.thickness its depth through the wall", WINDOW, ["volumes"], "glass",
+    e => one(e, "Vindu", WINDOW, "glass", "box", p => ({ width: p.thickness, height: p.height }))),
+  door_in_wall: mk("Dør i vegg", "A door in a wall as one slab; from to to is its width along the wall, params.thickness its depth through the wall", DOOR, ["volumes"], "wood",
+    e => one(e, "Dør", DOOR, "wood", "box", p => ({ width: p.thickness, height: p.height }))),
   roof_gable: mk("Saltak", "A saltak (gable roof) alone, to put on a building or a wall without a roof; from to to is the ridge line", ROOF, ["volumes"], "wood",
     e => one(e, "Saltak", ROOF, "wood", "gable", p => ({ width: p.width, wall_height: 0.1, height: p.rise + 0.1 }))),
   roof_hip: mk("Valmtak (pyramidetak)", "A hip (pyramid) roof alone: four slopes to one point over the middle", ROOF, ["volumes"], "wood",
