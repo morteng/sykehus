@@ -1,0 +1,10 @@
+{
+  "kits": "a7503767d3c39dbf970af6f620ad15671514a5ed",
+  "kit": "history",
+  "dest": "public/kit",
+  "file": "{}",
+  "import": "./{}",
+  "files": {
+    "history.js": "9a80c163c97f502d37f8e6e309de582174269e04"
+  }
+}

@@ -9,6 +9,7 @@
      send(text, drawing)  to Anton (anton.js sendIt); resolves true, or { error } */
 import { facadeDrawing, sidesOf, editsFor, readRef, tryEdits, sayChange, strokeWords, strokeToSite, toSvg, fm, initialLayout, layoutEdits, layoutFromEdits, openingsEdits, openingsFromEdits } from "./fasade.js";
 import { pickAt, marquee, choose, snapMove, snapPoint, handlesOf, moveRect, resizeRect, layoutItemOf, typedItem, alignItems, distribute, arrayOf, selectAll, hudText } from "./gizmo.js";
+import { createHistory } from "./kit/history.js";
 import { esc as kitEsc } from "./kit/html.js";
 
 const COLOURS = [["Rød", "#c8102e"], ["Blå", "#1f5fbf"], ["Svart", "#23211e"]];
@@ -41,8 +42,10 @@ export function open({ host = document.body, site0, floors0, baseEdits, wingOf, 
   let focusId = kp?.focusId ?? focus, sideName = kp?.sideName ?? side, mode = "mal", colour = COLOURS[0][1], erasing = false, selected = null, d = null, model = null;
   let seen = [0, 0], sel = [], layoutBy = {}, doorsBy = {}, origBy = {}, faceBy = {}, drag = null, marq = null, pending = [];   // [{ ref, value, was }] in the order made; doorsBy: the person's own doors per side (the openings edits)
   let strokes = [];   // [{ colour, pts: [[t, z]] }] in facade metres
-  const hist = [], snap = () => JSON.stringify({ pending, strokes, layoutBy, doorsBy, faceBy });
-  const push = () => { hist.push(snap()); if (hist.length > 60) hist.shift(); };
+  const hist = createHistory(50), snap = () => JSON.stringify({ pending, strokes, layoutBy, doorsBy, faceBy });
+  let lastPushed = null;   // the snapshot the newest entry returns to
+  const restore = s => { lastPushed = null; ({ pending, strokes, layoutBy, doorsBy, faceBy } = JSON.parse(s)); sel = []; selCard(); numCard.hidden = true; refresh(); };
+  const push = (before = snap()) => { lastPushed = before; let after = null; hist.record("fasade", () => { after = snap(); restore(before); }, () => restore(after)); };
   const view = { k: 1, x: 0, y: 0 };   // the zoom and where the drawing stands in the stage
   const dark = () => document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
   /* what the drawing is made of: the model with the pending edits; a refusal says why and leaves the last good picture */
@@ -90,7 +93,7 @@ export function open({ host = document.body, site0, floors0, baseEdits, wingOf, 
     pending = pending.filter(p => keyOf(p.ref) !== keyOf(ref)); if (Math.abs(v - was) > 1e-6) pending.push({ ref, value: v, was });
     const err = $(numCard, ".fx-err");
     try { build(); } catch (e) { pending = prev; err.textContent = e.message; err.hidden = false; return; }
-    err.hidden = true; if (hist.at(-1) !== before) hist.push(before); paint();
+    err.hidden = true; if (lastPushed !== before || !hist.canUndo()) push(before); paint();
     const nd = d.dims.find(x => keyOf(x.ref) === keyOf(ref)); if (nd) { selected = nd; $(numCard, ".fx-lbl").textContent = nd.label; }
   }
   $(numCard, ".fx-in").oninput = e => { const v = parseFloat(e.target.value.replace(",", ".")); setValue(v); };
@@ -287,14 +290,14 @@ export function open({ host = document.body, site0, floors0, baseEdits, wingOf, 
     else if (b.classList.contains("fx-mode")) { mode = b.dataset.mode; if (mode !== "mal") { sel = []; selCard(); } for (const m of box.querySelectorAll(".fx-mode")) m.setAttribute("aria-pressed", String(m === b)); $(box, ".fx-pens").hidden = mode !== "tegn"; if (mode === "tegn") numCard.hidden = true; ink.style.pointerEvents = "none"; paint(); }
     else if (b.classList.contains("dot")) { colour = b.dataset.c; erasing = false; for (const o of box.querySelectorAll(".dot")) o.setAttribute("aria-pressed", String(o === b)); $(box, ".fx-era").setAttribute("aria-pressed", "false"); }
     else if (b.classList.contains("fx-era")) { erasing = !erasing; b.setAttribute("aria-pressed", String(erasing)); }
-    else if (b.classList.contains("fx-undo")) { const s = hist.pop(); if (s) { ({ pending, strokes, layoutBy, doorsBy, faceBy } = JSON.parse(s)); sel = []; selCard(); numCard.hidden = true; refresh(); } }
+    else if (b.classList.contains("fx-undo")) { hist.undo(); }
     else if (b.classList.contains("fx-reset")) { if (pending.length || strokes.length) { push(); pending = []; strokes = []; numCard.hidden = true; refresh(); } }
     else if (b.classList.contains("fx-go")) go(true);
     else if (b.classList.contains("fx-save")) go(false);
   });
   $(box, ".fx-bygg").innerHTML = [...wings.map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`), ...(site0.added || []).filter(a => a.kind === "volume" && a.from && a.to && !/^balkong/i.test(a.name || "")).map(a => `<option value="${esc(a.id)}">${esc(a.name)} (nytt)</option>`)].join("");
   $(box, ".fx-bygg").value = focusId;
-  $(box, ".fx-bygg").onchange = e => { focusId = e.target.value; pending = []; strokes = []; hist.length = 0; sideName = null; view.k = 1; view.x = view.y = 0; numCard.hidden = true; if (refresh()) sideName = d.face.side; };
+  $(box, ".fx-bygg").onchange = e => { focusId = e.target.value; pending = []; strokes = []; hist.clear(); sideName = null; view.k = 1; view.x = view.y = 0; numCard.hidden = true; if (refresh()) sideName = d.face.side; };
   /* sending: the measures first (the draft, the same way the page's own changes go), then the words, the strokes and the picture */
   let sending = false;
   async function go(toAnton) {
@@ -310,7 +313,7 @@ export function open({ host = document.body, site0, floors0, baseEdits, wingOf, 
       }
       const words = [...pending.map(p => p.sent), ...lWords];
       for (const sd of lSides) delete layoutBy[sd]; for (const sd of dSides) delete doorsBy[sd]; sel = [];
-      if (!toAnton) { pending = []; hist.length = 0; refresh(); selCard(); say("Målene er lagret."); return; }
+      if (!toAnton) { pending = []; hist.clear(); refresh(); selCard(); say("Målene er lagret."); return; }
       const lines = [`Tegning av fasaden: ${d.face.building}, ${d.face.side.toLowerCase()}.`, ...(words.length ? ["Målene som er endret (fra, til):", ...words.map(w => `- ${w}`)] : []), ...(strokes.length ? [`${strokes.length} ${strokes.length === 1 ? "strek" : "streker"} tegnet på fasaden (meter fra venstre ende, kote):`, strokeWords(strokes, d.face)] : []), ...(text ? [text] : [])];
       const out = document.createElement("canvas"), k = Math.min(1, 1280 / d.W); out.width = Math.round(d.W * k); out.height = Math.round(d.H * k);
       const g = out.getContext("2d"); g.scale(k, k);
