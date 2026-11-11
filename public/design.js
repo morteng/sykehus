@@ -31,7 +31,7 @@
 
    The ground (surfaces, paths, trees, felling) is landscape.js's. */
 import { applyTerrain } from "./paint-edit.js";
-import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID } from "./landscape.js";
+import { checkLandscape, applyLandscape, checkGroundEdit, GROUND_ID, num, pt } from "./landscape.js";
 import { checkRoadEdit, applyRoads, ROAD_ID } from "./roads.js";   // a road section taken away (U3543)
 import { balanceKote, rootsHit, SLOPE, ROOT_M } from "./renderkit/grade.js";   // the one batter rule (U3616)
 import { applyGrading, lotCells } from "./grading.js";
@@ -186,16 +186,6 @@ function facts(e, str, out) {
   if (e.group !== undefined) out.group = e.group == null || e.group === "" ? null : str(String(e.group), 40, "Gruppen");   // the name a set of new buildings moves under; "" or null takes it away
   return out;
 }
-const num = (v, lo, hi, what, dflt) => {
-  if (v == null) { if (dflt === undefined) throw new Error(`${what} mangler`); return dflt; }
-  const x = +v; if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${what} må være et tall mellom ${lo} og ${hi}`); return Math.round(x * 100) / 100;
-};
-const pt = (v, what) => {
-  if (!Array.isArray(v) || v.length !== 2) throw new Error(`${what} er [øst, nord] i meter fra tomtas origo`);
-  const [x, y] = v.map(Number); if (![x, y].every(Number.isFinite) || Math.abs(x) > 500 || Math.abs(y) > 500) throw new Error(`${what} må ligge innen 500 m fra tomtas origo`);
-  return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
-};
-
 /* the buildings a demolish names: a wing's pieces, one building, or all the hospital's */
 export function targets(site, key, have = (site.added || []).map(a => a.id)) {   // have: the new buildings the version has, named in the refusal (an undone or deleted one is not there)   // on a model where some are torn down already, those count too (a restore names them)
   const k = String(key ?? "").toLowerCase().trim(), was = site.demolished || [];

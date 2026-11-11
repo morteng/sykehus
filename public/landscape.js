@@ -43,7 +43,7 @@ const BY_NO = new Map(ALL_PLANTS.filter(p => p.no).map(p => [fold(p.no), p]));  
 /* for a species outside hagekart's list, a size by what it is (pm, 2026-10-25): a tree unless it says shrub */
 const DEFAULT = { tree: { ht: 12, sp: 7, form: "round" }, conifer: { ht: 18, sp: 6, form: "cone" }, shrub: { ht: 2.5, sp: 2, form: "dome" } };
 
-const pt = (v, what) => {
+export const pt = (v, what) => {
   if (!Array.isArray(v) || v.length !== 2) throw new Error(`${what} er [øst, nord] i meter fra tomtas origo`);
   const [x, y] = v.map(Number); if (![x, y].every(Number.isFinite) || Math.abs(x) > 500 || Math.abs(y) > 500) throw new Error(`${what} må ligge innen 500 m fra tomtas origo`);
   return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
@@ -52,7 +52,7 @@ const pts = (v, what, min) => {
   if (!Array.isArray(v) || v.length < min || v.length > MAX_POINTS) throw new Error(`${what} er ${min} til ${MAX_POINTS} punkter [øst, nord]`);
   return v.map((p, i) => pt(p, `${what}[${i}]`));
 };
-const num = (v, lo, hi, what, dflt) => {
+export const num = (v, lo, hi, what, dflt) => {
   if (v == null) { if (dflt === undefined) throw new Error(`${what} mangler`); return dflt; }
   const x = +v; if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${what} må være et tall mellom ${lo} og ${hi}`); return Math.round(x * 100) / 100;
 };
