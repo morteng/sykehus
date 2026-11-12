@@ -38,9 +38,16 @@ test("the connector answers a JSON-RPC POST under /sykehus/mcp", async () => {
   assert.equal(r.status, 200); assert.ok(JSON.parse(await r.text()).result.tools.length > 10);
 });
 
+test("the path-inserted well-known form (RFC 9728/8414) names the mount (U4234)", async () => {
+  const pr = await (await fetch(O + "/.well-known/oauth-protected-resource/sykehus/mcp")).json();
+  assert.equal(pr.resource, "https://bygg.example/sykehus/mcp");
+  const as = await (await fetch(O + "/.well-known/oauth-authorization-server/sykehus")).json();
+  assert.equal(as.issuer, "https://bygg.example/sykehus");
+});
+
 /* U4185: with SYKEHUS_AUTH_SERVER set, the protected-resource document names the one authorization server, not itself */
 const PORT2 = PORT + 1;
-const srv2 = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT2), SYKEHUS_VERSIONS_DIR: dir, PUBLIC_ORIGIN: "https://bygg.example", SYKEHUS_AUTH_SERVER: "https://auth.gulden.no" }, stdio: ["ignore", "pipe", "inherit"] });
+const srv2 = spawn(process.execPath, [new URL("../server.mjs", import.meta.url).pathname], { env: { ...process.env, PORT: String(PORT2), SYKEHUS_VERSIONS_DIR: mkdtempSync(join(tmpdir(), "sykehus-mount2-")), PUBLIC_ORIGIN: "https://bygg.example", SYKEHUS_AUTH_SERVER: "https://auth.gulden.no" }, stdio: ["ignore", "pipe", "inherit"] });
 await new Promise(ok => srv2.stdout.on("data", d => String(d).includes("Sykehustomta on") && ok()));
 after(() => srv2.kill());
 
@@ -48,11 +55,4 @@ test("the protected-resource document names https://auth.gulden.no in authorizat
   const pr = await (await fetch(`http://localhost:${PORT2}/sykehus/.well-known/oauth-protected-resource/mcp`)).json();
   assert.deepEqual(pr.authorization_servers, ["https://auth.gulden.no"]);
   assert.equal(pr.resource, "https://bygg.example/sykehus/mcp");
-});
-
-test("the path-inserted well-known form (RFC 9728/8414) names the mount (U4234)", async () => {
-  const pr = await (await fetch(O + "/.well-known/oauth-protected-resource/sykehus/mcp")).json();
-  assert.equal(pr.resource, "https://bygg.example/sykehus/mcp");
-  const as = await (await fetch(O + "/.well-known/oauth-authorization-server/sykehus")).json();
-  assert.equal(as.issuer, "https://bygg.example/sykehus");
 });
