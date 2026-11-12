@@ -115,7 +115,8 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
   const metaAS = req => { const o = originOf(req); return { issuer: o, authorization_endpoint: `${o}/oauth/authorize`, token_endpoint: `${o}/oauth/token`, registration_endpoint: `${o}/oauth/register`,
     response_types_supported: ["code"], grant_types_supported: ["authorization_code", "refresh_token"], code_challenge_methods_supported: ["S256"], token_endpoint_auth_methods_supported: ["none"],
     scopes_supported: [SCOPE], client_id_metadata_document_supported: true, service_documentation: `${o}/` }; };
-  const metaPR = req => { const o = originOf(req); return { resource: `${o}/mcp`, authorization_servers: [o], scopes_supported: [SCOPE], bearer_methods_supported: ["header"], resource_name: "Sykehustomta" }; };
+  /* U4185: SYKEHUS_AUTH_SERVER names the one authorization server (https://auth.gulden.no once its Authelia client is live); unset, the app is its own server as before */
+  const metaPR = req => { const o = originOf(req); return { resource: `${o}/mcp`, authorization_servers: [process.env.SYKEHUS_AUTH_SERVER || o], scopes_supported: [SCOPE], bearer_methods_supported: ["header"], resource_name: "Sykehustomta" }; };
   const escH = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const page = (res, code, title, body) => { res.writeHead(code, { ...SECURITY, "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; form-action 'self' https: http://localhost:* http://127.0.0.1:*" });
     res.end(`<!doctype html><html lang="nb"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escH(title)} · Sykehustomta</title><style>
