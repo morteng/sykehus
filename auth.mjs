@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { lookup } from "node:dns/promises";
 import { privateAddress } from "./vendor/netkit/public-address.js";   // the one public-address check (kits net, U3984)
 import { join } from "node:path";
+import { verifyRs256 } from "./oidc-verify.mjs";   // Authelia's RS256 tokens (U4185)
 import { AssertionRefused, edgeIdentity } from "./vendor/edgekit/edge.js";   // who is asking behind the edge (kits edge, U3981, U3964)
 
 export const SCOPE = "versions";
@@ -54,9 +55,14 @@ export function createAuth({ SECURITY, readJson, dir = process.env.SYKEHUS_VERSI
   const save = () => { if (!file) return; const t = file + ".tmp"; writeFileSync(t, JSON.stringify(store)); renameSync(t, file); };
   const grantOf = bearer => { const h = sha64(bearer), g = store.grants.find(x => x.access_hash === h); if (!g || g.access_exp < Date.now() / 1000) return null;
     if (!g.last_used || Date.now() - Date.parse(g.last_used) > 3600e3) { g.last_used = new Date().toISOString(); save(); } return g; };
+  /* U4185: a token from the one authorization server: SYKEHUS_AUTH_SERVER (issuer) + SYKEHUS_OIDC_JWKS (file of its keys) + SYKEHUS_OIDC_AUDIENCE; any one unset: off */
+  const jwks = (() => { try { return process.env.SYKEHUS_OIDC_JWKS ? JSON.parse(readFileSync(process.env.SYKEHUS_OIDC_JWKS, "utf8")) : null; } catch (e) { console.error("oidc jwks:", e.message); return null; } })();
+  const oidcUser = h => { const iss = process.env.SYKEHUS_AUTH_SERVER, aud = process.env.SYKEHUS_OIDC_AUDIENCE; if (!jwks || !iss || !aud) return null;
+    const m = /^Bearer\s+(\S{100,4000})$/i.exec(h || ""); const c = m && verifyRs256(m[1], jwks, { iss, aud }); const who = c?.preferred_username; return typeof who === "string" && LOGIN.test(who) ? who : null; };
   function userOf(req) {
     if (req.webUser) return req.webUser;   // server.mjs sets it from login.mjs's cookie, on the page's own /api routes only
     const p = proxyUser(req); if (p) return p;
+    const jt = oidcUser(req.headers.authorization); if (jt) return jt;
     const m = /^Bearer\s+(\S{16,400})$/i.exec(req.headers.authorization || ""); if (!m) return null;
     const who = tokens[createHash("sha256").update(m[1]).digest("hex")];
     if (typeof who === "string" && LOGIN.test(who)) return who;
