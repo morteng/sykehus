@@ -939,16 +939,16 @@ export function createMcp({ intake = createIntake(), site, floors, sections = []
         return { wing: w.id, ifc: link, contents: got.counts, materials: got.materials, modelled: t.modelled,
           say: `${w.name} er nå en ekte modell i IFC-fila: ${Object.entries(got.counts).map(([k, n]) => `${n} ${k}`).join(", ")}${got.materials.length ? `; materialer: ${got.materials.join(", ")}` : ""}.` };
       } },
-    { name: "export_ifc", tgt: "read", title: "Eksporter til IFC for FreeCAD", ro: true, schema: S({ target: TARGET, draft: OLD }),
-       description: "The model (a draft, a version, or the shared before) as an IFC for FreeCAD, tried in the FreeCAD worker. Answers the file link and whether FreeCAD opened it (parts) or why not: say it as it is.",
+    { name: "export_ifc", tgt: "read", title: "Eksporter til IFC", ro: true, schema: S({ target: TARGET, draft: OLD }),
+       description: "The model (a draft, a version, or the shared before) as an IFC, opened and read by the worker. Answers the file link and whether it was opened and read (parts) or why not: say it as it is.",
       run: async (a, req) => {
         const isV = /^v.{8}$/.test(String(a.draft)), o = originOf(req);
         const tag = a.draft ? (isV ? (v => `${v.id}@${v.updated}`)(versionOf(a.draft, req)) : (d => `${d.id}#${d.edits.length}:${JSON.stringify(d.edits).length}`)(draftOf(a.draft))) : "før";
         const file = await ifcBody(tag, a.draft ? editsOf(a.draft, req) : [], true, a.draft ? modelledOf(a.draft, req) : []).catch(e => { throw toolErr(e.tool ? e.message : `IFC-fila kunne ikke lages: ${String(e.message).slice(0, 150)}`); });
         const link = !a.draft ? `${o}/api/ifc?for=freecad` : isV ? versionOut(versionOf(a.draft, req), o, req).link.replace("/?versjon=", "/api/ifc?versjon=") + "&for=freecad" : `${o}/api/ifc?utkast=${a.draft}&for=freecad`;
-        const fc = await openInFreecad(file);
-        return { ifc: link, bytes: file.length, freecad: fc,
-          say: fc.opened ? `IFC-fila er laget (${Math.round(file.length / 1024)} kB) og FreeCAD åpnet den${fc.parts != null ? `: ${fc.parts} deler` : ""}.` : `IFC-fila er laget (${Math.round(file.length / 1024)} kB), men den er ikke vist å åpne i FreeCAD: ${fc.why}` };
+        const fc = await openInFreecad(file);   // U7111: the plain worker reads it
+        return { ifc: link, bytes: file.length, check: fc,
+          say: fc.opened ? `IFC-fila er laget (${Math.round(file.length / 1024)} kB), åpnet og lest${fc.parts != null ? `: ${fc.parts} deler` : ""}.` : `IFC-fila er laget (${Math.round(file.length / 1024)} kB), men den er ikke vist å åpne: ${fc.why}` };
       } },
     { name: "list_materials", title: "Materialer", ro: true, schema: S({}),
       description: "Materials with real surfaces: betong/concrete, tegl/brick, tre/wood, grus/gravel, plen/grass, asfalt … Each: the word material or surface takes, its Norwegian name, building or ground, and a picture or not. Use it when a person names a wall, path or lawn surface in plain words.",

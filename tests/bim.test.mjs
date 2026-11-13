@@ -277,3 +277,29 @@ test("U3620: a stair job goes to the FreeCAD worker, the plain worker's refusal 
     await assert.rejects(prepare({ kind: "part", part: "stair", from: [-10, -80], to: [-10, -78] }, site), /No such part here/);
   } finally { plain.close(); fc.close(); delete process.env.SYKEHUS_WORKER_FREECAD; }
 });
+
+/* U7111: the IFC check is asked of the plain worker (SYKEHUS_WORKER) and answers with its part count; with no worker it answers null */
+test("U7111: openInFreecad asks the plain worker; with no worker it answers opened null", async () => {
+  const { openInFreecad } = await import("../bim.mjs");
+  const jobs = [];
+  const srv = createServer((req, res) => { const b = []; req.on("data", c => b.push(c)); req.on("end", () => {
+    const body = Buffer.concat(b);
+    if (req.url === "/blobs") return res.end(JSON.stringify({ sha256: "a".repeat(64) }));
+    if (req.url.startsWith("/files/")) return res.end(JSON.stringify({ parts: 7, unit: "m" }));
+    jobs.push(JSON.parse(body)); res.end(JSON.stringify({ state: "done", files: { "import.json": "/files/import.json" } }));
+  }); });
+  await new Promise(r => srv.listen(0, "127.0.0.1", r));
+  const keep = { w: process.env.SYKEHUS_WORKER, g: process.env.GULDEN_WORKER, f: process.env.SYKEHUS_WORKER_FREECAD, gf: process.env.GULDEN_WORKER_FREECAD };
+  try {
+    delete process.env.GULDEN_WORKER; delete process.env.SYKEHUS_WORKER_FREECAD; delete process.env.GULDEN_WORKER_FREECAD;
+    process.env.SYKEHUS_WORKER = `http://127.0.0.1:${srv.address().port}`;
+    const r = await openInFreecad(Buffer.from("ISO-10303-21;"));
+    assert.equal(r.opened, true); assert.equal(r.parts, 7); assert.deepEqual(jobs.at(-1).then, ["import"]);
+    delete process.env.SYKEHUS_WORKER;
+    const n = await openInFreecad(Buffer.from("ISO-10303-21;"));
+    assert.equal(n.opened, null); assert.doesNotMatch(n.why, /FreeCAD/);
+  } finally {
+    srv.close();
+    for (const [k, v] of Object.entries({ SYKEHUS_WORKER: keep.w, GULDEN_WORKER: keep.g, SYKEHUS_WORKER_FREECAD: keep.f, GULDEN_WORKER_FREECAD: keep.gf })) v === undefined ? delete process.env[k] : (process.env[k] = v);
+  }
+});
