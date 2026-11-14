@@ -6,10 +6,11 @@ import { spawn } from "node:child_process";
 
 const sse = (e, d) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`;
 function stub(script) {
-  const subs = new Set(), seen = { auth: [], stopped: 0 };
+  const subs = new Set(), seen = { auth: [], stopped: 0, answers: [] };
   const srv = http.createServer((req, res) => {
     seen.auth.push(req.headers["x-edge-auth"]);
     if (req.url === "/api/anton/strom") { res.writeHead(200, { "content-type": "text/event-stream" }); subs.add(res); res.write(sse("queue", {})); return; }
+    if (req.url === "/api/anton/godkjenn") { let b = ""; req.on("data", d => b += d); req.on("end", () => { seen.answers.push(JSON.parse(b)); res.writeHead(200); res.end("{}"); }); return; }
     if (req.url === "/api/anton/stopp") { seen.stopped++; res.writeHead(200); return res.end("{}"); }
     if (req.url === "/api/anton/historikk") { res.writeHead(200); return res.end(JSON.stringify({ items: [{ type: "tool", key: "try_change", result: { added: ["n1"] } }] })); }
     if (req.url === "/api/anton") { res.writeHead(202); res.end(JSON.stringify({ id: "T1" })); setTimeout(() => { for (const s of subs) for (const [e, d] of script) s.write(sse(e, d)); }, 50); return; }
@@ -42,4 +43,22 @@ test("refuses unknown flags, two messages and a missing header JSON", async () =
   assert.equal((await client("http://127.0.0.1:1", ["--x", "y"])).code, 1);
   assert.notEqual((await client("http://127.0.0.1:1", ["a", "b"])).code, 0);
   assert.equal((await client("http://127.0.0.1:1", ["a"], "nope")).code, 2);
+});
+
+const card = (id, tool, args) => ["approval", { id, tool, key: tool, arguments: args, reply_to: "T1" }];
+const ZZ = (extra = []) => ["--zz-row", "U5108", "--zz-approve", "create_design", "--zz-budget", "1", ...extra, "x"];
+async function zz(script, args = ZZ()) { const s = await stub(script); const r = await client(s.base, args); s.srv.closeAllConnections(); s.srv.close(); return { r, seen: s.seen, j: JSON.parse(r.o) }; }
+const done = ["done", { type: "done", reply_to: "T1" }];
+test("zz: a listed tool with a zz-u5108- name is accepted; approved and cards are printed", async () => {
+  const { r, seen, j } = await zz([card("c1", "create_design", { name: "zz-u5108-hus", price_usd: 0 }), done]);
+  assert.equal(r.code, 0, r.e); assert.deepEqual(seen.answers, [{ approval_id: "c1", decision: "accept" }]);
+  assert.deepEqual(j.approved, ["create_design"]); assert.deepEqual(j.cards, [{ tool: "create_design", target: "zz-u5108-hus", decision: "accept", card: "c1" }]);
+});
+test("zz: an unlisted tool, a priced card, a bare name and a card past the budget are rejected, nothing accepted (or only what came before)", async () => {
+  for (const [c, why] of [[card("c", "delete_design", { name: "zz-u5108-a" }), "unlisted"], [card("c", "create_design", { name: "zz-u5108-a", price_usd: 3 }), "priced"], [card("c", "create_design", { name: "hus" }), "name"], [card("c", "create_design", { name: "zz-u5108-a", project: "annet" }), "project"]]) {
+    const { r, seen, j } = await zz([c, done]);
+    assert.equal(r.code, 1, why); assert.deepEqual(seen.answers, [{ approval_id: "c", decision: "reject" }], why); assert.deepEqual(j.approved, [], why); assert.equal(j.cards[0].decision, "reject"); assert.equal(seen.stopped, 1);
+  }
+  const { seen, j } = await zz([card("c1", "create_design", { name: "zz-u5108-a" }), card("c2", "create_design", { name: "zz-u5108-b" }), done]);
+  assert.deepEqual(seen.answers.map(a => a.decision), ["accept", "reject"]); assert.deepEqual(j.approved, ["create_design"]); assert.equal(j.ended, "approval");
 });
